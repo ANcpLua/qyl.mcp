@@ -281,6 +281,67 @@ function unwrapItems<T>(body: any): T[] {
   return (body?.items ?? []) as T[];
 }
 
+// The generated OpenAPI types say span.kind / status.code are numbers, but the live
+// collector serializes them as string enums ("client", "ok" — JsonStringEnumConverter).
+// Normalize to the numeric contract at the fetch boundary, tolerating both encodings.
+const SPAN_KIND_BY_NAME: Record<string, number> = {
+  unspecified: 0, internal: 1, server: 2, client: 3, producer: 4, consumer: 5,
+};
+const STATUS_CODE_BY_NAME: Record<string, number> = { unset: 0, ok: 1, error: 2 };
+
+function toEnumNumber(value: unknown, byName: Record<string, number>): number {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") return byName[value.toLowerCase()] ?? 0;
+  return 0;
+}
+
+function normalizeSpan(span: any): any {
+  if (!span) return span;
+  // Project to exactly the contract's QylSpan fields: the live collector also sends
+  // trace_state / links / flags / dropped_*_count / instrumentation_scope, which the
+  // strict output schema (additionalProperties: false) rejects and the viewer ignores.
+  return {
+    span_id: span.span_id,
+    trace_id: span.trace_id,
+    ...(span.parent_span_id ? { parent_span_id: span.parent_span_id } : {}),
+    name: span.name,
+    kind: toEnumNumber(span.kind, SPAN_KIND_BY_NAME),
+    start_time_unix_nano: Number(span.start_time_unix_nano ?? 0),
+    end_time_unix_nano: Number(span.end_time_unix_nano ?? 0),
+    ...(Array.isArray(span.attributes) ? { attributes: span.attributes } : {}),
+    ...(Array.isArray(span.events)
+      ? {
+          events: span.events.map((e: any) => ({
+            name: e?.name ?? "",
+            time_unix_nano: Number(e?.time_unix_nano ?? 0),
+            ...(Array.isArray(e?.attributes) ? { attributes: e.attributes } : {}),
+          })),
+        }
+      : {}),
+    status: span.status
+      ? {
+          code: toEnumNumber(span.status.code, STATUS_CODE_BY_NAME),
+          ...(span.status.message ? { message: span.status.message } : {}),
+        }
+      : { code: 0 },
+    resource: span.resource ?? {},
+  };
+}
+
+function normalizeTrace(trace: any): QylTrace {
+  return {
+    trace_id: trace?.trace_id ?? "",
+    spans: Array.isArray(trace?.spans) ? trace.spans.map(normalizeSpan) : [],
+    ...(trace?.root_span ? { root_span: normalizeSpan(trace.root_span) } : {}),
+    span_count: Number(trace?.span_count ?? 0),
+    duration_ns: Number(trace?.duration_ns ?? 0),
+    start_time: trace?.start_time ?? "",
+    end_time: trace?.end_time ?? "",
+    services: Array.isArray(trace?.services) ? trace.services : [],
+    has_error: Boolean(trace?.has_error),
+  } as QylTrace;
+}
+
 // =============================================================================
 // Mode selection
 // QYL_DEMO=1 forces demo. Otherwise the first tool call probes the collector
@@ -1089,7 +1150,7 @@ async function fetchTraces(limit: number): Promise<{ traces: QylTrace[]; mode: M
     return { traces: DEMO.traces.slice(0, limit), mode };
   }
   const body = await collectorGet("/api/v1/traces", { limit });
-  return { traces: unwrapItems<QylTrace>(body), mode };
+  return { traces: unwrapItems<any>(body).map(normalizeTrace), mode };
 }
 
 async function fetchTrace(traceId: string): Promise<{ trace: QylTrace; mode: Mode }> {
@@ -1100,9 +1161,9 @@ async function fetchTrace(traceId: string): Promise<{ trace: QylTrace; mode: Mod
     return { trace, mode };
   }
   try {
-    const trace = (await collectorGet(
-      `/api/v1/traces/${encodeURIComponent(traceId)}`,
-    )) as QylTrace;
+    const trace = normalizeTrace(
+      await collectorGet(`/api/v1/traces/${encodeURIComponent(traceId)}`),
+    );
     return { trace, mode };
   } catch (err) {
     if (err instanceof CollectorError && err.status === 404) {
@@ -1127,7 +1188,7 @@ async function fetchSessionTraces(
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/traces`,
       { limit },
     );
-    return { traces: unwrapItems<QylTrace>(body), mode };
+    return { traces: unwrapItems<any>(body).map(normalizeTrace), mode };
   } catch (err) {
     if (err instanceof CollectorError && err.status === 404) {
       throw new CollectorError(`session not found: ${sessionId}`);
