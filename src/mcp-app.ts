@@ -1,14 +1,14 @@
 /**
- * @file X Timeline Viewer — MCP App.
+ * @file qyl Trace Explorer — MCP App.
  *
- * Renders an X (Twitter) timeline from the `display_timeline` tool result and
- * lets the user search / paginate via the app-only `fetch_posts` server tool.
+ * Renders qyl telemetry traces from the `display_traces` tool result and lets
+ * the user refresh / drill into logs via the app-only `fetch_telemetry`
+ * server tool. Trace list on the left, span waterfall on the right, slide-in
+ * span detail panel, and a logs tab scoped to the selected trace.
  *
- * Rendering is XSS-safe by construction: all API-supplied strings reach the
- * DOM exclusively through `textContent` / `createTextNode`. URL linkification
- * splits the post text on entity offsets and builds anchor elements — raw
- * text is never concatenated into HTML. The only `innerHTML` writes use the
- * constant SVG icon strings defined in this file.
+ * Rendering is XSS-safe by construction: all telemetry strings reach the DOM
+ * exclusively through `textContent` / `createTextNode`. The only `innerHTML`
+ * in this app is the constant SVG markup in mcp-app.html.
  */
 import {
   App,
@@ -18,80 +18,90 @@ import {
   type McpUiHostContext,
 } from "@modelcontextprotocol/ext-apps";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { computeWaterfall, type WaterfallRow } from "./waterfall.ts";
 import "./global.css";
 import "./mcp-app.css";
 
 // ---------------------------------------------------------------------------
-// Shapes (mirrors INTERFACE.md — the viewer renders ONLY this shape)
+// Shapes (mirrors INTERFACE.md — snake_case wire format from the collector)
 // ---------------------------------------------------------------------------
 
-interface XAuthor {
-  id: string;
+interface QylSpanEvent {
   name: string;
-  username: string;
-  profile_image_url?: string;
-  verified?: boolean;
+  time_unix_nano: number;
+  attributes?: unknown[];
 }
 
-interface XMedia {
-  type: "photo" | "video" | "animated_gif";
-  url?: string;
-  preview_image_url?: string;
+interface QylSpan {
+  span_id: string;
+  trace_id: string;
+  parent_span_id?: string;
+  name: string;
+  kind: 0 | 1 | 2 | 3 | 4 | 5;
+  start_time_unix_nano: number;
+  end_time_unix_nano: number;
+  attributes?: Array<{ key: string; value: unknown }>;
+  events?: QylSpanEvent[];
+  status: { code: 0 | 1 | 2; message?: string };
+  resource: Record<string, unknown>;
 }
 
-interface XUrlEntity {
-  url: string;
-  expanded_url: string;
-  display_url: string;
+interface QylTrace {
+  trace_id: string;
+  spans: QylSpan[];
+  root_span?: QylSpan;
+  span_count: number;
+  duration_ns: number;
+  start_time: string;
+  end_time: string;
+  services: string[];
+  has_error: boolean;
 }
 
-interface XPost {
-  id: string;
-  text: string;
-  author: XAuthor;
-  created_at: string; // ISO 8601
-  metrics: {
-    likes: number;
-    reposts: number;
-    replies: number;
-    quotes: number;
-    views?: number;
-  };
-  media?: XMedia[];
-  urls?: XUrlEntity[];
+interface QylLogRecord {
+  time_unix_nano: number;
+  severity_number: number;
+  severity_text?: string;
+  body: string;
+  attributes?: Array<{ key: string; value: unknown }>;
+  trace_id?: string;
+  span_id?: string;
+  resource: Record<string, unknown>;
 }
 
-type TimelineSource = "search" | "user";
+type Mode = "live" | "demo";
 
-/** structuredContent of `fetch_posts`. */
-interface FetchPostsPayload {
-  posts: XPost[];
-  next_token?: string;
-  mode: "live" | "demo";
+/** structuredContent of `display_traces` / `fetch_telemetry view:"traces"`. */
+interface TracesPayload {
+  traces: QylTrace[];
+  selected_trace_id?: string;
+  mode: Mode;
 }
 
-/** structuredContent of `display_timeline`. */
-interface TimelinePayload extends FetchPostsPayload {
-  source: TimelineSource;
-  query?: string;
-  username?: string;
+/** structuredContent of `fetch_telemetry view:"logs"`. */
+interface LogsPayload {
+  logs: QylLogRecord[];
+  mode: Mode;
 }
 
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
+type Tab = "waterfall" | "logs";
+
 const state = {
-  source: "search" as TimelineSource,
-  query: undefined as string | undefined,
-  username: undefined as string | undefined,
-  mode: "demo" as "live" | "demo",
-  posts: [] as XPost[],
-  /** ids already rendered — guards against duplicate appends when paging. */
-  seenIds: new Set<string>(),
-  nextToken: undefined as string | undefined,
-  /** In-flight guard for search / load-more. */
+  mode: "demo" as Mode,
+  traces: [] as QylTrace[],
+  selectedTraceId: undefined as string | undefined,
+  selectedSpanId: undefined as string | undefined,
+  activeTab: "waterfall" as Tab,
+  /** Fetched logs per trace id (cleared on refresh so live data stays fresh). */
+  logsCache: new Map<string, QylLogRecord[]>(),
+  /** In-flight guard for refresh. */
   busy: false,
+  /** Monotonic token so a stale logs response can't clobber a newer trace's tab. */
+  logsRequestSeq: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -99,61 +109,144 @@ const state = {
 // ---------------------------------------------------------------------------
 
 const mainEl = document.querySelector(".main") as HTMLElement;
-const sourceLabelEl = document.getElementById("source-label")!;
 const demoBadgeEl = document.getElementById("demo-badge")!;
-const searchFormEl = document.getElementById("search-form") as HTMLFormElement;
-const searchInputEl = document.getElementById("search-input") as HTMLInputElement;
+const traceCountLabelEl = document.getElementById("trace-count-label")!;
+const refreshBtn = document.getElementById("refresh-btn") as HTMLButtonElement;
+const emptyRefreshBtn = document.getElementById("empty-refresh-btn") as HTMLButtonElement;
+const retryBtn = document.getElementById("retry-btn") as HTMLButtonElement;
 const bannerEl = document.getElementById("banner")!;
 const loadingEl = document.getElementById("state-loading")!;
 const loadingTextEl = document.getElementById("loading-text")!;
 const emptyEl = document.getElementById("state-empty")!;
 const errorEl = document.getElementById("state-error")!;
 const errorMessageEl = document.getElementById("error-message")!;
-const timelineEl = document.getElementById("timeline")!;
-const loadMoreBtn = document.getElementById("load-more-btn") as HTMLButtonElement;
+const explorerEl = document.getElementById("explorer")!;
+const traceListEl = document.getElementById("trace-list")!;
+const traceViewEmptyEl = document.getElementById("trace-view-empty")!;
+const traceViewBodyEl = document.getElementById("trace-view-body")!;
+const traceTitleEl = document.getElementById("trace-title")!;
+const traceStatusBadgeEl = document.getElementById("trace-status-badge")!;
+const traceIdLabelEl = document.getElementById("trace-id-label")!;
+const traceDurationLabelEl = document.getElementById("trace-duration-label")!;
+const traceSpanCountLabelEl = document.getElementById("trace-span-count-label")!;
+const traceServicesEl = document.getElementById("trace-services")!;
+const tabWaterfallBtn = document.getElementById("tab-waterfall") as HTMLButtonElement;
+const tabLogsBtn = document.getElementById("tab-logs") as HTMLButtonElement;
+const waterfallPanelEl = document.getElementById("waterfall-panel")!;
+const timeRulerEl = document.getElementById("time-ruler")!;
+const spanRowsEl = document.getElementById("span-rows")!;
+const logsPanelEl = document.getElementById("logs-panel")!;
+const logsStateEl = document.getElementById("logs-state")!;
+const logsListEl = document.getElementById("logs-list")!;
+const detailPanelEl = document.getElementById("detail-panel")!;
+const detailTitleEl = document.getElementById("detail-title")!;
+const detailBodyEl = document.getElementById("detail-body")!;
+const detailCloseBtn = document.getElementById("detail-close-btn") as HTMLButtonElement;
 
 // ---------------------------------------------------------------------------
-// Constant SVG icons (static markup only — NEVER interpolate user data here)
+// Domain constants & helpers
 // ---------------------------------------------------------------------------
 
-const ICONS = {
-  reply:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1.751 10c0-4.42 3.584-8 8.005-8h4.366c4.49 0 8.129 3.64 8.129 8.13 0 2.96-1.607 5.68-4.196 7.11l-8.054 4.46v-3.69h-.067c-4.49.1-8.183-3.51-8.183-8.01zm8.005-6c-3.317 0-6.005 2.69-6.005 6 0 3.37 2.77 6.08 6.138 6.01l.351-.01h1.761v2.3l5.087-2.81c1.951-1.08 3.163-3.13 3.163-5.36 0-3.39-2.744-6.13-6.129-6.13H9.756z"/></svg>',
-  repost:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2z"/></svg>',
-  like:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.697 5.5c-1.222-.06-2.679.51-3.89 2.16l-.805 1.09-.806-1.09C9.984 6.01 8.526 5.44 7.304 5.5c-1.243.07-2.349.78-2.91 1.91-.552 1.12-.633 2.78.479 4.82 1.074 1.97 3.257 4.27 7.129 6.61 3.87-2.34 6.052-4.64 7.126-6.61 1.111-2.04 1.03-3.7.477-4.82-.561-1.13-1.666-1.84-2.908-1.91zm4.187 7.69c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.504-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.41-4.86-.514-6.67.887-1.79 2.647-2.91 4.601-3.01 1.651-.09 3.368.56 4.798 2.01 1.429-1.45 3.146-2.1 4.796-2.01 1.954.1 3.714 1.22 4.601 3.01.896 1.81.846 4.17-.514 6.67z"/></svg>',
-  views:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.75 21V3h2v18h-2zM18 21V8.5h2V21h-2zM4 21l.004-10h2L6 21H4zm9.248 0v-7h2v7h-2z"/></svg>',
-  verified:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91c-1.31.67-2.2 1.91-2.2 3.34s.89 2.67 2.2 3.34c-.46 1.39-.21 2.9.8 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.68-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.71 4.2L6.8 12.46l1.41-1.42 2.26 2.26 4.8-5.23 1.47 1.36-6.2 6.77z"/></svg>',
-  play:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12L4 2v20l17-10z"/></svg>',
+const KIND_LABELS: Record<number, string> = {
+  0: "Unspecified",
+  1: "Internal",
+  2: "Server",
+  3: "Client",
+  4: "Producer",
+  5: "Consumer",
 };
 
-/** Deterministic avatar-fallback palette (works on light and dark). */
-const AVATAR_COLORS = [
-  "#1d9bf0", "#00ba7c", "#f91880", "#7856ff",
-  "#ff7a00", "#ffd400", "#e0245e", "#794bc4",
-];
+type Flavor = "genai" | "http" | "db" | "messaging" | "neutral";
+
+/** Span flavor from attribute-key prefixes, falling back to span kind. */
+function spanFlavor(span: QylSpan): Flavor {
+  let flavor: Flavor | undefined;
+  for (const attr of span.attributes ?? []) {
+    const key = attr?.key;
+    if (typeof key !== "string") continue;
+    if (key.startsWith("gen_ai.")) return "genai"; // highest priority — stop early
+    if (!flavor && key.startsWith("http.")) flavor = "http";
+    if (!flavor && key.startsWith("db.")) flavor = "db";
+    if (!flavor && key.startsWith("messaging.")) flavor = "messaging";
+  }
+  if (flavor) return flavor;
+  if (span.kind === 4 || span.kind === 5) return "messaging";
+  return "neutral";
+}
+
+function serviceName(span: QylSpan): string {
+  const v = span.resource?.["service.name"];
+  return typeof v === "string" && v ? v : "unknown";
+}
+
+interface SeverityInfo {
+  label: string;
+  cls: "trace" | "debug" | "info" | "warn" | "error" | "fatal";
+}
+
+/** OTel severity_number bands → label + tint class. */
+function severityInfo(log: QylLogRecord): SeverityInfo {
+  const n = log.severity_number;
+  let info: SeverityInfo;
+  if (n >= 21) info = { label: "FATAL", cls: "fatal" };
+  else if (n >= 17) info = { label: "ERROR", cls: "error" };
+  else if (n >= 13) info = { label: "WARN", cls: "warn" };
+  else if (n >= 9) info = { label: "INFO", cls: "info" };
+  else if (n >= 5) info = { label: "DEBUG", cls: "debug" };
+  else info = { label: "TRACE", cls: "trace" };
+  if (typeof log.severity_text === "string" && log.severity_text) {
+    info = { ...info, label: log.severity_text.toUpperCase() };
+  }
+  return info;
+}
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-/** 1234 → "1.2K", 3400000 → "3.4M". */
-function formatCompact(n: number | undefined): string {
-  if (n === undefined || n === null || !Number.isFinite(n)) return "";
+/** 640 → "640", 1236 → "1.24", 87400 → "87.4", 234000 → "234". */
+function sigFig(v: number): string {
+  if (v >= 100) return String(Math.round(v));
+  const s = v >= 10 ? v.toFixed(1) : v.toFixed(2);
+  return s.replace(/\.?0+$/, "");
+}
+
+/** Nanoseconds → "312 ns" / "640 µs" / "87 ms" / "1.24 s". */
+function formatNs(ns: number): string {
+  if (!Number.isFinite(ns) || ns < 0) return "—";
+  if (ns < 1e3) return `${Math.round(ns)} ns`;
+  if (ns < 1e6) return `${sigFig(ns / 1e3)} µs`;
+  if (ns < 1e9) return `${sigFig(ns / 1e6)} ms`;
+  return `${sigFig(ns / 1e9)} s`;
+}
+
+/** First 8 hex chars of an id, for dense display. */
+function shortId(id: string): string {
+  return id.length > 8 ? id.slice(0, 8) : id;
+}
+
+/** Unix-nano timestamp → local "HH:MM:SS.mmm". */
+function formatLogTime(ns: number): string {
+  if (!Number.isFinite(ns) || ns <= 0) return "—";
+  const date = new Date(ns / 1e6);
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  const ss = String(date.getSeconds()).padStart(2, "0");
+  const ms = String(date.getMilliseconds()).padStart(3, "0");
+  return `${hh}:${mm}:${ss}.${ms}`;
+}
+
+/** 412 → "412", 1834 → "1.8K", 2400000 → "2.4M". */
+function formatCompact(n: number): string {
+  if (!Number.isFinite(n)) return "—";
   if (n < 1000) return String(n);
-  const units: Array<[number, string]> = [
+  for (const [div, suffix] of [
     [1e9, "B"],
     [1e6, "M"],
     [1e3, "K"],
-  ];
-  for (const [div, suffix] of units) {
+  ] as const) {
     if (n >= div) {
       const v = n / div;
-      // One decimal below 100, none above; strip trailing ".0".
       const s = v >= 100 ? Math.round(v).toString() : v.toFixed(1).replace(/\.0$/, "");
       return `${s}${suffix}`;
     }
@@ -161,48 +254,16 @@ function formatCompact(n: number | undefined): string {
   return String(n);
 }
 
-/** ISO timestamp → "now" / "5m" / "2h" / "3d" / "Mar 5" / "Mar 5, 2024". */
-function relativeTime(iso: string): string {
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return "";
-  const secs = Math.max(0, (Date.now() - then) / 1000);
-  if (secs < 60) return "now";
-  if (secs < 3600) return `${Math.floor(secs / 60)}m`;
-  if (secs < 86400) return `${Math.floor(secs / 3600)}h`;
-  if (secs < 7 * 86400) return `${Math.floor(secs / 86400)}d`;
-  const date = new Date(then);
-  const opts: Intl.DateTimeFormatOptions =
-    date.getFullYear() === new Date().getFullYear()
-      ? { month: "short", day: "numeric" }
-      : { month: "short", day: "numeric", year: "numeric" };
-  return date.toLocaleDateString(undefined, opts);
-}
-
-/** Stable color pick for the avatar-initial fallback. */
-function avatarColor(username: string): string {
-  let hash = 0;
-  for (let i = 0; i < username.length; i++) {
-    hash = (hash * 31 + username.charCodeAt(i)) | 0;
-  }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-/**
- * Validate an external URL for use as href / openLink target.
- * Parse-and-reserialize (URL.href) so only http(s) survives — blocks
- * `javascript:` and friends. Returns undefined when unsafe/unparseable.
- */
-function safeHttpUrl(raw: string | undefined): string | undefined {
-  if (!raw) return undefined;
+/** Attribute value → display string (arrays/objects JSON-stringified). */
+function stringifyValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value === null || value === undefined) return "";
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
   try {
-    const parsed = new URL(raw);
-    if (parsed.protocol === "https:" || parsed.protocol === "http:") {
-      return parsed.href;
-    }
+    return JSON.stringify(value);
   } catch {
-    // fall through
+    return String(value);
   }
-  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -227,7 +288,7 @@ function handleHostContextChanged(ctx: McpUiHostContext) {
   }
 }
 
-const app = new App({ name: "X Timeline Viewer", version: "1.0.0" });
+const app = new App({ name: "qyl Trace Explorer", version: "1.0.0" });
 
 app.onteardown = async () => {
   console.info("App is being torn down");
@@ -235,35 +296,34 @@ app.onteardown = async () => {
 };
 
 app.ontoolinput = (params) => {
-  // display_timeline is running server-side; show a query-aware spinner.
+  // display_traces is running server-side; show an argument-aware spinner.
   console.info("Received tool call input:", params);
-  const args = (params.arguments ?? {}) as { query?: string; username?: string };
-  if (typeof args.query === "string" && args.query) {
-    loadingTextEl.textContent = `Searching for “${args.query}”…`;
-  } else if (typeof args.username === "string" && args.username) {
-    loadingTextEl.textContent = `Loading @${args.username}…`;
+  const args = (params.arguments ?? {}) as { trace_id?: string; session_id?: string };
+  if (typeof args.trace_id === "string" && args.trace_id) {
+    loadingTextEl.textContent = `Loading trace ${shortId(args.trace_id)}…`;
+  } else if (typeof args.session_id === "string" && args.session_id) {
+    loadingTextEl.textContent = `Loading session ${args.session_id}…`;
+  } else {
+    loadingTextEl.textContent = "Loading traces…";
   }
   showView("loading");
 };
 
 app.ontoolresult = (result) => {
   console.info("Received tool call result:", result);
-  const payload = parseTimelinePayload(result);
+  const payload = parseTracesPayload(result);
   if (!payload) {
     showError(toolErrorText(result) ?? "Received an invalid tool result.");
     return;
   }
-  state.source = payload.source;
-  state.query = payload.query;
-  state.username = payload.username;
-  applyPage(payload, /* append */ false);
+  applyTraces(payload);
 };
 
 app.ontoolcancelled = (params) => {
   console.info("Tool call cancelled:", params.reason);
   // ontoolinput already switched to the loading spinner; restore the prior
   // view so a cancelled call doesn't leave the viewer stuck on "Loading…".
-  showView(state.posts.length > 0 ? "timeline" : "empty");
+  showView(state.traces.length > 0 ? "explorer" : "empty");
 };
 
 app.onerror = console.error;
@@ -283,38 +343,62 @@ function toolErrorText(result: CallToolResult): string | undefined {
   return text || undefined;
 }
 
-/** Runtime-validate a post enough to render it without throwing. */
-function isRenderablePost(p: unknown): p is XPost {
-  if (typeof p !== "object" || p === null) return false;
-  const post = p as Partial<XPost>;
+/** Runtime-validate a span enough to render it without throwing. */
+function isRenderableSpan(s: unknown): s is QylSpan {
+  if (typeof s !== "object" || s === null) return false;
+  const span = s as Partial<QylSpan>;
   return (
-    typeof post.id === "string" &&
-    typeof post.text === "string" &&
-    typeof post.author === "object" &&
-    post.author !== null &&
-    typeof post.author.username === "string"
+    typeof span.span_id === "string" &&
+    typeof span.name === "string" &&
+    typeof span.start_time_unix_nano === "number" &&
+    typeof span.end_time_unix_nano === "number"
   );
 }
 
-function parsePostsPayload(result: CallToolResult): FetchPostsPayload | null {
-  const sc = result.structuredContent as Partial<FetchPostsPayload> | undefined;
-  if (!sc || !Array.isArray(sc.posts)) return null;
+/** Normalize a wire trace, dropping unrenderable spans. */
+function sanitizeTrace(t: unknown): QylTrace | null {
+  if (typeof t !== "object" || t === null) return null;
+  const trace = t as Partial<QylTrace>;
+  if (typeof trace.trace_id !== "string" || !trace.trace_id) return null;
+  const spans = (Array.isArray(trace.spans) ? trace.spans : []).filter(isRenderableSpan);
   return {
-    posts: sc.posts.filter(isRenderablePost),
-    next_token: typeof sc.next_token === "string" ? sc.next_token : undefined,
+    trace_id: trace.trace_id,
+    spans,
+    root_span: isRenderableSpan(trace.root_span) ? trace.root_span : undefined,
+    span_count: typeof trace.span_count === "number" ? trace.span_count : spans.length,
+    duration_ns: typeof trace.duration_ns === "number" ? trace.duration_ns : 0,
+    start_time: typeof trace.start_time === "string" ? trace.start_time : "",
+    end_time: typeof trace.end_time === "string" ? trace.end_time : "",
+    services: Array.isArray(trace.services)
+      ? trace.services.filter((s): s is string => typeof s === "string")
+      : [],
+    has_error: trace.has_error === true,
+  };
+}
+
+function parseTracesPayload(result: CallToolResult): TracesPayload | null {
+  const sc = result.structuredContent as Partial<TracesPayload> | undefined;
+  if (!sc || !Array.isArray(sc.traces)) return null;
+  return {
+    traces: sc.traces.map(sanitizeTrace).filter((t): t is QylTrace => t !== null),
+    selected_trace_id:
+      typeof sc.selected_trace_id === "string" ? sc.selected_trace_id : undefined,
     mode: sc.mode === "live" ? "live" : "demo",
   };
 }
 
-function parseTimelinePayload(result: CallToolResult): TimelinePayload | null {
-  const base = parsePostsPayload(result);
-  if (!base) return null;
-  const sc = result.structuredContent as Partial<TimelinePayload>;
+function isRenderableLog(l: unknown): l is QylLogRecord {
+  if (typeof l !== "object" || l === null) return false;
+  const log = l as Partial<QylLogRecord>;
+  return typeof log.body === "string" && typeof log.severity_number === "number";
+}
+
+function parseLogsPayload(result: CallToolResult): LogsPayload | null {
+  const sc = result.structuredContent as Partial<LogsPayload> | undefined;
+  if (!sc || !Array.isArray(sc.logs)) return null;
   return {
-    ...base,
-    source: sc.source === "user" ? "user" : "search",
-    query: typeof sc.query === "string" ? sc.query : undefined,
-    username: typeof sc.username === "string" ? sc.username : undefined,
+    logs: sc.logs.filter(isRenderableLog),
+    mode: sc.mode === "live" ? "live" : "demo",
   };
 }
 
@@ -322,14 +406,13 @@ function parseTimelinePayload(result: CallToolResult): TimelinePayload | null {
 // View state helpers
 // ---------------------------------------------------------------------------
 
-type ViewName = "loading" | "empty" | "error" | "timeline";
+type ViewName = "loading" | "empty" | "error" | "explorer";
 
 function showView(view: ViewName) {
   loadingEl.hidden = view !== "loading";
   emptyEl.hidden = view !== "empty";
   errorEl.hidden = view !== "error";
-  timelineEl.hidden = view !== "timeline";
-  loadMoreBtn.hidden = view !== "timeline" || !state.nextToken;
+  explorerEl.hidden = view !== "explorer";
 }
 
 function showError(message: string) {
@@ -339,7 +422,7 @@ function showError(message: string) {
 
 let bannerTimer: ReturnType<typeof setTimeout> | undefined;
 
-/** Transient, non-destructive error notice (keeps the timeline visible). */
+/** Transient, non-destructive error notice (keeps the explorer visible). */
 function showBanner(message: string) {
   bannerEl.textContent = message;
   bannerEl.hidden = false;
@@ -350,368 +433,625 @@ function showBanner(message: string) {
 }
 
 function renderHeader() {
-  if (state.source === "user" && state.username) {
-    sourceLabelEl.textContent = `@${state.username}`;
-  } else if (state.query) {
-    sourceLabelEl.textContent = `Search: ${state.query}`;
-  } else {
-    sourceLabelEl.textContent = "Timeline";
-  }
   demoBadgeEl.hidden = state.mode !== "demo";
-  // Reflect the active search query in the box (without clobbering typing).
-  if (state.source === "search" && document.activeElement !== searchInputEl) {
-    searchInputEl.value = state.query ?? "";
-  }
+  const n = state.traces.length;
+  traceCountLabelEl.textContent = n === 0 ? "" : `${n} trace${n === 1 ? "" : "s"}`;
 }
 
 // ---------------------------------------------------------------------------
-// Post rendering (all API text goes through textContent — never innerHTML)
+// Trace selection & top-level render
 // ---------------------------------------------------------------------------
 
-/**
- * Append `text` to `container` with entity URLs turned into anchors.
- * The text is split on matches of each entity's t.co `url` (or its
- * `expanded_url`); segments become text nodes, matches become `<a>` elements
- * whose label is set via textContent. No raw string ever meets innerHTML.
- */
-function linkifyInto(container: HTMLElement, text: string, urls?: XUrlEntity[]) {
-  interface Match {
-    start: number;
-    end: number;
-    entity: XUrlEntity;
-  }
-  const matches: Match[] = [];
-  for (const entity of urls ?? []) {
-    // Match the wrapped t.co URL first (what the API puts in `text`),
-    // falling back to the expanded URL for pre-expanded/demo text.
-    for (const needle of [entity.url, entity.expanded_url]) {
-      if (!needle) continue;
-      const idx = text.indexOf(needle);
-      if (idx !== -1) {
-        matches.push({ start: idx, end: idx + needle.length, entity });
-        break;
-      }
-    }
-  }
-  matches.sort((a, b) => a.start - b.start);
+function selectedTrace(): QylTrace | undefined {
+  return state.traces.find((t) => t.trace_id === state.selectedTraceId);
+}
 
-  let pos = 0;
-  for (const m of matches) {
-    if (m.start < pos) continue; // overlap — skip
-    if (m.start > pos) {
-      container.appendChild(document.createTextNode(text.slice(pos, m.start)));
-    }
-    const href = safeHttpUrl(m.entity.expanded_url) ?? safeHttpUrl(m.entity.url);
-    const label = m.entity.display_url || m.entity.expanded_url || m.entity.url;
-    if (href) {
-      const a = document.createElement("a");
-      a.className = "post-link";
-      a.href = href;
-      a.rel = "noopener noreferrer";
-      a.textContent = label;
-      a.title = m.entity.expanded_url;
-      a.addEventListener("click", (e) => {
-        // Route through the host — plain navigation is blocked in the iframe.
-        e.preventDefault();
-        e.stopPropagation();
-        void openExternal(href);
-      });
-      container.appendChild(a);
-    } else {
-      // Unsafe/unparseable URL: render its label as plain text.
-      container.appendChild(document.createTextNode(label));
-    }
-    pos = m.end;
+function traceDisplayName(trace: QylTrace): string {
+  if (trace.root_span?.name) return trace.root_span.name;
+  // Fallback: earliest span's name.
+  let first: QylSpan | undefined;
+  for (const span of trace.spans) {
+    if (!first || span.start_time_unix_nano < first.start_time_unix_nano) first = span;
   }
-  if (pos < text.length) {
-    container.appendChild(document.createTextNode(text.slice(pos)));
+  return first?.name ?? "(unnamed trace)";
+}
+
+/** Replace the trace set (tool result or refresh) and re-render everything. */
+function applyTraces(payload: TracesPayload) {
+  state.traces = payload.traces;
+  state.mode = payload.mode;
+  state.logsCache.clear();
+  state.selectedSpanId = undefined;
+  closeDetail();
+
+  const preferred = payload.selected_trace_id ?? state.selectedTraceId;
+  const stillThere = state.traces.some((t) => t.trace_id === preferred);
+  state.selectedTraceId = stillThere ? preferred : state.traces[0]?.trace_id;
+  state.activeTab = "waterfall";
+
+  renderHeader();
+  renderTraceList();
+  renderTraceView();
+  showView(state.traces.length === 0 ? "empty" : "explorer");
+}
+
+function selectTrace(traceId: string) {
+  if (state.selectedTraceId === traceId) return;
+  state.selectedTraceId = traceId;
+  state.selectedSpanId = undefined;
+  state.activeTab = "waterfall";
+  closeDetail();
+  renderTraceList();
+  renderTraceView();
+}
+
+/** Arrow-key navigation: move selection by ±1 within the list order. */
+function moveTraceSelection(delta: number) {
+  if (state.traces.length === 0) return;
+  const idx = state.traces.findIndex((t) => t.trace_id === state.selectedTraceId);
+  const next = idx === -1 ? 0 : Math.min(state.traces.length - 1, Math.max(0, idx + delta));
+  const trace = state.traces[next];
+  if (!trace || trace.trace_id === state.selectedTraceId) return;
+  selectTrace(trace.trace_id);
+  traceListEl
+    .querySelector(`[data-trace-id="${CSS.escape(trace.trace_id)}"]`)
+    ?.scrollIntoView({ block: "nearest" });
+}
+
+// ---------------------------------------------------------------------------
+// Trace list rendering
+// ---------------------------------------------------------------------------
+
+function createServiceChip(name: string): HTMLElement {
+  const chip = document.createElement("span");
+  chip.className = "service-chip";
+  chip.textContent = name;
+  return chip;
+}
+
+function createTraceRow(trace: QylTrace): HTMLElement {
+  const row = document.createElement("li");
+  row.className = "trace-row";
+  row.dataset.traceId = trace.trace_id;
+  row.setAttribute("role", "option");
+  row.tabIndex = -1;
+  if (trace.trace_id === state.selectedTraceId) {
+    row.classList.add("selected");
+    row.setAttribute("aria-selected", "true");
+  }
+  if (trace.has_error) row.classList.add("has-error");
+
+  const top = document.createElement("div");
+  top.className = "trace-row-top";
+  if (trace.has_error) {
+    const warn = document.createElement("span");
+    warn.className = "trace-warn";
+    warn.textContent = "⚠";
+    warn.title = "Trace contains error spans";
+    top.appendChild(warn);
+  }
+  const name = document.createElement("span");
+  name.className = "trace-row-name";
+  name.textContent = traceDisplayName(trace);
+  name.title = traceDisplayName(trace);
+  top.appendChild(name);
+  const duration = document.createElement("span");
+  duration.className = "trace-row-duration mono";
+  duration.textContent = formatNs(trace.duration_ns);
+  top.appendChild(duration);
+  row.appendChild(top);
+
+  const meta = document.createElement("div");
+  meta.className = "trace-row-meta";
+  const id = document.createElement("span");
+  id.className = "mono dim";
+  id.textContent = shortId(trace.trace_id);
+  meta.appendChild(id);
+  const spans = document.createElement("span");
+  spans.className = "dim";
+  spans.textContent = `${trace.span_count} span${trace.span_count === 1 ? "" : "s"}`;
+  meta.appendChild(spans);
+  row.appendChild(meta);
+
+  if (trace.services.length > 0) {
+    const chips = document.createElement("div");
+    chips.className = "trace-row-chips";
+    for (const service of trace.services.slice(0, 4)) {
+      chips.appendChild(createServiceChip(service));
+    }
+    if (trace.services.length > 4) {
+      const more = document.createElement("span");
+      more.className = "dim";
+      more.textContent = `+${trace.services.length - 4}`;
+      chips.appendChild(more);
+    }
+    row.appendChild(chips);
+  }
+
+  row.addEventListener("click", () => selectTrace(trace.trace_id));
+  return row;
+}
+
+function renderTraceList() {
+  const fragment = document.createDocumentFragment();
+  for (const trace of state.traces) {
+    fragment.appendChild(createTraceRow(trace));
+  }
+  traceListEl.replaceChildren(fragment);
+}
+
+// ---------------------------------------------------------------------------
+// Trace view (summary + tabs)
+// ---------------------------------------------------------------------------
+
+function renderTraceView() {
+  const trace = selectedTrace();
+  traceViewEmptyEl.hidden = Boolean(trace);
+  traceViewBodyEl.hidden = !trace;
+  if (!trace) return;
+
+  traceTitleEl.textContent = traceDisplayName(trace);
+  traceStatusBadgeEl.textContent = trace.has_error ? "Error" : "OK";
+  traceStatusBadgeEl.className = `trace-status-badge ${trace.has_error ? "error" : "ok"}`;
+  traceIdLabelEl.textContent = trace.trace_id;
+  traceDurationLabelEl.textContent = formatNs(trace.duration_ns);
+  traceSpanCountLabelEl.textContent = `${trace.span_count} span${trace.span_count === 1 ? "" : "s"}`;
+  const chips = document.createDocumentFragment();
+  for (const service of trace.services) chips.appendChild(createServiceChip(service));
+  traceServicesEl.replaceChildren(chips);
+
+  renderTabs();
+  renderWaterfall(trace);
+  if (state.activeTab === "logs") void showLogsTab(trace);
+}
+
+function renderTabs() {
+  const isLogs = state.activeTab === "logs";
+  tabWaterfallBtn.classList.toggle("active", !isLogs);
+  tabWaterfallBtn.setAttribute("aria-selected", String(!isLogs));
+  tabLogsBtn.classList.toggle("active", isLogs);
+  tabLogsBtn.setAttribute("aria-selected", String(isLogs));
+  waterfallPanelEl.hidden = isLogs;
+  logsPanelEl.hidden = !isLogs;
+}
+
+function setTab(tab: Tab) {
+  if (state.activeTab === tab) return;
+  state.activeTab = tab;
+  renderTabs();
+  const trace = selectedTrace();
+  if (tab === "logs" && trace) void showLogsTab(trace);
+}
+
+// ---------------------------------------------------------------------------
+// Waterfall rendering
+// ---------------------------------------------------------------------------
+
+function renderTimeRuler(totalNs: number) {
+  timeRulerEl.replaceChildren();
+  const ticks = 4;
+  for (let i = 0; i <= ticks; i++) {
+    const pct = (i / ticks) * 100;
+    const tick = document.createElement("span");
+    tick.className = "ruler-tick";
+    if (i === 0) tick.classList.add("first");
+    if (i === ticks) tick.classList.add("last");
+    tick.style.left = `${pct}%`;
+    tick.textContent = totalNs > 0 ? formatNs((i / ticks) * totalNs) : "0 ns";
+    timeRulerEl.appendChild(tick);
   }
 }
 
-/** Avatar image with colored-initial fallback on missing/failed load. */
-function createAvatar(author: XAuthor): HTMLElement {
-  const wrap = document.createElement("div");
-  wrap.className = "avatar";
+function createSpanRow(row: WaterfallRow<QylSpan>, traceStartNs: number): HTMLElement {
+  const { span, depth } = row;
+  const flavor = spanFlavor(span);
+  const isError = span.status?.code === 2;
 
-  const useFallback = () => {
-    wrap.replaceChildren();
-    wrap.classList.add("avatar-fallback");
-    wrap.style.backgroundColor = avatarColor(author.username);
-    const initial = (author.name || author.username || "?").trim().charAt(0);
-    wrap.textContent = initial.toUpperCase() || "?";
-  };
+  const el = document.createElement("div");
+  el.className = `span-row flavor-${flavor}`;
+  if (isError) el.classList.add("has-error");
+  if (span.span_id === state.selectedSpanId) el.classList.add("selected");
+  el.dataset.spanId = span.span_id;
+  el.tabIndex = 0;
+  el.setAttribute("role", "button");
+  el.setAttribute("aria-label", `Span ${span.name}, ${formatNs(span.end_time_unix_nano - span.start_time_unix_nano)}`);
 
-  const src = safeHttpUrl(author.profile_image_url);
-  if (src) {
-    const img = document.createElement("img");
-    img.alt = "";
-    img.loading = "lazy";
-    img.referrerPolicy = "no-referrer";
-    img.addEventListener("error", useFallback);
-    img.src = src;
-    wrap.appendChild(img);
+  // --- Name column (depth-indented) ---
+  const nameCol = document.createElement("div");
+  nameCol.className = "span-name-col";
+  nameCol.style.paddingLeft = `${8 + Math.min(depth, 24) * 14}px`;
+  const dot = document.createElement("span");
+  dot.className = "span-dot";
+  nameCol.appendChild(dot);
+  const name = document.createElement("span");
+  name.className = "span-name";
+  name.textContent = span.name;
+  name.title = span.name;
+  nameCol.appendChild(name);
+  const service = document.createElement("span");
+  service.className = "span-service dim";
+  service.textContent = serviceName(span);
+  nameCol.appendChild(service);
+  el.appendChild(nameCol);
+
+  // --- Bar column ---
+  const barCol = document.createElement("div");
+  barCol.className = "span-bar-col";
+  const bar = document.createElement("span");
+  bar.className = "span-bar";
+  bar.style.left = `${row.leftPct}%`;
+  bar.style.width = `${row.widthPct}%`;
+  barCol.appendChild(bar);
+  const durationLabel = document.createElement("span");
+  durationLabel.className = "span-duration mono";
+  // Sit the label after the bar; when the bar ends near the right edge,
+  // flip it to the left of the bar, or inside the bar when there is no
+  // room on either side (near-full-width bars).
+  const barEnd = row.leftPct + row.widthPct;
+  if (barEnd <= 82) {
+    durationLabel.style.left = `${barEnd + 0.6}%`;
+  } else if (row.leftPct >= 12) {
+    durationLabel.style.right = `${100 - row.leftPct + 0.6}%`;
   } else {
-    useFallback();
+    durationLabel.classList.add("inside");
+    durationLabel.style.right = `${Math.max(0.6, 100 - barEnd + 0.6)}%`;
   }
-  return wrap;
-}
+  durationLabel.textContent = formatNs(span.end_time_unix_nano - span.start_time_unix_nano);
+  barCol.appendChild(durationLabel);
+  el.appendChild(barCol);
 
-/** One metric ("icon + compact count"). Icons are constant markup. */
-function createMetric(
-  kind: "reply" | "repost" | "like" | "views",
-  value: number | undefined,
-  label: string,
-): HTMLElement {
-  const el = document.createElement("span");
-  el.className = `metric metric-${kind}`;
-  el.title = label;
-  const icon = document.createElement("span");
-  icon.className = "metric-icon";
-  icon.innerHTML = ICONS[kind]; // constant markup only
-  const count = document.createElement("span");
-  count.className = "metric-count";
-  count.textContent = formatCompact(value);
-  el.append(icon, count);
+  const open = () => openDetail(span, traceStartNs);
+  el.addEventListener("click", open);
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target === el) open();
+  });
   return el;
 }
 
-function createMediaGrid(media: XMedia[]): HTMLElement | null {
-  const items = media
-    .map((m) => ({
-      type: m.type,
-      src: safeHttpUrl(m.type === "photo" ? m.url ?? m.preview_image_url : m.preview_image_url ?? m.url),
-    }))
-    .filter((m): m is { type: XMedia["type"]; src: string } => Boolean(m.src));
-  if (items.length === 0) return null;
-
-  const grid = document.createElement("div");
-  grid.className = `post-media media-count-${Math.min(items.length, 4)}`;
-  for (const item of items.slice(0, 4)) {
-    const cell = document.createElement("div");
-    cell.className = "media-item";
-    const img = document.createElement("img");
-    img.alt = "";
-    img.loading = "lazy";
-    img.referrerPolicy = "no-referrer";
-    img.src = item.src;
-    // Hide broken media cells instead of showing a broken-image glyph.
-    img.addEventListener("error", () => {
-      cell.remove();
-    });
-    cell.appendChild(img);
-    if (item.type === "video" || item.type === "animated_gif") {
-      const badge = document.createElement("span");
-      badge.className = "media-play";
-      badge.innerHTML = ICONS.play; // constant markup
-      cell.appendChild(badge);
-    }
-    grid.appendChild(cell);
+function renderWaterfall(trace: QylTrace) {
+  const waterfall = computeWaterfall(trace.spans);
+  renderTimeRuler(waterfall.totalNs);
+  const fragment = document.createDocumentFragment();
+  for (const row of waterfall.rows) {
+    fragment.appendChild(createSpanRow(row, waterfall.traceStartNs));
   }
-  return grid;
+  spanRowsEl.replaceChildren(fragment);
+  if (waterfall.rows.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "logs-state";
+    empty.textContent = "This trace has no spans.";
+    spanRowsEl.appendChild(empty);
+  }
 }
 
-function createPostCard(post: XPost): HTMLElement {
-  const card = document.createElement("article");
-  card.className = "post";
-  card.tabIndex = 0;
-  card.setAttribute("role", "link");
-  card.setAttribute(
-    "aria-label",
-    `Post by ${post.author.name || post.author.username}. Open on X.`,
-  );
+// ---------------------------------------------------------------------------
+// Span detail panel
+// ---------------------------------------------------------------------------
 
-  card.appendChild(createAvatar(post.author));
-
+function detailSection(label: string): { section: HTMLElement; body: HTMLElement } {
+  const section = document.createElement("section");
+  section.className = "detail-section";
+  const heading = document.createElement("div");
+  heading.className = "detail-label";
+  heading.textContent = label;
+  section.appendChild(heading);
   const body = document.createElement("div");
-  body.className = "post-body";
+  section.appendChild(body);
+  return { section, body };
+}
 
-  // --- Header row: name · badge · @handle · time ---
+function detailStat(label: string, value: string, cls?: string): HTMLElement {
+  const cell = document.createElement("div");
+  cell.className = "detail-stat";
+  const labelEl = document.createElement("div");
+  labelEl.className = "detail-label";
+  labelEl.textContent = label;
+  cell.appendChild(labelEl);
+  const valueEl = document.createElement("div");
+  valueEl.className = `detail-stat-value${cls ? ` ${cls}` : ""}`;
+  valueEl.textContent = value;
+  cell.appendChild(valueEl);
+  return cell;
+}
+
+function attributeRows(container: HTMLElement, attrs: Array<{ key: string; value: unknown }>) {
+  const table = document.createElement("div");
+  table.className = "attr-table";
+  for (const attr of attrs) {
+    if (typeof attr?.key !== "string") continue;
+    const keyEl = document.createElement("span");
+    keyEl.className = "attr-key mono";
+    if (attr.key.startsWith("error.") || attr.key.startsWith("exception.")) {
+      keyEl.classList.add("error");
+    }
+    keyEl.textContent = attr.key;
+    const valueEl = document.createElement("span");
+    valueEl.className = "attr-value mono";
+    valueEl.textContent = stringifyValue(attr.value);
+    table.append(keyEl, valueEl);
+  }
+  container.appendChild(table);
+}
+
+/** Render one span event; `key: value` pairs when items are {key,value}. */
+function renderEvent(event: QylSpanEvent, spanStartNs: number): HTMLElement {
+  const card = document.createElement("div");
+  card.className = "event-card";
+  const isException = event.name === "exception";
+  if (isException) card.classList.add("exception");
+
   const head = document.createElement("div");
-  head.className = "post-head";
-
+  head.className = "event-head";
   const name = document.createElement("span");
-  name.className = "post-name";
-  name.textContent = post.author.name || post.author.username;
+  name.className = "event-name";
+  name.textContent = event.name;
   head.appendChild(name);
-
-  if (post.author.verified) {
-    const badge = document.createElement("span");
-    badge.className = "verified-badge";
-    badge.title = "Verified";
-    badge.innerHTML = ICONS.verified; // constant markup
-    head.appendChild(badge);
-  }
-
-  const handle = document.createElement("span");
-  handle.className = "post-handle";
-  handle.textContent = `@${post.author.username}`;
-  head.appendChild(handle);
-
-  const dot = document.createElement("span");
-  dot.className = "post-dot";
-  dot.textContent = "·";
-  head.appendChild(dot);
-
-  const time = document.createElement("time");
-  time.className = "post-time";
-  time.dateTime = post.created_at;
-  time.textContent = relativeTime(post.created_at);
-  time.title = new Date(post.created_at).toLocaleString();
+  const time = document.createElement("span");
+  time.className = "mono dim";
+  time.textContent = `+${formatNs(Math.max(0, event.time_unix_nano - spanStartNs))}`;
   head.appendChild(time);
+  card.appendChild(head);
 
-  body.appendChild(head);
-
-  // --- Text (escaped + linkified) ---
-  const textEl = document.createElement("p");
-  textEl.className = "post-text";
-  linkifyInto(textEl, post.text, post.urls);
-  body.appendChild(textEl);
-
-  // --- Media previews ---
-  if (post.media && post.media.length > 0) {
-    const grid = createMediaGrid(post.media);
-    if (grid) body.appendChild(grid);
+  for (const item of event.attributes ?? []) {
+    const pair = item as { key?: unknown; value?: unknown } | null;
+    const key = pair && typeof pair.key === "string" ? pair.key : undefined;
+    const value = key !== undefined ? pair?.value : item;
+    const row = document.createElement("div");
+    row.className = "event-attr";
+    if (key !== undefined) {
+      const keyEl = document.createElement("span");
+      keyEl.className = "attr-key mono";
+      keyEl.textContent = key;
+      row.appendChild(keyEl);
+    }
+    if (key === "exception.stacktrace") {
+      const pre = document.createElement("pre");
+      pre.className = "stacktrace mono";
+      pre.textContent = stringifyValue(value);
+      row.appendChild(pre);
+    } else {
+      const valueEl = document.createElement("span");
+      valueEl.className = "attr-value mono";
+      valueEl.textContent = stringifyValue(value);
+      row.appendChild(valueEl);
+    }
+    card.appendChild(row);
   }
-
-  // --- Metric bar ---
-  const metrics = document.createElement("div");
-  metrics.className = "post-metrics";
-  metrics.appendChild(createMetric("reply", post.metrics?.replies, "Replies"));
-  metrics.appendChild(createMetric("repost", post.metrics?.reposts, "Reposts"));
-  metrics.appendChild(createMetric("like", post.metrics?.likes, "Likes"));
-  if (post.metrics?.views !== undefined) {
-    metrics.appendChild(createMetric("views", post.metrics.views, "Views"));
-  }
-  body.appendChild(metrics);
-
-  card.appendChild(body);
-
-  // --- Open on X (host-mediated link opening; degrades gracefully) ---
-  const postUrl = `https://x.com/${encodeURIComponent(post.author.username)}/status/${encodeURIComponent(post.id)}`;
-  card.addEventListener("click", () => void openExternal(postUrl));
-  card.addEventListener("keydown", (e) => {
-    // Ignore Enter presses on interactive children (e.g. focused inline
-    // links) — their own handlers fire, and acting here would open two links.
-    if (e.key === "Enter" && e.target === card) void openExternal(postUrl);
-  });
-
   return card;
 }
 
-/** Render a page of posts into the timeline (replace or append). */
-function applyPage(payload: FetchPostsPayload, append: boolean) {
-  if (!append) {
-    state.posts = [];
-    state.seenIds.clear();
-    timelineEl.replaceChildren();
+function openDetail(span: QylSpan, traceStartNs: number) {
+  state.selectedSpanId = span.span_id;
+  // Refresh row highlight without a full waterfall re-render.
+  for (const row of spanRowsEl.querySelectorAll<HTMLElement>(".span-row")) {
+    row.classList.toggle("selected", row.dataset.spanId === span.span_id);
   }
-  state.mode = payload.mode;
-  state.nextToken = payload.next_token;
 
-  const fragment = document.createDocumentFragment();
-  for (const post of payload.posts) {
-    if (state.seenIds.has(post.id)) continue;
-    state.seenIds.add(post.id);
-    state.posts.push(post);
-    fragment.appendChild(createPostCard(post));
+  detailTitleEl.textContent = span.name;
+  const body = document.createDocumentFragment();
+
+  const stats = document.createElement("div");
+  stats.className = "detail-stats";
+  stats.appendChild(detailStat("Service", serviceName(span)));
+  stats.appendChild(detailStat("Kind", KIND_LABELS[span.kind] ?? String(span.kind)));
+  stats.appendChild(
+    detailStat("Duration", formatNs(span.end_time_unix_nano - span.start_time_unix_nano)),
+  );
+  stats.appendChild(
+    detailStat("Offset", `+${formatNs(Math.max(0, span.start_time_unix_nano - traceStartNs))}`),
+  );
+  const statusCode = span.status?.code ?? 0;
+  const statusLabel = statusCode === 2 ? "Error" : statusCode === 1 ? "OK" : "Unset";
+  stats.appendChild(
+    detailStat("Status", statusLabel, statusCode === 2 ? "status-error" : statusCode === 1 ? "status-ok" : "status-unset"),
+  );
+  stats.appendChild(detailStat("Start", formatLogTime(span.start_time_unix_nano)));
+  const attrNumber = (key: string): number | undefined => {
+    const v = (span.attributes ?? []).find((a) => a?.key === key)?.value;
+    return typeof v === "number" ? v : undefined;
+  };
+  const inTokens = attrNumber("gen_ai.usage.input_tokens");
+  const outTokens = attrNumber("gen_ai.usage.output_tokens");
+  if (inTokens !== undefined || outTokens !== undefined) {
+    stats.appendChild(
+      detailStat(
+        "Tokens",
+        `${inTokens !== undefined ? formatCompact(inTokens) : "—"} in · ${outTokens !== undefined ? formatCompact(outTokens) : "—"} out`,
+      ),
+    );
   }
-  timelineEl.appendChild(fragment);
+  body.appendChild(stats);
 
-  renderHeader();
-  loadMoreBtn.textContent = "Load more";
-  loadMoreBtn.disabled = false;
-  showView(state.posts.length === 0 ? "empty" : "timeline");
+  if (span.status?.message) {
+    const { section, body: msgBody } = detailSection("Status message");
+    const msg = document.createElement("div");
+    msg.className = "status-message mono";
+    msg.textContent = span.status.message;
+    msgBody.appendChild(msg);
+    body.appendChild(section);
+  }
+
+  const { section: ids, body: idsBody } = detailSection("Identifiers");
+  const idTable = document.createElement("div");
+  idTable.className = "attr-table";
+  const idPairs: Array<[string, string | undefined]> = [
+    ["trace", span.trace_id],
+    ["span", span.span_id],
+    ["parent", span.parent_span_id],
+  ];
+  for (const [label, value] of idPairs) {
+    if (!value) continue;
+    const keyEl = document.createElement("span");
+    keyEl.className = "attr-key mono";
+    keyEl.textContent = label;
+    const valueEl = document.createElement("span");
+    valueEl.className = "attr-value mono";
+    valueEl.textContent = value;
+    idTable.append(keyEl, valueEl);
+  }
+  idsBody.appendChild(idTable);
+  body.appendChild(ids);
+
+  const attrs = span.attributes ?? [];
+  if (attrs.length > 0) {
+    const { section, body: attrsBody } = detailSection(`Attributes (${attrs.length})`);
+    attributeRows(attrsBody, attrs);
+    body.appendChild(section);
+  }
+
+  const events = span.events ?? [];
+  if (events.length > 0) {
+    const { section, body: eventsBody } = detailSection(`Events (${events.length})`);
+    for (const event of events) {
+      eventsBody.appendChild(renderEvent(event, span.start_time_unix_nano));
+    }
+    body.appendChild(section);
+  }
+
+  detailBodyEl.replaceChildren(body);
+  detailPanelEl.hidden = false;
+  detailBodyEl.scrollTop = 0;
+}
+
+function closeDetail() {
+  if (detailPanelEl.hidden) return;
+  detailPanelEl.hidden = true;
+  state.selectedSpanId = undefined;
+  for (const row of spanRowsEl.querySelectorAll<HTMLElement>(".span-row.selected")) {
+    row.classList.remove("selected");
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Host interactions
+// Logs tab
 // ---------------------------------------------------------------------------
 
-/** Open a URL via the host, guarding on the openLinks capability. */
-async function openExternal(url: string) {
-  const href = safeHttpUrl(url);
-  if (!href) return;
-  if (!app.getHostCapabilities()?.openLinks) {
-    console.warn("Host does not support opening links; ignoring click:", href);
+function renderLogs(logs: QylLogRecord[]) {
+  logsStateEl.hidden = logs.length > 0;
+  if (logs.length === 0) {
+    logsStateEl.textContent = "No logs recorded for this trace.";
+  }
+  const fragment = document.createDocumentFragment();
+  const sorted = [...logs].sort((a, b) => a.time_unix_nano - b.time_unix_nano);
+  for (const log of sorted) {
+    const { label, cls } = severityInfo(log);
+    const row = document.createElement("div");
+    row.className = `log-row severity-${cls}`;
+    const time = document.createElement("span");
+    time.className = "log-time mono dim";
+    time.textContent = formatLogTime(log.time_unix_nano);
+    row.appendChild(time);
+    const badge = document.createElement("span");
+    badge.className = "log-severity";
+    badge.textContent = label;
+    row.appendChild(badge);
+    const logBody = document.createElement("span");
+    logBody.className = "log-body mono";
+    logBody.textContent = log.body;
+    row.appendChild(logBody);
+    fragment.appendChild(row);
+  }
+  logsListEl.replaceChildren(fragment);
+}
+
+async function showLogsTab(trace: QylTrace) {
+  const cached = state.logsCache.get(trace.trace_id);
+  if (cached) {
+    renderLogs(cached);
     return;
   }
+
+  const seq = ++state.logsRequestSeq;
+  logsListEl.replaceChildren();
+  logsStateEl.hidden = false;
+  logsStateEl.textContent = "Loading logs…";
   try {
-    const { isError } = await app.openLink({ url: href });
-    if (isError) console.warn("Host rejected open-link request:", href);
-  } catch (e) {
-    console.error("openLink failed:", e);
-  }
-}
-
-/** Call the app-only `fetch_posts` tool and parse its result. */
-async function fetchPosts(args: {
-  source: TimelineSource;
-  query?: string;
-  username?: string;
-  max_results?: number;
-  next_token?: string;
-}): Promise<FetchPostsPayload> {
-  const result = await app.callServerTool({ name: "fetch_posts", arguments: args });
-  if (result.isError) {
-    throw new Error(toolErrorText(result) ?? "fetch_posts failed");
-  }
-  const payload = parsePostsPayload(result);
-  if (!payload) {
-    throw new Error("fetch_posts returned an invalid payload");
-  }
-  return payload;
-}
-
-// --- Search ---
-searchFormEl.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const query = searchInputEl.value.trim();
-  if (!query || state.busy) return;
-
-  state.busy = true;
-  loadingTextEl.textContent = `Searching for “${query}”…`;
-  showView("loading");
-  try {
-    const payload = await fetchPosts({ source: "search", query });
-    state.source = "search";
-    state.query = query;
-    state.username = undefined;
-    applyPage(payload, /* append */ false);
+    const result = await app.callServerTool({
+      name: "fetch_telemetry",
+      arguments: { view: "logs", trace_id: trace.trace_id, limit: 100 },
+    });
+    if (result.isError) {
+      throw new Error(toolErrorText(result) ?? "fetch_telemetry failed");
+    }
+    const payload = parseLogsPayload(result);
+    if (!payload) {
+      throw new Error("fetch_telemetry returned an invalid logs payload");
+    }
+    state.logsCache.set(trace.trace_id, payload.logs);
+    // Stale guard: the user may have switched traces/tabs mid-flight.
+    if (seq !== state.logsRequestSeq || state.selectedTraceId !== trace.trace_id) return;
+    if (state.activeTab === "logs") renderLogs(payload.logs);
   } catch (err) {
-    console.error("Search failed:", err);
-    if (state.posts.length > 0) {
+    console.error("Logs fetch failed:", err);
+    if (seq !== state.logsRequestSeq || state.selectedTraceId !== trace.trace_id) return;
+    logsStateEl.hidden = false;
+    logsStateEl.textContent = `Couldn't load logs: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Refresh (app-only fetch_telemetry view:"traces")
+// ---------------------------------------------------------------------------
+
+async function refreshTraces() {
+  if (state.busy) return;
+  state.busy = true;
+  refreshBtn.disabled = true;
+  refreshBtn.classList.add("spinning");
+  const hadTraces = state.traces.length > 0;
+  if (!hadTraces) {
+    loadingTextEl.textContent = "Loading traces…";
+    showView("loading");
+  }
+  try {
+    const result = await app.callServerTool({
+      name: "fetch_telemetry",
+      arguments: { view: "traces", limit: 20 },
+    });
+    if (result.isError) {
+      throw new Error(toolErrorText(result) ?? "fetch_telemetry failed");
+    }
+    const payload = parseTracesPayload(result);
+    if (!payload) {
+      throw new Error("fetch_telemetry returned an invalid payload");
+    }
+    applyTraces(payload);
+  } catch (err) {
+    console.error("Refresh failed:", err);
+    if (hadTraces) {
       // Keep what we have; surface the failure non-destructively.
-      showView("timeline");
-      showBanner(`Search failed: ${err instanceof Error ? err.message : String(err)}`);
+      showView("explorer");
+      showBanner(`Refresh failed: ${err instanceof Error ? err.message : String(err)}`);
     } else {
       showError(err instanceof Error ? err.message : String(err));
     }
   } finally {
     state.busy = false;
+    refreshBtn.disabled = false;
+    refreshBtn.classList.remove("spinning");
   }
-});
+}
 
-// --- Load more (pagination via next_token; appends, never replaces) ---
-loadMoreBtn.addEventListener("click", async () => {
-  if (!state.nextToken || state.busy) return;
-  state.busy = true;
-  loadMoreBtn.disabled = true;
-  loadMoreBtn.textContent = "Loading…";
-  try {
-    const payload = await fetchPosts({
-      source: state.source,
-      query: state.query,
-      username: state.username,
-      next_token: state.nextToken,
-    });
-    applyPage(payload, /* append */ true);
-  } catch (err) {
-    console.error("Load more failed:", err);
-    loadMoreBtn.textContent = "Load more";
-    loadMoreBtn.disabled = false;
-    showBanner(`Couldn't load more posts: ${err instanceof Error ? err.message : String(err)}`);
-  } finally {
-    state.busy = false;
+// ---------------------------------------------------------------------------
+// Event listeners
+// ---------------------------------------------------------------------------
+
+refreshBtn.addEventListener("click", () => void refreshTraces());
+emptyRefreshBtn.addEventListener("click", () => void refreshTraces());
+retryBtn.addEventListener("click", () => void refreshTraces());
+detailCloseBtn.addEventListener("click", closeDetail);
+tabWaterfallBtn.addEventListener("click", () => setTab("waterfall"));
+tabLogsBtn.addEventListener("click", () => setTab("logs"));
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeDetail();
+    return;
+  }
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    if (explorerEl.hidden) return;
+    e.preventDefault();
+    moveTraceSelection(e.key === "ArrowDown" ? 1 : -1);
   }
 });
 

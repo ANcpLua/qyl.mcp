@@ -1,25 +1,28 @@
 /**
- * X Apps Server
+ * qyl Apps Server
  *
- * An MCP Apps server for the X (Twitter) API v2 with an interactive
- * timeline viewer UI.
+ * An MCP Apps server for qyl telemetry with an interactive trace/log
+ * explorer UI. Successor to the deleted `services/qyl.mcp` Apps
+ * (TraceExplorer/ErrorExplorer), rebuilt on @modelcontextprotocol/ext-apps.
  *
  * Model-facing tools:
- * - search_posts:     GET /2/tweets/search/recent
- * - get_user:         GET /2/users/by/username/:username
- * - get_user_posts:   GET /2/users/:id/tweets
- * - get_trends:       GET /2/trends/by/woeid/:woeid
- * - display_timeline: fetches posts and renders the timeline viewer UI
+ * - list_traces:    GET /api/v1/traces (summaries, spans omitted)
+ * - get_trace:      GET /api/v1/traces/{traceId} (full spans)
+ * - list_sessions:  GET /api/v1/sessions
+ * - search_logs:    GET /api/v1/logs
+ * - display_traces: fetches traces and renders the trace explorer UI
  *
  * App-only tool (hidden from the model, called by the viewer iframe):
- * - fetch_posts: search / user-timeline fetch with pagination, used by the
- *   viewer's search box, refresh, and "Load more" button.
+ * - fetch_telemetry: traces / single trace / log search, used by the
+ *   viewer's refresh button, drill-down, and logs tab.
  *
  * Modes:
- * - Live mode: `X_BEARER_TOKEN` set → app-only Bearer auth against
- *   https://api.x.com/2. The token is never logged or echoed.
- * - Demo mode: no token, or `X_DEMO=1` → canned dataset so every tool is
- *   fully functional offline (including pagination, 5 posts per page).
+ * - Live mode: fetches from the qyl collector REST API at
+ *   `QYL_COLLECTOR_URL` (default http://127.0.0.1:5100). The read API has
+ *   no auth (only OTLP ingest does), so no token handling.
+ * - Demo mode: `QYL_DEMO=1`, or the collector startup probe getting a
+ *   connection-refused → canned telemetry so every tool is fully
+ *   functional offline (filters included).
  */
 
 import {
@@ -40,220 +43,231 @@ import { z } from "zod";
 // Configuration
 // =============================================================================
 
-const X_API_BASE = "https://api.x.com/2";
+const COLLECTOR_URL = process.env.QYL_COLLECTOR_URL ?? "http://127.0.0.1:5100";
 
-/** URI of the timeline viewer UI resource (see INTERFACE.md). */
-export const RESOURCE_URI = "ui://x-viewer/mcp-app.html";
-
-/** Demo mode pages through the canned set this many posts at a time. */
-const DEMO_PAGE_SIZE = 5;
+/** URI of the trace explorer UI resource (see INTERFACE.md). */
+export const RESOURCE_URI = "ui://qyl-explorer/mcp-app.html";
 
 // Works both from source (server.ts) and compiled (dist/server.js)
 const DIST_DIR = import.meta.filename.endsWith(".ts")
   ? path.join(import.meta.dirname, "dist")
   : import.meta.dirname;
 
-/** Demo mode is active when there is no bearer token or X_DEMO=1. */
-function isDemoMode(): boolean {
-  return !process.env.X_BEARER_TOKEN || process.env.X_DEMO === "1";
+// =============================================================================
+// Collector wire shapes (single source of truth: INTERFACE.md)
+// Response bodies are snake_case with dotted OTel keys; query params are
+// camelCase. Demo data uses the exact same shapes so live mode is a drop-in.
+// =============================================================================
+
+export interface QylTrace {
+  trace_id: string;
+  spans: QylSpan[];
+  root_span?: QylSpan;
+  span_count: number;
+  duration_ns: number;
+  start_time: string; // ISO 8601
+  end_time: string; // ISO 8601
+  services: string[];
+  has_error: boolean;
 }
 
-// =============================================================================
-// Normalized shapes (single source of truth: INTERFACE.md)
-// =============================================================================
-
-export interface XAuthor {
-  id: string;
+export interface QylSpan {
+  span_id: string;
+  trace_id: string;
+  parent_span_id?: string;
   name: string;
-  username: string;
-  profile_image_url?: string;
-  verified?: boolean;
-}
-
-export interface XPost {
-  id: string;
-  text: string;
-  author: XAuthor;
-  created_at: string; // ISO 8601
-  metrics: {
-    likes: number;
-    reposts: number;
-    replies: number;
-    quotes: number;
-    views?: number;
-  };
-  media?: Array<{
-    type: "photo" | "video" | "animated_gif";
-    url?: string;
-    preview_image_url?: string;
+  kind: 0 | 1 | 2 | 3 | 4 | 5; // Unspecified/Internal/Server/Client/Producer/Consumer
+  start_time_unix_nano: number;
+  end_time_unix_nano: number;
+  attributes?: Array<{ key: string; value: unknown }>;
+  events?: Array<{
+    name: string;
+    time_unix_nano: number;
+    attributes?: unknown[];
   }>;
-  urls?: Array<{ url: string; expanded_url: string; display_url: string }>;
+  status: { code: 0 | 1 | 2; message?: string }; // Unset/Ok/Error
+  resource: Record<string, unknown>; // dotted keys; "service.name" always present
 }
 
-export interface XUserProfile extends XAuthor {
-  description?: string;
-  public_metrics?: {
-    followers_count: number;
-    following_count: number;
-    tweet_count: number;
+export interface QylLogRecord {
+  time_unix_nano: number;
+  severity_number: number;
+  severity_text?: string;
+  body: string;
+  attributes?: Array<{ key: string; value: unknown }>;
+  trace_id?: string;
+  span_id?: string;
+  resource: Record<string, unknown>;
+}
+
+export interface QylSession {
+  "session.id": string;
+  "user.id"?: string;
+  start_time: string;
+  end_time?: string;
+  duration_ms?: number;
+  trace_count: number;
+  span_count: number;
+  error_count: number;
+  services: string[];
+  state: string;
+  genai_usage?: {
+    request_count: number;
+    total_input_tokens: number;
+    total_output_tokens: number;
+    models_used: string[];
+    providers_used: string[];
+    estimated_cost_usd?: number;
   };
 }
 
-export interface XTrend {
-  trend_name: string;
-  tweet_count?: number;
-}
-
-/** Result shape shared by search_posts / get_user_posts / fetch_posts. */
-interface PostsPage {
-  posts: XPost[];
-  next_token?: string;
-  mode: "live" | "demo";
-}
+type Mode = "live" | "demo";
 
 // =============================================================================
 // Zod schemas (runtime validators mirroring the interfaces above)
 // =============================================================================
 
-const AuthorSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  username: z.string(),
-  profile_image_url: z.string().optional(),
-  verified: z.boolean().optional(),
-});
+const AttributeSchema = z.object({ key: z.string(), value: z.unknown() });
 
-const PostSchema = z.object({
-  id: z.string(),
-  text: z.string(),
-  author: AuthorSchema,
-  created_at: z.string().describe("ISO 8601 timestamp"),
-  metrics: z.object({
-    likes: z.number(),
-    reposts: z.number(),
-    replies: z.number(),
-    quotes: z.number(),
-    views: z.number().optional(),
-  }),
-  media: z
+const SpanSchema = z.object({
+  span_id: z.string(),
+  trace_id: z.string(),
+  parent_span_id: z.string().optional(),
+  name: z.string(),
+  kind: z
+    .number()
+    .int()
+    .min(0)
+    .max(5)
+    .describe("0 Unspecified, 1 Internal, 2 Server, 3 Client, 4 Producer, 5 Consumer"),
+  start_time_unix_nano: z.number(),
+  end_time_unix_nano: z.number(),
+  attributes: z.array(AttributeSchema).optional(),
+  events: z
     .array(
       z.object({
-        type: z.enum(["photo", "video", "animated_gif"]),
-        url: z.string().optional(),
-        preview_image_url: z.string().optional(),
+        name: z.string(),
+        time_unix_nano: z.number(),
+        attributes: z.array(z.unknown()).optional(),
       }),
     )
     .optional(),
-  urls: z
-    .array(
-      z.object({
-        url: z.string(),
-        expanded_url: z.string(),
-        display_url: z.string(),
-      }),
-    )
+  status: z.object({
+    code: z.number().int().min(0).max(2).describe("0 Unset, 1 Ok, 2 Error"),
+    message: z.string().optional(),
+  }),
+  resource: z
+    .record(z.string(), z.unknown())
+    .describe('OTel resource with dotted keys; "service.name" always present'),
+});
+
+/** Trace summary — everything except the spans array (list_traces output). */
+const TraceSummarySchema = z.object({
+  trace_id: z.string(),
+  root_span: SpanSchema.optional(),
+  span_count: z.number().int(),
+  duration_ns: z.number(),
+  start_time: z.string().describe("ISO 8601 timestamp"),
+  end_time: z.string().describe("ISO 8601 timestamp"),
+  services: z.array(z.string()),
+  has_error: z.boolean(),
+});
+
+const TraceSchema = TraceSummarySchema.extend({
+  spans: z.array(SpanSchema),
+});
+
+const LogRecordSchema = z.object({
+  time_unix_nano: z.number(),
+  severity_number: z
+    .number()
+    .describe("OTel severity: 1-4 TRACE, 5-8 DEBUG, 9-12 INFO, 13-16 WARN, 17-20 ERROR, 21-24 FATAL"),
+  severity_text: z.string().optional(),
+  body: z.string(),
+  attributes: z.array(AttributeSchema).optional(),
+  trace_id: z.string().optional(),
+  span_id: z.string().optional(),
+  resource: z.record(z.string(), z.unknown()),
+});
+
+const SessionSchema = z.object({
+  "session.id": z.string(),
+  "user.id": z.string().optional(),
+  start_time: z.string(),
+  end_time: z.string().optional(),
+  duration_ms: z.number().optional(),
+  trace_count: z.number().int(),
+  span_count: z.number().int(),
+  error_count: z.number().int(),
+  services: z.array(z.string()),
+  state: z.string(),
+  genai_usage: z
+    .object({
+      request_count: z.number().int(),
+      total_input_tokens: z.number(),
+      total_output_tokens: z.number(),
+      models_used: z.array(z.string()),
+      providers_used: z.array(z.string()),
+      estimated_cost_usd: z.number().optional(),
+    })
     .optional(),
 });
 
 const ModeSchema = z.enum(["live", "demo"]);
 
-const UserProfileSchema = AuthorSchema.extend({
-  description: z.string().optional(),
-  public_metrics: z
-    .object({
-      followers_count: z.number(),
-      following_count: z.number(),
-      tweet_count: z.number(),
-    })
-    .optional(),
-});
-
-const TrendSchema = z.object({
-  trend_name: z.string(),
-  tweet_count: z.number().optional(),
-});
-
 // =============================================================================
-// X API v2 client
+// Collector REST client
 // =============================================================================
 
 /** Error with a message already suitable for showing to the model/user. */
-class XApiError extends Error {
+class CollectorError extends Error {
   constructor(
     message: string,
+    readonly connectionError = false,
     readonly status?: number,
   ) {
     super(message);
-    this.name = "XApiError";
+    this.name = "CollectorError";
   }
 }
 
 /**
- * GET an X API v2 endpoint with Bearer auth and useful error mapping.
- * `params` values that are undefined are omitted from the query string.
+ * GET a collector endpoint. Query params are camelCase per the collector
+ * API; `undefined` values are omitted. Connection failures map to a clear,
+ * actionable message.
  */
-async function xApiGet(
+async function collectorGet(
   pathname: string,
-  params: Record<string, string | number | undefined> = {},
+  params: Record<string, string | number | boolean | undefined> = {},
 ): Promise<any> {
-  const token = process.env.X_BEARER_TOKEN;
-  if (!token) {
-    // Callers gate on isDemoMode() first, so this is a defensive check.
-    throw new XApiError(
-      "X_BEARER_TOKEN is not set — live X API calls are unavailable.",
-    );
-  }
-
-  const url = new URL(`${X_API_BASE}${pathname}`);
+  const url = new URL(pathname, COLLECTOR_URL);
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
 
   let response: Response;
   try {
-    response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-  } catch (err) {
-    throw new XApiError(
-      `Network error calling the X API: ${err instanceof Error ? err.message : String(err)}`,
+    response = await fetch(url);
+  } catch {
+    throw new CollectorError(
+      `collector unreachable at ${COLLECTOR_URL} — start it with ` +
+        "`dotnet run --project services/qyl.collector` or set QYL_DEMO=1",
+      true,
     );
-  }
-
-  if (response.status === 401) {
-    throw new XApiError(
-      "X API authentication failed (401): invalid or missing bearer token. " +
-        "Check the X_BEARER_TOKEN environment variable.",
-      401,
-    );
-  }
-
-  if (response.status === 429) {
-    // x-rate-limit-reset is a Unix epoch (seconds) when the window resets.
-    const reset = response.headers.get("x-rate-limit-reset");
-    let when = "";
-    if (reset) {
-      const resetMs = Number(reset) * 1000;
-      if (Number.isFinite(resetMs)) {
-        const seconds = Math.max(0, Math.ceil((resetMs - Date.now()) / 1000));
-        when = ` Rate limit resets at ${new Date(resetMs).toISOString()} (~${seconds}s from now).`;
-      }
-    }
-    throw new XApiError(`X API rate limit exceeded (429).${when}`, 429);
   }
 
   if (!response.ok) {
-    // X API errors usually carry { title, detail } — surface them when present.
     let detail = "";
     try {
       const body: any = await response.json();
-      detail = body?.detail || body?.title || body?.errors?.[0]?.message || "";
+      detail = body?.error || body?.detail || body?.title || "";
     } catch {
       /* non-JSON body — status alone will have to do */
     }
-    throw new XApiError(
-      `X API request failed (${response.status} ${response.statusText})` +
+    throw new CollectorError(
+      `collector request failed (${response.status} ${response.statusText}) for ${pathname}` +
         (detail ? `: ${detail}` : ""),
+      false,
       response.status,
     );
   }
@@ -261,484 +275,1065 @@ async function xApiGet(
   return response.json();
 }
 
-/** Field/expansion params shared by every tweet-returning endpoint. */
-const TWEET_FIELD_PARAMS = {
-  "tweet.fields": "created_at,public_metrics,entities,attachments",
-  expansions: "author_id,attachments.media_keys",
-  "user.fields": "name,username,profile_image_url,verified",
-  "media.fields": "type,url,preview_image_url",
-} as const;
-
-/** Map a raw X API user object into the normalized XAuthor shape. */
-function mapAuthor(user: any): XAuthor {
-  return {
-    id: String(user?.id ?? ""),
-    name: user?.name ?? "Unknown",
-    username: user?.username ?? "unknown",
-    ...(user?.profile_image_url
-      ? { profile_image_url: user.profile_image_url }
-      : {}),
-    ...(typeof user?.verified === "boolean"
-      ? { verified: user.verified }
-      : {}),
-  };
+/** Collector list endpoints return CursorPage<T>; tolerate bare arrays too. */
+function unwrapItems<T>(body: any): T[] {
+  if (Array.isArray(body)) return body as T[];
+  return (body?.items ?? []) as T[];
 }
 
-/**
- * Map a raw X API tweets payload (data + includes.users + includes.media)
- * into normalized XPost[] plus the pagination token from meta.next_token.
- */
-function mapTweetsPayload(payload: any): {
-  posts: XPost[];
-  next_token?: string;
-} {
-  const tweets: any[] = payload?.data ?? [];
-  const usersById = new Map<string, any>(
-    (payload?.includes?.users ?? []).map((u: any) => [String(u.id), u]),
-  );
-  const mediaByKey = new Map<string, any>(
-    (payload?.includes?.media ?? []).map((m: any) => [String(m.media_key), m]),
-  );
+// =============================================================================
+// Mode selection
+// QYL_DEMO=1 forces demo. Otherwise the first tool call probes the collector
+// (GET /api/v1/traces?limit=1); a connection-refused there pins demo mode for
+// the process lifetime. Any other outcome (including HTTP errors) pins live —
+// the collector is reachable, so real calls should surface real errors.
+// =============================================================================
 
-  const posts: XPost[] = tweets.map((tweet) => {
-    const rawMetrics = tweet.public_metrics ?? {};
+let modeProbe: Promise<Mode> | undefined;
 
-    // Attach expanded media referenced via attachments.media_keys.
-    const media = (tweet.attachments?.media_keys ?? [])
-      .map((key: string) => mediaByKey.get(String(key)))
-      .filter((m: any) => m && ["photo", "video", "animated_gif"].includes(m.type))
-      .map((m: any) => ({
-        type: m.type as "photo" | "video" | "animated_gif",
-        ...(m.url ? { url: m.url } : {}),
-        ...(m.preview_image_url
-          ? { preview_image_url: m.preview_image_url }
-          : {}),
-      }));
+function resolveMode(): Promise<Mode> {
+  if (process.env.QYL_DEMO === "1") return Promise.resolve("demo");
+  return (modeProbe ??= (async () => {
+    try {
+      await collectorGet("/api/v1/traces", { limit: 1 });
+      return "live";
+    } catch (err) {
+      if (err instanceof CollectorError && err.connectionError) {
+        console.error(
+          `qyl-apps-server: ${err.message}. Serving demo telemetry for the rest of this process.`,
+        );
+        return "demo";
+      }
+      return "live";
+    }
+  })());
+}
 
-    // entities.urls includes t.co wrappers for the tweet's own media
-    // (display_url "pic.x.com/…" / "pic.twitter.com/…") — skip those, the
-    // viewer renders media separately.
-    const urls = (tweet.entities?.urls ?? [])
-      .filter(
-        (u: any) =>
-          u?.url &&
-          u?.expanded_url &&
-          !/^pic\.(x|twitter)\.com/.test(u.display_url ?? ""),
-      )
-      .map((u: any) => ({
-        url: u.url,
-        expanded_url: u.expanded_url,
-        display_url: u.display_url ?? u.expanded_url,
-      }));
+// =============================================================================
+// Demo dataset (exact collector wire shapes; timestamps relative to process
+// start so the data always looks recent)
+// =============================================================================
 
-    const post: XPost = {
-      id: String(tweet.id),
-      text: tweet.text ?? "",
-      author: mapAuthor(usersById.get(String(tweet.author_id))),
-      created_at: tweet.created_at ?? new Date().toISOString(),
-      metrics: {
-        likes: rawMetrics.like_count ?? 0,
-        reposts: rawMetrics.retweet_count ?? 0,
-        replies: rawMetrics.reply_count ?? 0,
-        quotes: rawMetrics.quote_count ?? 0,
-        ...(typeof rawMetrics.impression_count === "number"
-          ? { views: rawMetrics.impression_count }
-          : {}),
-      },
+/** Deterministic hex id — stable within a process, looks like real OTel ids. */
+function hexId(seed: number, length: number): string {
+  let hex = "";
+  let x = (seed ^ 0x5f3759df) >>> 0;
+  while (hex.length < length) {
+    x = (x * 1664525 + 1013904223) >>> 0;
+    hex += x.toString(16).padStart(8, "0");
+  }
+  return hex.slice(0, length);
+}
+
+const PROCESS_START_MS = Date.now();
+const minutesAgoMs = (minutes: number) => PROCESS_START_MS - minutes * 60_000;
+const toNano = (absoluteMs: number) => Math.round(absoluteMs * 1e6);
+
+/** Per-service OTel resources shared by demo spans and logs. */
+const DEMO_RESOURCES: Record<string, Record<string, unknown>> = {
+  "qyl-collector": {
+    "service.name": "qyl-collector",
+    "service.version": "0.4.2",
+    "telemetry.sdk.language": "dotnet",
+  },
+  "checkout-api": {
+    "service.name": "checkout-api",
+    "service.version": "2.11.0",
+    "telemetry.sdk.language": "dotnet",
+    "deployment.environment.name": "staging",
+  },
+  "agent-worker": {
+    "service.name": "agent-worker",
+    "service.version": "1.3.7",
+    "telemetry.sdk.language": "python",
+  },
+};
+
+/** Span blueprint: offsets are milliseconds relative to the trace start. */
+interface DemoSpanSpec {
+  parent?: number; // index into the spec array
+  name: string;
+  kind: QylSpan["kind"];
+  service: keyof typeof DEMO_RESOURCES;
+  start: number;
+  end: number;
+  attrs?: Record<string, unknown>;
+  status?: QylSpan["status"];
+  events?: Array<{ name: string; atMs: number; attributes?: unknown[] }>;
+}
+
+function buildDemoTrace(
+  seq: number,
+  startMs: number,
+  specs: DemoSpanSpec[],
+): QylTrace {
+  const traceId = hexId(seq * 7919 + 17, 32);
+
+  const spans: QylSpan[] = specs.map((spec, index) => {
+    const span: QylSpan = {
+      span_id: hexId(seq * 104_729 + index * 31 + 5, 16),
+      trace_id: traceId,
+      name: spec.name,
+      kind: spec.kind,
+      start_time_unix_nano: toNano(startMs + spec.start),
+      end_time_unix_nano: toNano(startMs + spec.end),
+      status: spec.status ?? { code: 0 },
+      resource: DEMO_RESOURCES[spec.service],
     };
-    if (media.length > 0) post.media = media;
-    if (urls.length > 0) post.urls = urls;
-    return post;
+    if (spec.attrs) {
+      span.attributes = Object.entries(spec.attrs).map(([key, value]) => ({
+        key,
+        value,
+      }));
+    }
+    if (spec.events) {
+      span.events = spec.events.map((event) => ({
+        name: event.name,
+        time_unix_nano: toNano(startMs + event.atMs),
+        ...(event.attributes ? { attributes: event.attributes } : {}),
+      }));
+    }
+    return span;
   });
 
-  return { posts, next_token: payload?.meta?.next_token };
-}
+  // Wire up parent ids after all span ids exist.
+  specs.forEach((spec, index) => {
+    if (spec.parent !== undefined) {
+      spans[index].parent_span_id = spans[spec.parent].span_id;
+    }
+  });
 
-/** Strip a leading "@" so both "jack" and "@jack" work. */
-function normalizeUsername(username: string): string {
-  return username.trim().replace(/^@/, "");
-}
-
-// =============================================================================
-// Demo dataset (module-level, active when !X_BEARER_TOKEN || X_DEMO=1)
-// =============================================================================
-
-/** ISO timestamp `hours` hours before module load — keeps demo posts fresh. */
-function hoursAgo(hours: number): string {
-  return new Date(Date.now() - hours * 3_600_000).toISOString();
-}
-
-/**
- * Demo author profiles. Some deliberately have NO profile_image_url so the
- * viewer's colored-initial avatar fallback is exercised.
- */
-const DEMO_USERS: XUserProfile[] = [
-  {
-    id: "1146602870",
-    name: "Dr. Elena Vasquez",
-    username: "astro_elena",
-    profile_image_url:
-      "https://pbs.twimg.com/profile_images/1729384756201349120/eV4kQz9c_normal.jpg",
-    verified: true,
-    description:
-      "Astrophysicist @ ESO. Exoplanet atmospheres, JWST spectroscopy. Views are my own, orbits are Kepler's.",
-    public_metrics: {
-      followers_count: 184203,
-      following_count: 512,
-      tweet_count: 9421,
-    },
-  },
-  {
-    id: "88231404",
-    name: "Marcus Chen",
-    username: "marcusbuilds",
-    // No profile_image_url — exercises the avatar fallback path.
-    description:
-      "Indie dev. Shipping small tools in public. Previously infra @ a big co.",
-    public_metrics: {
-      followers_count: 23417,
-      following_count: 890,
-      tweet_count: 15230,
-    },
-  },
-  {
-    id: "2244994945",
-    name: "Priya Raghavan",
-    username: "priya_ml",
-    profile_image_url:
-      "https://pbs.twimg.com/profile_images/1683902412887746560/8yBq2LtA_normal.jpg",
-    verified: true,
-    description:
-      "ML researcher. Mixture-of-experts, efficient inference. Papers > hot takes.",
-    public_metrics: {
-      followers_count: 96780,
-      following_count: 301,
-      tweet_count: 4102,
-    },
-  },
-  {
-    id: "15804774",
-    name: "Tom Osterberg",
-    username: "tomo_kernel",
-    // No profile_image_url — exercises the avatar fallback path.
-    description: "Linux kernel developer. io_uring, schedulers, coffee.",
-    public_metrics: {
-      followers_count: 41022,
-      following_count: 233,
-      tweet_count: 22841,
-    },
-  },
-  {
-    id: "3108351",
-    name: "Quanta Signals",
-    username: "quantasignals",
-    profile_image_url:
-      "https://pbs.twimg.com/profile_images/1590000123456789012/Qs7pLm2N_normal.jpg",
-    verified: true,
-    description:
-      "Daily signal from physics, math, and computer science research.",
-    public_metrics: {
-      followers_count: 512340,
-      following_count: 87,
-      tweet_count: 31200,
-    },
-  },
-  {
-    id: "742143",
-    name: "Jia Park",
-    username: "jiaparkdev",
-    // No profile_image_url — exercises the avatar fallback path.
-    description: "Frontend engineer. CSS is a programming language, fight me.",
-    public_metrics: {
-      followers_count: 18932,
-      following_count: 1204,
-      tweet_count: 8764,
-    },
-  },
-  {
-    id: "6253282",
-    name: "Dr. Samuel Okoye",
-    username: "sam_okoye",
-    profile_image_url:
-      "https://pbs.twimg.com/profile_images/1655501234567890123/sOk3yE9d_normal.jpg",
-    verified: true,
-    description:
-      "Climate scientist. Sea ice, ocean heat content, and why both matter.",
-    public_metrics: {
-      followers_count: 77105,
-      following_count: 645,
-      tweet_count: 12980,
-    },
-  },
-  {
-    id: "9204812",
-    name: "Lena Fischer",
-    username: "lenafischer_",
-    // No profile_image_url — exercises the avatar fallback path.
-    description: "Robotics PhD candidate. Making robot hands less clumsy.",
-    public_metrics: {
-      followers_count: 9412,
-      following_count: 388,
-      tweet_count: 2201,
-    },
-  },
-];
-
-/** Look up a demo user profile by username (case-insensitive). */
-function demoUser(username: string): XUserProfile | undefined {
-  const wanted = normalizeUsername(username).toLowerCase();
-  return DEMO_USERS.find((u) => u.username.toLowerCase() === wanted);
-}
-
-/** Author-only view of a demo user (drops profile fields). */
-function demoAuthor(username: string): XAuthor {
-  const user = demoUser(username)!;
-  const { description: _d, public_metrics: _m, ...author } = user;
-  return author;
-}
-
-/** Ten realistic demo posts, newest first, spread over recent hours/days. */
-const DEMO_POSTS: XPost[] = [
-  {
-    id: "1876543210987654401",
-    text: "New JWST NIRSpec data on WASP-39b just dropped. The CO2 feature at 4.3µm is even cleaner than in the ERS release — atmospheric metallicity looks ~10x solar. Full spectrum below. 🔭",
-    author: demoAuthor("astro_elena"),
-    created_at: hoursAgo(2),
-    metrics: { likes: 4821, reposts: 1203, replies: 312, quotes: 98, views: 812345 },
-    media: [
-      {
-        type: "photo",
-        url: "https://pbs.twimg.com/media/GXk4v2WbEAA1a2b?format=jpg&name=large",
-        preview_image_url:
-          "https://pbs.twimg.com/media/GXk4v2WbEAA1a2b?format=jpg&name=medium",
-      },
-    ],
-  },
-  {
-    id: "1876543210987654402",
-    text: "Shipped tinylog v0.4 — structured logging for CLIs in a single 8KB file, zero deps. Now with span timing and NDJSON output. Repo here: https://t.co/9xQz2LmA1b",
-    author: demoAuthor("marcusbuilds"),
-    created_at: hoursAgo(3.5),
-    metrics: { likes: 356, reposts: 62, replies: 41, quotes: 8, views: 28904 },
-    urls: [
-      {
-        url: "https://t.co/9xQz2LmA1b",
-        expanded_url: "https://github.com/marcusbuilds/tinylog",
-        display_url: "github.com/marcusbuilds/t…",
-      },
-    ],
-  },
-  {
-    id: "1876543210987654403",
-    text: "Our new paper is out: routing collapse in sparse MoE models is mostly an optimizer artifact, not a capacity problem. A 2-line fix to the router LR schedule recovers 94% of expert utilization. Preprint: https://t.co/4kPz8WnB2c",
-    author: demoAuthor("priya_ml"),
-    created_at: hoursAgo(5),
-    metrics: { likes: 2103, reposts: 587, replies: 164, quotes: 121, views: 340211 },
-    urls: [
-      {
-        url: "https://t.co/4kPz8WnB2c",
-        expanded_url: "https://arxiv.org/abs/2506.11482",
-        display_url: "arxiv.org/abs/2506.11482",
-      },
-    ],
-  },
-  {
-    id: "1876543210987654404",
-    text: "io_uring in 6.16: zero-copy receive finally lands for TCP. Early numbers on our test rig show 38% less CPU at 100Gbps line rate. A decade of plumbing for this moment.",
-    author: demoAuthor("tomo_kernel"),
-    created_at: hoursAgo(8),
-    metrics: { likes: 1876, reposts: 412, replies: 203, quotes: 45, views: 195023 },
-  },
-  {
-    id: "1876543210987654405",
-    text: "Researchers demonstrate 1.2-millisecond quantum coherence in a silicon spin qubit at 1.5K — no dilution refrigerator required. If it replicates, this changes the cost curve for scaling. 🧪",
-    author: demoAuthor("quantasignals"),
-    created_at: hoursAgo(12),
-    metrics: { likes: 6540, reposts: 2210, replies: 388, quotes: 260, views: 1204567 },
-    media: [
-      {
-        type: "photo",
-        url: "https://pbs.twimg.com/media/GXj8r5TaMAEq9pV?format=jpg&name=large",
-        preview_image_url:
-          "https://pbs.twimg.com/media/GXj8r5TaMAEq9pV?format=jpg&name=medium",
-      },
-    ],
-  },
-  {
-    id: "1876543210987654406",
-    text: "CSS anchor positioning is now in all three engines. We can finally delete 400 lines of tooltip-placement JavaScript and replace it with 6 lines of CSS. What a time to be alive.",
-    author: demoAuthor("jiaparkdev"),
-    created_at: hoursAgo(18),
-    metrics: { likes: 3204, reposts: 845, replies: 97, quotes: 66, views: 412876 },
-  },
-  {
-    id: "1876543210987654407",
-    text: "Antarctic sea-ice extent is tracking 1.9M km² below the 1981–2010 median for the third consecutive winter. This is no longer an outlier — it's a regime shift. Our analysis in @Nature this week: https://t.co/7mRt3KcD5e",
-    author: demoAuthor("sam_okoye"),
-    created_at: hoursAgo(26),
-    metrics: { likes: 5112, reposts: 2890, replies: 641, quotes: 402, views: 987654 },
-    urls: [
-      {
-        url: "https://t.co/7mRt3KcD5e",
-        expanded_url:
-          "https://www.nature.com/articles/s41586-026-04412-1",
-        display_url: "nature.com/articles/s4158…",
-      },
-    ],
-  },
-  {
-    id: "1876543210987654408",
-    text: "Our robot hand just buttoned a shirt for the first time. 27 attempts, 1 success, and I cried a little. Tactile-feedback policy trained entirely in sim. Video from the lab:",
-    author: demoAuthor("lenafischer_"),
-    created_at: hoursAgo(34),
-    metrics: { likes: 8931, reposts: 1764, replies: 289, quotes: 154, views: 1567890 },
-    media: [
-      {
-        type: "video",
-        preview_image_url:
-          "https://pbs.twimg.com/ext_tw_video_thumb/1876543098765432107/pu/img/kL9mNo2Pq.jpg",
-      },
-    ],
-  },
-  {
-    id: "1876543210987654409",
-    text: "PSA for observers: the ESO archive now serves calibrated MUSE cubes within 24h of observation. No more reducing your own data at 2am before a proposal deadline. This quietly fixes half of astronomy's reproducibility problem.",
-    author: demoAuthor("astro_elena"),
-    created_at: hoursAgo(47),
-    metrics: { likes: 1420, reposts: 388, replies: 76, quotes: 22, views: 156789 },
-  },
-  {
-    id: "1876543210987654410",
-    text: "Spent the weekend profiling instead of guessing. The 'slow database' was a JSON serializer called in a loop. It is ALWAYS a serializer called in a loop. Measure first, friends.",
-    author: demoAuthor("marcusbuilds"),
-    created_at: hoursAgo(60),
-    metrics: { likes: 2764, reposts: 531, replies: 148, quotes: 89, views: 389012 },
-  },
-];
-
-/** ~8 plausible demo trends for get_trends. */
-const DEMO_TRENDS: XTrend[] = [
-  { trend_name: "#OpenSource", tweet_count: 125400 },
-  { trend_name: "JWST", tweet_count: 88200 },
-  { trend_name: "#MachineLearning", tweet_count: 74600 },
-  { trend_name: "Quantum Computing", tweet_count: 51300 },
-  { trend_name: "Linux 6.16", tweet_count: 32800 },
-  { trend_name: "Starship", tweet_count: 141900 },
-  { trend_name: "#ClimateAction", tweet_count: 46100 },
-  { trend_name: "CRISPR" }, // no tweet_count — exercises the optional field
-];
-
-/**
- * Page through a demo post list DEMO_PAGE_SIZE at a time using an opaque
- * token of the form "demo-page-N" (N is the 1-based page to return next).
- */
-function demoPaginate(posts: XPost[], nextToken?: string): PostsPage {
-  let page = 1;
-  const match = nextToken?.match(/^demo-page-(\d+)$/);
-  if (match) page = Math.max(1, parseInt(match[1], 10));
-
-  const offset = (page - 1) * DEMO_PAGE_SIZE;
-  const slice = posts.slice(offset, offset + DEMO_PAGE_SIZE);
-  const hasMore = offset + DEMO_PAGE_SIZE < posts.length;
+  const startNano = Math.min(...spans.map((s) => s.start_time_unix_nano));
+  const endNano = Math.max(...spans.map((s) => s.end_time_unix_nano));
+  const services = [
+    ...new Set(spans.map((s) => String(s.resource["service.name"]))),
+  ];
 
   return {
-    posts: slice,
-    ...(hasMore ? { next_token: `demo-page-${page + 1}` } : {}),
-    mode: "demo",
+    trace_id: traceId,
+    spans,
+    root_span: spans.find((s) => !s.parent_span_id),
+    span_count: spans.length,
+    duration_ns: endNano - startNano,
+    start_time: new Date(startNano / 1e6).toISOString(),
+    end_time: new Date(endNano / 1e6).toISOString(),
+    services,
+    has_error: spans.some((s) => s.status.code === 2),
   };
 }
 
-/**
- * Demo search: match query words (whole words, so short terms like "ai"
- * don't match inside "trained") against post text and author fields.
- * Falls back to the full canned set when nothing matches, so the viewer's
- * search box always has something to render offline.
- */
-function demoSearch(query: string): XPost[] {
-  const terms = query
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((t) => t.length > 0)
-    .map(
-      (t) =>
-        new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"),
+interface DemoData {
+  traces: QylTrace[]; // newest first
+  logs: QylLogRecord[]; // oldest first
+  sessions: QylSession[];
+  sessionTraces: Record<string, QylTrace[]>;
+}
+
+function buildDemoData(): DemoData {
+  const NPGSQL_STACKTRACE = [
+    "Npgsql.NpgsqlException (0x80004005): Exception while writing to stream",
+    " ---> System.IO.IOException: Unable to write data to the transport connection: Connection reset by peer.",
+    " ---> System.Net.Sockets.SocketException (104): Connection reset by peer",
+    "   at System.Net.Sockets.NetworkStream.Write(ReadOnlySpan`1 buffer)",
+    "   --- End of inner exception stack trace ---",
+    "   at Npgsql.Internal.NpgsqlConnector.Flush(Boolean async)",
+    "   at Npgsql.NpgsqlCommand.ExecuteReader(CommandBehavior behavior)",
+    "   at CheckoutApi.Orders.OrderRepository.InsertAsync(Order order) in /src/Orders/OrderRepository.cs:line 88",
+    "   at CheckoutApi.Checkout.CheckoutHandler.Handle(CheckoutCommand cmd) in /src/Checkout/CheckoutHandler.cs:line 54",
+  ].join("\n");
+
+  // --- Trace 1 (2 min ago): agentic GenAI run — plan, two model calls, a tool
+  // with a DuckDB lookup. agent-worker.
+  const agentRun = buildDemoTrace(1, minutesAgoMs(2), [
+    {
+      name: "POST /v1/agent/run",
+      kind: 2,
+      service: "agent-worker",
+      start: 0,
+      end: 4200,
+      status: { code: 1 },
+      attrs: {
+        "http.request.method": "POST",
+        "url.path": "/v1/agent/run",
+        "http.response.status_code": 200,
+      },
+    },
+    {
+      parent: 0,
+      name: "agent.plan",
+      kind: 1,
+      service: "agent-worker",
+      start: 15,
+      end: 70,
+      attrs: { "qyl.agent.step": "plan" },
+    },
+    {
+      parent: 0,
+      name: "chat claude-sonnet-5",
+      kind: 3,
+      service: "agent-worker",
+      start: 90,
+      end: 2350,
+      attrs: {
+        "gen_ai.system": "anthropic",
+        "gen_ai.request.model": "claude-sonnet-5",
+        "gen_ai.response.model": "claude-sonnet-5",
+        "gen_ai.usage.input_tokens": 1874,
+        "gen_ai.usage.output_tokens": 412,
+      },
+    },
+    {
+      parent: 0,
+      name: "tool.execute search_docs",
+      kind: 1,
+      service: "agent-worker",
+      start: 2400,
+      end: 2900,
+      attrs: { "qyl.tool.name": "search_docs" },
+    },
+    {
+      parent: 3,
+      name: "SELECT docs",
+      kind: 3,
+      service: "agent-worker",
+      start: 2410,
+      end: 2600,
+      attrs: {
+        "db.system": "duckdb",
+        "db.statement":
+          "SELECT id, title, snippet FROM docs WHERE match_bm25(content, ?) LIMIT 10",
+      },
+    },
+    {
+      parent: 0,
+      name: "chat claude-sonnet-5",
+      kind: 3,
+      service: "agent-worker",
+      start: 2950,
+      end: 4150,
+      attrs: {
+        "gen_ai.system": "anthropic",
+        "gen_ai.request.model": "claude-sonnet-5",
+        "gen_ai.response.model": "claude-sonnet-5",
+        "gen_ai.usage.input_tokens": 2412,
+        "gen_ai.usage.output_tokens": 655,
+      },
+    },
+  ]);
+
+  // --- Trace 2 (5 min ago): GenAI summarize that calls the collector's own
+  // API cross-service (agent-worker → qyl-collector → DuckDB).
+  const agentSummarize = buildDemoTrace(2, minutesAgoMs(5), [
+    {
+      name: "POST /v1/agent/summarize",
+      kind: 2,
+      service: "agent-worker",
+      start: 0,
+      end: 2800,
+      status: { code: 1 },
+      attrs: {
+        "http.request.method": "POST",
+        "url.path": "/v1/agent/summarize",
+        "http.response.status_code": 200,
+      },
+    },
+    {
+      parent: 0,
+      name: "chat claude-haiku-4-5",
+      kind: 3,
+      service: "agent-worker",
+      start: 40,
+      end: 1900,
+      attrs: {
+        "gen_ai.system": "anthropic",
+        "gen_ai.request.model": "claude-haiku-4-5",
+        "gen_ai.response.model": "claude-haiku-4-5-20251001",
+        "gen_ai.usage.input_tokens": 932,
+        "gen_ai.usage.output_tokens": 208,
+      },
+    },
+    {
+      parent: 0,
+      name: "GET /api/v1/traces",
+      kind: 3,
+      service: "agent-worker",
+      start: 1950,
+      end: 2100,
+      attrs: {
+        "http.request.method": "GET",
+        "url.full": `${COLLECTOR_URL}/api/v1/traces?limit=20`,
+        "http.response.status_code": 200,
+      },
+    },
+    {
+      parent: 2,
+      name: "GET /api/v1/traces",
+      kind: 2,
+      service: "qyl-collector",
+      start: 1960,
+      end: 2085,
+      attrs: {
+        "http.request.method": "GET",
+        "url.path": "/api/v1/traces",
+        "http.response.status_code": 200,
+      },
+    },
+    {
+      parent: 3,
+      name: "SELECT traces",
+      kind: 3,
+      service: "qyl-collector",
+      start: 1970,
+      end: 2075,
+      attrs: {
+        "db.system": "duckdb",
+        "db.statement":
+          "SELECT trace_id, min(start_time_unix_nano) FROM spans GROUP BY trace_id ORDER BY 2 DESC LIMIT 20",
+      },
+    },
+  ]);
+
+  // --- Trace 3 (8 min ago): failed checkout — Postgres insert dies with an
+  // exception event; root span carries the error status too.
+  const checkoutError = buildDemoTrace(3, minutesAgoMs(8), [
+    {
+      name: "POST /checkout",
+      kind: 2,
+      service: "checkout-api",
+      start: 0,
+      end: 430,
+      status: { code: 2, message: "checkout failed: order persistence error" },
+      attrs: {
+        "http.request.method": "POST",
+        "url.path": "/checkout",
+        "http.response.status_code": 500,
+      },
+    },
+    {
+      parent: 0,
+      name: "validate cart",
+      kind: 1,
+      service: "checkout-api",
+      start: 5,
+      end: 35,
+      attrs: { "qyl.cart.items": 3 },
+    },
+    {
+      parent: 0,
+      name: "reserve inventory",
+      kind: 1,
+      service: "checkout-api",
+      start: 40,
+      end: 160,
+    },
+    {
+      parent: 2,
+      name: "UPDATE inventory",
+      kind: 3,
+      service: "checkout-api",
+      start: 45,
+      end: 150,
+      attrs: {
+        "db.system": "postgresql",
+        "db.statement":
+          "UPDATE inventory SET reserved = reserved + $1 WHERE sku = $2 AND available >= $1",
+      },
+    },
+    {
+      parent: 0,
+      name: "INSERT INTO orders",
+      kind: 3,
+      service: "checkout-api",
+      start: 170,
+      end: 410,
+      status: { code: 2, message: "connection reset by peer" },
+      attrs: {
+        "db.system": "postgresql",
+        "db.statement":
+          "INSERT INTO orders (id, user_id, total_cents, status) VALUES ($1, $2, $3, 'pending')",
+      },
+      events: [
+        {
+          name: "exception",
+          atMs: 405,
+          attributes: [
+            { key: "exception.type", value: "Npgsql.NpgsqlException" },
+            {
+              key: "exception.message",
+              value:
+                "Exception while writing to stream: connection reset by peer",
+            },
+            { key: "exception.stacktrace", value: NPGSQL_STACKTRACE },
+          ],
+        },
+      ],
+    },
+  ]);
+
+  // --- Trace 4 (11 min ago): read-path order lookup, two Postgres queries.
+  const orderLookup = buildDemoTrace(4, minutesAgoMs(11), [
+    {
+      name: "GET /orders/{orderId}",
+      kind: 2,
+      service: "checkout-api",
+      start: 0,
+      end: 96,
+      status: { code: 1 },
+      attrs: {
+        "http.request.method": "GET",
+        "http.route": "/orders/{orderId}",
+        "http.response.status_code": 200,
+      },
+    },
+    {
+      parent: 0,
+      name: "SELECT orders",
+      kind: 3,
+      service: "checkout-api",
+      start: 8,
+      end: 34,
+      attrs: {
+        "db.system": "postgresql",
+        "db.statement": "SELECT * FROM orders WHERE id = $1",
+      },
+    },
+    {
+      parent: 0,
+      name: "SELECT order_items",
+      kind: 3,
+      service: "checkout-api",
+      start: 38,
+      end: 71,
+      attrs: {
+        "db.system": "postgresql",
+        "db.statement":
+          "SELECT sku, quantity, price_cents FROM order_items WHERE order_id = $1",
+      },
+    },
+    {
+      parent: 0,
+      name: "render response",
+      kind: 1,
+      service: "checkout-api",
+      start: 74,
+      end: 92,
+    },
+  ]);
+
+  // --- Trace 5 (13 min ago): messaging — checkout publishes order.shipped,
+  // agent-worker consumes it and notifies the customer.
+  const orderShipped = buildDemoTrace(5, minutesAgoMs(13), [
+    {
+      name: "POST /orders/{orderId}/ship",
+      kind: 2,
+      service: "checkout-api",
+      start: 0,
+      end: 115,
+      status: { code: 1 },
+      attrs: {
+        "http.request.method": "POST",
+        "http.route": "/orders/{orderId}/ship",
+        "http.response.status_code": 202,
+      },
+    },
+    {
+      parent: 0,
+      name: "publish order.shipped",
+      kind: 4,
+      service: "checkout-api",
+      start: 20,
+      end: 112,
+      attrs: {
+        "messaging.system": "kafka",
+        "messaging.destination.name": "order.events",
+        "messaging.operation.type": "publish",
+      },
+    },
+    {
+      parent: 1,
+      name: "process order.shipped",
+      kind: 5,
+      service: "agent-worker",
+      start: 60,
+      end: 108,
+      attrs: {
+        "messaging.system": "kafka",
+        "messaging.destination.name": "order.events",
+        "messaging.operation.type": "process",
+      },
+    },
+    {
+      parent: 2,
+      name: "notify customer",
+      kind: 1,
+      service: "agent-worker",
+      start: 65,
+      end: 100,
+      attrs: { "qyl.notification.channel": "email" },
+    },
+  ]);
+
+  // --- Trace 6 (3 min ago): deep async pipeline — 13 spans, 4 levels, with a
+  // slow shard that needed a retry.
+  const pipeline = buildDemoTrace(6, minutesAgoMs(3), [
+    {
+      name: "pipeline.run nightly-eval",
+      kind: 1,
+      service: "agent-worker",
+      start: 0,
+      end: 8600,
+      status: { code: 1 },
+      attrs: { "qyl.pipeline.name": "nightly-eval" },
+    },
+    { parent: 0, name: "stage.collect", kind: 1, service: "agent-worker", start: 20, end: 2100 },
+    {
+      parent: 1,
+      name: "fetch dataset shard-1",
+      kind: 3,
+      service: "agent-worker",
+      start: 40,
+      end: 900,
+      attrs: { "url.path": "/datasets/eval/shard-1" },
+    },
+    {
+      parent: 1,
+      name: "fetch dataset shard-2",
+      kind: 3,
+      service: "agent-worker",
+      start: 60,
+      end: 1400,
+      attrs: { "url.path": "/datasets/eval/shard-2" },
+    },
+    {
+      parent: 1,
+      name: "fetch dataset shard-3",
+      kind: 3,
+      service: "agent-worker",
+      start: 80,
+      end: 2050,
+      attrs: { "url.path": "/datasets/eval/shard-3", "http.request.resend_count": 1 },
+    },
+    {
+      parent: 4,
+      name: "GET shard-3 (retry)",
+      kind: 3,
+      service: "agent-worker",
+      start: 1100,
+      end: 2000,
+      attrs: { "url.path": "/datasets/eval/shard-3" },
+    },
+    { parent: 0, name: "stage.transform", kind: 1, service: "agent-worker", start: 2150, end: 5100 },
+    { parent: 6, name: "normalize records", kind: 1, service: "agent-worker", start: 2160, end: 3600 },
+    { parent: 6, name: "dedupe records", kind: 1, service: "agent-worker", start: 3620, end: 5050 },
+    { parent: 8, name: "hash partition 0", kind: 1, service: "agent-worker", start: 3630, end: 4300 },
+    { parent: 8, name: "hash partition 1", kind: 1, service: "agent-worker", start: 3640, end: 5000 },
+    { parent: 0, name: "stage.load", kind: 1, service: "agent-worker", start: 5150, end: 8550 },
+    {
+      parent: 11,
+      name: "INSERT eval_results",
+      kind: 3,
+      service: "agent-worker",
+      start: 5200,
+      end: 8500,
+      attrs: {
+        "db.system": "duckdb",
+        "db.statement": "INSERT INTO eval_results SELECT * FROM staging_eval",
+      },
+    },
+  ]);
+
+  // --- Trace 7 (15 min ago): the collector ingesting an OTLP batch.
+  const otlpIngest = buildDemoTrace(7, minutesAgoMs(15), [
+    {
+      name: "POST /v1/traces",
+      kind: 2,
+      service: "qyl-collector",
+      start: 0,
+      end: 38,
+      status: { code: 1 },
+      attrs: {
+        "http.request.method": "POST",
+        "url.path": "/v1/traces",
+        "http.response.status_code": 200,
+      },
+    },
+    {
+      parent: 0,
+      name: "parse otlp payload",
+      kind: 1,
+      service: "qyl-collector",
+      start: 2,
+      end: 9,
+      attrs: { "qyl.otlp.spans": 142 },
+    },
+    {
+      parent: 0,
+      name: "INSERT INTO spans",
+      kind: 3,
+      service: "qyl-collector",
+      start: 12,
+      end: 33,
+      attrs: {
+        "db.system": "duckdb",
+        "db.statement": "INSERT INTO spans FROM read_otlp_batch(?)",
+      },
+    },
+  ]);
+
+  // --- Trace 8 (1 min ago): quick single-turn chat.
+  const quickChat = buildDemoTrace(8, minutesAgoMs(1), [
+    {
+      name: "POST /v1/agent/chat",
+      kind: 2,
+      service: "agent-worker",
+      start: 0,
+      end: 1350,
+      status: { code: 1 },
+      attrs: {
+        "http.request.method": "POST",
+        "url.path": "/v1/agent/chat",
+        "http.response.status_code": 200,
+      },
+    },
+    {
+      parent: 0,
+      name: "chat claude-sonnet-5",
+      kind: 3,
+      service: "agent-worker",
+      start: 25,
+      end: 1320,
+      attrs: {
+        "gen_ai.system": "anthropic",
+        "gen_ai.request.model": "claude-sonnet-5",
+        "gen_ai.response.model": "claude-sonnet-5",
+        "gen_ai.usage.input_tokens": 154,
+        "gen_ai.usage.output_tokens": 89,
+      },
+    },
+  ]);
+
+  const traces = [
+    quickChat, // 1 min ago
+    agentRun, // 2 min
+    pipeline, // 3 min
+    agentSummarize, // 5 min
+    checkoutError, // 8 min
+    orderLookup, // 11 min
+    orderShipped, // 13 min
+    otlpIngest, // 15 min
+  ];
+
+  // --- ~30 logs correlated to the traces above. Severity numbers follow
+  // OTel: TRACE=1, DEBUG=5, INFO=9, WARN=13, ERROR=17.
+  const log = (
+    trace: QylTrace,
+    spanIndex: number,
+    offsetMs: number,
+    severity: number,
+    severityText: string,
+    body: string,
+    attrs?: Record<string, unknown>,
+  ): QylLogRecord => {
+    const span = trace.spans[spanIndex];
+    return {
+      time_unix_nano: span.start_time_unix_nano + Math.round(offsetMs * 1e6),
+      severity_number: severity,
+      severity_text: severityText,
+      body,
+      trace_id: trace.trace_id,
+      span_id: span.span_id,
+      resource: span.resource,
+      ...(attrs
+        ? {
+            attributes: Object.entries(attrs).map(([key, value]) => ({
+              key,
+              value,
+            })),
+          }
+        : {}),
+    };
+  };
+
+  const logs: QylLogRecord[] = [
+    // otlpIngest (15 min ago)
+    log(otlpIngest, 1, 1, 5, "DEBUG", "parsed OTLP batch: 142 spans, 3 resources"),
+    log(otlpIngest, 2, 2, 1, "TRACE", "duckdb appender flushed 142 rows into spans"),
+    // orderShipped (13 min)
+    log(orderShipped, 1, 2, 9, "INFO", "published order.shipped for order ord_8842 to order.events", { "messaging.kafka.offset": 91204 }),
+    log(orderShipped, 2, 3, 9, "INFO", "consumed order.shipped for order ord_8842"),
+    log(orderShipped, 3, 5, 5, "DEBUG", "notification email queued for user user-77"),
+    // orderLookup (11 min)
+    log(orderLookup, 1, 3, 5, "DEBUG", "order ord_8842 loaded in 26ms (2 queries)"),
+    log(orderLookup, 0, 90, 9, "INFO", "GET /orders/ord_8842 -> 200 in 96ms"),
+    // checkoutError (8 min)
+    log(checkoutError, 0, 1, 9, "INFO", "checkout started for cart crt_5521 (3 items, total $84.97)"),
+    log(checkoutError, 1, 5, 5, "DEBUG", "cart crt_5521 validated: all SKUs in catalog"),
+    log(checkoutError, 3, 80, 13, "WARN", "inventory for sku KB-0042 low after reservation: 2 left"),
+    log(
+      checkoutError,
+      4,
+      236,
+      17,
+      "ERROR",
+      "order insert failed: Npgsql.NpgsqlException: Exception while writing to stream: connection reset by peer\n" +
+        NPGSQL_STACKTRACE,
+      { "db.system": "postgresql", "error.type": "Npgsql.NpgsqlException" },
+    ),
+    log(checkoutError, 0, 425, 17, "ERROR", "POST /checkout -> 500 (order persistence error, order not created)"),
+    log(checkoutError, 0, 428, 13, "WARN", "checkout for cart crt_5521 will be retried by the client"),
+    // agentSummarize (5 min)
+    log(agentSummarize, 0, 2, 9, "INFO", "summarize request received (target: last 20 traces)"),
+    log(agentSummarize, 1, 1855, 9, "INFO", "claude-haiku-4-5 responded: 932 in / 208 out tokens"),
+    log(agentSummarize, 3, 120, 5, "DEBUG", "served 20 trace summaries from duckdb in 105ms"),
+    // pipeline (3 min)
+    log(pipeline, 0, 5, 9, "INFO", "pipeline nightly-eval started (3 shards)"),
+    log(pipeline, 2, 855, 5, "DEBUG", "shard-1 fetched: 10,240 records"),
+    log(pipeline, 3, 1335, 5, "DEBUG", "shard-2 fetched: 10,240 records"),
+    log(pipeline, 4, 1015, 13, "WARN", "shard-3 fetch timed out after 1s, retrying (attempt 2)"),
+    log(pipeline, 5, 895, 5, "DEBUG", "shard-3 fetched on retry: 10,239 records"),
+    log(pipeline, 8, 10, 1, "TRACE", "dedupe: hashing 30,719 records into 2 partitions"),
+    log(pipeline, 12, 3295, 9, "INFO", "loaded 30,584 eval results into duckdb"),
+    log(pipeline, 0, 8590, 9, "INFO", "pipeline nightly-eval finished in 8.6s (135 duplicates dropped)"),
+    // agentRun (2 min)
+    log(agentRun, 0, 3, 9, "INFO", "agent run started for user user-42 (goal: summarize failing checkouts)"),
+    log(agentRun, 1, 50, 5, "DEBUG", "plan: [search_docs, analyze, respond]"),
+    log(agentRun, 2, 2255, 9, "INFO", "claude-sonnet-5 responded: 1874 in / 412 out tokens"),
+    log(agentRun, 4, 185, 1, "TRACE", "search_docs matched 10 documents (bm25)"),
+    log(agentRun, 5, 1195, 9, "INFO", "claude-sonnet-5 responded: 2412 in / 655 out tokens"),
+    log(agentRun, 0, 4195, 9, "INFO", "agent run completed in 4.2s"),
+    // quickChat (1 min)
+    log(quickChat, 0, 2, 9, "INFO", "chat request received (1 message)"),
+    log(quickChat, 1, 1290, 5, "DEBUG", "claude-sonnet-5 responded: 154 in / 89 out tokens"),
+  ].sort((a, b) => a.time_unix_nano - b.time_unix_nano);
+
+  // --- 3 sessions grouping the traces.
+  const makeSession = (
+    id: string,
+    userId: string | undefined,
+    sessionTraceList: QylTrace[],
+    state: string,
+    genaiUsage?: QylSession["genai_usage"],
+  ): QylSession => {
+    const startMs = Math.min(
+      ...sessionTraceList.map((t) => Date.parse(t.start_time)),
     );
-  if (terms.length === 0) return DEMO_POSTS;
+    const endMs = Math.max(
+      ...sessionTraceList.map((t) => Date.parse(t.end_time)),
+    );
+    const active = state === "active";
+    return {
+      "session.id": id,
+      ...(userId ? { "user.id": userId } : {}),
+      start_time: new Date(startMs).toISOString(),
+      ...(active ? {} : { end_time: new Date(endMs).toISOString(), duration_ms: endMs - startMs }),
+      trace_count: sessionTraceList.length,
+      span_count: sessionTraceList.reduce((sum, t) => sum + t.span_count, 0),
+      error_count: sessionTraceList.reduce(
+        (sum, t) => sum + t.spans.filter((s) => s.status.code === 2).length,
+        0,
+      ),
+      services: [...new Set(sessionTraceList.flatMap((t) => t.services))],
+      state,
+      ...(genaiUsage ? { genai_usage: genaiUsage } : {}),
+    };
+  };
 
-  const matches = DEMO_POSTS.filter((post) => {
-    const haystack =
-      `${post.text} ${post.author.name} ${post.author.username}`.toLowerCase();
-    return terms.some((term) => term.test(haystack));
+  const sessionTraces: Record<string, QylTrace[]> = {
+    "sess-demo-genai-01": [quickChat, agentRun, agentSummarize],
+    "sess-demo-pipeline-02": [pipeline, otlpIngest],
+    "sess-demo-checkout-03": [checkoutError, orderLookup, orderShipped],
+  };
+
+  const sessions: QylSession[] = [
+    makeSession(
+      "sess-demo-genai-01",
+      "user-42",
+      sessionTraces["sess-demo-genai-01"],
+      "completed",
+      {
+        request_count: 4,
+        total_input_tokens: 5372,
+        total_output_tokens: 1364,
+        models_used: ["claude-sonnet-5", "claude-haiku-4-5"],
+        providers_used: ["anthropic"],
+        estimated_cost_usd: 0.0421,
+      },
+    ),
+    makeSession(
+      "sess-demo-pipeline-02",
+      undefined,
+      sessionTraces["sess-demo-pipeline-02"],
+      "active",
+    ),
+    makeSession(
+      "sess-demo-checkout-03",
+      "user-77",
+      sessionTraces["sess-demo-checkout-03"],
+      "errored",
+    ),
+  ];
+
+  return { traces, logs, sessions, sessionTraces };
+}
+
+const DEMO = buildDemoData();
+
+// =============================================================================
+// Telemetry fetching (shared by model tools, display_traces, fetch_telemetry —
+// demo mode honors every filter the live endpoints support)
+// =============================================================================
+
+async function fetchTraces(limit: number): Promise<{ traces: QylTrace[]; mode: Mode }> {
+  const mode = await resolveMode();
+  if (mode === "demo") {
+    return { traces: DEMO.traces.slice(0, limit), mode };
+  }
+  const body = await collectorGet("/api/v1/traces", { limit });
+  return { traces: unwrapItems<QylTrace>(body), mode };
+}
+
+async function fetchTrace(traceId: string): Promise<{ trace: QylTrace; mode: Mode }> {
+  const mode = await resolveMode();
+  if (mode === "demo") {
+    const trace = DEMO.traces.find((t) => t.trace_id === traceId);
+    if (!trace) throw new CollectorError(`trace not found: ${traceId}`);
+    return { trace, mode };
+  }
+  try {
+    const trace = (await collectorGet(
+      `/api/v1/traces/${encodeURIComponent(traceId)}`,
+    )) as QylTrace;
+    return { trace, mode };
+  } catch (err) {
+    if (err instanceof CollectorError && err.status === 404) {
+      throw new CollectorError(`trace not found: ${traceId}`);
+    }
+    throw err;
+  }
+}
+
+async function fetchSessionTraces(
+  sessionId: string,
+  limit: number,
+): Promise<{ traces: QylTrace[]; mode: Mode }> {
+  const mode = await resolveMode();
+  if (mode === "demo") {
+    const traces = DEMO.sessionTraces[sessionId];
+    if (!traces) throw new CollectorError(`session not found: ${sessionId}`);
+    return { traces: traces.slice(0, limit), mode };
+  }
+  try {
+    const body = await collectorGet(
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}/traces`,
+      { limit },
+    );
+    return { traces: unwrapItems<QylTrace>(body), mode };
+  } catch (err) {
+    if (err instanceof CollectorError && err.status === 404) {
+      throw new CollectorError(`session not found: ${sessionId}`);
+    }
+    throw err;
+  }
+}
+
+async function fetchSessions(
+  limit: number,
+  activeOnly?: boolean,
+): Promise<{ sessions: QylSession[]; mode: Mode }> {
+  const mode = await resolveMode();
+  if (mode === "demo") {
+    const sessions = (
+      activeOnly ? DEMO.sessions.filter((s) => s.state === "active") : DEMO.sessions
+    ).slice(0, limit);
+    return { sessions, mode };
+  }
+  const body = await collectorGet("/api/v1/sessions", {
+    limit,
+    isActive: activeOnly ? true : undefined,
   });
-  return matches.length > 0 ? matches : DEMO_POSTS;
+  return { sessions: unwrapItems<QylSession>(body), mode };
 }
 
-/**
- * Demo user timeline: posts authored by the username, or the full canned
- * set for unknown usernames (keeps the viewer functional offline).
- */
-function demoUserPosts(username: string): XPost[] {
-  const wanted = normalizeUsername(username).toLowerCase();
-  const matches = DEMO_POSTS.filter(
-    (post) => post.author.username.toLowerCase() === wanted,
-  );
-  return matches.length > 0 ? matches : DEMO_POSTS;
-}
-
-// =============================================================================
-// Shared post-fetching (used by search_posts / get_user_posts /
-// display_timeline / fetch_posts so all four behave identically)
-// =============================================================================
-
-async function fetchPostsForSource(args: {
-  source: "search" | "user";
+interface LogFilters {
+  trace_id?: string;
+  service_name?: string;
+  severity_min?: number;
   query?: string;
-  username?: string;
-  max_results?: number;
-  next_token?: string;
-}): Promise<PostsPage> {
-  const { source, query, username, max_results = 10, next_token } = args;
+  limit: number;
+}
 
-  if (source === "search" && !query) {
-    throw new XApiError('source "search" requires a `query`.');
+async function fetchLogs(
+  filters: LogFilters,
+): Promise<{ logs: QylLogRecord[]; mode: Mode }> {
+  const mode = await resolveMode();
+  if (mode === "demo") {
+    let logs = DEMO.logs;
+    if (filters.trace_id) logs = logs.filter((l) => l.trace_id === filters.trace_id);
+    if (filters.service_name) {
+      logs = logs.filter(
+        (l) => String(l.resource["service.name"]) === filters.service_name,
+      );
+    }
+    if (filters.severity_min !== undefined) {
+      logs = logs.filter((l) => l.severity_number >= filters.severity_min!);
+    }
+    if (filters.query) {
+      const needle = filters.query.toLowerCase();
+      logs = logs.filter((l) => l.body.toLowerCase().includes(needle));
+    }
+    return { logs: logs.slice(0, filters.limit), mode };
   }
-  if (source === "user" && !username) {
-    throw new XApiError('source "user" requires a `username`.');
-  }
-
-  if (isDemoMode()) {
-    const posts =
-      source === "search" ? demoSearch(query!) : demoUserPosts(username!);
-    return demoPaginate(posts, next_token);
-  }
-
-  if (source === "search") {
-    const payload = await xApiGet("/tweets/search/recent", {
-      query: query!,
-      max_results,
-      next_token,
-      ...TWEET_FIELD_PARAMS,
-    });
-    return { ...mapTweetsPayload(payload), mode: "live" };
-  }
-
-  // source === "user": resolve the username to an id, then fetch the timeline.
-  const handle = normalizeUsername(username!);
-  const userPayload = await xApiGet(
-    `/users/by/username/${encodeURIComponent(handle)}`,
-  );
-  const userId = userPayload?.data?.id;
-  if (!userId) {
-    throw new XApiError(`X user not found: @${handle}`);
-  }
-  const payload = await xApiGet(`/users/${userId}/tweets`, {
-    max_results,
-    // The user-timeline endpoint calls its pagination cursor pagination_token
-    // (search calls it next_token); we normalize both to next_token outward.
-    pagination_token: next_token,
-    ...TWEET_FIELD_PARAMS,
+  const body = await collectorGet("/api/v1/logs", {
+    traceId: filters.trace_id,
+    serviceName: filters.service_name,
+    severityMin: filters.severity_min,
+    query: filters.query,
+    limit: filters.limit,
   });
-  return { ...mapTweetsPayload(payload), mode: "live" };
+  return { logs: unwrapItems<QylLogRecord>(body), mode };
+}
+
+/** Shared by display_traces and fetch_telemetry (view "traces"). */
+async function fetchTracesForDisplay(args: {
+  trace_id?: string;
+  session_id?: string;
+  limit: number;
+}): Promise<{ traces: QylTrace[]; selected_trace_id?: string; mode: Mode }> {
+  if (args.trace_id) {
+    const { trace, mode } = await fetchTrace(args.trace_id);
+    return { traces: [trace], selected_trace_id: args.trace_id, mode };
+  }
+  if (args.session_id) {
+    return fetchSessionTraces(args.session_id, args.limit);
+  }
+  return fetchTraces(args.limit);
+}
+
+// =============================================================================
+// Text summaries (compact and model-friendly)
+// =============================================================================
+
+/** Humanize a nanosecond duration: "1.24 s" / "87 ms" / "640 µs". */
+function humanizeNs(ns: number): string {
+  if (ns >= 1e9) return `${(ns / 1e9).toFixed(2)} s`;
+  if (ns >= 1e6) return `${Math.round(ns / 1e6)} ms`;
+  return `${Math.round(ns / 1e3)} µs`;
+}
+
+function shortId(id: string): string {
+  return id.length > 8 ? `${id.slice(0, 8)}…` : id;
+}
+
+/** Root span name with fallback to the earliest span (per INTERFACE.md). */
+function rootSpanName(trace: QylTrace): string {
+  if (trace.root_span?.name) return trace.root_span.name;
+  const earliest = [...(trace.spans ?? [])].sort(
+    (a, b) => a.start_time_unix_nano - b.start_time_unix_nano,
+  )[0];
+  return earliest?.name ?? "unknown";
+}
+
+function serviceOf(span: QylSpan): string {
+  return String(span.resource?.["service.name"] ?? "unknown");
+}
+
+function modeNote(mode: Mode): string {
+  return mode === "demo" ? " [demo data]" : "";
+}
+
+function summarizeTraceTable(traces: QylTrace[], mode: Mode): string {
+  const lines = [
+    `Traces (${traces.length})${modeNote(mode)}`,
+    "",
+    "| Trace | Root span | Spans | Duration | Status | Services |",
+    "|-------|-----------|-------|----------|--------|----------|",
+  ];
+  for (const trace of traces) {
+    const services =
+      trace.services.slice(0, 3).join(", ") +
+      (trace.services.length > 3 ? ` +${trace.services.length - 3}` : "");
+    lines.push(
+      `| ${shortId(trace.trace_id)} | ${rootSpanName(trace)} | ${trace.span_count} | ` +
+        `${humanizeNs(trace.duration_ns)} | ${trace.has_error ? "ERROR" : "OK"} | ${services} |`,
+    );
+  }
+  return lines.join("\n");
+}
+
+function summarizeTrace(trace: QylTrace, mode: Mode): string {
+  const spansByService = new Map<string, number>();
+  for (const span of trace.spans) {
+    const service = serviceOf(span);
+    spansByService.set(service, (spansByService.get(service) ?? 0) + 1);
+  }
+  const perService = [...spansByService]
+    .map(([service, count]) => `${service} ×${count}`)
+    .join(", ");
+
+  const lines = [
+    `Trace ${trace.trace_id}${modeNote(mode)}`,
+    `Root: ${rootSpanName(trace)} — ${humanizeNs(trace.duration_ns)}, ` +
+      `${trace.span_count} spans, started ${trace.start_time}`,
+    `Spans by service: ${perService}`,
+  ];
+
+  const errorSpans = trace.spans.filter((s) => s.status.code === 2);
+  if (errorSpans.length > 0) {
+    lines.push(`Error spans (${errorSpans.length}):`);
+    for (const span of errorSpans) {
+      lines.push(
+        `- ${span.name} (${serviceOf(span)})` +
+          (span.status.message ? ` — ${span.status.message}` : ""),
+      );
+    }
+  }
+  return lines.join("\n");
+}
+
+function summarizeSessions(sessions: QylSession[], mode: Mode): string {
+  const lines = [
+    `Sessions (${sessions.length})${modeNote(mode)}`,
+    "",
+    "| Session | State | Traces | Spans | Errors | Duration | GenAI |",
+    "|---------|-------|--------|-------|--------|----------|-------|",
+  ];
+  for (const session of sessions) {
+    const duration =
+      session.duration_ms !== undefined
+        ? humanizeNs(session.duration_ms * 1e6)
+        : "—";
+    const genai = session.genai_usage
+      ? `${session.genai_usage.request_count} req, ` +
+        `${session.genai_usage.total_input_tokens}/${session.genai_usage.total_output_tokens} tok` +
+        (session.genai_usage.estimated_cost_usd !== undefined
+          ? `, ~$${session.genai_usage.estimated_cost_usd.toFixed(4)}`
+          : "")
+      : "—";
+    lines.push(
+      `| ${session["session.id"]} | ${session.state} | ${session.trace_count} | ` +
+        `${session.span_count} | ${session.error_count} | ${duration} | ${genai} |`,
+    );
+  }
+  return lines.join("\n");
+}
+
+function summarizeLogs(logs: QylLogRecord[], mode: Mode): string {
+  if (logs.length === 0) return `No logs matched${modeNote(mode)}.`;
+  const lines = logs.map((record) => {
+    const time = new Date(record.time_unix_nano / 1e6)
+      .toISOString()
+      .slice(11, 23);
+    const severity = record.severity_text ?? String(record.severity_number);
+    const body =
+      record.body.length > 140
+        ? `${record.body.slice(0, 140).replace(/\s+/g, " ")}…`
+        : record.body.replace(/\s+/g, " ");
+    const correlation = record.trace_id
+      ? ` (trace ${shortId(record.trace_id)})`
+      : "";
+    return `- ${time} ${severity} [${String(record.resource["service.name"] ?? "unknown")}] ${body}${correlation}`;
+  });
+  return `Logs (${logs.length})${modeNote(mode)}\n${lines.join("\n")}`;
 }
 
 // =============================================================================
@@ -751,20 +1346,6 @@ function toolError(err: unknown): CallToolResult {
   return { content: [{ type: "text", text: message }], isError: true };
 }
 
-/** Compact human-readable digest of a posts page for text content. */
-function summarizePosts(page: PostsPage, heading: string): string {
-  const lines = page.posts.map((post) => {
-    const text =
-      post.text.length > 100 ? `${post.text.slice(0, 100)}…` : post.text;
-    return `- @${post.author.username} (${post.metrics.likes} likes): ${text.replace(/\s+/g, " ")}`;
-  });
-  const modeNote = page.mode === "demo" ? " [demo data]" : "";
-  // Note: next_token is surfaced only in structuredContent. The model-facing
-  // tools (search_posts / get_user_posts) accept no next_token input, so a
-  // textual "more available via next_token" hint would invite invalid calls.
-  return `${heading}${modeNote}\n${lines.join("\n")}`;
-}
-
 // =============================================================================
 // MCP Server Factory
 // =============================================================================
@@ -774,69 +1355,49 @@ function summarizePosts(page: PostsPage, heading: string): string {
 let cachedAppHtml: string | undefined;
 
 /**
- * Creates a new MCP server instance with all X tools and the timeline
- * viewer UI resource registered.
+ * Creates a new MCP server instance with all qyl telemetry tools and the
+ * trace explorer UI resource registered.
  */
 export function createServer(): McpServer {
   const server = new McpServer({
-    name: "X Apps Server",
+    name: "qyl Apps Server",
     version: "1.0.0",
   });
 
-  // Shared input fragment: max_results per the X API search window (10–100).
-  const maxResultsSchema = z
+  const limitSchema = z
     .number()
     .int()
-    .min(10)
+    .min(1)
     .max(100)
-    .default(10)
-    .describe("Number of posts to return (10–100, default 10)");
+    .default(20)
+    .describe("Number of traces to return (1–100, default 20)");
 
   // ---------------------------------------------------------------------------
-  // Tool 1: search_posts — recent post search
+  // Tool 1: list_traces — recent trace summaries
   // ---------------------------------------------------------------------------
   server.registerTool(
-    "search_posts",
+    "list_traces",
     {
-      title: "Search Posts",
+      title: "List Traces",
       description:
-        "Search recent X (Twitter) posts by keyword/query. Returns normalized posts with " +
-        "author, metrics, media and URLs. Use display_timeline instead when the user wants " +
-        "to SEE the posts in an interactive viewer.",
+        "List recent qyl traces with summary fields (root span, services, duration, " +
+        "span count, error flag). Spans are omitted — use get_trace for full span data. " +
+        "Use display_traces instead when the user wants to LOOK at traces in the explorer UI.",
       inputSchema: {
-        query: z
-          .string()
-          .min(1)
-          .describe("Search query (X search syntax supported in live mode)"),
-        max_results: maxResultsSchema,
+        limit: limitSchema,
       },
       outputSchema: {
-        posts: z.array(PostSchema),
-        next_token: z
-          .string()
-          .optional()
-          .describe("Opaque pagination token for the next page"),
+        traces: z.array(TraceSummarySchema),
         mode: ModeSchema,
       },
     },
-    async ({ query, max_results }): Promise<CallToolResult> => {
+    async ({ limit }): Promise<CallToolResult> => {
       try {
-        const page = await fetchPostsForSource({
-          source: "search",
-          query,
-          max_results,
-        });
+        const { traces, mode } = await fetchTraces(limit);
+        const summaries = traces.map(({ spans: _spans, ...summary }) => summary);
         return {
-          content: [
-            {
-              type: "text",
-              text: summarizePosts(
-                page,
-                `Found ${page.posts.length} posts for "${query}":`,
-              ),
-            },
-          ],
-          structuredContent: page as any,
+          content: [{ type: "text", text: summarizeTraceTable(traces, mode) }],
+          structuredContent: { traces: summaries, mode } as any,
         };
       } catch (err) {
         return toolError(err);
@@ -845,126 +1406,30 @@ export function createServer(): McpServer {
   );
 
   // ---------------------------------------------------------------------------
-  // Tool 2: get_user — user profile lookup
+  // Tool 2: get_trace — one trace with full spans
   // ---------------------------------------------------------------------------
   server.registerTool(
-    "get_user",
+    "get_trace",
     {
-      title: "Get User",
+      title: "Get Trace",
       description:
-        "Look up an X (Twitter) user profile by username (with or without the leading @). " +
-        "Returns name, avatar, verification status, bio and follower counts.",
+        "Fetch a single qyl trace by trace id, including every span with timing, " +
+        "attributes, events, and status. Use display_traces instead when the user " +
+        "wants to SEE the trace waterfall.",
       inputSchema: {
-        username: z.string().min(1).describe("X username, e.g. 'nasa' or '@nasa'"),
+        trace_id: z.string().min(1).describe("Trace id (32-char hex from OTLP)"),
       },
       outputSchema: {
-        user: UserProfileSchema,
-      },
-    },
-    async ({ username }): Promise<CallToolResult> => {
-      try {
-        const handle = normalizeUsername(username);
-        let user: XUserProfile;
-
-        if (isDemoMode()) {
-          // Return the matching demo author, or a plausible generic profile.
-          user = demoUser(handle) ?? {
-            id: "1000000000000000000",
-            name: handle,
-            username: handle,
-            description: "Demo profile (no X_BEARER_TOKEN configured).",
-            public_metrics: {
-              followers_count: 1234,
-              following_count: 256,
-              tweet_count: 789,
-            },
-          };
-        } else {
-          const payload = await xApiGet(
-            `/users/by/username/${encodeURIComponent(handle)}`,
-            {
-              "user.fields":
-                "name,username,profile_image_url,verified,description,public_metrics",
-            },
-          );
-          const data = payload?.data;
-          if (!data) throw new XApiError(`X user not found: @${handle}`);
-          user = {
-            ...mapAuthor(data),
-            ...(data.description ? { description: data.description } : {}),
-            ...(data.public_metrics
-              ? {
-                  public_metrics: {
-                    followers_count: data.public_metrics.followers_count ?? 0,
-                    following_count: data.public_metrics.following_count ?? 0,
-                    tweet_count: data.public_metrics.tweet_count ?? 0,
-                  },
-                }
-              : {}),
-          };
-        }
-
-        const followers = user.public_metrics?.followers_count;
-        const text =
-          `@${user.username} — ${user.name}` +
-          (user.verified ? " (verified)" : "") +
-          (followers !== undefined
-            ? `, ${followers.toLocaleString()} followers`
-            : "") +
-          (user.description ? `. ${user.description}` : "") +
-          (isDemoMode() ? " [demo data]" : "");
-
-        return {
-          content: [{ type: "text", text }],
-          structuredContent: { user } as any,
-        };
-      } catch (err) {
-        return toolError(err);
-      }
-    },
-  );
-
-  // ---------------------------------------------------------------------------
-  // Tool 3: get_user_posts — a user's recent posts
-  // ---------------------------------------------------------------------------
-  server.registerTool(
-    "get_user_posts",
-    {
-      title: "Get User Posts",
-      description:
-        "Fetch recent posts from an X (Twitter) user's timeline by username. " +
-        "Use display_timeline instead when the user wants to SEE the posts in an interactive viewer.",
-      inputSchema: {
-        username: z.string().min(1).describe("X username, e.g. 'nasa' or '@nasa'"),
-        max_results: maxResultsSchema,
-      },
-      outputSchema: {
-        posts: z.array(PostSchema),
-        next_token: z
-          .string()
-          .optional()
-          .describe("Opaque pagination token for the next page"),
+        trace: TraceSchema,
         mode: ModeSchema,
       },
     },
-    async ({ username, max_results }): Promise<CallToolResult> => {
+    async ({ trace_id }): Promise<CallToolResult> => {
       try {
-        const page = await fetchPostsForSource({
-          source: "user",
-          username,
-          max_results,
-        });
+        const { trace, mode } = await fetchTrace(trace_id);
         return {
-          content: [
-            {
-              type: "text",
-              text: summarizePosts(
-                page,
-                `Latest ${page.posts.length} posts from @${normalizeUsername(username)}:`,
-              ),
-            },
-          ],
-          structuredContent: page as any,
+          content: [{ type: "text", text: summarizeTrace(trace, mode) }],
+          structuredContent: { trace, mode } as any,
         };
       } catch (err) {
         return toolError(err);
@@ -973,63 +1438,40 @@ export function createServer(): McpServer {
   );
 
   // ---------------------------------------------------------------------------
-  // Tool 4: get_trends — trending topics by location
+  // Tool 3: list_sessions — qyl sessions (agentic runs / user sessions)
   // ---------------------------------------------------------------------------
   server.registerTool(
-    "get_trends",
+    "list_sessions",
     {
-      title: "Get Trends",
+      title: "List Sessions",
       description:
-        "Get trending topics on X (Twitter) for a location identified by WOEID " +
-        "(Where On Earth ID). Default WOEID 1 is worldwide.",
+        "List qyl sessions with trace/span/error counts, state, and GenAI token " +
+        "usage where present. Pass a session id to display_traces to see a " +
+        "session's traces in the explorer UI.",
       inputSchema: {
-        woeid: z
+        limit: z
           .number()
           .int()
-          .default(1)
-          .describe("Where On Earth ID (default 1 = worldwide)"),
+          .min(1)
+          .max(100)
+          .default(20)
+          .describe("Number of sessions to return (1–100, default 20)"),
+        active_only: z
+          .boolean()
+          .optional()
+          .describe("Only sessions that are still active"),
       },
       outputSchema: {
-        trends: z.array(TrendSchema),
+        sessions: z.array(SessionSchema),
         mode: ModeSchema,
       },
     },
-    async ({ woeid }): Promise<CallToolResult> => {
+    async ({ limit, active_only }): Promise<CallToolResult> => {
       try {
-        let trends: XTrend[];
-        let mode: "live" | "demo";
-
-        if (isDemoMode()) {
-          trends = DEMO_TRENDS;
-          mode = "demo";
-        } else {
-          const payload = await xApiGet(`/trends/by/woeid/${woeid}`);
-          trends = (payload?.data ?? []).map((t: any) => ({
-            trend_name: t.trend_name ?? String(t.name ?? ""),
-            ...(typeof t.tweet_count === "number"
-              ? { tweet_count: t.tweet_count }
-              : {}),
-          }));
-          mode = "live";
-        }
-
-        const lines = trends.map(
-          (t) =>
-            `- ${t.trend_name}` +
-            (t.tweet_count !== undefined
-              ? ` (${t.tweet_count.toLocaleString()} posts)`
-              : ""),
-        );
+        const { sessions, mode } = await fetchSessions(limit, active_only);
         return {
-          content: [
-            {
-              type: "text",
-              text:
-                `Trending (WOEID ${woeid})${mode === "demo" ? " [demo data]" : ""}:\n` +
-                lines.join("\n"),
-            },
-          ],
-          structuredContent: { trends, mode } as any,
+          content: [{ type: "text", text: summarizeSessions(sessions, mode) }],
+          structuredContent: { sessions, mode } as any,
         };
       } catch (err) {
         return toolError(err);
@@ -1038,73 +1480,133 @@ export function createServer(): McpServer {
   );
 
   // ---------------------------------------------------------------------------
-  // Tool 5: display_timeline — THE app tool (renders the viewer UI)
+  // Tool 4: search_logs — log search with correlation filters
+  // ---------------------------------------------------------------------------
+  server.registerTool(
+    "search_logs",
+    {
+      title: "Search Logs",
+      description:
+        "Search qyl log records, filterable by trace id (correlated logs), service " +
+        "name, minimum severity (OTel numbers: 9 INFO, 13 WARN, 17 ERROR), and a " +
+        "body substring query.",
+      inputSchema: {
+        trace_id: z
+          .string()
+          .optional()
+          .describe("Only logs correlated to this trace"),
+        service_name: z
+          .string()
+          .optional()
+          .describe('Only logs from this service (resource "service.name")'),
+        severity_min: z
+          .number()
+          .int()
+          .min(1)
+          .max(24)
+          .optional()
+          .describe("Minimum OTel severity number (e.g. 13 for WARN and above)"),
+        query: z
+          .string()
+          .optional()
+          .describe("Case-insensitive substring match on the log body"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .default(50)
+          .describe("Number of logs to return (1–200, default 50)"),
+      },
+      outputSchema: {
+        logs: z.array(LogRecordSchema),
+        mode: ModeSchema,
+      },
+    },
+    async ({ trace_id, service_name, severity_min, query, limit }): Promise<CallToolResult> => {
+      try {
+        const { logs, mode } = await fetchLogs({
+          trace_id,
+          service_name,
+          severity_min,
+          query,
+          limit,
+        });
+        return {
+          content: [{ type: "text", text: summarizeLogs(logs, mode) }],
+          structuredContent: { logs, mode } as any,
+        };
+      } catch (err) {
+        return toolError(err);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // Tool 5: display_traces — THE app tool (renders the trace explorer UI)
   // ---------------------------------------------------------------------------
   registerAppTool(
     server,
-    "display_timeline",
+    "display_traces",
     {
-      title: "Display Timeline",
+      title: "Display Traces",
       description:
-        "Show X (Twitter) posts in an interactive timeline viewer. Fetches posts " +
-        "server-side from a search query or a user's timeline and renders them as " +
-        "cards with avatars, media, and engagement metrics. Prefer this over " +
-        "search_posts/get_user_posts whenever the user wants to look at posts.",
+        "Show qyl traces in the interactive trace explorer with a span waterfall, " +
+        "detail panel, and correlated logs. Pass a trace_id to open one trace, a " +
+        "session_id for that session's traces, or neither for recent traces. Prefer " +
+        "this over list_traces/get_trace whenever the user wants to look at traces.",
       inputSchema: {
-        source: z
-          .enum(["search", "user"])
-          .describe('"search" for a keyword search, "user" for a user timeline'),
-        query: z
+        trace_id: z
           .string()
           .optional()
-          .describe('Search query (required when source is "search")'),
-        username: z
+          .describe("Open this single trace in the explorer"),
+        session_id: z
           .string()
           .optional()
-          .describe('X username (required when source is "user")'),
-        max_results: maxResultsSchema.optional(),
+          .describe("Show this session's traces"),
+        limit: limitSchema.optional(),
       },
       outputSchema: z.object({
-        source: z.enum(["search", "user"]),
-        query: z.string().optional(),
-        username: z.string().optional(),
-        posts: z.array(PostSchema),
-        next_token: z.string().optional(),
+        traces: z.array(TraceSchema),
+        selected_trace_id: z.string().optional(),
         mode: ModeSchema,
       }),
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
-    async ({ source, query, username, max_results }): Promise<CallToolResult> => {
+    async ({ trace_id, session_id, limit }): Promise<CallToolResult> => {
       try {
-        const page = await fetchPostsForSource({
-          source,
-          query,
-          username,
-          max_results,
+        const result = await fetchTracesForDisplay({
+          trace_id,
+          session_id,
+          limit: limit ?? 20,
         });
 
-        const label =
-          source === "search"
-            ? `search "${query}"`
-            : `@${normalizeUsername(username!)}`;
+        let text: string;
+        if (result.selected_trace_id) {
+          const trace = result.traces[0];
+          text =
+            `Showing trace ${shortId(trace.trace_id)} (${rootSpanName(trace)}, ` +
+            `${trace.span_count} spans, ${humanizeNs(trace.duration_ns)}) in the qyl explorer` +
+            `${result.mode === "demo" ? " (demo data)" : ""}.`;
+        } else {
+          const errorCount = result.traces.filter((t) => t.has_error).length;
+          const scope = session_id ? `session ${session_id}` : "recent";
+          text =
+            `Showing ${result.traces.length} ${scope} traces in the qyl explorer` +
+            `${errorCount > 0 ? ` (${errorCount} with errors)` : ""}` +
+            `${result.mode === "demo" ? " (demo data)" : ""}.`;
+        }
+
         const structuredContent = {
-          source,
-          ...(query !== undefined ? { query } : {}),
-          ...(username !== undefined
-            ? { username: normalizeUsername(username) }
+          traces: result.traces,
+          ...(result.selected_trace_id
+            ? { selected_trace_id: result.selected_trace_id }
             : {}),
-          posts: page.posts,
-          ...(page.next_token ? { next_token: page.next_token } : {}),
-          mode: page.mode,
+          mode: result.mode,
         };
 
         return {
-          content: [
-            {
-              type: "text",
-              text: `Showing ${page.posts.length} posts for ${label}${page.mode === "demo" ? " (demo data)" : ""}.`,
-            },
-          ],
+          content: [{ type: "text", text }],
           structuredContent: structuredContent as any,
         };
       } catch (err) {
@@ -1114,65 +1616,104 @@ export function createServer(): McpServer {
   );
 
   // ---------------------------------------------------------------------------
-  // Tool 6: fetch_posts — app-only (hidden from the model)
-  // Used by the viewer iframe for its search box, refresh, and "Load more".
+  // Tool 6: fetch_telemetry — app-only (hidden from the model)
+  // Used by the viewer iframe for refresh, drill-down, and the logs tab.
   // ---------------------------------------------------------------------------
   registerAppTool(
     server,
-    "fetch_posts",
+    "fetch_telemetry",
     {
-      title: "Fetch Posts",
+      title: "Fetch Telemetry",
       description:
-        "Fetch a page of X posts for the timeline viewer (search or user timeline, " +
-        "with pagination). The model should NOT call this tool directly.",
+        "Fetch traces, a single trace, or logs for the trace explorer UI. " +
+        "The model should NOT call this tool directly.",
       inputSchema: {
-        source: z
-          .enum(["search", "user"])
-          .describe('"search" for a keyword search, "user" for a user timeline'),
+        view: z
+          .enum(["traces", "trace", "logs"])
+          .describe(
+            '"traces" for the recent trace list, "trace" for one trace, "logs" for a log search',
+          ),
+        trace_id: z
+          .string()
+          .optional()
+          .describe('Trace id (required for view "trace"; filters view "logs")'),
+        service_name: z
+          .string()
+          .optional()
+          .describe('Service filter for view "logs"'),
+        severity_min: z
+          .number()
+          .int()
+          .min(1)
+          .max(24)
+          .optional()
+          .describe('Minimum OTel severity for view "logs"'),
         query: z
           .string()
           .optional()
-          .describe('Search query (required when source is "search")'),
-        username: z
-          .string()
+          .describe('Body substring filter for view "logs"'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
           .optional()
-          .describe('X username (required when source is "user")'),
-        max_results: maxResultsSchema.optional(),
-        next_token: z
-          .string()
-          .optional()
-          .describe("Pagination token from a previous result"),
+          .describe("Max items (default: 20 traces / 50 logs)"),
       },
       outputSchema: z.object({
-        posts: z.array(PostSchema),
-        next_token: z.string().optional(),
+        traces: z.array(TraceSchema).optional(),
+        trace: TraceSchema.optional(),
+        logs: z.array(LogRecordSchema).optional(),
         mode: ModeSchema,
       }),
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({
-      source,
-      query,
-      username,
-      max_results,
-      next_token,
-    }): Promise<CallToolResult> => {
+    async ({ view, trace_id, service_name, severity_min, query, limit }): Promise<CallToolResult> => {
       try {
-        const page = await fetchPostsForSource({
-          source,
-          query,
-          username,
-          max_results,
-          next_token,
-        });
+        if (view === "trace") {
+          if (!trace_id) {
+            throw new CollectorError('view "trace" requires a `trace_id`.');
+          }
+          const { trace, mode } = await fetchTrace(trace_id);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Fetched trace ${shortId(trace.trace_id)} (${trace.span_count} spans, ${mode} mode).`,
+              },
+            ],
+            structuredContent: { trace, mode } as any,
+          };
+        }
+
+        if (view === "logs") {
+          const { logs, mode } = await fetchLogs({
+            trace_id,
+            service_name,
+            severity_min,
+            query,
+            limit: limit ?? 50,
+          });
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Fetched ${logs.length} logs (${mode} mode).`,
+              },
+            ],
+            structuredContent: { logs, mode } as any,
+          };
+        }
+
+        const { traces, mode } = await fetchTraces(limit ?? 20);
         return {
           content: [
             {
               type: "text",
-              text: `Fetched ${page.posts.length} posts (${page.mode} mode)${page.next_token ? ", more available" : ""}.`,
+              text: `Fetched ${traces.length} traces (${mode} mode).`,
             },
           ],
-          structuredContent: page as any,
+          structuredContent: { traces, mode } as any,
         };
       } catch (err) {
         return toolError(err);
@@ -1181,7 +1722,7 @@ export function createServer(): McpServer {
   );
 
   // ---------------------------------------------------------------------------
-  // UI resource: the bundled timeline viewer HTML
+  // UI resource: the bundled trace explorer HTML
   // ---------------------------------------------------------------------------
   registerAppResource(
     server,
@@ -1202,14 +1743,10 @@ export function createServer(): McpServer {
             _meta: {
               ui: {
                 csp: {
-                  // Avatars and media previews are <img> loads from X's CDN
-                  // → resourceDomains. connectDomains kept in sync per the
-                  // interface contract.
-                  connectDomains: ["https://pbs.twimg.com"],
-                  resourceDomains: [
-                    "https://pbs.twimg.com",
-                    "https://abs.twimg.com",
-                  ],
+                  // Fully self-contained viewer: system font stack, no CDN,
+                  // all data via fetch_telemetry — no external origins.
+                  connectDomains: [],
+                  resourceDomains: [],
                 },
               },
             },

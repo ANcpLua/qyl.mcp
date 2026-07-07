@@ -4,49 +4,102 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <title>X Timeline</title>
+  <title>qyl · traces</title>
 </head>
 <body>
   <main class="main">
     <header class="header">
-      <div class="header-row">
-        <svg class="x-logo" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+      <div class="header-brand">
+        <svg class="header-logo" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 20V10h3v10H3zm7.5 0V4h3v16h-3zM18 20v-7h3v7h-3z"/>
         </svg>
-        <h1 id="source-label" class="source-label">Timeline</h1>
+        <h1 class="header-title">qyl <span class="header-title-dim">· traces</span></h1>
         <span id="demo-badge" class="demo-badge" hidden>DEMO DATA</span>
       </div>
-      <form id="search-form" class="search-form" role="search">
-        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M10.25 3.75c-3.59 0-6.5 2.91-6.5 6.5s2.91 6.5 6.5 6.5c1.795 0 3.419-.726 4.596-1.904 1.178-1.177 1.904-2.801 1.904-4.596 0-3.59-2.91-6.5-6.5-6.5zm-8.5 6.5c0-4.694 3.806-8.5 8.5-8.5s8.5 3.806 8.5 8.5c0 1.986-.682 3.815-1.824 5.262l4.781 4.781-1.414 1.414-4.781-4.781c-1.447 1.142-3.276 1.824-5.262 1.824-4.694 0-8.5-3.806-8.5-8.5z"/>
-        </svg>
-        <input id="search-input" type="search" placeholder="Search posts" autocomplete="off"
-               aria-label="Search posts" enterkeyhint="search">
-      </form>
+      <div class="header-actions">
+        <span id="trace-count-label" class="header-count"></span>
+        <button id="refresh-btn" class="refresh-btn" type="button" title="Refresh traces" aria-label="Refresh traces">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 4V1L7 6l5 5V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-8z"/>
+          </svg>
+        </button>
+      </div>
     </header>
 
-    <!-- Transient error banner (kept above the timeline; auto-hides) -->
+    <!-- Transient, non-destructive error notice (auto-hides) -->
     <div id="banner" class="banner" role="alert" hidden></div>
 
-    <!-- Full-viewport states shown before/instead of the timeline -->
+    <!-- Full-panel states shown before/instead of the explorer -->
     <div id="state-loading" class="state">
       <div class="spinner" aria-hidden="true"></div>
-      <span id="loading-text">Loading posts&hellip;</span>
+      <span id="loading-text">Loading traces&hellip;</span>
     </div>
     <div id="state-empty" class="state" hidden>
-      <span class="state-title">No posts found</span>
-      <span class="state-hint">Try a different search.</span>
+      <span class="state-title">No traces</span>
+      <span class="state-hint">The collector has not received any telemetry yet.</span>
+      <button id="empty-refresh-btn" class="state-btn" type="button">Refresh</button>
     </div>
     <div id="state-error" class="state" hidden>
       <span class="state-title">Something went wrong</span>
       <span id="error-message" class="state-hint"></span>
+      <button id="retry-btn" class="state-btn" type="button">Retry</button>
     </div>
 
-    <section id="timeline" class="timeline" aria-live="polite" hidden></section>
+    <!-- Explorer: trace list + trace view -->
+    <div id="explorer" class="explorer" hidden>
+      <aside class="trace-list-pane">
+        <div class="pane-heading">Recent traces</div>
+        <ul id="trace-list" class="trace-list" role="listbox" aria-label="Traces"></ul>
+      </aside>
 
-    <footer class="footer">
-      <button id="load-more-btn" class="load-more" type="button" hidden>Load more</button>
-    </footer>
+      <section class="trace-view">
+        <div id="trace-view-empty" class="trace-view-empty">
+          <span class="state-hint">Select a trace to inspect its spans.</span>
+        </div>
+
+        <div id="trace-view-body" class="trace-view-body" hidden>
+          <div class="trace-summary">
+            <div class="trace-summary-top">
+              <span id="trace-title" class="trace-title"></span>
+              <span id="trace-status-badge" class="trace-status-badge"></span>
+            </div>
+            <div class="trace-summary-meta">
+              <span id="trace-id-label" class="mono dim"></span>
+              <span id="trace-duration-label" class="mono"></span>
+              <span id="trace-span-count-label" class="dim"></span>
+              <span id="trace-services" class="trace-services"></span>
+            </div>
+          </div>
+
+          <div class="tabbar" role="tablist" aria-label="Trace detail tabs">
+            <button id="tab-waterfall" class="tab active" type="button" role="tab" aria-selected="true">Waterfall</button>
+            <button id="tab-logs" class="tab" type="button" role="tab" aria-selected="false">Logs</button>
+          </div>
+
+          <div id="waterfall-panel" class="waterfall-panel" role="tabpanel">
+            <div class="waterfall-header">
+              <div class="waterfall-header-name">Span</div>
+              <div id="time-ruler" class="time-ruler"></div>
+            </div>
+            <div id="span-rows" class="span-rows"></div>
+          </div>
+
+          <div id="logs-panel" class="logs-panel" role="tabpanel" hidden>
+            <div id="logs-state" class="logs-state" hidden></div>
+            <div id="logs-list" class="logs-list"></div>
+          </div>
+        </div>
+
+        <!-- Slide-in span detail -->
+        <aside id="detail-panel" class="detail-panel" aria-label="Span details" hidden>
+          <div class="detail-header">
+            <span id="detail-title" class="detail-title"></span>
+            <button id="detail-close-btn" class="detail-close" type="button" aria-label="Close span details">&times;</button>
+          </div>
+          <div id="detail-body" class="detail-body"></div>
+        </aside>
+      </section>
+    </div>
   </main>
   <script type="module" src="/src/mcp-app.ts"></script>
 </body>
