@@ -104,9 +104,13 @@ export class McpTelemetry {
             attributes.push({ key: "error.type", value: toOtlpValue("mcp_error") });
         }
 
+        // Base64, not hex: the OTLP spec special-cases trace/span ids to hex in JSON, but
+        // collectors that parse OTLP JSON with stock protojson (qyl included) apply the
+        // plain proto3 bytes mapping = base64. qyl is the target backend, so base64 wins;
+        // switch to hex if pointing QYL_OTLP_ENDPOINT at a strict-OTLP collector.
         this.queue.push({
-            traceId: randomBytes(16).toString("hex"),
-            spanId: randomBytes(8).toString("hex"),
+            traceId: randomBytes(16).toString("base64"),
+            spanId: randomBytes(8).toString("base64"),
             name: input.toolName ? `${input.method} ${input.toolName}` : input.method,
             kind: 3, // SPAN_KIND_CLIENT — the runner calls the managed server
             startTimeUnixNano: String(Math.round(input.startTimeMs * 1e6)),

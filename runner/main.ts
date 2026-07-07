@@ -13,8 +13,10 @@ app.addStdioServer("qyl-apps", {
     command: "node",
     args: ["dist/index.js", "--stdio"],
     cwd: "/Users/ancplua/Desktop/qyl-apps-server",
-    env: { QYL_DEMO: "1" },
-    description: "qyl telemetry explorer (MCP Apps; demo mode — unset QYL_DEMO and set QYL_COLLECTOR_URL for a live collector)",
+    // No QYL_DEMO here on purpose: the server probes QYL_COLLECTOR_URL and falls back to
+    // demo telemetry by itself when no collector is running. Set QYL_DEMO=1 to force demo.
+    env: { QYL_COLLECTOR_URL: "http://127.0.0.1:5100" },
+    description: "qyl telemetry explorer (MCP Apps; live against the collector, demo fallback)",
 });
 
 // Architectural reference workload (X timeline viewer) — enable when needed:
