@@ -150,11 +150,11 @@ export class Orchestrator {
     }
 
     // For the API's MCP passthrough: null means unknown resource.
-    lookup(name: string): { state: McpResourceState; client: Client | null } | null {
+    lookup(name: string): { state: McpResourceState; client: Client | null; resource: McpResource } | null {
         const managed = this.managed.get(name);
         const state = this.registry.get(name);
         if (!managed || !state) return null;
-        return { state, client: managed.client };
+        return { state, client: managed.client, resource: managed.resource };
     }
 
     // User-initiated restart: same launch spec, fresh crash budget — does not count toward

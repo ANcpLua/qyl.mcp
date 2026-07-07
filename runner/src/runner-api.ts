@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { Constants } from "./constants.js";
 import { LogStore } from "./log-store.js";
 import { Orchestrator } from "./orchestrator.js";
+import { McpTelemetry } from "./telemetry.js";
 
 const { Ports, Network, Routes, LogEvents } = Constants;
 
@@ -35,6 +36,8 @@ interface UiResourceCsp {
 export class RunnerApi {
     private server: Server | null = null;
     private sandboxServer: Server | null = null;
+    // MCP self-monitoring: every passthrough call becomes an OTLP span (see telemetry.ts).
+    private readonly telemetry = new McpTelemetry();
 
     constructor(
         private readonly orchestrator: Orchestrator,
@@ -46,7 +49,7 @@ export class RunnerApi {
     }
 
     async close(): Promise<void> {
-        await Promise.all([closeServer(this.server), closeServer(this.sandboxServer)]);
+        await Promise.all([closeServer(this.server), closeServer(this.sandboxServer), this.telemetry.close()]);
         this.server = null;
         this.sandboxServer = null;
     }
@@ -104,7 +107,9 @@ export class RunnerApi {
 
         // MCP passthrough. Errors: 404 unknown resource, 409 not Ready, 502 upstream MCP error.
         app.get(`${Routes.Runner}/mcp/:name/tools`, (req, res) => {
-            void this.passthrough(req, res, (client) => client.listTools().then(({ tools }) => ({ tools })));
+            void this.passthrough(req, res, { method: "tools/list" }, (client) =>
+                client.listTools().then(({ tools }) => ({ tools })),
+            );
         });
 
         app.post(`${Routes.Runner}/mcp/:name/tools/call`, (req, res) => {
@@ -113,7 +118,7 @@ export class RunnerApi {
                 res.status(400).json({ error: "Body must be { name: string, arguments?: object }" });
                 return;
             }
-            void this.passthrough(req, res, (client) =>
+            void this.passthrough(req, res, { method: "tools/call", toolName: name }, (client) =>
                 client.callTool({ name, arguments: (args ?? {}) as Record<string, unknown> }),
             );
         });
@@ -124,7 +129,9 @@ export class RunnerApi {
                 res.status(400).json({ error: "Body must be { uri: string }" });
                 return;
             }
-            void this.passthrough(req, res, (client) => client.readResource({ uri }));
+            void this.passthrough(req, res, { method: "resources/read", resourceUri: uri }, (client) =>
+                client.readResource({ uri }),
+            );
         });
 
         app.get(Routes.Health, (_req, res) => {
@@ -157,6 +164,7 @@ export class RunnerApi {
     private async passthrough(
         req: Request,
         res: Response,
+        call: { method: string; toolName?: string; resourceUri?: string },
         invoke: (client: import("@modelcontextprotocol/sdk/client/index.js").Client) => Promise<unknown>,
     ): Promise<void> {
         const name = req.params.name as string;
@@ -169,13 +177,29 @@ export class RunnerApi {
             res.status(409).json({ error: `Resource '${name}' is not Ready (currently ${entry.state.lifecycle})` });
             return;
         }
+        const startTimeMs = Date.now();
         try {
-            res.json(await invoke(entry.client));
+            const result = await invoke(entry.client);
+            this.telemetry.recordCall({
+                ...call,
+                serverName: name,
+                transport: entry.resource.kind,
+                startTimeMs,
+                endTimeMs: Date.now(),
+            });
+            res.json(result);
         } catch (error) {
-            console.error(
-                `[${LogEvents.RunnerApiRequestFailed}] Runner API request failed: ${error instanceof Error ? error.message : String(error)}`,
-            );
-            res.status(502).json({ error: error instanceof Error ? error.message : String(error) });
+            const message = error instanceof Error ? error.message : String(error);
+            this.telemetry.recordCall({
+                ...call,
+                serverName: name,
+                transport: entry.resource.kind,
+                startTimeMs,
+                endTimeMs: Date.now(),
+                error: message,
+            });
+            console.error(`[${LogEvents.RunnerApiRequestFailed}] Runner API request failed: ${message}`);
+            res.status(502).json({ error: message });
         }
     }
 
