@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>X Timeline</title>
+</head>
+<body>
+  <main class="main">
+    <header class="header">
+      <div class="header-row">
+        <svg class="x-logo" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+        </svg>
+        <h1 id="source-label" class="source-label">Timeline</h1>
+        <span id="demo-badge" class="demo-badge" hidden>DEMO DATA</span>
+      </div>
+      <form id="search-form" class="search-form" role="search">
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M10.25 3.75c-3.59 0-6.5 2.91-6.5 6.5s2.91 6.5 6.5 6.5c1.795 0 3.419-.726 4.596-1.904 1.178-1.177 1.904-2.801 1.904-4.596 0-3.59-2.91-6.5-6.5-6.5zm-8.5 6.5c0-4.694 3.806-8.5 8.5-8.5s8.5 3.806 8.5 8.5c0 1.986-.682 3.815-1.824 5.262l4.781 4.781-1.414 1.414-4.781-4.781c-1.447 1.142-3.276 1.824-5.262 1.824-4.694 0-8.5-3.806-8.5-8.5z"/>
+        </svg>
+        <input id="search-input" type="search" placeholder="Search posts" autocomplete="off"
+               aria-label="Search posts" enterkeyhint="search">
+      </form>
+    </header>
+
+    <!-- Transient error banner (kept above the timeline; auto-hides) -->
+    <div id="banner" class="banner" role="alert" hidden></div>
+
+    <!-- Full-viewport states shown before/instead of the timeline -->
+    <div id="state-loading" class="state">
+      <div class="spinner" aria-hidden="true"></div>
+      <span id="loading-text">Loading posts&hellip;</span>
+    </div>
+    <div id="state-empty" class="state" hidden>
+      <span class="state-title">No posts found</span>
+      <span class="state-hint">Try a different search.</span>
+    </div>
+    <div id="state-error" class="state" hidden>
+      <span class="state-title">Something went wrong</span>
+      <span id="error-message" class="state-hint"></span>
+    </div>
+
+    <section id="timeline" class="timeline" aria-live="polite" hidden></section>
+
+    <footer class="footer">
+      <button id="load-more-btn" class="load-more" type="button" hidden>Load more</button>
+    </footer>
+  </main>
+  <script type="module" src="/src/mcp-app.ts"></script>
+</body>
+</html>
