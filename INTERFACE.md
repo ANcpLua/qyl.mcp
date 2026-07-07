@@ -149,3 +149,53 @@ cwd: "/Users/ancplua/Desktop/qyl-apps-server", env: { QYL_DEMO: "1" }, descripti
 Issues/errors endpoints (not served by today's collector), profiles UI, query studio,
 writes/annotations, auth. README should note these as the v2 direction once the collector
 grows the endpoints back.
+
+---
+
+## Addendum: MCP Dashboard (Sentry "MCP monitoring" equivalent, qyl-based)
+
+New app tool `display_mcp_dashboard` — an aggregate dashboard over the MCP spans that
+mcp-run's passthrough emits into the collector (service.name "mcp.run", spans carrying the
+`mcp.method.name` attribute). Second UI resource: `ui://qyl-explorer/mcp-dashboard.html`
+(own vite INPUT build → dist/mcp-dashboard.html; same CSP: no external origins).
+
+### Aggregate shape (computed SERVER-side; UI renders only this)
+
+```ts
+interface McpToolRow { name: string; requests: number; errors: number; error_rate: number; avg_ms: number; p95_ms: number }
+interface McpDashboardStats {
+  window: { start: string; end: string; bucket_ms: number };   // bucket count 24-48
+  buckets: Array<{ start: string; requests: number; errors: number }>;
+  totals: { requests: number; errors: number; error_rate: number };
+  by_server: Array<{ name: string; requests: number }>;        // mcp.server.name (≈ Sentry "by client")
+  by_transport: Array<{ name: string; requests: number }>;     // app.transport
+  by_method: Array<{ name: string; requests: number }>;        // mcp.method.name
+  tools: McpToolRow[];                                          // by mcp.tool.name, desc requests
+  resources: Array<McpToolRow & { name: string }>;              // name = mcp.resource.uri
+  span_count_analyzed: number;
+  truncated: boolean;                                           // hit the 1000-trace fetch cap
+  mode: "live" | "demo";
+}
+```
+
+- Durations ms from span nano fields; p95 = nearest-rank. error = status.code 2.
+- Live source: GET /api/v1/traces?limit=1000 → flatten spans → keep spans with an
+  `mcp.method.name` attribute → filter to window (`hours` arg) → aggregate.
+- Tools: `display_mcp_dashboard` — { hours?: number (1-168, default 24) }, model-facing,
+  `_meta.ui.resourceUri` = the dashboard resource. Text content: compact summary table
+  (top tools with requests/error-rate/p95). structuredContent { stats: McpDashboardStats }.
+- `fetch_telemetry` gains view `"mcp_stats"` (+ hours) returning the same — used by the
+  dashboard UI's refresh + window selector (1h / 24h / 7d).
+- Demo mode: synthesize ~2 weeks of plausible MCP spans (4 tools incl. one failing-ish,
+  2 resources, 2 transports, 3 server names, daily traffic rhythm) and aggregate through
+  the SAME aggregation code as live.
+
+### Dashboard UI (mcp-dashboard.html + src/mcp-dashboard.ts + css)
+
+Widget grid mirroring Sentry's MCP dashboard, qyl vocabulary: Traffic (stacked ok/error
+bars over time + error-rate line), Traffic by Server, Transport Distribution, Most Used
+Tools, Slowest Tools (p95), Most Failing Tools, then detail tables Tools and Resources
+(REQUESTS / ERROR RATE / AVG / P95, sortable by column click). Window selector buttons
+(1h/24h/7d) + refresh → fetch_telemetry view "mcp_stats". Charts hand-rolled inline SVG
+(no libs). Same theme/App wiring as the explorer. "Prompts" widget intentionally absent
+(no prompt telemetry) — do not fake it.

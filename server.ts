@@ -11,10 +11,12 @@
  * - list_sessions:  GET /api/v1/sessions
  * - search_logs:    GET /api/v1/logs
  * - display_traces: fetches traces and renders the trace explorer UI
+ * - display_mcp_dashboard: aggregate MCP traffic stats (spans carrying an
+ *   `mcp.method.name` attribute) rendered as a dashboard UI
  *
  * App-only tool (hidden from the model, called by the viewer iframe):
- * - fetch_telemetry: traces / single trace / log search, used by the
- *   viewer's refresh button, drill-down, and logs tab.
+ * - fetch_telemetry: traces / single trace / log search / mcp_stats, used
+ *   by the viewers' refresh buttons, drill-down, and logs tab.
  *
  * Modes:
  * - Live mode: fetches from the qyl collector REST API at
@@ -47,6 +49,9 @@ const COLLECTOR_URL = process.env.QYL_COLLECTOR_URL ?? "http://127.0.0.1:5100";
 
 /** URI of the trace explorer UI resource (see INTERFACE.md). */
 export const RESOURCE_URI = "ui://qyl-explorer/mcp-app.html";
+
+/** URI of the MCP dashboard UI resource (see INTERFACE.md addendum). */
+export const DASHBOARD_RESOURCE_URI = "ui://qyl-explorer/mcp-dashboard.html";
 
 // Works both from source (server.ts) and compiled (dist/server.js)
 const DIST_DIR = import.meta.filename.endsWith(".ts")
@@ -122,6 +127,31 @@ export interface QylSession {
 }
 
 type Mode = "live" | "demo";
+
+// --- MCP dashboard aggregate (INTERFACE.md addendum) -------------------------
+
+export interface McpToolRow {
+  name: string;
+  requests: number;
+  errors: number;
+  error_rate: number;
+  avg_ms: number;
+  p95_ms: number;
+}
+
+export interface McpDashboardStats {
+  window: { start: string; end: string; bucket_ms: number }; // bucket count 24-48
+  buckets: Array<{ start: string; requests: number; errors: number }>;
+  totals: { requests: number; errors: number; error_rate: number };
+  by_server: Array<{ name: string; requests: number }>; // mcp.server.name
+  by_transport: Array<{ name: string; requests: number }>; // app.transport
+  by_method: Array<{ name: string; requests: number }>; // mcp.method.name
+  tools: McpToolRow[]; // by mcp.tool.name, desc requests
+  resources: Array<McpToolRow & { name: string }>; // name = mcp.resource.uri
+  span_count_analyzed: number;
+  truncated: boolean; // hit the 1000-trace fetch cap
+  mode: Mode;
+}
 
 // =============================================================================
 // Zod schemas (runtime validators mirroring the interfaces above)
@@ -214,6 +244,50 @@ const SessionSchema = z.object({
 });
 
 const ModeSchema = z.enum(["live", "demo"]);
+
+const McpToolRowSchema = z.object({
+  name: z.string(),
+  requests: z.number().int(),
+  errors: z.number().int(),
+  error_rate: z.number().describe("errors / requests, 0–1"),
+  avg_ms: z.number(),
+  p95_ms: z.number().describe("nearest-rank 95th percentile duration"),
+});
+
+const NameRequestsSchema = z.object({
+  name: z.string(),
+  requests: z.number().int(),
+});
+
+const McpDashboardStatsSchema = z.object({
+  window: z.object({
+    start: z.string().describe("ISO 8601"),
+    end: z.string().describe("ISO 8601"),
+    bucket_ms: z.number(),
+  }),
+  buckets: z.array(
+    z.object({
+      start: z.string().describe("ISO 8601 bucket start"),
+      requests: z.number().int(),
+      errors: z.number().int(),
+    }),
+  ),
+  totals: z.object({
+    requests: z.number().int(),
+    errors: z.number().int(),
+    error_rate: z.number(),
+  }),
+  by_server: z.array(NameRequestsSchema).describe('by "mcp.server.name"'),
+  by_transport: z.array(NameRequestsSchema).describe('by "app.transport"'),
+  by_method: z.array(NameRequestsSchema).describe('by "mcp.method.name"'),
+  tools: z.array(McpToolRowSchema).describe('by "mcp.tool.name", requests desc'),
+  resources: z
+    .array(McpToolRowSchema)
+    .describe('by "mcp.resource.uri" (name = uri), requests desc'),
+  span_count_analyzed: z.number().int(),
+  truncated: z.boolean().describe("true when the 1000-trace fetch cap was hit"),
+  mode: ModeSchema,
+});
 
 // =============================================================================
 // Collector REST client
@@ -1140,6 +1214,162 @@ function buildDemoData(): DemoData {
 const DEMO = buildDemoData();
 
 // =============================================================================
+// Demo MCP spans (dashboard dataset — separate from the 8-trace explorer set)
+//
+// ~2 weeks of plausible mcp-run passthrough spans (service.name "mcp.run",
+// `mcp.method.name` attribute): 4 tools with one failing-ish, 2 resource uris,
+// 3 server names, stdio-dominant transports, a day/night traffic rhythm, and
+// log-normal-ish durations with p95 tails. Aggregated through the SAME
+// aggregateMcpStats() as live data.
+// =============================================================================
+
+/** Deterministic PRNG (mulberry32) so demo stats are stable within a run. */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const MCP_RUN_RESOURCE: Record<string, unknown> = {
+  "service.name": "mcp.run",
+  "service.version": "0.9.1",
+  "telemetry.sdk.language": "nodejs",
+};
+
+/** Per-tool traffic profile: pick weight, log-normal duration, error rate. */
+const DEMO_MCP_TOOLS: Array<{
+  name: string;
+  weight: number;
+  medianMs: number;
+  sigma: number;
+  errorRate: number;
+}> = [
+  { name: "display_traces", weight: 0.35, medianMs: 30, sigma: 0.7, errorRate: 0.01 },
+  { name: "list_traces", weight: 0.3, medianMs: 14, sigma: 0.65, errorRate: 0.008 },
+  // The deliberately failing-ish tool — its error_rate must dominate.
+  { name: "search_logs", weight: 0.2, medianMs: 20, sigma: 0.8, errorRate: 0.12 },
+  { name: "get_trace", weight: 0.15, medianMs: 8, sigma: 0.6, errorRate: 0.018 },
+];
+
+const DEMO_MCP_RESOURCE_URIS = [RESOURCE_URI, DASHBOARD_RESOURCE_URI];
+
+const DEMO_MCP_SERVERS: Array<{ name: string; weight: number }> = [
+  { name: "qyl-apps", weight: 0.6 },
+  { name: "x-apps", weight: 0.25 },
+  { name: "docs-mcp", weight: 0.15 },
+];
+
+function pickWeighted<T extends { weight: number }>(items: T[], roll: number): T {
+  let acc = 0;
+  for (const item of items) {
+    acc += item.weight;
+    if (roll < acc) return item;
+  }
+  return items[items.length - 1];
+}
+
+/** Requests per hour by hour-of-day: office-hours peak, quiet nights. */
+function demoMcpHourlyRate(hourOfDay: number): number {
+  if (hourOfDay >= 8 && hourOfDay <= 19) return 48; // working day
+  if (hourOfDay >= 6 && hourOfDay <= 23) return 26; // morning/evening shoulder
+  return 9; // night
+}
+
+function buildDemoMcpSpans(): QylSpan[] {
+  const rng = mulberry32(0x9e3779b9);
+  /** Log-normal-ish duration with an occasional heavier tail spike. */
+  const durationMs = (medianMs: number, sigma: number): number => {
+    const u1 = Math.max(rng(), 1e-9);
+    const u2 = rng();
+    const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    const base = medianMs * Math.exp(sigma * normal);
+    return rng() < 0.02 ? base * 4 : base; // p95 tail spikes
+  };
+
+  const spans: QylSpan[] = [];
+  const endMs = PROCESS_START_MS;
+  const startMs = endMs - 14 * 24 * 3_600_000;
+  let seq = 0;
+
+  for (let hourStart = startMs; hourStart < endMs; hourStart += 3_600_000) {
+    const rate = demoMcpHourlyRate(new Date(hourStart).getHours());
+    const count = Math.round(rate * (0.75 + rng() * 0.5));
+
+    for (let i = 0; i < count; i++) {
+      seq++;
+      const spanStartMs = hourStart + rng() * 3_600_000;
+      const server = pickWeighted(DEMO_MCP_SERVERS, rng()).name;
+      const transport = rng() < 0.78 ? "stdio" : "http";
+
+      const methodRoll = rng();
+      let method: string;
+      let name: string;
+      let median: number;
+      let sigma: number;
+      let errorRate: number;
+      const attrs: Array<{ key: string; value: unknown }> = [];
+
+      if (methodRoll < 0.7) {
+        method = "tools/call";
+        const tool = pickWeighted(DEMO_MCP_TOOLS, rng());
+        name = `tools/call ${tool.name}`;
+        median = tool.medianMs;
+        sigma = tool.sigma;
+        errorRate = tool.errorRate;
+        attrs.push({ key: "mcp.tool.name", value: tool.name });
+      } else if (methodRoll < 0.85) {
+        method = "tools/list";
+        name = "tools/list";
+        median = 3;
+        sigma = 0.5;
+        errorRate = 0.004;
+      } else {
+        method = "resources/read";
+        const uri = DEMO_MCP_RESOURCE_URIS[rng() < 0.65 ? 0 : 1];
+        name = `resources/read ${uri}`;
+        median = 6;
+        sigma = 0.7;
+        errorRate = 0.01;
+        attrs.push({ key: "mcp.resource.uri", value: uri });
+      }
+
+      const isError = rng() < errorRate;
+      const ms = durationMs(median, sigma);
+      attrs.push(
+        { key: "mcp.method.name", value: method },
+        { key: "mcp.server.name", value: server },
+        { key: "app.transport", value: transport },
+      );
+
+      spans.push({
+        span_id: hexId(seq * 65_537 + 11, 16),
+        trace_id: hexId(seq * 92_821 + 3, 32),
+        name,
+        kind: 3,
+        start_time_unix_nano: toNano(spanStartMs),
+        end_time_unix_nano: toNano(spanStartMs + ms),
+        attributes: attrs,
+        status: isError
+          ? { code: 2, message: "MCP request failed" }
+          : { code: 1 },
+        resource: MCP_RUN_RESOURCE,
+      });
+    }
+  }
+  return spans;
+}
+
+let demoMcpSpans: QylSpan[] | undefined;
+function getDemoMcpSpans(): QylSpan[] {
+  return (demoMcpSpans ??= buildDemoMcpSpans());
+}
+
+// =============================================================================
 // Telemetry fetching (shared by model tools, display_traces, fetch_telemetry —
 // demo mode honors every filter the live endpoints support)
 // =============================================================================
@@ -1271,6 +1501,213 @@ async function fetchTracesForDisplay(args: {
 }
 
 // =============================================================================
+// MCP dashboard aggregation (shared by demo and live paths)
+// =============================================================================
+
+function spanAttr(span: QylSpan, key: string): string | undefined {
+  const attr = span.attributes?.find((a) => a.key === key);
+  return attr === undefined || attr.value === undefined
+    ? undefined
+    : String(attr.value);
+}
+
+/**
+ * Pick a clean bucket size that tiles the window into 24–48 buckets.
+ * For every integer hours in 1–168 the resulting count lands in range.
+ */
+function pickBucketMs(windowMs: number): number {
+  const MINUTE = 60_000;
+  const candidates = [
+    MINUTE, 2 * MINUTE, 5 * MINUTE, 10 * MINUTE, 15 * MINUTE, 30 * MINUTE,
+    60 * MINUTE, 120 * MINUTE, 180 * MINUTE, 240 * MINUTE, 360 * MINUTE,
+  ];
+  for (const candidate of candidates) {
+    if (Math.ceil(windowMs / candidate) <= 48) return candidate;
+  }
+  return candidates[candidates.length - 1];
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
+
+/** Nearest-rank 95th percentile of an ascending-sorted array. */
+function nearestRankP95(sortedAsc: number[]): number {
+  return sortedAsc[Math.max(0, Math.ceil(sortedAsc.length * 0.95) - 1)];
+}
+
+const MCP_METHOD_NAME_RE =
+  /^(initialize|ping|tools\/(?:call|list)|resources\/(?:read|list|templates\/list|subscribe|unsubscribe)|prompts\/(?:get|list)|completion\/complete|logging\/setLevel|notifications\/[\w/]+)(?:\s+(.+))?$/;
+
+/**
+ * Classify a span as MCP traffic. Attributes win (full-fidelity emitters); the
+ * span-name fallback ("tools/call get_trace", "resources/read ui://…" — the
+ * Sentry-style description mcp-run emits) recovers method/tool/resource when a
+ * collector redacts unknown attributes. qyl's collector allowlist strips mcp.*
+ * and app.transport today, keeping only gen_ai.tool.name — so against a live
+ * qyl collector this fallback is what lights the dashboard up.
+ */
+function classifyMcpSpan(
+  span: QylSpan,
+): { method: string; tool?: string; resourceUri?: string } | null {
+  const attrMethod = spanAttr(span, "mcp.method.name");
+  const nameMatch = MCP_METHOD_NAME_RE.exec(span.name ?? "");
+  const method = attrMethod ?? nameMatch?.[1];
+  if (method === undefined) return null;
+  const target = nameMatch?.[2];
+  const tool =
+    spanAttr(span, "mcp.tool.name") ??
+    spanAttr(span, "gen_ai.tool.name") ??
+    (method === "tools/call" ? target : undefined);
+  const resourceUri =
+    spanAttr(span, "mcp.resource.uri") ??
+    (method === "resources/read" ? target : undefined);
+  return { method, tool, resourceUri };
+}
+
+/**
+ * Aggregate flattened spans into McpDashboardStats (minus mode/truncated,
+ * which depend on the data source). Only spans carrying an `mcp.method.name`
+ * attribute and starting inside [windowStart, windowEnd] count; durations
+ * come from the span nano fields; error = status.code 2.
+ */
+export function aggregateMcpStats(
+  spans: QylSpan[],
+  windowStart: number,
+  windowEnd: number,
+  bucketMs: number,
+): Omit<McpDashboardStats, "mode" | "truncated"> {
+  const startNano = windowStart * 1e6;
+  const endNano = windowEnd * 1e6;
+  const mcpSpans: Array<{ span: QylSpan; cls: NonNullable<ReturnType<typeof classifyMcpSpan>> }> = [];
+  for (const s of spans) {
+    if (s.start_time_unix_nano < startNano || s.start_time_unix_nano > endNano) continue;
+    const cls = classifyMcpSpan(s);
+    if (cls) mcpSpans.push({ span: s, cls });
+  }
+
+  const bucketCount = Math.max(1, Math.ceil((windowEnd - windowStart) / bucketMs));
+  const buckets = Array.from({ length: bucketCount }, (_, i) => ({
+    start: new Date(windowStart + i * bucketMs).toISOString(),
+    requests: 0,
+    errors: 0,
+  }));
+
+  const byServer = new Map<string, number>();
+  const byTransport = new Map<string, number>();
+  const byMethod = new Map<string, number>();
+  interface RowAcc { requests: number; errors: number; durations: number[] }
+  const toolAcc = new Map<string, RowAcc>();
+  const resourceAcc = new Map<string, RowAcc>();
+
+  const bump = (map: Map<string, number>, name: string) =>
+    map.set(name, (map.get(name) ?? 0) + 1);
+  const accumulate = (
+    map: Map<string, RowAcc>,
+    name: string,
+    error: boolean,
+    ms: number,
+  ) => {
+    let acc = map.get(name);
+    if (!acc) map.set(name, (acc = { requests: 0, errors: 0, durations: [] }));
+    acc.requests++;
+    if (error) acc.errors++;
+    acc.durations.push(ms);
+  };
+
+  let totalErrors = 0;
+  for (const { span, cls } of mcpSpans) {
+    const error = span.status.code === 2;
+    if (error) totalErrors++;
+    const ms = (span.end_time_unix_nano - span.start_time_unix_nano) / 1e6;
+
+    const startMs = span.start_time_unix_nano / 1e6;
+    const index = Math.min(
+      bucketCount - 1,
+      Math.max(0, Math.floor((startMs - windowStart) / bucketMs)),
+    );
+    buckets[index].requests++;
+    if (error) buckets[index].errors++;
+
+    // service.name is a reasonable last-resort "server" bucket when the
+    // emitter-level mcp.server.name attribute was redacted.
+    bump(
+      byServer,
+      spanAttr(span, "mcp.server.name") ??
+        (typeof span.resource["service.name"] === "string"
+          ? (span.resource["service.name"] as string)
+          : "unknown"),
+    );
+    bump(byTransport, spanAttr(span, "app.transport") ?? "unknown");
+    bump(byMethod, cls.method);
+
+    if (cls.tool !== undefined) accumulate(toolAcc, cls.tool, error, ms);
+    if (cls.resourceUri !== undefined) accumulate(resourceAcc, cls.resourceUri, error, ms);
+  }
+
+  const toNameRequests = (map: Map<string, number>) =>
+    [...map]
+      .map(([name, requests]) => ({ name, requests }))
+      .sort((a, b) => b.requests - a.requests);
+
+  const toRows = (map: Map<string, RowAcc>): McpToolRow[] =>
+    [...map]
+      .map(([name, acc]) => {
+        const sorted = [...acc.durations].sort((a, b) => a - b);
+        const sum = sorted.reduce((total, d) => total + d, 0);
+        return {
+          name,
+          requests: acc.requests,
+          errors: acc.errors,
+          error_rate: round4(acc.errors / acc.requests),
+          avg_ms: round2(sum / sorted.length),
+          p95_ms: round2(nearestRankP95(sorted)),
+        };
+      })
+      .sort((a, b) => b.requests - a.requests);
+
+  const requests = mcpSpans.length;
+  return {
+    window: {
+      start: new Date(windowStart).toISOString(),
+      end: new Date(windowEnd).toISOString(),
+      bucket_ms: bucketMs,
+    },
+    buckets,
+    totals: {
+      requests,
+      errors: totalErrors,
+      error_rate: requests > 0 ? round4(totalErrors / requests) : 0,
+    },
+    by_server: toNameRequests(byServer),
+    by_transport: toNameRequests(byTransport),
+    by_method: toNameRequests(byMethod),
+    tools: toRows(toolAcc),
+    resources: toRows(resourceAcc),
+    span_count_analyzed: requests,
+  };
+}
+
+/** Shared by display_mcp_dashboard and fetch_telemetry (view "mcp_stats"). */
+async function fetchMcpStats(hours: number): Promise<McpDashboardStats> {
+  const mode = await resolveMode();
+  const windowEnd = Date.now();
+  const windowStart = windowEnd - hours * 3_600_000;
+  const bucketMs = pickBucketMs(windowEnd - windowStart);
+
+  if (mode === "demo") {
+    const stats = aggregateMcpStats(getDemoMcpSpans(), windowStart, windowEnd, bucketMs);
+    return { ...stats, truncated: false, mode };
+  }
+
+  const body = await collectorGet("/api/v1/traces", { limit: 1000 });
+  const traces = unwrapItems<any>(body).map(normalizeTrace);
+  const spans = traces.flatMap((t) => t.spans);
+  const stats = aggregateMcpStats(spans, windowStart, windowEnd, bucketMs);
+  const truncated = traces.length >= 1000 || Boolean((body as any)?.has_more);
+  return { ...stats, truncated, mode };
+}
+
+// =============================================================================
 // Text summaries (compact and model-friendly)
 // =============================================================================
 
@@ -1397,6 +1834,36 @@ function summarizeLogs(logs: QylLogRecord[], mode: Mode): string {
   return `Logs (${logs.length})${modeNote(mode)}\n${lines.join("\n")}`;
 }
 
+function summarizeMcpStats(stats: McpDashboardStats, hours: number): string {
+  const pct = (rate: number) => `${(rate * 100).toFixed(1)}%`;
+  const nameList = (rows: Array<{ name: string; requests: number }>) =>
+    rows.map((r) => `${r.name} ×${r.requests}`).join(", ") || "—";
+
+  const lines = [
+    `MCP traffic — last ${hours}h${modeNote(stats.mode)}` +
+      (stats.truncated ? " (truncated at the 1000-trace fetch cap)" : ""),
+    `Requests: ${stats.totals.requests}, errors: ${stats.totals.errors} ` +
+      `(${pct(stats.totals.error_rate)})`,
+    `Servers: ${nameList(stats.by_server)}`,
+    `Transports: ${nameList(stats.by_transport)}`,
+    `Methods: ${nameList(stats.by_method)}`,
+  ];
+
+  if (stats.tools.length > 0) {
+    lines.push(
+      "",
+      "| Tool | Requests | Error rate | p95 |",
+      "|------|----------|------------|-----|",
+    );
+    for (const tool of stats.tools.slice(0, 5)) {
+      lines.push(
+        `| ${tool.name} | ${tool.requests} | ${pct(tool.error_rate)} | ${tool.p95_ms} ms |`,
+      );
+    }
+  }
+  return lines.join("\n");
+}
+
 // =============================================================================
 // Result helpers
 // =============================================================================
@@ -1414,6 +1881,7 @@ function toolError(err: unknown): CallToolResult {
 // Cached across createServer() calls — in stateless HTTP deployments a fresh
 // server is created per request and per-instance caches would be useless.
 let cachedAppHtml: string | undefined;
+let cachedDashboardHtml: string | undefined;
 
 /**
  * Creates a new MCP server instance with all qyl telemetry tools and the
@@ -1677,8 +2145,50 @@ export function createServer(): McpServer {
   );
 
   // ---------------------------------------------------------------------------
-  // Tool 6: fetch_telemetry — app-only (hidden from the model)
-  // Used by the viewer iframe for refresh, drill-down, and the logs tab.
+  // Tool 6: display_mcp_dashboard — aggregate MCP traffic dashboard
+  // ---------------------------------------------------------------------------
+  registerAppTool(
+    server,
+    "display_mcp_dashboard",
+    {
+      title: "Display MCP Dashboard",
+      description:
+        "Show an aggregate dashboard of MCP traffic (spans carrying an " +
+        "`mcp.method.name` attribute): request/error timeline, per-server and " +
+        "per-transport breakdowns, and per-tool/per-resource latency and error " +
+        "rates. Prefer this when the user asks about MCP usage, tool health, " +
+        "or MCP monitoring.",
+      inputSchema: {
+        hours: z
+          .number()
+          .min(1)
+          .max(168)
+          .default(24)
+          .describe("Aggregation window in hours (1–168, default 24)"),
+      },
+      outputSchema: z.object({
+        stats: McpDashboardStatsSchema,
+      }),
+      _meta: { ui: { resourceUri: DASHBOARD_RESOURCE_URI } },
+    },
+    async ({ hours }): Promise<CallToolResult> => {
+      try {
+        const window = hours ?? 24;
+        const stats = await fetchMcpStats(window);
+        return {
+          content: [{ type: "text", text: summarizeMcpStats(stats, window) }],
+          structuredContent: { stats } as any,
+        };
+      } catch (err) {
+        return toolError(err);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // Tool 7: fetch_telemetry — app-only (hidden from the model)
+  // Used by the viewer iframes for refresh, drill-down, logs tab, and the
+  // dashboard's window selector.
   // ---------------------------------------------------------------------------
   registerAppTool(
     server,
@@ -1690,9 +2200,10 @@ export function createServer(): McpServer {
         "The model should NOT call this tool directly.",
       inputSchema: {
         view: z
-          .enum(["traces", "trace", "logs"])
+          .enum(["traces", "trace", "logs", "mcp_stats"])
           .describe(
-            '"traces" for the recent trace list, "trace" for one trace, "logs" for a log search',
+            '"traces" for the recent trace list, "trace" for one trace, ' +
+              '"logs" for a log search, "mcp_stats" for the MCP dashboard aggregate',
           ),
         trace_id: z
           .string()
@@ -1720,17 +2231,37 @@ export function createServer(): McpServer {
           .max(200)
           .optional()
           .describe("Max items (default: 20 traces / 50 logs)"),
+        hours: z
+          .number()
+          .min(1)
+          .max(168)
+          .optional()
+          .describe('Aggregation window for view "mcp_stats" (default 24)'),
       },
       outputSchema: z.object({
         traces: z.array(TraceSchema).optional(),
         trace: TraceSchema.optional(),
         logs: z.array(LogRecordSchema).optional(),
+        stats: McpDashboardStatsSchema.optional(),
         mode: ModeSchema,
       }),
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ view, trace_id, service_name, severity_min, query, limit }): Promise<CallToolResult> => {
+    async ({ view, trace_id, service_name, severity_min, query, limit, hours }): Promise<CallToolResult> => {
       try {
+        if (view === "mcp_stats") {
+          const stats = await fetchMcpStats(hours ?? 24);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Fetched MCP stats: ${stats.totals.requests} requests over ${hours ?? 24}h (${stats.mode} mode).`,
+              },
+            ],
+            structuredContent: { stats, mode: stats.mode } as any,
+          };
+        }
+
         if (view === "trace") {
           if (!trace_id) {
             throw new CollectorError('view "trace" requires a `trace_id`.');
@@ -1806,6 +2337,50 @@ export function createServer(): McpServer {
                 csp: {
                   // Fully self-contained viewer: system font stack, no CDN,
                   // all data via fetch_telemetry — no external origins.
+                  connectDomains: [],
+                  resourceDomains: [],
+                },
+              },
+            },
+          },
+        ],
+      };
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // UI resource: the bundled MCP dashboard HTML
+  // ---------------------------------------------------------------------------
+  registerAppResource(
+    server,
+    DASHBOARD_RESOURCE_URI,
+    DASHBOARD_RESOURCE_URI,
+    { mimeType: RESOURCE_MIME_TYPE },
+    async (): Promise<ReadResourceResult> => {
+      if (cachedDashboardHtml === undefined) {
+        try {
+          cachedDashboardHtml = await fs.readFile(
+            path.join(DIST_DIR, "mcp-dashboard.html"),
+            "utf-8",
+          );
+        } catch {
+          throw new Error(
+            "dashboard UI not built yet: dist/mcp-dashboard.html is missing — " +
+              "build the mcp-dashboard.html vite entry (`npm run build`) first",
+          );
+        }
+      }
+      return {
+        contents: [
+          {
+            uri: DASHBOARD_RESOURCE_URI,
+            mimeType: RESOURCE_MIME_TYPE,
+            text: cachedDashboardHtml,
+            _meta: {
+              ui: {
+                csp: {
+                  // Same as the explorer: fully self-contained, hand-rolled
+                  // inline SVG charts, all data via fetch_telemetry.
                   connectDomains: [],
                   resourceDomains: [],
                 },

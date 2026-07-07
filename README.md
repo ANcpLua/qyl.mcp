@@ -20,7 +20,8 @@ waterfall, span detail panel, and correlated-logs tab.
 | `list_sessions` | model | Sessions with trace/span/error counts, state, and GenAI token usage where present |
 | `search_logs` | model | Log search by trace id, service, minimum OTel severity, and body substring |
 | `display_traces` | app | Opens the trace explorer UI — a `trace_id`, a `session_id`, or recent traces |
-| `fetch_telemetry` | app-only | Called by the viewer iframe (refresh, drill-down, logs tab); hidden from the model |
+| `display_mcp_dashboard` | app | Opens the MCP dashboard UI — aggregate MCP traffic stats over a 1–168h window |
+| `fetch_telemetry` | app-only | Called by the viewer iframes (refresh, drill-down, logs tab, dashboard window selector); hidden from the model |
 
 Every result carries both a compact text summary (for non-UI hosts and the model) and
 `structuredContent` in the collector's exact wire shapes (snake_case with dotted OTel keys),
@@ -44,6 +45,23 @@ exception event and stacktrace, DB and messaging spans, and a 13-span async pipe
 correlated log records and 3 sessions (one active, one with GenAI usage/cost, one errored).
 Timestamps are relative to process start, so the data always looks fresh. All filters
 (trace id, service, severity, query, limit) work in demo mode.
+
+## MCP Dashboard
+
+`display_mcp_dashboard` aggregates the MCP spans that mcp-run's passthrough emits into the
+collector (spans carrying an `mcp.method.name` attribute) into a Sentry-style MCP monitoring
+view, rendered by a second UI resource (`ui://qyl-explorer/mcp-dashboard.html`). The aggregate
+is computed server-side: a request/error timeline (24–48 time buckets over the window),
+totals, breakdowns by server (`mcp.server.name`), transport (`app.transport`), and method
+(`mcp.method.name`), plus per-tool (`mcp.tool.name`) and per-resource (`mcp.resource.uri`)
+tables with request counts, error rates, average and nearest-rank p95 latency.
+
+Live mode flattens the spans of up to 1000 recent traces (`truncated: true` when that cap is
+hit) and filters to the requested window (`hours`, 1–168, default 24). Demo mode synthesizes
+about two weeks of plausible MCP traffic — four tools with one deliberately failing-ish,
+two resource URIs, three server names, stdio-dominant transports, and a day/night rhythm —
+and runs it through the same aggregation code. The dashboard UI refreshes and switches
+windows via `fetch_telemetry` with `view: "mcp_stats"`.
 
 ## Collector endpoints used
 

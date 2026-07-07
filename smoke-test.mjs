@@ -3,14 +3,16 @@
  *
  * Spawns `node dist/index.js --stdio` with QYL_DEMO=1 and asserts the
  * INTERFACE.md contract: tool list + _meta, display_traces, get_trace,
- * search_logs severity filtering, fetch_telemetry correlated logs, and
- * demo-data parent/child span time containment.
+ * search_logs severity filtering, fetch_telemetry correlated logs,
+ * demo-data parent/child span time containment, and the MCP dashboard
+ * aggregation (display_mcp_dashboard + fetch_telemetry view "mcp_stats").
  *
  * Run: node smoke-test.mjs   (after `npm run build`)
  */
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { existsSync } from "node:fs";
 
 let failures = 0;
 function check(name, condition, detail = "") {
@@ -35,11 +37,12 @@ console.log("tools/list");
 const { tools } = await client.listTools();
 const names = tools.map((t) => t.name).sort();
 check(
-  "6 tools registered",
-  names.length === 6 &&
+  "7 tools registered",
+  names.length === 7 &&
     JSON.stringify(names) ===
       JSON.stringify(
         [
+          "display_mcp_dashboard",
           "display_traces",
           "fetch_telemetry",
           "get_trace",
@@ -63,6 +66,14 @@ check(
   'fetch_telemetry has _meta.ui.visibility ["app"]',
   JSON.stringify(fetchTelemetry?._meta?.ui?.visibility) === '["app"]',
   JSON.stringify(fetchTelemetry?._meta),
+);
+
+const displayDashboard = tools.find((t) => t.name === "display_mcp_dashboard");
+check(
+  "display_mcp_dashboard has _meta.ui.resourceUri",
+  displayDashboard?._meta?.ui?.resourceUri ===
+    "ui://qyl-explorer/mcp-dashboard.html",
+  JSON.stringify(displayDashboard?._meta),
 );
 
 // --- 2. display_traces {} ----------------------------------------------------
@@ -185,6 +196,106 @@ check(
   many.structuredContent?.traces?.length === 8 &&
     many.structuredContent.traces.every((t) => t.spans.length > 0),
 );
+
+// --- 6. display_mcp_dashboard (demo aggregation) ------------------------------
+console.log("display_mcp_dashboard {}");
+const dash = await client.callTool({
+  name: "display_mcp_dashboard",
+  arguments: {},
+});
+const stats = dash.structuredContent?.stats;
+check("not isError", !dash.isError, dash.content?.[0]?.text);
+check('mode is "demo"', stats?.mode === "demo", `got ${stats?.mode}`);
+check("truncated is false in demo", stats?.truncated === false);
+check(
+  "totals.requests > 500 in the 24h demo window",
+  stats?.totals?.requests > 500,
+  `got ${stats?.totals?.requests}`,
+);
+check(
+  "4 tool rows",
+  stats?.tools?.length === 4,
+  `got ${stats?.tools?.length}`,
+);
+check(
+  "tools sorted by requests desc",
+  stats?.tools?.every(
+    (row, i, rows) => i === 0 || rows[i - 1].requests >= row.requests,
+  ),
+  JSON.stringify(stats?.tools?.map((t) => t.requests)),
+);
+const byErrorRate = [...(stats?.tools ?? [])].sort(
+  (a, b) => b.error_rate - a.error_rate,
+);
+check(
+  "one tool has a meaningfully higher error_rate than the rest",
+  byErrorRate.length === 4 && byErrorRate[0].error_rate > byErrorRate[1].error_rate,
+  JSON.stringify(byErrorRate.map((t) => `${t.name}=${t.error_rate}`)),
+);
+check(
+  "24-48 buckets",
+  stats?.buckets?.length >= 24 && stats?.buckets?.length <= 48,
+  `got ${stats?.buckets?.length}`,
+);
+check(
+  "bucket request/error sums equal totals",
+  stats?.buckets?.reduce((sum, b) => sum + b.requests, 0) ===
+    stats?.totals?.requests &&
+    stats?.buckets?.reduce((sum, b) => sum + b.errors, 0) ===
+      stats?.totals?.errors,
+);
+check(
+  "p95_ms >= avg_ms for every tool row",
+  stats?.tools?.every((row) => row.p95_ms >= row.avg_ms),
+  JSON.stringify(stats?.tools?.map((t) => `${t.name}: avg ${t.avg_ms} p95 ${t.p95_ms}`)),
+);
+check(
+  "2 resource rows (mcp.resource.uri)",
+  stats?.resources?.length === 2,
+  `got ${stats?.resources?.length}`,
+);
+check(
+  "by_server / by_transport / by_method populated",
+  stats?.by_server?.length === 3 &&
+    stats?.by_transport?.length === 2 &&
+    stats?.by_method?.length === 3,
+);
+
+// --- 7. fetch_telemetry view:"mcp_stats" ---------------------------------------
+console.log('fetch_telemetry { view: "mcp_stats", hours: 24 }');
+const mcpStatsRes = await client.callTool({
+  name: "fetch_telemetry",
+  arguments: { view: "mcp_stats", hours: 24 },
+});
+check("not isError", !mcpStatsRes.isError, mcpStatsRes.content?.[0]?.text);
+check(
+  "returns { stats } with the same totals shape",
+  mcpStatsRes.structuredContent?.stats?.totals?.requests > 500 &&
+    mcpStatsRes.structuredContent.stats.mode === "demo",
+);
+
+// --- 8. resources/read of the dashboard UI -------------------------------------
+console.log("resources/read ui://qyl-explorer/mcp-dashboard.html");
+if (existsSync(new URL("./dist/mcp-dashboard.html", import.meta.url))) {
+  const dashRes = await client.readResource({
+    uri: "ui://qyl-explorer/mcp-dashboard.html",
+  });
+  const content = dashRes.contents?.[0];
+  check(
+    "dashboard resource serves non-empty HTML",
+    typeof content?.text === "string" && content.text.length > 0,
+  );
+  check(
+    "dashboard resource has empty-CSP _meta",
+    JSON.stringify(content?._meta?.ui?.csp) ===
+      '{"connectDomains":[],"resourceDomains":[]}',
+    JSON.stringify(content?._meta),
+  );
+} else {
+  console.log(
+    "  SKIPPED  dist/mcp-dashboard.html not built yet (UI agent builds it)",
+  );
+}
 
 await client.close();
 

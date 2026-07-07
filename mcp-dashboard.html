@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>qyl · mcp</title>
+</head>
+<body>
+  <main class="main">
+    <header class="header">
+      <div class="header-brand">
+        <svg class="header-logo" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 20V10h3v10H3zm7.5 0V4h3v16h-3zM18 20v-7h3v7h-3z"/>
+        </svg>
+        <h1 class="header-title">qyl <span class="header-title-dim">· mcp</span></h1>
+        <span id="demo-badge" class="demo-badge" hidden>DEMO DATA</span>
+      </div>
+      <div class="header-actions">
+        <span id="analyzed-label" class="header-count"></span>
+        <div class="window-selector" role="group" aria-label="Time window">
+          <button class="win-btn" type="button" data-hours="1">1h</button>
+          <button class="win-btn active" type="button" data-hours="24" aria-pressed="true">24h</button>
+          <button class="win-btn" type="button" data-hours="168">7d</button>
+        </div>
+        <button id="refresh-btn" class="refresh-btn" type="button" title="Refresh stats" aria-label="Refresh stats">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 4V1L7 6l5 5V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-8z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Transient, non-destructive error notice (auto-hides) -->
+    <div id="banner" class="banner" role="alert" hidden></div>
+
+    <!-- Persistent truncation notice (shown while stats.truncated) -->
+    <div id="truncation-note" class="notice-warn" hidden>
+      Results truncated — the 1,000-trace fetch cap was hit; older spans in this window are not counted.
+    </div>
+
+    <!-- Full-panel states shown before/instead of the dashboard -->
+    <div id="state-loading" class="state">
+      <div class="spinner" aria-hidden="true"></div>
+      <span id="loading-text">Loading MCP stats&hellip;</span>
+    </div>
+    <div id="state-empty" class="state" hidden>
+      <span class="state-title">No MCP spans in this window</span>
+      <span class="state-hint">Call some tools through the runner first.</span>
+      <button id="empty-refresh-btn" class="state-btn" type="button">Refresh</button>
+    </div>
+    <div id="state-error" class="state" hidden>
+      <span class="state-title">Something went wrong</span>
+      <span id="error-message" class="state-hint"></span>
+      <button id="retry-btn" class="state-btn" type="button">Retry</button>
+    </div>
+
+    <!-- Widget grid -->
+    <div id="dashboard" class="dashboard" hidden>
+      <div class="dash-grid">
+        <section class="card card-traffic" aria-label="Traffic over time">
+          <div class="card-head">
+            <h2 class="card-title">Traffic</h2>
+            <div class="chart-legend">
+              <span class="lg-item"><span class="lg-swatch lg-ok" aria-hidden="true"></span>OK</span>
+              <span class="lg-item"><span class="lg-swatch lg-err" aria-hidden="true"></span>Errors</span>
+              <span class="lg-item"><span class="lg-line" aria-hidden="true"></span>Error rate</span>
+            </div>
+          </div>
+          <div class="traffic-wrap">
+            <div id="traffic-chart" class="traffic-chart"></div>
+            <div id="traffic-tip" class="chart-tip" role="status" hidden></div>
+          </div>
+        </section>
+
+        <section class="card card-side" aria-label="Traffic by server">
+          <div class="card-head"><h2 class="card-title">Traffic by Server</h2></div>
+          <div id="by-server" class="bar-list"></div>
+        </section>
+
+        <section class="card card-side" aria-label="Transport distribution">
+          <div class="card-head"><h2 class="card-title">Transport Distribution</h2></div>
+          <div id="by-transport" class="bar-list"></div>
+        </section>
+
+        <section class="card card-rank" aria-label="Most used tools">
+          <div class="card-head"><h2 class="card-title">Most Used Tools</h2></div>
+          <div id="most-used" class="bar-list"></div>
+        </section>
+
+        <section class="card card-rank" aria-label="Slowest tools">
+          <div class="card-head"><h2 class="card-title">Slowest Tools</h2><span class="card-note">p95</span></div>
+          <div id="slowest" class="bar-list"></div>
+        </section>
+
+        <section class="card card-rank" aria-label="Most failing tools">
+          <div class="card-head"><h2 class="card-title">Most Failing Tools</h2><span class="card-note">&ge;5 requests</span></div>
+          <div id="most-failing" class="bar-list"></div>
+        </section>
+
+        <section class="card card-table" aria-label="Tools detail">
+          <div class="card-head"><h2 class="card-title">Tools</h2></div>
+          <div id="tools-table" class="table-holder"></div>
+        </section>
+
+        <section class="card card-table" aria-label="Resources detail">
+          <div class="card-head"><h2 class="card-title">Resources</h2></div>
+          <div id="resources-table" class="table-holder"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <script type="module" src="/src/mcp-dashboard.ts"></script>
+</body>
+</html>
