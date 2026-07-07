@@ -61,6 +61,23 @@ export interface McpCallSpanInput {
     startTimeMs: number;
     endTimeMs: number;
     error?: string;
+    /** tools/call arguments — recorded only when MCP_RUN_RECORD_INPUTS=1. */
+    arguments?: Record<string, unknown>;
+    /** Tool result — recorded only when MCP_RUN_RECORD_OUTPUTS=1. */
+    result?: unknown;
+}
+
+/** Cap recorded input/output attribute values so spans stay bounded. */
+const RECORDED_VALUE_MAX_CHARS = 2_000;
+
+function truncated(value: unknown): string {
+    let text: string;
+    try {
+        text = typeof value === "string" ? value : JSON.stringify(value);
+    } catch {
+        text = String(value);
+    }
+    return text.length > RECORDED_VALUE_MAX_CHARS ? `${text.slice(0, RECORDED_VALUE_MAX_CHARS)}…` : text;
 }
 
 export class McpTelemetry {
@@ -72,9 +89,17 @@ export class McpTelemetry {
     private timer: ReturnType<typeof setInterval> | null = null;
     private unreachableNoticeShown = false;
 
+    // Sentry-MCP-style recordInputs/recordOutputs: tool arguments and results as span
+    // attributes (gen_ai.tool.call.arguments.<key> / gen_ai.tool.call.result). Off by
+    // default — argument/result payloads may carry user data; opt in per environment.
+    private readonly recordInputs: boolean;
+    private readonly recordOutputs: boolean;
+
     constructor(env: NodeJS.ProcessEnv = process.env) {
         this.endpoint = (env.QYL_OTLP_ENDPOINT ?? "http://127.0.0.1:4318").replace(/\/$/, "");
         this.enabled = env.MCP_RUN_TELEMETRY !== "0";
+        this.recordInputs = env.MCP_RUN_RECORD_INPUTS === "1";
+        this.recordOutputs = env.MCP_RUN_RECORD_OUTPUTS === "1";
         if (this.enabled) {
             this.timer = setInterval(() => void this.flush(), FLUSH_INTERVAL_MS);
             this.timer.unref();
@@ -102,6 +127,23 @@ export class McpTelemetry {
         }
         if (input.error) {
             attributes.push({ key: "error.type", value: toOtlpValue("mcp_error") });
+        }
+        if (this.recordInputs && input.arguments) {
+            for (const [key, value] of Object.entries(input.arguments)) {
+                attributes.push({
+                    key: `gen_ai.tool.call.arguments.${key}`,
+                    value: toOtlpValue(truncated(value)),
+                });
+            }
+        }
+        if (this.recordOutputs && input.result !== undefined) {
+            attributes.push({ key: "gen_ai.tool.call.result", value: toOtlpValue(truncated(input.result)) });
+            const count = Array.isArray((input.result as any)?.content)
+                ? (input.result as any).content.length
+                : undefined;
+            if (count !== undefined) {
+                attributes.push({ key: "gen_ai.tool.call.result.count", value: toOtlpValue(count) });
+            }
         }
 
         // Base64, not hex: the OTLP spec special-cases trace/span ids to hex in JSON, but

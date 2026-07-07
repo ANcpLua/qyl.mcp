@@ -118,8 +118,9 @@ export class RunnerApi {
                 res.status(400).json({ error: "Body must be { name: string, arguments?: object }" });
                 return;
             }
-            void this.passthrough(req, res, { method: "tools/call", toolName: name }, (client) =>
-                client.callTool({ name, arguments: (args ?? {}) as Record<string, unknown> }),
+            const callArgs = (args ?? {}) as Record<string, unknown>;
+            void this.passthrough(req, res, { method: "tools/call", toolName: name, arguments: callArgs }, (client) =>
+                client.callTool({ name, arguments: callArgs }),
             );
         });
 
@@ -164,7 +165,7 @@ export class RunnerApi {
     private async passthrough(
         req: Request,
         res: Response,
-        call: { method: string; toolName?: string; resourceUri?: string },
+        call: { method: string; toolName?: string; resourceUri?: string; arguments?: Record<string, unknown> },
         invoke: (client: import("@modelcontextprotocol/sdk/client/index.js").Client) => Promise<unknown>,
     ): Promise<void> {
         const name = req.params.name as string;
@@ -186,6 +187,7 @@ export class RunnerApi {
                 transport: entry.resource.kind,
                 startTimeMs,
                 endTimeMs: Date.now(),
+                result,
             });
             res.json(result);
         } catch (error) {
