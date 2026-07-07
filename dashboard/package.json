@@ -1,0 +1,26 @@
+{
+  "name": "mcp-run-dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "mcp.run resource dashboard — qyl.run.dashboard upgraded with MCP Apps sandboxed iframe rendering",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && INPUT=index.html vite build && INPUT=sandbox.html vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.7.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.0",
+    "vite-plugin-singlefile": "^2.3.0"
+  }
+}
