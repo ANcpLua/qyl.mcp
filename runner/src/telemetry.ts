@@ -153,7 +153,14 @@ export class McpTelemetry {
         this.queue.push({
             traceId: randomBytes(16).toString("base64"),
             spanId: randomBytes(8).toString("base64"),
-            name: input.toolName ? `${input.method} ${input.toolName}` : input.method,
+            // Sentry-style span description: target in the name ("tools/call get_trace",
+            // "resources/read ui://..."). Doubles as the recovery channel for collectors
+            // that redact unknown attributes (qyl's allowlist strips mcp.* today).
+            name: input.toolName
+                ? `${input.method} ${input.toolName}`
+                : input.resourceUri
+                  ? `${input.method} ${input.resourceUri}`
+                  : input.method,
             kind: 3, // SPAN_KIND_CLIENT — the runner calls the managed server
             startTimeUnixNano: String(Math.round(input.startTimeMs * 1e6)),
             endTimeUnixNano: String(Math.round(input.endTimeMs * 1e6)),
