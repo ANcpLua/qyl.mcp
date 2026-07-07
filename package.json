@@ -1,0 +1,14 @@
+{
+  "name": "mcp-run",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Aspire-style app host for MCP servers (Qyl.Run-shaped) with an MCP Apps dashboard",
+  "workspaces": ["runner", "dashboard"],
+  "scripts": {
+    "build": "npm run build --workspace runner && npm run build --workspace dashboard",
+    "start": "node runner/dist/main.js",
+    "dev": "npm run dev --workspace dashboard"
+  },
+  "engines": { "node": ">=20" }
+}
