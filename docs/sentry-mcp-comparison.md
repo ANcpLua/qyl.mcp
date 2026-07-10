@@ -1,6 +1,6 @@
 # qyl-apps-server vs. sentry-mcp — comparison and adoption map
 
-Reference: the local clone at `~/RiderProjects/qyl-workspace/sentry-mcp` (getsentry/sentry-mcp)
+Reference: the local clone at `~/RiderProjects/qyl-references/sentry-mcp` (getsentry/sentry-mcp)
 and Sentry's MCP-monitoring docs. This maps their patterns onto the qyl MCP stack
 (`qyl-apps-server` + the `mcp-run` host) — what we adopted, what we translated, what we skipped.
 
@@ -11,10 +11,10 @@ and Sentry's MCP-monitoring docs. This maps their patterns onto the qyl MCP stac
 | Shape | pnpm monorepo: `mcp-core` (tool catalog) + `mcp-server` (stdio CLI) + `mcp-cloudflare` (hosted HTTP + OAuth + web UI) + evals/mocks/test-client packages | `qyl-apps-server` (single package, stdio+HTTP) managed by `mcp-run` (Aspire-style host: orchestrator, lifecycle, logs, passthrough, dashboard) | Different centers of gravity: Sentry ships a hosted multi-tenant server; we ship an orchestrated local fleet. Both are valid ends of the same spectrum. |
 | UI | Separate web chat client (mcp-cloudflare/client); tools return markdown only | **MCP Apps**: tools carry `_meta.ui.resourceUri`; the trace explorer renders sandboxed *inside the conversation* | Ours is the richer interaction model — Sentry has no in-conversation UI. (Their deleted-era counterpart was qyl.mcp's own Apps.) |
 | Auth | OAuth 2.1 + device-code flow, scopes/permissions, multi-tenant | None (loopback collector, read-only API) | Sentry's is production-grade; ours is deliberately local-dev. Adopt their model only when qyl's collector regains authenticated multi-tenant API. |
-| Tool catalog | Generated `toolDefinitions.json` from per-tool modules with Zod schemas, embedded agents for query repair, `search_sentry_tools` for discovery at scale (~40 tools) | 6 hand-written tools (5 model + 1 app-only) | At 6 tools a catalog generator is overhead; adopt the pattern if the surface grows past ~15 (v2: issues/errors/metrics tools). |
+| Tool catalog | Generated `toolDefinitions.json` from per-tool modules with Zod schemas, embedded agents for query repair, `search_sentry_tools` for discovery at scale (~40 tools) | 7 hand-written tools (6 model-visible + 1 app-only) | At 7 tools a catalog generator is overhead; adopt the pattern if the surface grows past ~15 (v2: issues/errors/metrics tools). |
 | Self-telemetry | Sentry SDK instruments the MCP server; dashboards pivot on `mcp.*`, `gen_ai.tool.*`, `app.*` (see their TELEMETRY.md) | **Adopted, qyl-based**: `mcp-run`'s passthrough emits OTLP JSON spans to the qyl collector with `mcp.method.name`, `mcp.tool.name` + `gen_ai.tool.name`, `mcp.server.name`, `app.transport`, `error.type`, under `session.id` per runner run (`runner/src/telemetry.ts`) | The host-level choke point instruments *every* managed server with zero per-server work — structurally stronger than per-server SDK init. This is "Sentry MCP monitoring, but the backend is qyl". |
 | Response contract | `docs/contributing/tool-responses.md`: predictable markdown sections, IDs/URLs for pivoting, follow-up tool hints, no raw API dumps | Compact summaries + `structuredContent`; trace/log ids included | Partially adopted; their explicit response-contract doc is worth mirroring as tool count grows. |
-| Testing | Vitest + msw fixture mocks (`mcp-server-mocks`), LLM evals per tool (`mcp-server-evals`), smoke tests, ast-grep rule forbidding stdout writes in stdio mode | stdio smoke test (30 assertions) + demo-mode fixtures baked into the server | Their *no-stdio-stdout* ast-grep rule encodes the same invariant our runner enforces at runtime (stdout is the JSON-RPC channel; stderr → LogStore). Evals are the biggest genuinely-missing piece. |
+| Testing | Vitest + msw fixture mocks (`mcp-server-mocks`), LLM evals per tool (`mcp-server-evals`), smoke tests, ast-grep rule forbidding stdout writes in stdio mode | stdio smoke test (~40 assertions) + demo-mode fixtures baked into the server | Their *no-stdio-stdout* ast-grep rule encodes the same invariant our runner enforces at runtime (stdout is the JSON-RPC channel; stderr → LogStore). Evals are the biggest genuinely-missing piece. |
 | Agent packaging | `plugins/sentry-mcp/` Claude Code plugin: `agents/sentry-mcp.md` frontmatter agent + `mcp.json` | **Adopted**: `plugins/qyl-mcp/` — same format, qyl domain (traces/logs/sessions/GenAI cost, OTel semconv pivots, demo-mode guidance) | Direct port of the pattern. |
 
 ## The monitoring translation (their product → our stack)
@@ -41,7 +41,8 @@ displays it in its own in-conversation explorer.
 The OTel MCP conventions were moved out of the main `semantic-conventions` repo into the
 GenAI semconv registry; the attribute set (`mcp.method.name` with the full method enum,
 tool/resource attributes) is preserved in
-`semantic-conventions/model/mcp/deprecated/registry-deprecated.yaml` in the local clone.
+`semantic-conventions/model/mcp/deprecated/registry-deprecated.yaml` in the local clone
+(under `~/RiderProjects/qyl-references/`).
 `telemetry.ts` emits the canonical `mcp.*` keys plus Sentry's `gen_ai.tool.name` alias so
 either dashboard vocabulary works.
 

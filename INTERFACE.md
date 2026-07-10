@@ -2,7 +2,7 @@
 
 MCP Apps server for **qyl telemetry**: an interactive trace/log explorer rendered in the chat,
 backed by the qyl collector's REST API. Successor to the deleted `services/qyl.mcp` Apps
-(TraceExplorer/ErrorExplorer — prior art extracted to the scratchpad `qyl-mcp-prior-art/` dir),
+(TraceExplorer/ErrorExplorer — deleted in qyl commit `43d032f9`; recover via git history there),
 rebuilt on `@modelcontextprotocol/ext-apps` following the same architecture as
 `x-apps-server` (the pattern reference — deleted locally, GitHub-only at
 `github.com/ANcpLua/x-apps-server`; read its server.ts/src for idioms).
@@ -101,8 +101,9 @@ Do NOT call /issues, /errors, /services, /metrics — they don't exist on the st
 ## Viewer (mcp-app.html + src/mcp-app.ts + src/mcp-app.css; vanilla TS; keep template App wiring:
 applyDocumentTheme/applyHostStyleVariables/applyHostFonts, ontoolinput/ontoolresult, autoResize)
 
-Layout — a trace explorer in the spirit of the deleted TraceExplorer/ErrorExplorer (study the
-prior-art HTML for visual language: dense dark-friendly list, slide-in detail, status tints):
+Layout — a trace explorer in the spirit of the deleted TraceExplorer/ErrorExplorer (visual
+language: dense dark-friendly list, slide-in detail, status tints; the prior-art HTML lives
+in qyl git history before `43d032f9`):
 
 - **Header**: "qyl · traces", mode badge ("DEMO DATA" when demo), refresh button
   (fetch_telemetry view:"traces").
@@ -140,10 +141,12 @@ prior-art HTML for visual language: dense dark-friendly list, slide-in detail, s
 
 ## Wiring into mcp-run (integrator)
 
-`~/RiderProjects/qyl-workspace/mcp-run/runner/main.ts`: replace the x-apps resource with
-`app.addStdioServer("qyl-apps", { command: "node", args: ["dist/index.js", "--stdio"],
-cwd: "/Users/ancplua/RiderProjects/qyl-workspace/qyl-apps-server", env: { QYL_DEMO: "1" }, description:
-"qyl telemetry explorer (MCP Apps)" })` — keep x-apps present but commented out as the reference.
+DONE — see `~/RiderProjects/qyl-workspace/mcp-run/runner/main.ts`. The live wiring
+deliberately sets `env: { QYL_COLLECTOR_URL: "http://127.0.0.1:5100" }` and **no**
+`QYL_DEMO` (the server probes the collector and falls back to demo telemetry by itself;
+set `QYL_DEMO=1` only to force demo), description "qyl telemetry explorer (MCP Apps;
+live against the collector, demo fallback)". The x-apps resource stays commented out
+there as the architectural reference.
 
 ## Out of scope
 
