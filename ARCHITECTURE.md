@@ -1,9 +1,9 @@
 # mcp-run — Architecture Contract
 
 An Aspire-style app host for **MCP servers**, deliberately shaped 1:1 after
-`qyl/packages/Qyl.Run` (+ `.Host`, `.Dashboard`) so it can later be ported into qyl
+`qyl/packages/Qyl.Run` (+ `.Host`, `.Console`) so it can later be ported into qyl
 mechanically. TypeScript/Node throughout. The dashboard is `ext-apps/examples/basic-host`
-upgraded into a qyl.run.dashboard-style resource dashboard with sandboxed MCP Apps rendering.
+upgraded into a qyl.run.console-style resource dashboard with sandboxed MCP Apps rendering.
 
 This file is the single source of truth for names, shapes, ports, and routes.
 Builders must not deviate from it.
@@ -14,13 +14,13 @@ Builders must not deviate from it.
 |---|---|---|
 | `QylConstants` | `constants.ts` (same nesting: `Product`, `Ports`, `ResourceKinds`, `Environments`, `Network`, `Env`, `Routes`, `Orchestrator`, `LogEvents` — keep the 11xx event ids) | `runner/src/constants.ts` |
 | `QylResource` / `QylLaunchSpec` / `QylResourceState` / `ResourceLifecycle` | `McpResource` / `McpLaunchSpec` / `McpResourceState` / `ResourceLifecycle` | `runner/src/resources.ts` |
-| `QylAppBuilder` / `IQylResourceBuilder` (+ `WaitFor`, `WithReference`) | `McpAppBuilder` / `McpResourceBuilder` (+ `.waitFor()`, `.withReference()`) | `runner/src/app-builder.ts` |
+| `QylAppBuilder` / `IQylResourceBuilder` | `McpAppBuilder` / `McpResourceBuilder` (+ `.waitFor()`, `.withReference()` — new in mcp-run, no C# counterpart) | `runner/src/app-builder.ts` |
 | `QylApp` | `McpApp` (`run()`: start orchestrator + runner API, resolve on SIGINT/SIGTERM after graceful stop) | `runner/src/app.ts` |
 | `QylLogStore` | `LogStore` (per-resource ring buffer, 1000 lines, snapshot+subscribe) | `runner/src/log-store.ts` |
 | `QylOrchestrator` | `Orchestrator` | `runner/src/orchestrator.ts` |
 | `QylRunnerApi` | `RunnerApi` (express) | `runner/src/runner-api.ts` |
 | `Qyl.Run.Host/Program.cs` | `runner/main.ts` (sample host program) | `runner/main.ts` |
-| `Qyl.Run.Dashboard` | `dashboard/` (React 19 + Vite, no other runtime deps besides `@modelcontextprotocol/sdk` + `@modelcontextprotocol/ext-apps` for the App Bridge) | `dashboard/src/*` |
+| `Qyl.Run.Console` | `dashboard/` (React 19 + Vite, no other runtime deps besides `@modelcontextprotocol/sdk` + `@modelcontextprotocol/ext-apps` for the App Bridge) | `dashboard/src/*` |
 
 ## Resource model (`runner/src/resources.ts`)
 
@@ -41,7 +41,7 @@ export interface McpResource {             // ≈ QylResource (immutable; builde
   launch: McpLaunchSpec;                    // http kind: empty command, endpoint below
   endpoint?: string;                        // http kind only: upstream MCP URL
   waitForNames: readonly string[];
-  references: readonly string[];            // referencing implies waiting (same as qyl)
+  references: readonly string[];            // referencing implies waiting
   description?: string;
 }
 
@@ -72,8 +72,9 @@ McpAppBuilder.create(args?: string[]): McpAppBuilder
 ```
 
 - Duplicate names throw (`Resource '<name>' was already added; names must be unique.`).
-- `McpResourceBuilder.waitFor(...others)` / `.withReference(...others)` mirror qyl semantics:
-  reference ⇒ wait; merged, deduped, ordinal.
+- `McpResourceBuilder.waitFor(...others)` / `.withReference(...others)` — Aspire-style
+  wait/reference semantics, new in mcp-run (Qyl.Run's `IQylResourceBuilder` has only
+  `Update`): reference ⇒ wait; merged, deduped, ordinal.
 - `withReference` env injection at launch: for each referenced resource, inject
   `MCP_ENDPOINT_<NAME_UPPER_SNAKE>=<runner proxy url>` into the child env once the
   reference is Ready (start-ordering guarantees it).
@@ -113,7 +114,7 @@ McpAppBuilder.create(args?: string[]): McpAppBuilder
 
 ## Runner API (`runner/src/runner-api.ts`) — express on 127.0.0.1:18888
 
-Wire-compatible with qyl.run.dashboard where routes overlap:
+Wire-compatible with qyl.run.console where routes overlap:
 
 - `GET  /runner/resources` → `McpResourceState[]`
 - `GET  /runner/resources/stream` → SSE; on connect replay snapshot (one message per resource), then deltas. `data: <json McpResourceState>`
@@ -136,13 +137,13 @@ Static serving:
   `sandbox.html` + nothing else, with CSP response headers derived from a `?csp=` query param
   — same mechanism as basic-host's `serve.ts`.
 
-## Dashboard (`dashboard/`) — qyl.run.dashboard upgraded with basic-host's App Bridge
+## Dashboard (`dashboard/`) — qyl.run.console upgraded with basic-host's App Bridge
 
 Stack: React 19, Vite, TypeScript. `vite.config.ts` dev-proxies `/runner` → `http://127.0.0.1:18888`.
 Build outputs `dashboard/dist` (main app) AND `dashboard/dist-sandbox/sandbox.html`
 (separate vite input, self-contained, no module preload polyfill leakage — copy basic-host's approach).
 
-- `src/types.ts`, `src/useResources.ts`, `src/useLogs.ts`: port of the qyl dashboard versions
+- `src/types.ts`, `src/useResources.ts`, `src/useLogs.ts`: port of the qyl.run.console versions
   (same SSE contract; types extended with the additive mcp-run fields).
 - `src/App.tsx`: left = resource table (name, kind, lifecycle badge with qyl-style colors,
   serverInfo, toolCount, restarts, endpoint link, restart/stop buttons hitting the POST routes);
@@ -186,10 +187,20 @@ await app.build().run();
 - `runner`: deps `@modelcontextprotocol/sdk`, `express`, `cors`, `zod`; tsc build (NodeNext, ES2022)
   to `runner/dist`. No bundler needed.
 - `dashboard`: deps `react`, `react-dom`, `@modelcontextprotocol/sdk`, `@modelcontextprotocol/ext-apps`;
-  devDeps vite, @vitejs/plugin-react, typescript.
+  devDeps vite, @vitejs/plugin-react, vite-plugin-singlefile, typescript.
 - Node ≥ 20. No other runtime deps.
+
+## Host-side telemetry (`runner/src/telemetry.ts`) — new in mcp-run, no Qyl.Run counterpart
+
+`McpTelemetry` self-monitors the MCP passthrough: every proxied request emits an OTLP/HTTP
+JSON span (zero deps, `POST {endpoint}/v1/traces`, endpoint from `QYL_OTLP_ENDPOINT`,
+default `http://127.0.0.1:4318`) carrying `mcp.method.name`, `mcp.tool.name` +
+`gen_ai.tool.name` (both on purpose — semconv canonical + GenAI alias), and a per-run
+`session.id` resource attribute so the qyl collector groups one runner run into one session.
+Sentry-MCP-style `recordInputs`/`recordOutputs` are opt-in via `MCP_RUN_RECORD_INPUTS=1` /
+`MCP_RUN_RECORD_OUTPUTS=1`.
 
 ## Out of scope (v1)
 
-Container resources, TUI console keys, OTLP, auth on the runner API (loopback bind only),
+Container resources, TUI console keys, auth on the runner API (loopback bind only),
 transparent Streamable-HTTP⇄stdio proxying (REST passthrough instead — noted for v2).
