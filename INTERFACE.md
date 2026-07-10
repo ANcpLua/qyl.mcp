@@ -4,7 +4,8 @@ MCP Apps server for **qyl telemetry**: an interactive trace/log explorer rendere
 backed by the qyl collector's REST API. Successor to the deleted `services/qyl.mcp` Apps
 (TraceExplorer/ErrorExplorer — prior art extracted to the scratchpad `qyl-mcp-prior-art/` dir),
 rebuilt on `@modelcontextprotocol/ext-apps` following the same architecture as
-`~/Desktop/x-apps-server` (which is the pattern reference — read its server.ts/src for idioms).
+`x-apps-server` (the pattern reference — deleted locally, GitHub-only at
+`github.com/ANcpLua/x-apps-server`; read its server.ts/src for idioms).
 
 Binding for both builders. Build setup (tsc + vite singlefile + bun, package scripts) is
 inherited from the scaffold — do not change it.
@@ -139,9 +140,9 @@ prior-art HTML for visual language: dense dark-friendly list, slide-in detail, s
 
 ## Wiring into mcp-run (integrator)
 
-`~/Desktop/mcp-run/runner/main.ts`: replace the x-apps resource with
+`~/RiderProjects/qyl-workspace/mcp-run/runner/main.ts`: replace the x-apps resource with
 `app.addStdioServer("qyl-apps", { command: "node", args: ["dist/index.js", "--stdio"],
-cwd: "/Users/ancplua/Desktop/qyl-apps-server", env: { QYL_DEMO: "1" }, description:
+cwd: "/Users/ancplua/RiderProjects/qyl-workspace/qyl-apps-server", env: { QYL_DEMO: "1" }, description:
 "qyl telemetry explorer (MCP Apps)" })` — keep x-apps present but commented out as the reference.
 
 ## Out of scope
