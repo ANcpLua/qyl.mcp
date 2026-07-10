@@ -12,18 +12,19 @@ const app = McpAppBuilder.create(process.argv.slice(2));
 app.addStdioServer("qyl-apps", {
     command: "node",
     args: ["dist/index.js", "--stdio"],
-    cwd: "/Users/ancplua/Desktop/qyl-apps-server",
+    cwd: "/Users/ancplua/RiderProjects/qyl-workspace/qyl-apps-server",
     // No QYL_DEMO here on purpose: the server probes QYL_COLLECTOR_URL and falls back to
     // demo telemetry by itself when no collector is running. Set QYL_DEMO=1 to force demo.
     env: { QYL_COLLECTOR_URL: "http://127.0.0.1:5100" },
     description: "qyl telemetry explorer (MCP Apps; live against the collector, demo fallback)",
 });
 
-// Architectural reference workload (X timeline viewer) — enable when needed:
+// Architectural reference workload (X timeline viewer) — x-apps-server was deleted
+// locally (GitHub-only: github.com/ANcpLua/x-apps-server); re-clone before enabling:
 // app.addStdioServer("x-apps", {
 //     command: "node",
 //     args: ["dist/index.js", "--stdio"],
-//     cwd: "/Users/ancplua/Desktop/x-apps-server",
+//     cwd: "/path/to/x-apps-server",
 //     env: { X_DEMO: "1" },
 //     description: "X timeline MCP Apps server (demo mode)",
 // });

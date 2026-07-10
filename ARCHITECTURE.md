@@ -170,10 +170,11 @@ Build outputs `dashboard/dist` (main app) AND `dashboard/dist-sandbox/sandbox.ht
 
 ```ts
 const app = McpAppBuilder.create(process.argv.slice(2));
-app.addStdioServer("x-apps", {
+app.addStdioServer("qyl-apps", {
   command: "node", args: ["dist/index.js", "--stdio"],
-  cwd: "/Users/ancplua/Desktop/x-apps-server", env: { X_DEMO: "1" },
-  description: "X timeline MCP Apps server (demo mode)",
+  cwd: "/Users/ancplua/RiderProjects/qyl-workspace/qyl-apps-server",
+  env: { QYL_COLLECTOR_URL: "http://127.0.0.1:5100" },
+  description: "qyl telemetry explorer (MCP Apps; live against the collector, demo fallback)",
 });
 await app.build().run();
 ```
