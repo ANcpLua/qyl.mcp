@@ -1,5 +1,5 @@
 // Sandbox proxy — port of ext-apps basic-host sandbox.ts with the referrer
-// allowlist adjusted for mcp-run: the runner-served dashboard (:18888) and the
+// allowlist adjusted for qyl.mcp: the runner-served dashboard (:18888) and the
 // vite dev server (localhost:5173).
 import type { McpUiSandboxProxyReadyNotification, McpUiSandboxResourceReadyNotification } from "@modelcontextprotocol/ext-apps/app-bridge";
 import { buildAllowAttribute } from "@modelcontextprotocol/ext-apps/app-bridge";

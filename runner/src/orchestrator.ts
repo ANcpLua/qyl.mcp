@@ -5,10 +5,16 @@
 // runner owns the child's stdio, so the ONE Client opened over that transport is both the health
 // probe and the proxy backend. stdout is the JSON-RPC channel and never goes to the log store;
 // stderr is piped into it line by line.
+//
+// An inproc resource has no process at all: the resource's serverFactory builds an MCP server
+// inside the runner and the same ONE Client connects to it over an in-memory linked transport
+// pair — identical health/ping/passthrough semantics, zero IPC.
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { Constants } from "./constants.js";
@@ -93,7 +99,9 @@ export function validateDependencies(resources: readonly McpResource[]): void {
 interface Managed {
     resource: McpResource;
     client: Client | null;
-    transport: StdioClientTransport | StreamableHTTPClientTransport | null;
+    transport: StdioClientTransport | StreamableHTTPClientTransport | InMemoryTransport | null;
+    // inproc kind only: the hosted server instance, closed on stop/restart.
+    server: McpServer | null;
     pingTimer: NodeJS.Timeout | null;
     restarts: number; // crash budget consumed; user restarts reset it
     generation: number; // guards stale onclose/ping callbacks across restarts
@@ -130,6 +138,7 @@ export class Orchestrator {
                 resource,
                 client: null,
                 transport: null,
+                server: null,
                 pingTimer: null,
                 restarts: 0,
                 generation: 0,
@@ -200,25 +209,30 @@ export class Orchestrator {
 
         const deadline = Date.now() + Timing.StartupTimeoutSeconds * 1000;
         try {
-            const { client, transport } =
+            const { client, transport, server } =
                 managed.resource.kind === "stdio"
                     ? await this.connectStdio(managed, deadline)
-                    : await this.connectHttp(managed, generation, deadline);
+                    : managed.resource.kind === "http"
+                      ? await this.connectHttp(managed, generation, deadline)
+                      : await this.connectInProc(managed, deadline);
 
             if (generation !== managed.generation) {
                 // Superseded by a stop/restart while connecting — discard quietly.
                 await client.close().catch(() => {});
+                await server?.close().catch(() => {});
                 return;
             }
 
             const { tools } = await client.listTools(undefined, { timeout: remaining(deadline) });
             if (generation !== managed.generation) {
                 await client.close().catch(() => {});
+                await server?.close().catch(() => {});
                 return;
             }
 
             managed.client = client;
             managed.transport = transport;
+            managed.server = server ?? null;
             const serverVersion = client.getServerVersion();
             managed.serverInfo = serverVersion ? { name: serverVersion.name, version: serverVersion.version } : null;
             managed.toolCount = tools.length;
@@ -241,7 +255,7 @@ export class Orchestrator {
     private async connectStdio(
         managed: Managed,
         deadline: number,
-    ): Promise<{ client: Client; transport: StdioClientTransport }> {
+    ): Promise<{ client: Client; transport: StdioClientTransport; server?: McpServer }> {
         const { launch } = managed.resource;
 
         // The SDK filters the child env down to a safe allowlist by default — merge explicitly so
@@ -278,7 +292,7 @@ export class Orchestrator {
         managed: Managed,
         generation: number,
         deadline: number,
-    ): Promise<{ client: Client; transport: StreamableHTTPClientTransport }> {
+    ): Promise<{ client: Client; transport: StreamableHTTPClientTransport; server?: McpServer }> {
         const url = new URL(managed.resource.endpoint!);
         for (;;) {
             const transport = new StreamableHTTPClientTransport(url);
@@ -294,6 +308,31 @@ export class Orchestrator {
                 await delay(Timing.HealthPollIntervalMs);
             }
         }
+    }
+
+    // No process and no socket — build the server via the resource's factory and connect the
+    // usual ONE Client to it over an in-memory linked transport pair. Health/ping/passthrough
+    // semantics stay identical to the other kinds.
+    private async connectInProc(
+        managed: Managed,
+        deadline: number,
+    ): Promise<{ client: Client; transport: InMemoryTransport; server: McpServer }> {
+        const factory = managed.resource.serverFactory;
+        if (!factory) {
+            throw new Error(`Resource '${managed.resource.name}' is inproc but has no serverFactory.`);
+        }
+        const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+        const server = factory();
+        await server.connect(serverTransport);
+
+        const client = new Client({ name: Product.name, version: Product.version });
+        try {
+            await client.connect(clientTransport, { timeout: remaining(deadline) });
+        } catch (error) {
+            await server.close().catch(() => {});
+            throw error;
+        }
+        return { client, transport: clientTransport, server };
     }
 
     private startPing(managed: Managed, generation: number): void {
@@ -357,9 +396,12 @@ export class Orchestrator {
 
     private async closeConnection(managed: Managed): Promise<void> {
         const client = managed.client;
+        const server = managed.server;
         managed.client = null;
         managed.transport = null;
+        managed.server = null;
         if (client) await client.close().catch(() => {});
+        if (server) await server.close().catch(() => {});
     }
 
     private clearPing(managed: Managed): void {

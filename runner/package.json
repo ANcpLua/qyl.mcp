@@ -1,9 +1,9 @@
 {
-  "name": "mcp-run-runner",
+  "name": "qyl-mcp-runner",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Qyl.Run-shaped app host for MCP servers: orchestrator + runner API + MCP passthrough",
+  "description": "Qyl.Run-shaped app host for MCP servers: orchestrator + runner API + MCP passthrough, hosting the qyl telemetry tools in-process",
   "scripts": {
     "build": "tsc",
     "start": "node dist/main.js"
@@ -11,14 +11,14 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "cors": "^2.8.5",
-    "express": "^5.1.0",
-    "zod": "^3.25.0"
+    "express": "^5.2.1",
+    "qyl-mcp-server": "^0.1.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/node": "^24.0.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.3"
   },
-  "engines": { "node": ">=20" }
+  "engines": { "node": ">=22" }
 }

@@ -1,7 +1,7 @@
 /**
  * @file qyl MCP Dashboard — MCP App.
  *
- * Aggregate dashboard over the MCP spans that mcp-run's passthrough emits
+ * Aggregate dashboard over the MCP spans that the qyl.mcp runner's passthrough emits
  * into the collector. Renders the pre-aggregated `McpDashboardStats` from
  * the `display_mcp_dashboard` tool result; the window selector and refresh
  * button re-fetch via the app-only `fetch_telemetry view:"mcp_stats"` tool.

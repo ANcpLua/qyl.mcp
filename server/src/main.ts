@@ -1,7 +1,11 @@
+#!/usr/bin/env node
 /**
- * Entry point for running the MCP server.
- * Run with: npx mcp-server-basic-vanillajs
- * Or: node dist/index.js [--stdio]
+ * Standalone entry point for the qyl telemetry MCP server.
+ * Run with: node dist/main.js [--stdio]
+ *
+ * The qyl.mcp runner does NOT go through this file — it hosts createServer()
+ * in-process over an in-memory transport (runner/main.ts). This entry exists
+ * for direct chat-client wiring (stdio) and hosted HTTP deployments.
  */
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";

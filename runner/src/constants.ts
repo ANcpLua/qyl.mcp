@@ -2,11 +2,11 @@
 
 export const Constants = {
     Product: {
-        name: "mcp.run",
-        banner: "mcp",
+        name: "qyl.mcp",
+        banner: "qyl",
         version: "0.1.0",
-        userAgent: "mcp.run/0.1.0",
-        tagline: "mcp distributed-app runner",
+        userAgent: "qyl.mcp/0.1.0",
+        tagline: "qyl mcp app host",
     },
 
     Ports: {
@@ -18,6 +18,9 @@ export const Constants = {
     ResourceKinds: {
         Stdio: "stdio",
         Http: "http",
+        // In-process MCP server over an in-memory transport — no child process,
+        // no socket; the qyl telemetry tools are hosted inside the runner itself.
+        InProc: "inproc",
     },
 
     Environments: {

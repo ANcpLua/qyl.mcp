@@ -2,6 +2,7 @@
 // resource records. A builder never mutates a record: update() produces a replacement and
 // swaps it into the app's resource list.
 
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Constants } from "./constants.js";
 import { McpApp } from "./app.js";
 import type { McpResource } from "./resources.js";
@@ -15,6 +16,10 @@ export interface StdioServerOptions {
 }
 
 export interface HttpServerOptions {
+    description?: string;
+}
+
+export interface InProcessServerOptions {
     description?: string;
 }
 
@@ -57,6 +62,29 @@ export class McpAppBuilder {
             environment: Constants.Environments.Dev,
             launch: { command: "", args: [], env: {} },
             endpoint: endpointUrl,
+            waitForNames: [],
+            references: [],
+            description: options?.description,
+        });
+    }
+
+    // Host an MCP server inside the runner process itself (in-memory transport,
+    // no child process). The factory runs once per (re)start so restarts get a
+    // fresh server instance. Configuration flows through the runner's own
+    // environment — there is no per-resource env for an in-process server.
+    addInProcessServer(
+        name: string,
+        serverFactory: () => McpServer,
+        options?: InProcessServerOptions,
+    ): McpResourceBuilder {
+        if (!name.trim()) throw new Error("Resource name must not be empty.");
+
+        return this.register({
+            name,
+            kind: "inproc",
+            environment: Constants.Environments.Dev,
+            launch: { command: "", args: [], env: {} },
+            serverFactory,
             waitForNames: [],
             references: [],
             description: options?.description,

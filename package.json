@@ -1,14 +1,15 @@
 {
-  "name": "mcp-run",
+  "name": "qyl.mcp",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Aspire-style app host for MCP servers (Qyl.Run-shaped) with an MCP Apps dashboard",
-  "workspaces": ["runner", "dashboard"],
+  "description": "qyl MCP host — Qyl.Run-shaped orchestrator + MCP passthrough + dashboard, hosting the qyl telemetry MCP Apps surface in-process",
+  "workspaces": ["server", "runner", "dashboard"],
   "scripts": {
-    "build": "npm run build --workspace runner && npm run build --workspace dashboard",
+    "build": "npm run build --workspace server && npm run build --workspace runner && npm run build --workspace dashboard",
     "start": "node runner/dist/main.js",
+    "smoke": "npm run smoke --workspace server",
     "dev": "npm run dev --workspace dashboard"
   },
-  "engines": { "node": ">=20" }
+  "engines": { "node": ">=22" }
 }

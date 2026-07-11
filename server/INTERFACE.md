@@ -1,14 +1,15 @@
-# qyl Apps Server — Interface Contract
+# qyl.mcp server — Interface Contract
 
-MCP Apps server for **qyl telemetry**: an interactive trace/log explorer rendered in the chat,
+The visual half of **qyl.mcp**: an interactive trace/log explorer rendered in the chat,
 backed by the qyl collector's REST API. Successor to the deleted `services/qyl.mcp` Apps
 (TraceExplorer/ErrorExplorer — deleted in qyl commit `43d032f9`; recover via git history there),
 rebuilt on `@modelcontextprotocol/ext-apps` following the same architecture as
 `x-apps-server` (the pattern reference — deleted locally, GitHub-only at
 `github.com/ANcpLua/x-apps-server`; read its server.ts/src for idioms).
 
-Binding for both builders. Build setup (tsc + vite singlefile + bun, package scripts) is
-inherited from the scaffold — do not change it.
+Binding contract. Build: `npm run build` = ui typecheck + two vite singlefile
+viewer builds (`--mode mcp-app` / `--mode mcp-dashboard`) + tsc NodeNext compile
+of `src/` — plain node toolchain, no bun, everything into `dist/`.
 
 ## Modes & config
 
@@ -63,34 +64,53 @@ Collector endpoints used (the ONLY real ones): `GET /api/v1/traces?limit=`,
 `GET /api/v1/logs?traceId=&serviceName=&severityMin=&query=&limit=`.
 Do NOT call /issues, /errors, /services, /metrics — they don't exist on the standalone collector.
 
-## Model-facing tools (server.ts)
+## Tool surface (tool-slot economy — src/surfaces.ts, enforced in code)
 
-1. `list_traces` — { limit?: number (1–100, default 20) } → GET /api/v1/traces.
-   Text: compact table (trace id short, root span name, services, duration ms, spans, error flag).
-   structuredContent { traces: QylTrace[] (spans omitted — summary fields only), mode }.
-2. `get_trace` — { trace_id: string } → GET /api/v1/traces/{id}.
-   Text: root span, duration, per-service span counts, error spans listed.
-   structuredContent { trace: QylTrace (full spans), mode }.
-3. `list_sessions` — { limit?: number, active_only?: boolean } → /api/v1/sessions.
-   structuredContent { sessions: QylSession[], mode }.
-4. `search_logs` — { trace_id?: string, service_name?: string, severity_min?: number,
-   query?: string, limit?: number (default 50) } → /api/v1/logs.
-   structuredContent { logs: QylLogRecord[], mode }.
-5. `display_traces` — THE app tool. `_meta: { ui: { resourceUri: "ui://qyl-explorer/mcp-app.html" } }`.
+`tools/list` exposes EXACTLY the curated top-level set; everything else lives
+in a search/execute catalog (Sentry MCP's surfaces.ts pattern). The budget
+(`MODEL_VISIBLE_TOOL_BUDGET = 8`) and the curation are asserted at
+createServer() construction — drift throws, it cannot ship by accident.
+
+**Top-level, model-visible (4):**
+
+1. `display_traces` — THE app tool. `_meta: { ui: { resourceUri: "ui://qyl-explorer/mcp-app.html" } }`.
    Input: { trace_id?: string, session_id?: string, limit?: number (default 20) }.
    Server-side: trace_id → that one trace (full spans); session_id → that session's traces;
    neither → recent traces. structuredContent { traces: QylTrace[] (FULL spans — the UI renders
    waterfalls from them), selected_trace_id?: string, mode }.
    Text: one-line summary. Description tells the model to prefer this when the user wants to LOOK at traces.
+2. `display_mcp_dashboard` — the second app tool (see addendum below).
+3. `search_qyl_tools` — { query?: string } → matching catalog entries
+   (name, title, description, input_schema as JSON Schema); empty query lists all.
+4. `execute_qyl_tool` — { name: string, arguments?: object } → validates the
+   arguments against the catalog tool's zod schema and returns THAT tool's own
+   result verbatim (text + structuredContent). Unknown names and invalid
+   arguments come back as `isError: true` text, never a throw.
+
+**Catalog (src/tools.ts — reached only through search/execute; each entry
+carries a `capability: "read"` field, the seam for skill→capability
+authorization, and the def list is the seam for the eval harness — both are
+deliberately the NEXT step, not built):**
+
+- `list_traces` — { limit?: number (1–100, default 20) } → GET /api/v1/traces.
+  Text: compact table. structuredContent { traces: QylTrace[] (spans omitted — summary fields only), mode }.
+- `get_trace` — { trace_id: string } → GET /api/v1/traces/{id}.
+  structuredContent { trace: QylTrace (full spans), mode }.
+- `list_sessions` — { limit?: number, active_only?: boolean } → /api/v1/sessions.
+  structuredContent { sessions: QylSession[], mode }.
+- `search_logs` — { trace_id?: string, service_name?: string, severity_min?: number,
+  query?: string, limit?: number (default 50) } → /api/v1/logs.
+  structuredContent { logs: QylLogRecord[], mode }.
 
 ## App-only tool (viewer → server; `_meta: { ui: { visibility: ["app"] } }`)
 
-6. `fetch_telemetry` — { view: "traces" | "trace" | "logs",
-   trace_id?: string, service_name?: string, severity_min?: number, query?: string, limit?: number }.
+5. `fetch_telemetry` — { view: "traces" | "trace" | "logs" | "mcp_stats",
+   trace_id?: string, service_name?: string, severity_min?: number, query?: string, limit?: number, hours?: number }.
    view "traces" → recent trace list (full spans); "trace" → single trace; "logs" → log search
-   (typically with trace_id to show a trace's logs in the detail panel).
-   Returns the same structuredContent shapes as the corresponding model tools.
-   Used by the UI for refresh, drill-down, and the logs tab.
+   (typically with trace_id to show a trace's logs in the detail panel); "mcp_stats" → the
+   dashboard aggregate. Returns the same structuredContent shapes as the corresponding tools.
+   Used by the UI for refresh, drill-down, the logs tab, and the dashboard window selector.
+   Registered top-level (viewers call it) but hidden from the model — no model tool slot.
 
 ## UI resource
 
@@ -139,14 +159,17 @@ in qyl git history before `43d032f9`):
   the error trace); 3 sessions (one active, one with genai_usage + estimated_cost_usd, one errored).
 - Demo mode honors filters (trace_id, service_name, severity_min, query substring, limit).
 
-## Wiring into mcp-run (integrator)
+## Wiring into the runner (integrator)
 
-DONE — see `~/RiderProjects/qyl-workspace/mcp-run/runner/main.ts`. The live wiring
-deliberately sets `env: { QYL_COLLECTOR_URL: "http://127.0.0.1:5100" }` and **no**
-`QYL_DEMO` (the server probes the collector and falls back to demo telemetry by itself;
-set `QYL_DEMO=1` only to force demo), description "qyl telemetry explorer (MCP Apps;
-live against the collector, demo fallback)". The x-apps resource stays commented out
-there as the architectural reference.
+DONE — see `../runner/main.ts`: the runner hosts this server IN-PROCESS via
+`addInProcessServer("qyl-telemetry", createServer, …)` over an in-memory
+transport — no child process, no sibling checkout. Configuration flows through
+the runner's own environment: `QYL_COLLECTOR_URL` (default
+`http://127.0.0.1:5100`) and **no** `QYL_DEMO` (the server probes the collector
+and falls back to demo telemetry by itself; set `QYL_DEMO=1` only to force
+demo). The standalone entry (`dist/main.js [--stdio]`) remains for direct
+chat-client wiring and hosted HTTP deployments — same createServer(), same
+surface.
 
 ## Out of scope
 

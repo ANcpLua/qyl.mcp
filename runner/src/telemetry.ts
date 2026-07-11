@@ -12,7 +12,7 @@
 // passthrough, so export failures are silently dropped after one console notice.
 //
 // Config: QYL_OTLP_ENDPOINT (default http://127.0.0.1:4318; the qyl collector also accepts
-// OTLP on :5100), MCP_RUN_TELEMETRY=0 to disable.
+// OTLP on :5100), QYL_MCP_TELEMETRY=0 to disable.
 
 import { randomBytes, randomUUID } from "node:crypto";
 import { Constants } from "./constants.js";
@@ -61,9 +61,9 @@ export interface McpCallSpanInput {
     startTimeMs: number;
     endTimeMs: number;
     error?: string;
-    /** tools/call arguments — recorded only when MCP_RUN_RECORD_INPUTS=1. */
+    /** tools/call arguments — recorded only when QYL_MCP_RECORD_INPUTS=1. */
     arguments?: Record<string, unknown>;
-    /** Tool result — recorded only when MCP_RUN_RECORD_OUTPUTS=1. */
+    /** Tool result — recorded only when QYL_MCP_RECORD_OUTPUTS=1. */
     result?: unknown;
 }
 
@@ -97,9 +97,9 @@ export class McpTelemetry {
 
     constructor(env: NodeJS.ProcessEnv = process.env) {
         this.endpoint = (env.QYL_OTLP_ENDPOINT ?? "http://127.0.0.1:4318").replace(/\/$/, "");
-        this.enabled = env.MCP_RUN_TELEMETRY !== "0";
-        this.recordInputs = env.MCP_RUN_RECORD_INPUTS === "1";
-        this.recordOutputs = env.MCP_RUN_RECORD_OUTPUTS === "1";
+        this.enabled = env.QYL_MCP_TELEMETRY !== "0";
+        this.recordInputs = env.QYL_MCP_RECORD_INPUTS === "1";
+        this.recordOutputs = env.QYL_MCP_RECORD_OUTPUTS === "1";
         if (this.enabled) {
             this.timer = setInterval(() => void this.flush(), FLUSH_INTERVAL_MS);
             this.timer.unref();
@@ -185,7 +185,7 @@ export class McpTelemetry {
                     },
                     scopeSpans: [
                         {
-                            scope: { name: "mcp-run/passthrough", version: Product.version },
+                            scope: { name: "qyl.mcp/passthrough", version: Product.version },
                             spans,
                         },
                     ],
@@ -204,8 +204,8 @@ export class McpTelemetry {
             if (!this.unreachableNoticeShown) {
                 this.unreachableNoticeShown = true;
                 console.error(
-                    `mcp-run telemetry: collector unreachable at ${this.endpoint} — MCP spans will be dropped ` +
-                        `(start the qyl collector, set QYL_OTLP_ENDPOINT, or MCP_RUN_TELEMETRY=0 to silence): ` +
+                    `qyl.mcp telemetry: collector unreachable at ${this.endpoint} — MCP spans will be dropped ` +
+                        `(start the qyl collector, set QYL_OTLP_ENDPOINT, or QYL_MCP_TELEMETRY=0 to silence): ` +
                         `${error instanceof Error ? error.message : String(error)}`,
                 );
             }

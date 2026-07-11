@@ -12,7 +12,7 @@ import type { McpUiStyles } from "@modelcontextprotocol/ext-apps";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { ReadResourceResult, ServerCapabilities } from "@modelcontextprotocol/sdk/types.js";
 
-const HOST_INFO = { name: "mcp.run", version: "0.1.0" };
+const HOST_INFO = { name: "qyl.mcp", version: "0.1.0" };
 
 export const log = {
   info: console.log.bind(console, "[HOST]"),
