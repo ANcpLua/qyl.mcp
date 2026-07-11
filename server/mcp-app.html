@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>qyl · traces</title>
+</head>
+<body>
+  <main class="main">
+    <header class="header">
+      <div class="header-brand">
+        <svg class="header-logo" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 20V10h3v10H3zm7.5 0V4h3v16h-3zM18 20v-7h3v7h-3z"/>
+        </svg>
+        <h1 class="header-title">qyl <span class="header-title-dim">· traces</span></h1>
+        <span id="demo-badge" class="demo-badge" hidden>DEMO DATA</span>
+      </div>
+      <div class="header-actions">
+        <span id="trace-count-label" class="header-count"></span>
+        <button id="refresh-btn" class="refresh-btn" type="button" title="Refresh traces" aria-label="Refresh traces">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 4V1L7 6l5 5V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-8z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Transient, non-destructive error notice (auto-hides) -->
+    <div id="banner" class="banner" role="alert" hidden></div>
+
+    <!-- Full-panel states shown before/instead of the explorer -->
+    <div id="state-loading" class="state">
+      <div class="spinner" aria-hidden="true"></div>
+      <span id="loading-text">Loading traces&hellip;</span>
+    </div>
+    <div id="state-empty" class="state" hidden>
+      <span class="state-title">No traces</span>
+      <span class="state-hint">The collector has not received any telemetry yet.</span>
+      <button id="empty-refresh-btn" class="state-btn" type="button">Refresh</button>
+    </div>
+    <div id="state-error" class="state" hidden>
+      <span class="state-title">Something went wrong</span>
+      <span id="error-message" class="state-hint"></span>
+      <button id="retry-btn" class="state-btn" type="button">Retry</button>
+    </div>
+
+    <!-- Explorer: trace list + trace view -->
+    <div id="explorer" class="explorer" hidden>
+      <aside class="trace-list-pane">
+        <div class="pane-heading">Recent traces</div>
+        <ul id="trace-list" class="trace-list" role="listbox" aria-label="Traces"></ul>
+      </aside>
+
+      <section class="trace-view">
+        <div id="trace-view-empty" class="trace-view-empty">
+          <span class="state-hint">Select a trace to inspect its spans.</span>
+        </div>
+
+        <div id="trace-view-body" class="trace-view-body" hidden>
+          <div class="trace-summary">
+            <div class="trace-summary-top">
+              <span id="trace-title" class="trace-title"></span>
+              <span id="trace-status-badge" class="trace-status-badge"></span>
+            </div>
+            <div class="trace-summary-meta">
+              <span id="trace-id-label" class="mono dim"></span>
+              <span id="trace-duration-label" class="mono"></span>
+              <span id="trace-span-count-label" class="dim"></span>
+              <span id="trace-services" class="trace-services"></span>
+            </div>
+          </div>
+
+          <div class="tabbar" role="tablist" aria-label="Trace detail tabs">
+            <button id="tab-waterfall" class="tab active" type="button" role="tab" aria-selected="true">Waterfall</button>
+            <button id="tab-logs" class="tab" type="button" role="tab" aria-selected="false">Logs</button>
+          </div>
+
+          <div id="waterfall-panel" class="waterfall-panel" role="tabpanel">
+            <div class="waterfall-header">
+              <div class="waterfall-header-name">Span</div>
+              <div id="time-ruler" class="time-ruler"></div>
+            </div>
+            <div id="span-rows" class="span-rows"></div>
+          </div>
+
+          <div id="logs-panel" class="logs-panel" role="tabpanel" hidden>
+            <div id="logs-state" class="logs-state" hidden></div>
+            <div id="logs-list" class="logs-list"></div>
+          </div>
+        </div>
+
+        <!-- Slide-in span detail -->
+        <aside id="detail-panel" class="detail-panel" aria-label="Span details" hidden>
+          <div class="detail-header">
+            <span id="detail-title" class="detail-title"></span>
+            <button id="detail-close-btn" class="detail-close" type="button" aria-label="Close span details">&times;</button>
+          </div>
+          <div id="detail-body" class="detail-body"></div>
+        </aside>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="/src/mcp-app.ts"></script>
+</body>
+</html>
