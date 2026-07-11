@@ -17,7 +17,10 @@ function catalogToolNames(): string {
 
 function toJsonSchema(shape: z.ZodRawShape): Record<string, unknown> {
   try {
-    return z.toJSONSchema(z.object(shape)) as Record<string, unknown>;
+    // io: "input" — callers see the pre-parse shape, where defaulted
+    // parameters are optional (the default io: "output" would mark them
+    // required because parsing always materializes them).
+    return z.toJSONSchema(z.object(shape), { io: "input" }) as Record<string, unknown>;
   } catch {
     // A shape that resists JSON Schema conversion still deserves a listing.
     return { type: "object" };
@@ -113,7 +116,21 @@ export function registerCatalogInfrastructure(server: McpServer): void {
         return toolError(new Error(`Invalid arguments for '${name}': ${issues}`));
       }
       try {
-        return await tool.handler(parsed.data);
+        const result = await tool.handler(parsed.data);
+        // Catalog tools are not registered on the MCP server, so the SDK's
+        // output validation never sees them — validate here against the def's
+        // outputSchema (as isError text, never a throw) to keep the guarantee
+        // the monolith had via registerTool.
+        if (!result.isError && result.structuredContent) {
+          const out = z.object(tool.outputSchema).safeParse(result.structuredContent);
+          if (!out.success) {
+            const issues = out.error.issues
+              .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
+              .join("; ");
+            return toolError(new Error(`Output validation error for '${name}': ${issues}`));
+          }
+        }
+        return result;
       } catch (err) {
         // Handlers return isError themselves; this is the belt to that brace.
         return toolError(err);

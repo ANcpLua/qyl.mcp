@@ -8,7 +8,7 @@ server + runner halves) — what we adopted, what we translated, what we skipped
 
 | Dimension | sentry-mcp | qyl MCP stack | Verdict |
 |---|---|---|---|
-| Shape | pnpm monorepo: `mcp-core` (tool catalog) + `mcp-server` (stdio CLI) + `mcp-cloudflare` (hosted HTTP + OAuth + web UI) + evals/mocks/test-client packages | `qyl-apps-server` (single package, stdio+HTTP) managed by `mcp-run` (Aspire-style host: orchestrator, lifecycle, logs, passthrough, dashboard) | Different centers of gravity: Sentry ships a hosted multi-tenant server; we ship an orchestrated local fleet. Both are valid ends of the same spectrum. |
+| Shape | pnpm monorepo: `mcp-core` (tool catalog) + `mcp-server` (stdio CLI) + `mcp-cloudflare` (hosted HTTP + OAuth + web UI) + evals/mocks/test-client packages | qyl.mcp npm workspaces: `server/` (tools + MCP Apps viewers, stdio+HTTP) hosted IN-PROCESS by `runner/` (Aspire-style host: orchestrator, lifecycle, logs, passthrough) + `dashboard/` | Different centers of gravity: Sentry ships a hosted multi-tenant server; we ship an orchestrated local host with the telemetry surface in-process. Both are valid ends of the same spectrum. |
 | UI | Separate web chat client (mcp-cloudflare/client); tools return markdown only | **MCP Apps**: tools carry `_meta.ui.resourceUri`; the trace explorer renders sandboxed *inside the conversation* | Ours is the richer interaction model — Sentry has no in-conversation UI. (Their deleted-era counterpart was qyl.mcp's own Apps.) |
 | Auth | OAuth 2.1 + device-code flow, scopes/permissions, multi-tenant | None (loopback collector, read-only API) | Sentry's is production-grade; ours is deliberately local-dev. Adopt their model only when qyl's collector regains authenticated multi-tenant API. |
 | Tool catalog | Generated `toolDefinitions.json` from per-tool modules with Zod schemas, embedded agents for query repair, `search_sentry_tools` for discovery at scale (~40 tools) | ADOPTED (qyl.mcp merge): curated 4-tool top-level set + `search_qyl_tools`/`execute_qyl_tool` over a data-driven catalog (`src/tools.ts`); budget + curation asserted in code (`src/surfaces.ts`) at server construction | Their slot-economy idea, our enforcement: drift throws instead of shipping. |
@@ -25,7 +25,7 @@ most-used / slowest / most-failing tools. Every one of those is derivable from t
 
 | Sentry widget | qyl equivalent query surface |
 |---|---|
-| Traffic / error rate | span count & `status.code=2` rate on `service.name="mcp.run"` |
+| Traffic / error rate | span count & `status.code=2` rate on `service.name="qyl.mcp"` |
 | Most used tools | group by `mcp.tool.name` (or `gen_ai.tool.name`) |
 | Slowest tools | span duration by `mcp.tool.name` |
 | Most failing tools | `error.type` present, by `mcp.tool.name` |
@@ -49,7 +49,8 @@ either dashboard vocabulary works.
 ## Deliberately not adopted (v1)
 
 - OAuth/scopes, Cloudflare hosting, multi-tenancy — wrong scale for a loopback dev tool today.
-- Generated tool catalog + `search_*_tools` discovery — premature under ~15 tools.
+- ~~Generated tool catalog + `search_*_tools` discovery~~ — ADOPTED in the qyl.mcp merge
+  (curated top-level set + `search_qyl_tools`/`execute_qyl_tool`, budget asserted in code).
 - Embedded query-repair agents — qyl's query params are simple enums/ids; nothing to repair yet.
 - LLM evals — the highest-value future adoption; pair with the tool-catalog generator when
   the issues/errors/metrics tool families arrive.

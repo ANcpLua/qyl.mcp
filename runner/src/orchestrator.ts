@@ -208,6 +208,12 @@ export class Orchestrator {
         console.error(`[${LogEvents.ResourceStarting}] resource '${name}' Starting`);
 
         const deadline = Date.now() + Timing.StartupTimeoutSeconds * 1000;
+        // Tracked outside the try so the catch can close a connection that was
+        // established before a later handshake step (e.g. tools/list) failed —
+        // at that point nothing is assigned to `managed` yet, so closeConnection()
+        // alone cannot reach it (stdio: the child would run orphaned; inproc: the
+        // factory-built server would stay connected).
+        let connection: { client: Client; server?: McpServer } | null = null;
         try {
             const { client, transport, server } =
                 managed.resource.kind === "stdio"
@@ -215,6 +221,7 @@ export class Orchestrator {
                     : managed.resource.kind === "http"
                       ? await this.connectHttp(managed, generation, deadline)
                       : await this.connectInProc(managed, deadline);
+            connection = { client, server };
 
             if (generation !== managed.generation) {
                 // Superseded by a stop/restart while connecting — discard quietly.
@@ -247,6 +254,10 @@ export class Orchestrator {
             console.error(`[${LogEvents.ResourceReady}] resource '${name}' Ready`);
             this.startPing(managed, generation);
         } catch (error) {
+            if (connection) {
+                await connection.client.close().catch(() => {});
+                await connection.server?.close().catch(() => {});
+            }
             if (generation !== managed.generation) return;
             this.onLaunchFailed(managed, errorMessage(error));
         }

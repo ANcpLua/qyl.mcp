@@ -59,7 +59,6 @@ interface QylSession {
 ```
 
 Collector endpoints used (the ONLY real ones): `GET /api/v1/traces?limit=`,
-`GET /api/v1/traces/{traceId}`, `GET /api/v1/traces/{traceId}/spans`,
 `GET /api/v1/sessions?limit=&isActive=`, `GET /api/v1/sessions/{id}/traces`,
 `GET /api/v1/logs?traceId=&serviceName=&severityMin=&query=&limit=`.
 Do NOT call /issues, /errors, /services, /metrics — they don't exist on the standalone collector.
@@ -118,7 +117,7 @@ deliberately the NEXT step, not built):**
   cached module-level. `_meta.ui.csp`: `{ connectDomains: [], resourceDomains: [] }` — fully
   self-contained, no external origins (system font stack, no CDN).
 
-## Viewer (mcp-app.html + src/mcp-app.ts + src/mcp-app.css; vanilla TS; keep template App wiring:
+## Viewer (mcp-app.html + ui/mcp-app.ts + ui/mcp-app.css; vanilla TS; keep template App wiring:
 applyDocumentTheme/applyHostStyleVariables/applyHostFonts, ontoolinput/ontoolresult, autoResize)
 
 Layout — a trace explorer in the spirit of the deleted TraceExplorer/ErrorExplorer (visual
@@ -182,9 +181,9 @@ grows the endpoints back.
 ## Addendum: MCP Dashboard (Sentry "MCP monitoring" equivalent, qyl-based)
 
 New app tool `display_mcp_dashboard` — an aggregate dashboard over the MCP spans that
-mcp-run's passthrough emits into the collector (service.name "mcp.run", spans carrying the
-`mcp.method.name` attribute). Second UI resource: `ui://qyl-explorer/mcp-dashboard.html`
-(own vite INPUT build → dist/mcp-dashboard.html; same CSP: no external origins).
+the qyl.mcp runner's passthrough emits into the collector (service.name "qyl.mcp", spans
+carrying the `mcp.method.name` attribute). Second UI resource: `ui://qyl-explorer/mcp-dashboard.html`
+(own vite `--mode mcp-dashboard` build → dist/mcp-dashboard.html; same CSP: no external origins).
 
 ### Aggregate shape (computed SERVER-side; UI renders only this)
 
@@ -217,7 +216,7 @@ interface McpDashboardStats {
   2 resources, 2 transports, 3 server names, daily traffic rhythm) and aggregate through
   the SAME aggregation code as live.
 
-### Dashboard UI (mcp-dashboard.html + src/mcp-dashboard.ts + css)
+### Dashboard UI (mcp-dashboard.html + ui/mcp-dashboard.ts + css)
 
 Widget grid mirroring Sentry's MCP dashboard, qyl vocabulary: Traffic (stacked ok/error
 bars over time + error-rate line), Traffic by Server, Transport Distribution, Most Used

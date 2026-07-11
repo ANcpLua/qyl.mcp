@@ -1,6 +1,6 @@
-# mcp-run-dashboard
+# qyl-mcp-dashboard
 
-The mcp.run resource dashboard: a port of qyl.run's runner console (SSE resource
+The qyl.mcp resource dashboard: a port of qyl.run's runner console (SSE resource
 table + log streaming) upgraded with MCP Apps rendering from the ext-apps
 basic-host (sandboxed double-iframe + AppBridge over the runner's REST
 passthrough).

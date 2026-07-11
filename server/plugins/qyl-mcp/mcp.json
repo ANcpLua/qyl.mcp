@@ -3,7 +3,7 @@
     "qyl": {
       "type": "stdio",
       "command": "node",
-      "args": ["/Users/ancplua/RiderProjects/qyl-workspace/qyl.mcp/server/dist/main.js", "--stdio"],
+      "args": ["${CLAUDE_PLUGIN_ROOT}/../../dist/main.js", "--stdio"],
       "env": {
         "QYL_COLLECTOR_URL": "http://127.0.0.1:5100"
       }

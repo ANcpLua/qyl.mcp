@@ -10,7 +10,7 @@ import {
   resolveMode,
   unwrapItems,
 } from "./collector.js";
-import { DEMO, getDemoMcpSpans } from "./demo.js";
+import { getDemo, getDemoMcpSpans } from "./demo.js";
 import { aggregateMcpStats, pickBucketMs } from "./stats.js";
 import type {
   McpDashboardStats,
@@ -23,7 +23,7 @@ import type {
 export async function fetchTraces(limit: number): Promise<{ traces: QylTrace[]; mode: Mode }> {
   const mode = await resolveMode();
   if (mode === "demo") {
-    return { traces: DEMO.traces.slice(0, limit), mode };
+    return { traces: getDemo().traces.slice(0, limit), mode };
   }
   const body = await collectorGet("/api/v1/traces", { limit });
   return { traces: unwrapItems<any>(body).map(normalizeTrace), mode };
@@ -32,7 +32,7 @@ export async function fetchTraces(limit: number): Promise<{ traces: QylTrace[]; 
 export async function fetchTrace(traceId: string): Promise<{ trace: QylTrace; mode: Mode }> {
   const mode = await resolveMode();
   if (mode === "demo") {
-    const trace = DEMO.traces.find((t) => t.trace_id === traceId);
+    const trace = getDemo().traces.find((t) => t.trace_id === traceId);
     if (!trace) throw new CollectorError(`trace not found: ${traceId}`);
     return { trace, mode };
   }
@@ -55,7 +55,7 @@ export async function fetchSessionTraces(
 ): Promise<{ traces: QylTrace[]; mode: Mode }> {
   const mode = await resolveMode();
   if (mode === "demo") {
-    const traces = DEMO.sessionTraces[sessionId];
+    const traces = getDemo().sessionTraces[sessionId];
     if (!traces) throw new CollectorError(`session not found: ${sessionId}`);
     return { traces: traces.slice(0, limit), mode };
   }
@@ -80,7 +80,7 @@ export async function fetchSessions(
   const mode = await resolveMode();
   if (mode === "demo") {
     const sessions = (
-      activeOnly ? DEMO.sessions.filter((s) => s.state === "active") : DEMO.sessions
+      activeOnly ? getDemo().sessions.filter((s) => s.state === "active") : getDemo().sessions
     ).slice(0, limit);
     return { sessions, mode };
   }
@@ -104,7 +104,7 @@ export async function fetchLogs(
 ): Promise<{ logs: QylLogRecord[]; mode: Mode }> {
   const mode = await resolveMode();
   if (mode === "demo") {
-    let logs = DEMO.logs;
+    let logs = getDemo().logs;
     if (filters.trace_id) logs = logs.filter((l) => l.trace_id === filters.trace_id);
     if (filters.service_name) {
       logs = logs.filter(

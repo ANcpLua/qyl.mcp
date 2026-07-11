@@ -1,9 +1,9 @@
-# mcp-run runner
+# qyl.mcp runner
 
 Aspire-style app host for MCP servers, shaped 1:1 after qyl's `Qyl.Run` so it can later be
-ported into qyl mechanically. The orchestrator spawns/monitors MCP servers (stdio or
-Streamable HTTP), health-checks them via the MCP handshake itself, restarts crashes (bounded),
-and exposes state + a REST MCP passthrough on one loopback origin.
+ported into qyl mechanically. The orchestrator hosts MCP servers (in-process, stdio child,
+or Streamable HTTP), health-checks them via the MCP handshake itself, restarts crashes
+(bounded), and exposes state + a REST MCP passthrough on one loopback origin.
 
 ## Qyl.Run → runner mapping
 
@@ -21,19 +21,21 @@ and exposes state + a REST MCP passthrough on one loopback origin.
 ## Run
 
 ```bash
-npm install          # workspace root
-npm run build --workspace runner
+npm ci               # workspace root
+npm run build        # workspace root — the runner typechecks against server/dist, so build all
 node runner/dist/main.js
 ```
 
-Host programs look like `main.ts`:
+The host program (`main.ts`) hosts the qyl telemetry server in-process:
 
 ```ts
+import { createServer } from "qyl-mcp-server";
 const app = McpAppBuilder.create(process.argv.slice(2));
-app.addStdioServer("x-apps", { command: "node", args: ["dist/index.js", "--stdio"], cwd: "…" });
+app.addInProcessServer("qyl-telemetry", createServer, { description: "…" });
 await app.build().run();
 ```
 
+`addStdioServer(name, { command, args, env, cwd })` spawns and supervises a child process;
 `addHttpServer(name, url)` manages an already-running Streamable HTTP server;
 `.waitFor(other)` orders startup; `.withReference(other)` additionally injects
 `MCP_ENDPOINT_<NAME>=<runner proxy url>` into the child env (reference implies wait).

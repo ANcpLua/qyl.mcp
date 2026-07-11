@@ -33,9 +33,34 @@ export const APP_ONLY_TOOL_NAMES = ["fetch_telemetry"] as const;
 export const MODEL_VISIBLE_TOOL_BUDGET = 8;
 
 /**
+ * Enumerate the ACTUAL registered tools off the SDK server and keep the
+ * model-visible ones (no `_meta.ui.visibility` constraint, or one that
+ * includes "model"). Reads the SDK's private `_registeredTools` by necessity —
+ * 1.29 has no public enumeration — and throws loudly if that surface moves,
+ * so an SDK upgrade can never silently un-enforce the budget.
+ */
+export function registeredModelVisibleToolNames(server: unknown): string[] {
+  const tools = (
+    server as { _registeredTools?: Record<string, { _meta?: { ui?: { visibility?: string[] } } }> }
+  )._registeredTools;
+  if (!tools) {
+    throw new Error(
+      "Tool-budget introspection failed: McpServer._registeredTools is not " +
+        "readable (SDK internals moved?) — update surfaces.ts before shipping.",
+    );
+  }
+  return Object.entries(tools)
+    .filter(([, tool]) => {
+      const visibility = tool._meta?.ui?.visibility;
+      return !visibility || visibility.includes("model");
+    })
+    .map(([name]) => name);
+}
+
+/**
  * Throws unless the registered model-visible surface is exactly the curated
- * top-level set and within budget. Called by createServer() after
- * registration — the budget is enforced by construction, not convention.
+ * top-level set and within budget. Called by createServer() on the actually
+ * registered tools — the budget is enforced by construction, not convention.
  */
 export function assertToolSurface(modelVisibleToolNames: readonly string[]): void {
   if (modelVisibleToolNames.length > MODEL_VISIBLE_TOOL_BUDGET) {

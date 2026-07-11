@@ -1,10 +1,15 @@
 /**
- * Demo dataset (exact collector wire shapes; timestamps relative to process
- * start so the data always looks recent). Two independent sets:
+ * Demo dataset (exact collector wire shapes). Two independent sets:
  *
  * - 8 explorer traces + ~30 correlated logs + 3 sessions (trace explorer);
  * - ~2 weeks of synthesized MCP passthrough spans (MCP dashboard), aggregated
  *   through the SAME aggregateMcpStats() as live data.
+ *
+ * Timestamps are anchored to now and the dataset is rebuilt when the anchor
+ * ages past a short TTL — the merged architecture hosts this module inside a
+ * long-lived runner process, and an import-time snapshot would age out of the
+ * dashboard's 24h/168h windows entirely. Ids are seed-derived, so they stay
+ * stable across rebuilds; only the timestamps slide.
  */
 
 import { collectorUrl, DASHBOARD_RESOURCE_URI, RESOURCE_URI } from "./config.js";
@@ -21,8 +26,9 @@ function hexId(seed: number, length: number): string {
   return hex.slice(0, length);
 }
 
-const PROCESS_START_MS = Date.now();
-const minutesAgoMs = (minutes: number) => PROCESS_START_MS - minutes * 60_000;
+/** The "now" every demo timestamp offsets from; refreshed by refreshDemo(). */
+let demoAnchorMs = 0;
+const minutesAgoMs = (minutes: number) => demoAnchorMs - minutes * 60_000;
 const toNano = (absoluteMs: number) => Math.round(absoluteMs * 1e6);
 
 /** Per-service OTel resources shared by demo spans and logs. */
@@ -772,7 +778,29 @@ function buildDemoData(): DemoData {
   return { traces, logs, sessions, sessionTraces };
 }
 
-export const DEMO = buildDemoData();
+const DEMO_REBUILD_INTERVAL_MS = 60_000;
+let demoData: DemoData | undefined;
+let demoMcpSpans: QylSpan[] | undefined;
+
+// Rebuild both datasets when the anchor ages past the TTL. Cheap enough to do
+// lazily on access (~10k synthesized spans), and only demo mode ever gets here.
+function refreshDemo(): void {
+  const now = Date.now();
+  if (demoData && now - demoAnchorMs < DEMO_REBUILD_INTERVAL_MS) return;
+  demoAnchorMs = now;
+  demoData = buildDemoData();
+  demoMcpSpans = buildDemoMcpSpans();
+}
+
+export function getDemo(): DemoData {
+  refreshDemo();
+  return demoData!;
+}
+
+export function getDemoMcpSpans(): QylSpan[] {
+  refreshDemo();
+  return demoMcpSpans!;
+}
 
 // =============================================================================
 // Demo MCP spans (dashboard dataset — separate from the 8-trace explorer set)
@@ -853,7 +881,7 @@ function buildDemoMcpSpans(): QylSpan[] {
   };
 
   const spans: QylSpan[] = [];
-  const endMs = PROCESS_START_MS;
+  const endMs = demoAnchorMs;
   const startMs = endMs - 14 * 24 * 3_600_000;
   let seq = 0;
 
@@ -923,9 +951,4 @@ function buildDemoMcpSpans(): QylSpan[] {
     }
   }
   return spans;
-}
-
-let demoMcpSpans: QylSpan[] | undefined;
-export function getDemoMcpSpans(): QylSpan[] {
-  return (demoMcpSpans ??= buildDemoMcpSpans());
 }

@@ -111,7 +111,7 @@ collector does not serve them (they return 404).
 
 ## Golden test
 
-With the collector running and any MCP traffic through mcp-run:
+With the collector running and any MCP traffic through the qyl.mcp runner:
 "List failing traces from the last 24h and show the error in the newest one."
 Expected: `list-traces --errors-only` table, then `trace-detail <id>` showing
 the error span with its status message.

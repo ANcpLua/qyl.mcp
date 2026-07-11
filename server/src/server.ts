@@ -43,7 +43,7 @@ import {
   shortId,
   summarizeMcpStats,
 } from "./summaries.js";
-import { assertToolSurface } from "./surfaces.js";
+import { assertToolSurface, registeredModelVisibleToolNames } from "./surfaces.js";
 import { toolError } from "./tools.js";
 import {
   LogRecordSchema,
@@ -87,8 +87,6 @@ export function createServer(): McpServer {
     name: "qyl.mcp",
     version: "0.1.0",
   });
-
-  const modelVisible: string[] = [];
 
   // ---------------------------------------------------------------------------
   // display_traces — THE app tool (renders the trace explorer UI)
@@ -163,7 +161,6 @@ export function createServer(): McpServer {
       }
     },
   );
-  modelVisible.push("display_traces");
 
   // ---------------------------------------------------------------------------
   // display_mcp_dashboard — aggregate MCP traffic dashboard
@@ -205,13 +202,11 @@ export function createServer(): McpServer {
       }
     },
   );
-  modelVisible.push("display_mcp_dashboard");
 
   // ---------------------------------------------------------------------------
   // search_qyl_tools + execute_qyl_tool — the catalog (src/tools.ts)
   // ---------------------------------------------------------------------------
   registerCatalogInfrastructure(server);
-  modelVisible.push("search_qyl_tools", "execute_qyl_tool");
 
   // ---------------------------------------------------------------------------
   // fetch_telemetry — app-only (hidden from the model, no model tool slot)
@@ -341,9 +336,10 @@ export function createServer(): McpServer {
     },
   );
 
-  // The budget and curation are enforced here, not by convention: adding a
-  // model-visible tool without updating surfaces.ts makes construction throw.
-  assertToolSurface(modelVisible);
+  // The budget and curation are enforced here, not by convention: the
+  // assertion enumerates what is ACTUALLY registered on the server, so adding
+  // a model-visible tool without updating surfaces.ts makes construction throw.
+  assertToolSurface(registeredModelVisibleToolNames(server));
 
   // ---------------------------------------------------------------------------
   // UI resource: the bundled trace explorer HTML
