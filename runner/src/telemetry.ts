@@ -146,13 +146,12 @@ export class McpTelemetry {
             }
         }
 
-        // Base64, not hex: the OTLP spec special-cases trace/span ids to hex in JSON, but
-        // collectors that parse OTLP JSON with stock protojson (qyl included) apply the
-        // plain proto3 bytes mapping = base64. qyl is the target backend, so base64 wins;
-        // switch to hex if pointing QYL_OTLP_ENDPOINT at a strict-OTLP collector.
+        // Hex, per the OTLP/JSON spec (trace/span ids are special-cased to hex in JSON).
+        // The qyl collector enforces spec-hex strictly since 2026-07-11 (Phase 1 of its repair
+        // plan): it rewrites hex ids for protojson and rejects non-hex/wrong-length ids with 400.
         this.queue.push({
-            traceId: randomBytes(16).toString("base64"),
-            spanId: randomBytes(8).toString("base64"),
+            traceId: randomBytes(16).toString("hex"),
+            spanId: randomBytes(8).toString("hex"),
             // Sentry-style span description: target in the name ("tools/call get_trace",
             // "resources/read ui://..."). Doubles as the recovery channel for collectors
             // that redact unknown attributes (qyl's allowlist strips mcp.* today).
