@@ -1,9 +1,6 @@
-// ≈ Qyl.Run/QylAppBuilder.cs + IQylResourceBuilder.cs — fluent host builder over immutable
-// resource records. A builder never mutates a record: update() produces a replacement and
-// swaps it into the app's resource list.
+// Fluent host builder over immutable resource definitions.
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { Constants } from "./constants.js";
 import { McpApp } from "./app.js";
 import type { McpResource } from "./resources.js";
 
@@ -12,24 +9,15 @@ export interface StdioServerOptions {
     args?: readonly string[];
     env?: Readonly<Record<string, string>>;
     cwd?: string;
-    description?: string;
-}
-
-export interface HttpServerOptions {
-    description?: string;
-}
-
-export interface InProcessServerOptions {
-    description?: string;
 }
 
 export class McpAppBuilder {
     private readonly resources: McpResource[] = [];
 
-    private constructor(public readonly args: readonly string[]) {}
+    private constructor() {}
 
-    static create(args?: string[]): McpAppBuilder {
-        return new McpAppBuilder(args ?? []);
+    static create(): McpAppBuilder {
+        return new McpAppBuilder();
     }
 
     addStdioServer(name: string, options: StdioServerOptions): McpResourceBuilder {
@@ -39,7 +27,6 @@ export class McpAppBuilder {
         return this.register({
             name,
             kind: "stdio",
-            environment: Constants.Environments.Dev,
             launch: {
                 command: options.command,
                 args: options.args ?? [],
@@ -47,24 +34,18 @@ export class McpAppBuilder {
                 cwd: options.cwd,
             },
             waitForNames: [],
-            references: [],
-            description: options.description,
         });
     }
 
-    addHttpServer(name: string, endpointUrl: string, options?: HttpServerOptions): McpResourceBuilder {
+    addHttpServer(name: string, endpointUrl: string): McpResourceBuilder {
         if (!name.trim()) throw new Error("Resource name must not be empty.");
         if (!endpointUrl.trim()) throw new Error(`Resource '${name}' needs an endpoint URL.`);
 
         return this.register({
             name,
             kind: "http",
-            environment: Constants.Environments.Dev,
-            launch: { command: "", args: [], env: {} },
             endpoint: endpointUrl,
             waitForNames: [],
-            references: [],
-            description: options?.description,
         });
     }
 
@@ -75,19 +56,14 @@ export class McpAppBuilder {
     addInProcessServer(
         name: string,
         serverFactory: () => McpServer,
-        options?: InProcessServerOptions,
     ): McpResourceBuilder {
         if (!name.trim()) throw new Error("Resource name must not be empty.");
 
         return this.register({
             name,
             kind: "inproc",
-            environment: Constants.Environments.Dev,
-            launch: { command: "", args: [], env: {} },
             serverFactory,
             waitForNames: [],
-            references: [],
-            description: options?.description,
         });
     }
 
@@ -141,17 +117,4 @@ export class McpResourceBuilder {
         return this.update((r) => ({ ...r, waitForNames: merged }));
     }
 
-    // Inject the referenced resources' resolved endpoints into this resource's environment once
-    // they are ready (env-based service discovery). Referencing implies waiting — the endpoint
-    // must exist first.
-    withReference(...others: McpResourceBuilder[]): this {
-        if (others.length === 0) return this;
-
-        const merged = [...this.#resource.references];
-        for (const other of others) {
-            if (!merged.includes(other.resource.name)) merged.push(other.resource.name);
-        }
-
-        return this.waitFor(...others).update((r) => ({ ...r, references: merged }));
-    }
 }

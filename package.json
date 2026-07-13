@@ -3,13 +3,25 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "qyl MCP host — Qyl.Run-shaped orchestrator + MCP passthrough + dashboard, hosting the qyl telemetry MCP Apps surface in-process",
-  "workspaces": ["server", "runner", "dashboard"],
+  "description": "qyl MCP host, telemetry tools, MCP Apps viewers, and local resource dashboard",
+  "workspaces": [
+    "server",
+    "runner",
+    "dashboard"
+  ],
   "scripts": {
     "build": "npm run build --workspace server && npm run build --workspace runner && npm run build --workspace dashboard",
+    "test": "npm run test --workspaces --if-present",
     "start": "node runner/dist/main.js",
-    "smoke": "npm run smoke --workspace server",
+    "smoke": "npm run smoke --workspace server && npm run smoke --workspace runner",
+    "smoke:otlp": "npm run smoke:otlp --workspace runner",
     "dev": "npm run dev --workspace dashboard"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "vite": "^8.1.4"
+  }
 }

@@ -17,49 +17,21 @@ import {
   applyHostStyleVariables,
   type McpUiHostContext,
 } from "@modelcontextprotocol/ext-apps";
+import type {
+  McpDashboardBucket as McpBucket,
+  McpDashboardStats,
+  McpDataMode as Mode,
+  McpNameRequestCount as McpNameCount,
+  McpToolStats as McpToolRow,
+} from "@ancplua/qyl-api-schema/types";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import packageMetadata from "../package.json";
+import {
+  DisplayMcpDashboardOutputSchema,
+  FetchTelemetryOutputSchema,
+} from "../src/contracts.ts";
 import "./global.css";
 import "./mcp-dashboard.css";
-
-// ---------------------------------------------------------------------------
-// Shapes (mirrors INTERFACE.md — McpDashboardStats)
-// ---------------------------------------------------------------------------
-
-interface McpToolRow {
-  name: string;
-  requests: number;
-  errors: number;
-  error_rate: number; // fraction 0..1
-  avg_ms: number;
-  p95_ms: number;
-}
-
-interface McpBucket {
-  start: string;
-  requests: number;
-  errors: number;
-}
-
-interface McpNameCount {
-  name: string;
-  requests: number;
-}
-
-type Mode = "live" | "demo";
-
-interface McpDashboardStats {
-  window: { start: string; end: string; bucket_ms: number };
-  buckets: McpBucket[];
-  totals: { requests: number; errors: number; error_rate: number };
-  by_server: McpNameCount[];
-  by_transport: McpNameCount[];
-  by_method: McpNameCount[];
-  tools: McpToolRow[];
-  resources: McpToolRow[];
-  span_count_analyzed: number;
-  truncated: boolean;
-  mode: Mode;
-}
 
 // ---------------------------------------------------------------------------
 // State
@@ -75,13 +47,12 @@ interface SortState {
 const WINDOW_PRESETS = [1, 24, 168] as const;
 
 const state = {
-  mode: "demo" as Mode,
+  mode: undefined as Mode | undefined,
   stats: undefined as McpDashboardStats | undefined,
   hours: 24,
   /** Monotonic token so a stale fetch can't clobber a newer one. */
   requestSeq: 0,
   toolsSort: { key: "requests", dir: -1 } as SortState,
-  resourcesSort: { key: "requests", dir: -1 } as SortState,
 };
 
 // ---------------------------------------------------------------------------
@@ -110,7 +81,6 @@ const mostUsedEl = document.getElementById("most-used")!;
 const slowestEl = document.getElementById("slowest")!;
 const mostFailingEl = document.getElementById("most-failing")!;
 const toolsTableEl = document.getElementById("tools-table")!;
-const resourcesTableEl = document.getElementById("resources-table")!;
 const windowButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>(".win-btn"),
 );
@@ -188,75 +158,14 @@ function toolErrorText(result: CallToolResult): string | undefined {
   return text || undefined;
 }
 
-function num(v: unknown): number {
-  return typeof v === "number" && Number.isFinite(v) ? v : 0;
-}
-
-function str(v: unknown): string {
-  return typeof v === "string" ? v : "";
-}
-
-function sanitizeToolRow(r: unknown): McpToolRow | null {
-  if (typeof r !== "object" || r === null) return null;
-  const row = r as Partial<McpToolRow>;
-  if (typeof row.name !== "string" || !row.name) return null;
-  return {
-    name: row.name,
-    requests: num(row.requests),
-    errors: num(row.errors),
-    error_rate: num(row.error_rate),
-    avg_ms: num(row.avg_ms),
-    p95_ms: num(row.p95_ms),
-  };
-}
-
-function sanitizeNameCount(r: unknown): McpNameCount | null {
-  if (typeof r !== "object" || r === null) return null;
-  const row = r as Partial<McpNameCount>;
-  if (typeof row.name !== "string" || !row.name) return null;
-  return { name: row.name, requests: num(row.requests) };
-}
-
-function sanitizeBucket(b: unknown): McpBucket | null {
-  if (typeof b !== "object" || b === null) return null;
-  const bucket = b as Partial<McpBucket>;
-  if (typeof bucket.start !== "string") return null;
-  return { start: bucket.start, requests: num(bucket.requests), errors: num(bucket.errors) };
-}
-
-function sanitizeList<T>(v: unknown, fn: (item: unknown) => T | null): T[] {
-  if (!Array.isArray(v)) return [];
-  return v.map(fn).filter((item): item is T => item !== null);
-}
-
-function sanitizeStats(s: unknown): McpDashboardStats | null {
-  if (typeof s !== "object" || s === null) return null;
-  const stats = s as Partial<McpDashboardStats>;
-  const win = (stats.window ?? {}) as Partial<McpDashboardStats["window"]>;
-  const totals = (stats.totals ?? {}) as Partial<McpDashboardStats["totals"]>;
-  return {
-    window: { start: str(win.start), end: str(win.end), bucket_ms: num(win.bucket_ms) },
-    buckets: sanitizeList(stats.buckets, sanitizeBucket),
-    totals: {
-      requests: num(totals.requests),
-      errors: num(totals.errors),
-      error_rate: num(totals.error_rate),
-    },
-    by_server: sanitizeList(stats.by_server, sanitizeNameCount),
-    by_transport: sanitizeList(stats.by_transport, sanitizeNameCount),
-    by_method: sanitizeList(stats.by_method, sanitizeNameCount),
-    tools: sanitizeList(stats.tools, sanitizeToolRow),
-    resources: sanitizeList(stats.resources, sanitizeToolRow),
-    span_count_analyzed: num(stats.span_count_analyzed),
-    truncated: stats.truncated === true,
-    mode: stats.mode === "live" ? "live" : "demo",
-  };
-}
-
 function parseStatsPayload(result: CallToolResult): McpDashboardStats | null {
-  const sc = result.structuredContent as { stats?: unknown } | undefined;
-  if (!sc || typeof sc.stats !== "object") return null;
-  return sanitizeStats(sc.stats);
+  const displayed = DisplayMcpDashboardOutputSchema.safeParse(result.structuredContent);
+  if (displayed.success) return displayed.data.stats;
+
+  const fetched = FetchTelemetryOutputSchema.safeParse(result.structuredContent);
+  return fetched.success && fetched.data.stats !== undefined
+    ? fetched.data.stats
+    : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -853,19 +762,6 @@ function renderToolsTable() {
   );
 }
 
-function renderResourcesTable() {
-  renderTable(
-    resourcesTableEl,
-    state.stats?.resources ?? [],
-    state.resourcesSort,
-    (key) => {
-      state.resourcesSort = nextSort(state.resourcesSort, key);
-      renderResourcesTable();
-    },
-    "No resource reads in this window.",
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Top-level render
 // ---------------------------------------------------------------------------
@@ -882,7 +778,6 @@ function applyStats(stats: McpDashboardStats) {
   renderTrafficChart();
   renderRankedWidgets(stats);
   renderToolsTable();
-  renderResourcesTable();
 }
 
 // ---------------------------------------------------------------------------
@@ -916,7 +811,6 @@ async function fetchStats() {
     }
     applyStats(stats);
   } catch (err) {
-    console.error("Stats fetch failed:", err);
     if (seq !== state.requestSeq) return;
     if (hadStats) {
       showView("dashboard");
@@ -978,7 +872,7 @@ function handleHostContextChanged(ctx: McpUiHostContext) {
   }
 }
 
-const app = new App({ name: "qyl MCP Dashboard", version: "1.0.0" });
+const app = new App({ name: "qyl MCP Dashboard", version: packageMetadata.version });
 
 app.onteardown = async () => {
   console.info("App is being torn down");
@@ -987,7 +881,6 @@ app.onteardown = async () => {
 
 app.ontoolinput = (params) => {
   // display_mcp_dashboard is running server-side; show a window-aware spinner.
-  console.info("Received tool call input:", params);
   const args = (params.arguments ?? {}) as { hours?: number };
   if (typeof args.hours === "number" && Number.isFinite(args.hours)) {
     // Snap the selector to the nearest preset for display.
@@ -1001,7 +894,6 @@ app.ontoolinput = (params) => {
 };
 
 app.ontoolresult = (result) => {
-  console.info("Received tool call result:", result);
   const stats = parseStatsPayload(result);
   if (!stats) {
     showError(toolErrorText(result) ?? "Received an invalid tool result.");
@@ -1010,8 +902,7 @@ app.ontoolresult = (result) => {
   applyStats(stats);
 };
 
-app.ontoolcancelled = (params) => {
-  console.info("Tool call cancelled:", params.reason);
+app.ontoolcancelled = () => {
   // ontoolinput already switched to the loading spinner; restore the prior
   // view so a cancelled call doesn't leave the viewer stuck on "Loading…".
   showView(state.stats ? "dashboard" : "empty");

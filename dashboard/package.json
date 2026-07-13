@@ -3,17 +3,19 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "qyl.mcp resource dashboard — qyl.run.console upgraded with MCP Apps sandboxed iframe rendering",
+  "description": "Local dashboard for qyl.mcp resources and telemetry",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && vite build --mode sandbox",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ancplua/qyl-api-schema": "0.5.4",
     "@modelcontextprotocol/ext-apps": "^1.7.4",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/react": "^19.2.2",
@@ -22,5 +24,8 @@
     "typescript": "^5.9.3",
     "vite": "^8.1.4",
     "vite-plugin-singlefile": "^2.3.3"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

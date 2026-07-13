@@ -1,21 +1,34 @@
 /**
- * Demo dataset (exact collector wire shapes). Two independent sets:
+ * Programmatically generated demo telemetry. Two independent sets:
  *
  * - 8 explorer traces + ~30 correlated logs + 3 sessions (trace explorer);
  * - ~2 weeks of synthesized MCP passthrough spans (MCP dashboard), aggregated
- *   through the SAME aggregateMcpStats() as live data.
+ *   through the production aggregateMcpStats() path.
  *
  * Timestamps are anchored to now and the dataset is rebuilt when the anchor
- * ages past a short TTL — the merged architecture hosts this module inside a
- * long-lived runner process, and an import-time snapshot would age out of the
+ * ages past a short TTL. The long-lived runner would otherwise let an
+ * import-time snapshot age out of the
  * dashboard's 24h/168h windows entirely. Ids are seed-derived, so they stay
  * stable across rebuilds; only the timestamps slide.
  */
 
-import { collectorUrl, DASHBOARD_RESOURCE_URI, RESOURCE_URI } from "./config.js";
+import { collectorUrl } from "./config.js";
 import type { QylLogRecord, QylSession, QylSpan, QylTrace } from "./wire.js";
+import packageMetadata from "../package.json" with { type: "json" };
+import type {
+  Attribute,
+  AttributeValue,
+  Resource,
+  SessionId,
+  SessionState,
+  SeverityNumber,
+  SeverityText,
+  SpanId,
+  TraceId,
+  UserId,
+} from "@ancplua/qyl-api-schema/types";
 
-/** Deterministic hex id — stable within a process, looks like real OTel ids. */
+/** Deterministic, valid lowercase-hex trace or span id. */
 function hexId(seed: number, length: number): string {
   let hex = "";
   let x = (seed ^ 0x5f3759df) >>> 0;
@@ -32,7 +45,7 @@ const minutesAgoMs = (minutes: number) => demoAnchorMs - minutes * 60_000;
 const toNano = (absoluteMs: number) => Math.round(absoluteMs * 1e6);
 
 /** Per-service OTel resources shared by demo spans and logs. */
-const DEMO_RESOURCES: Record<string, Record<string, unknown>> = {
+const DEMO_RESOURCES: Record<string, Resource> = {
   "qyl-collector": {
     "service.name": "qyl-collector",
     "service.version": "0.4.2",
@@ -59,9 +72,9 @@ interface DemoSpanSpec {
   service: keyof typeof DEMO_RESOURCES;
   start: number;
   end: number;
-  attrs?: Record<string, unknown>;
+  attrs?: Record<string, AttributeValue>;
   status?: QylSpan["status"];
-  events?: Array<{ name: string; atMs: number; attributes?: unknown[] }>;
+  events?: Array<{ name: string; atMs: number; attributes?: Attribute[] }>;
 }
 
 function buildDemoTrace(
@@ -69,11 +82,11 @@ function buildDemoTrace(
   startMs: number,
   specs: DemoSpanSpec[],
 ): QylTrace {
-  const traceId = hexId(seq * 7919 + 17, 32);
+  const traceId = hexId(seq * 7919 + 17, 32) as TraceId;
 
   const spans: QylSpan[] = specs.map((spec, index) => {
     const span: QylSpan = {
-      span_id: hexId(seq * 104_729 + index * 31 + 5, 16),
+      span_id: hexId(seq * 104_729 + index * 31 + 5, 16) as SpanId,
       trace_id: traceId,
       name: spec.name,
       kind: spec.kind,
@@ -631,17 +644,19 @@ function buildDemoData(): DemoData {
     trace: QylTrace,
     spanIndex: number,
     offsetMs: number,
-    severity: number,
-    severityText: string,
+    severity: SeverityNumber,
+    severityText: SeverityText,
     body: string,
-    attrs?: Record<string, unknown>,
+    attrs?: Record<string, AttributeValue>,
   ): QylLogRecord => {
     const span = trace.spans[spanIndex];
+    const timeUnixNano = span.start_time_unix_nano + Math.round(offsetMs * 1e6);
     return {
-      time_unix_nano: span.start_time_unix_nano + Math.round(offsetMs * 1e6),
+      time_unix_nano: timeUnixNano,
+      observed_time_unix_nano: timeUnixNano,
       severity_number: severity,
       severity_text: severityText,
-      body,
+      body: { string_value: body },
       trace_id: trace.trace_id,
       span_id: span.span_id,
       resource: span.resource,
@@ -713,7 +728,7 @@ function buildDemoData(): DemoData {
     id: string,
     userId: string | undefined,
     sessionTraceList: QylTrace[],
-    state: string,
+    state: SessionState,
     genaiUsage?: QylSession["genai_usage"],
   ): QylSession => {
     const startMs = Math.min(
@@ -724,8 +739,8 @@ function buildDemoData(): DemoData {
     );
     const active = state === "active";
     return {
-      "session.id": id,
-      ...(userId ? { "user.id": userId } : {}),
+      "session.id": id as SessionId,
+      ...(userId ? { "user.id": userId as UserId } : {}),
       start_time: new Date(startMs).toISOString(),
       ...(active ? {} : { end_time: new Date(endMs).toISOString(), duration_ms: endMs - startMs }),
       trace_count: sessionTraceList.length,
@@ -751,7 +766,7 @@ function buildDemoData(): DemoData {
       "sess-demo-genai-01",
       "user-42",
       sessionTraces["sess-demo-genai-01"],
-      "completed",
+      "ended",
       {
         request_count: 4,
         total_input_tokens: 5372,
@@ -771,7 +786,7 @@ function buildDemoData(): DemoData {
       "sess-demo-checkout-03",
       "user-77",
       sessionTraces["sess-demo-checkout-03"],
-      "errored",
+      "ended",
     ),
   ];
 
@@ -806,9 +821,9 @@ export function getDemoMcpSpans(): QylSpan[] {
 // Demo MCP spans (dashboard dataset — separate from the 8-trace explorer set)
 //
 // ~2 weeks of plausible qyl.mcp passthrough spans (service.name "qyl.mcp",
-// `mcp.method.name` attribute): 4 tools with one failing-ish, 2 resource uris,
+// `mcp.method.name` attribute): 4 tools with one failing-ish,
 // 3 server names, stdio-dominant transports, a day/night traffic rhythm, and
-// log-normal-ish durations with p95 tails. Aggregated through the SAME
+// log-normal-ish durations with p95 tails. Aggregated through the production
 // aggregateMcpStats() as live data.
 // =============================================================================
 
@@ -824,9 +839,9 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-const QYL_MCP_RESOURCE: Record<string, unknown> = {
+const QYL_MCP_RESOURCE: Resource = {
   "service.name": "qyl.mcp",
-  "service.version": "0.1.0",
+  "service.version": packageMetadata.version,
   "telemetry.sdk.language": "nodejs",
 };
 
@@ -844,8 +859,6 @@ const DEMO_MCP_TOOLS: Array<{
   { name: "search_logs", weight: 0.2, medianMs: 20, sigma: 0.8, errorRate: 0.12 },
   { name: "get_trace", weight: 0.15, medianMs: 8, sigma: 0.6, errorRate: 0.018 },
 ];
-
-const DEMO_MCP_RESOURCE_URIS = [RESOURCE_URI, DASHBOARD_RESOURCE_URI];
 
 const DEMO_MCP_SERVERS: Array<{ name: string; weight: number }> = [
   { name: "qyl-telemetry", weight: 0.6 },
@@ -893,7 +906,7 @@ function buildDemoMcpSpans(): QylSpan[] {
       seq++;
       const spanStartMs = hourStart + rng() * 3_600_000;
       const server = pickWeighted(DEMO_MCP_SERVERS, rng()).name;
-      const transport = rng() < 0.78 ? "stdio" : "http";
+      const transport = rng() < 0.78 ? "pipe" : "tcp";
 
       const methodRoll = rng();
       let method: string;
@@ -901,7 +914,7 @@ function buildDemoMcpSpans(): QylSpan[] {
       let median: number;
       let sigma: number;
       let errorRate: number;
-      const attrs: Array<{ key: string; value: unknown }> = [];
+      const attrs: Attribute[] = [];
 
       if (methodRoll < 0.7) {
         method = "tools/call";
@@ -910,7 +923,7 @@ function buildDemoMcpSpans(): QylSpan[] {
         median = tool.medianMs;
         sigma = tool.sigma;
         errorRate = tool.errorRate;
-        attrs.push({ key: "mcp.tool.name", value: tool.name });
+        attrs.push({ key: "gen_ai.tool.name", value: tool.name });
       } else if (methodRoll < 0.85) {
         method = "tools/list";
         name = "tools/list";
@@ -919,25 +932,23 @@ function buildDemoMcpSpans(): QylSpan[] {
         errorRate = 0.004;
       } else {
         method = "resources/read";
-        const uri = DEMO_MCP_RESOURCE_URIS[rng() < 0.65 ? 0 : 1];
-        name = `resources/read ${uri}`;
+        name = "resources/read";
         median = 6;
         sigma = 0.7;
         errorRate = 0.01;
-        attrs.push({ key: "mcp.resource.uri", value: uri });
       }
 
       const isError = rng() < errorRate;
       const ms = durationMs(median, sigma);
       attrs.push(
         { key: "mcp.method.name", value: method },
-        { key: "mcp.server.name", value: server },
-        { key: "app.transport", value: transport },
+        { key: "service.peer.name", value: server },
+        { key: "network.transport", value: transport },
       );
 
       spans.push({
-        span_id: hexId(seq * 65_537 + 11, 16),
-        trace_id: hexId(seq * 92_821 + 3, 32),
+        span_id: hexId(seq * 65_537 + 11, 16) as SpanId,
+        trace_id: hexId(seq * 92_821 + 3, 32) as TraceId,
         name,
         kind: 3,
         start_time_unix_nano: toNano(spanStartMs),

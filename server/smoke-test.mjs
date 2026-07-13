@@ -1,12 +1,9 @@
 /**
  * Smoke test for the qyl.mcp telemetry server (demo mode, stdio).
  *
- * Spawns `node dist/main.js --stdio` with QYL_DEMO=1 and asserts the
- * INTERFACE.md contract: the curated tools/list + catalog surface (tool-slot
- * economy with the budget enforced in code), _meta wiring, display_traces,
- * catalog execution (get_trace, search_logs), the isError-never-throw rule,
- * fetch_telemetry correlated logs, demo-data parent/child span time
- * containment, and the MCP dashboard aggregation.
+ * Spawns `node dist/main.js --stdio` with QYL_DEMO=1 and asserts the direct
+ * tool surface, MCP Apps metadata, trace/log behavior, explicit mode
+ * selection, generated-demo invariants, and dashboard aggregation.
  *
  * Run: node smoke-test.mjs   (after `npm run build`)
  */
@@ -25,12 +22,8 @@ function check(name, condition, detail = "") {
   }
 }
 
-/** Run a catalog tool through execute_qyl_tool. */
-async function executeCatalog(client, name, args) {
-  return client.callTool({
-    name: "execute_qyl_tool",
-    arguments: { name, arguments: args },
-  });
+async function callTool(client, name, args) {
+  return client.callTool({ name, arguments: args });
 }
 
 const transport = new StdioClientTransport({
@@ -41,30 +34,26 @@ const transport = new StdioClientTransport({
 const client = new Client({ name: "qyl-smoke", version: "1.0.0" });
 await client.connect(transport);
 
-// --- 1. Curated tools/list (tool-slot economy) -------------------------------
+// --- 1. Direct tools/list ----------------------------------------------------
 console.log("tools/list");
 const { tools } = await client.listTools();
 const names = tools.map((t) => t.name).sort();
 check(
-  "exactly the curated 5-tool surface",
-  names.length === 5 &&
+  "exactly the seven supported tools",
+  names.length === 7 &&
     JSON.stringify(names) ===
       JSON.stringify(
         [
           "display_mcp_dashboard",
           "display_traces",
-          "execute_qyl_tool",
           "fetch_telemetry",
-          "search_qyl_tools",
+          "get_trace",
+          "list_sessions",
+          "list_traces",
+          "search_logs",
         ].sort(),
       ),
   `got: ${names.join(", ")}`,
-);
-check(
-  "catalog tools are NOT in tools/list",
-  !names.some((n) =>
-    ["list_traces", "get_trace", "list_sessions", "search_logs"].includes(n),
-  ),
 );
 
 const displayTraces = tools.find((t) => t.name === "display_traces");
@@ -89,64 +78,10 @@ check(
   JSON.stringify(displayDashboard?._meta),
 );
 
-// --- 2. Budget enforced in code (surfaces.ts) --------------------------------
-console.log("tool budget (surfaces.js)");
-const surfaces = await import("./dist/surfaces.js");
-check(
-  "MODEL_VISIBLE_TOOL_BUDGET is a hard number",
-  Number.isInteger(surfaces.MODEL_VISIBLE_TOOL_BUDGET) &&
-    surfaces.MODEL_VISIBLE_TOOL_BUDGET >= 4,
-);
-let budgetThrew = false;
-try {
-  surfaces.assertToolSurface(
-    Array.from({ length: surfaces.MODEL_VISIBLE_TOOL_BUDGET + 1 }, (_, i) => `tool_${i}`),
-  );
-} catch {
-  budgetThrew = true;
-}
-check("assertToolSurface throws over budget", budgetThrew);
-let curationThrew = false;
-try {
-  surfaces.assertToolSurface(["display_traces", "rogue_tool"]);
-} catch {
-  curationThrew = true;
-}
-check("assertToolSurface throws on curation drift", curationThrew);
-
-// --- 3. search_qyl_tools ------------------------------------------------------
-console.log("search_qyl_tools");
-const allTools = await client.callTool({
-  name: "search_qyl_tools",
-  arguments: {},
-});
-check("not isError", !allTools.isError, allTools.content?.[0]?.text);
-const catalogNames = allTools.structuredContent?.tools?.map((t) => t.name).sort();
-check(
-  "empty query lists the whole 4-tool catalog",
-  JSON.stringify(catalogNames) ===
-    JSON.stringify(["get_trace", "list_sessions", "list_traces", "search_logs"]),
-  `got: ${catalogNames?.join(", ")}`,
-);
-check(
-  "catalog entries carry input schemas",
-  allTools.structuredContent?.tools?.every(
-    (t) => t.input_schema && typeof t.input_schema === "object",
-  ),
-);
-const logSearch = await client.callTool({
-  name: "search_qyl_tools",
-  arguments: { query: "logs" },
-});
-check(
-  'query "logs" finds search_logs',
-  logSearch.structuredContent?.tools?.some((t) => t.name === "search_logs"),
-);
-
-// --- 4. execute_qyl_tool + the isError-never-throw rule ------------------------
-console.log("execute_qyl_tool");
-const listed = await executeCatalog(client, "list_traces", {});
-check("list_traces via catalog: not isError", !listed.isError, listed.content?.[0]?.text);
+// --- 2. Direct read tools + handler error contract ---------------------------
+console.log("list_traces / get_trace error");
+const listed = await callTool(client, "list_traces", {});
+check("list_traces: not isError", !listed.isError, listed.content?.[0]?.text);
 check(
   "list_traces returns 8 demo trace summaries without spans",
   listed.structuredContent?.traces?.length === 8 &&
@@ -154,28 +89,17 @@ check(
 );
 check('mode is "demo"', listed.structuredContent?.mode === "demo");
 
-const unknown = await executeCatalog(client, "does_not_exist", {});
-check("unknown catalog tool → isError:true, no throw", unknown.isError === true);
-check(
-  "unknown-tool error names the available catalog",
-  unknown.content?.[0]?.text?.includes("list_traces"),
-  unknown.content?.[0]?.text,
-);
-
-const badArgs = await executeCatalog(client, "get_trace", {});
-check("invalid arguments → isError:true, no throw", badArgs.isError === true);
-
-const missingTrace = await executeCatalog(client, "get_trace", {
+const missingTrace = await callTool(client, "get_trace", {
   trace_id: "0000000000000000000000000000dead",
 });
-check("missing trace id → isError:true, no throw", missingTrace.isError === true);
+check("handler failure returns isError:true", missingTrace.isError === true);
 check(
   "missing-trace error is descriptive",
   missingTrace.content?.[0]?.text?.includes("trace not found"),
   missingTrace.content?.[0]?.text,
 );
 
-// --- 5. display_traces {} ----------------------------------------------------
+// --- 3. display_traces {} ----------------------------------------------------
 console.log("display_traces {}");
 const display = await client.callTool({ name: "display_traces", arguments: {} });
 const sc = display.structuredContent;
@@ -226,10 +150,10 @@ check(
   ),
 );
 
-// --- 6. get_trace via the catalog ---------------------------------------------
-console.log("execute_qyl_tool get_trace");
+// --- 4. get_trace ------------------------------------------------------------
+console.log("get_trace");
 const someId = sc.traces[0].trace_id;
-const got = await executeCatalog(client, "get_trace", { trace_id: someId });
+const got = await callTool(client, "get_trace", { trace_id: someId });
 check("not isError", !got.isError, got.content?.[0]?.text);
 check(
   "returns the trace with spans",
@@ -237,9 +161,9 @@ check(
     got.structuredContent.trace.spans.length > 0,
 );
 
-// --- 7. search_logs severity_min:17 via the catalog ----------------------------
-console.log("execute_qyl_tool search_logs { severity_min: 17 }");
-const logsRes = await executeCatalog(client, "search_logs", { severity_min: 17 });
+// --- 5. search_logs severity_min:17 ------------------------------------------
+console.log("search_logs { severity_min: 17 }");
+const logsRes = await callTool(client, "search_logs", { severity_min: 17 });
 const logs = logsRes.structuredContent?.logs;
 check("not isError", !logsRes.isError, logsRes.content?.[0]?.text);
 check("returns at least one log", Array.isArray(logs) && logs.length > 0);
@@ -249,7 +173,7 @@ check(
   JSON.stringify(logs?.map((l) => l.severity_number)),
 );
 
-// --- 8. fetch_telemetry view:"logs" for the error trace -----------------------
+// --- 6. fetch_telemetry view:"logs" for the error trace ----------------------
 console.log('fetch_telemetry { view: "logs", trace_id: <error trace> }');
 const corr = await client.callTool({
   name: "fetch_telemetry",
@@ -267,7 +191,12 @@ check(
 );
 check(
   "includes an ERROR log with a stacktrace body",
-  corrLogs?.some((l) => l.severity_number >= 17 && l.body.includes("   at ")),
+  corrLogs?.some(
+    (l) =>
+      l.severity_number >= 17 &&
+      typeof l.body?.string_value === "string" &&
+      l.body.string_value.includes("   at "),
+  ),
 );
 
 // Bonus: fetch_telemetry view "trace" and "traces" shapes.
@@ -290,7 +219,7 @@ check(
     many.structuredContent.traces.every((t) => t.spans.length > 0),
 );
 
-// --- 9. display_mcp_dashboard (demo aggregation) ------------------------------
+// --- 7. display_mcp_dashboard (demo aggregation) -----------------------------
 console.log("display_mcp_dashboard {}");
 const dash = await client.callTool({
   name: "display_mcp_dashboard",
@@ -343,18 +272,13 @@ check(
   JSON.stringify(stats?.tools?.map((t) => `${t.name}: avg ${t.avg_ms} p95 ${t.p95_ms}`)),
 );
 check(
-  "2 resource rows (mcp.resource.uri)",
-  stats?.resources?.length === 2,
-  `got ${stats?.resources?.length}`,
-);
-check(
   "by_server / by_transport / by_method populated",
   stats?.by_server?.length === 3 &&
     stats?.by_transport?.length === 2 &&
     stats?.by_method?.length === 3,
 );
 
-// --- 10. fetch_telemetry view:"mcp_stats" ---------------------------------------
+// --- 8. fetch_telemetry view:"mcp_stats" -------------------------------------
 console.log('fetch_telemetry { view: "mcp_stats", hours: 24 }');
 const mcpStatsRes = await client.callTool({
   name: "fetch_telemetry",
@@ -367,7 +291,7 @@ check(
     mcpStatsRes.structuredContent.stats.mode === "demo",
 );
 
-// --- 11. resources/read of the dashboard UI -------------------------------------
+// --- 9. resources/read of the dashboard UI -----------------------------------
 console.log("resources/read ui://qyl-explorer/mcp-dashboard.html");
 if (existsSync(new URL("./dist/mcp-dashboard.html", import.meta.url))) {
   const dashRes = await client.readResource({
@@ -389,6 +313,32 @@ if (existsSync(new URL("./dist/mcp-dashboard.html", import.meta.url))) {
 }
 
 await client.close();
+
+// --- 10. Mode selection is explicit; live failures do not become demo data ---
+console.log("explicit live/demo mode selection");
+const previousDemo = process.env.QYL_DEMO;
+const previousCollectorUrl = process.env.QYL_COLLECTOR_URL;
+const { collectorGet, resolveMode } = await import("./dist/collector.js");
+delete process.env.QYL_DEMO;
+process.env.QYL_COLLECTOR_URL = "http://127.0.0.1:1";
+check('QYL_DEMO unset selects "live"', (await resolveMode()) === "live");
+let liveFailure;
+try {
+  await collectorGet("/api/v1/traces");
+} catch (error) {
+  liveFailure = error;
+}
+check(
+  "unreachable live collector remains a connection error",
+  liveFailure?.name === "CollectorError" && liveFailure.connectionError === true,
+  liveFailure?.message,
+);
+process.env.QYL_DEMO = "1";
+check('QYL_DEMO=1 selects "demo"', (await resolveMode()) === "demo");
+if (previousDemo === undefined) delete process.env.QYL_DEMO;
+else process.env.QYL_DEMO = previousDemo;
+if (previousCollectorUrl === undefined) delete process.env.QYL_COLLECTOR_URL;
+else process.env.QYL_COLLECTOR_URL = previousCollectorUrl;
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) FAILED`);

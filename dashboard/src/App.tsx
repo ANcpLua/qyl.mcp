@@ -9,12 +9,12 @@ import { callResourceTool, runnerAction } from "./bridge";
 import type { ResourceLifecycle } from "./types";
 
 const DOT: Record<ResourceLifecycle, string> = {
-  Pending: "#6b7280",
-  Starting: "#d97706",
-  Ready: "#16a34a",
-  Stopping: "#d97706",
-  Stopped: "#6b7280",
-  Failed: "#dc2626",
+  pending: "#6b7280",
+  starting: "#d97706",
+  ready: "#16a34a",
+  stopping: "#d97706",
+  stopped: "#6b7280",
+  failed: "#dc2626",
 };
 
 /**
@@ -77,7 +77,7 @@ export default function App() {
 
   const logs = useLogs(selected);
   const selectedState = resources.find((r) => r.name === selected);
-  const selectedReady = selectedState?.lifecycle === "Ready";
+  const selectedReady = selectedState?.lifecycle === "ready";
   const { tools, loading: toolsLoading, error: toolsError } = useTools(selected, selectedReady);
 
   const pushError = useCallback((message: string) => {
@@ -97,7 +97,7 @@ export default function App() {
     } catch (err) {
       pushError(err instanceof Error ? err.message : String(err));
     }
-    const resultPromise = callResourceTool(resource, tool.name, input) as Promise<CallToolResult>;
+    const resultPromise = callResourceTool(resource, tool.name, input);
     // Both ResultView and AppFrame attach rejection handlers after mount; this
     // no-op handler keeps an early rejection from firing unhandledrejection.
     resultPromise.catch(() => {});
@@ -193,23 +193,11 @@ export default function App() {
                 <td>{r.serverInfo ? `${r.serverInfo.name}@${r.serverInfo.version}` : "—"}</td>
                 <td>{r.toolCount ?? "—"}</td>
                 <td>{r.restarts ?? 0}</td>
-                <td>
-                  {r.endpoint ? (
-                    <a
-                      href={r.endpoint}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {r.endpoint}
-                    </a>
-                  ) : (
-                    "—"
-                  )}
-                </td>
+                <td>{r.endpoint ? <code>{r.endpoint}</code> : "—"}</td>
                 <td className="actions">
                   <button
                     className="action"
+                    disabled={!["ready", "failed", "stopped"].includes(r.lifecycle)}
                     onClick={(e) => {
                       e.stopPropagation();
                       doAction(r.name, "restart");
@@ -219,6 +207,7 @@ export default function App() {
                   </button>
                   <button
                     className="action"
+                    disabled={["stopping", "stopped"].includes(r.lifecycle)}
                     onClick={(e) => {
                       e.stopPropagation();
                       doAction(r.name, "stop");
@@ -245,7 +234,7 @@ export default function App() {
           />
         ) : (
           <p className="hint">
-            Tools are available once <strong>{selected}</strong> is Ready.
+            Tools are available once <strong>{selected}</strong> is ready.
           </p>
         )
       ) : (

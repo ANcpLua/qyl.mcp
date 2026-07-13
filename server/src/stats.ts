@@ -41,36 +41,28 @@ const MCP_METHOD_NAME_RE =
 
 /**
  * Classify a span as MCP traffic. Attributes win (full-fidelity emitters); the
- * span-name fallback ("tools/call get_trace", "resources/read ui://…" — the
- * Sentry-style description the qyl.mcp runner emits) recovers method/tool/
- * resource when a collector redacts unknown attributes. qyl's collector
- * allowlist strips mcp.* and app.transport today, keeping only
- * gen_ai.tool.name — so against a live qyl collector this fallback is what
- * lights the dashboard up.
+ * span-name fallback ("tools/call get_trace") recovers method and tool when a
+ * collector redacts incubating MCP attributes.
  */
 function classifyMcpSpan(
   span: QylSpan,
-): { method: string; tool?: string; resourceUri?: string } | null {
+): { method: string; tool?: string } | null {
   const attrMethod = spanAttr(span, "mcp.method.name");
   const nameMatch = MCP_METHOD_NAME_RE.exec(span.name ?? "");
   const method = attrMethod ?? nameMatch?.[1];
   if (method === undefined) return null;
   const target = nameMatch?.[2];
   const tool =
-    spanAttr(span, "mcp.tool.name") ??
     spanAttr(span, "gen_ai.tool.name") ??
     (method === "tools/call" ? target : undefined);
-  const resourceUri =
-    spanAttr(span, "mcp.resource.uri") ??
-    (method === "resources/read" ? target : undefined);
-  return { method, tool, resourceUri };
+  return { method, tool };
 }
 
 /**
  * Aggregate flattened spans into McpDashboardStats (minus mode/truncated,
- * which depend on the data source). Only spans carrying an `mcp.method.name`
- * attribute and starting inside [windowStart, windowEnd] count; durations
- * come from the span nano fields; error = status.code 2.
+ * which depend on the data source). Classified MCP spans starting inside
+ * [windowStart, windowEnd] count; durations come from the span nano fields;
+ * error = status.code 2.
  */
 export function aggregateMcpStats(
   spans: QylSpan[],
@@ -99,7 +91,6 @@ export function aggregateMcpStats(
   const byMethod = new Map<string, number>();
   interface RowAcc { requests: number; errors: number; durations: number[] }
   const toolAcc = new Map<string, RowAcc>();
-  const resourceAcc = new Map<string, RowAcc>();
 
   const bump = (map: Map<string, number>, name: string) =>
     map.set(name, (map.get(name) ?? 0) + 1);
@@ -130,20 +121,11 @@ export function aggregateMcpStats(
     buckets[index].requests++;
     if (error) buckets[index].errors++;
 
-    // service.name is a reasonable last-resort "server" bucket when the
-    // emitter-level mcp.server.name attribute was redacted.
-    bump(
-      byServer,
-      spanAttr(span, "mcp.server.name") ??
-        (typeof span.resource["service.name"] === "string"
-          ? (span.resource["service.name"] as string)
-          : "unknown"),
-    );
-    bump(byTransport, spanAttr(span, "app.transport") ?? "unknown");
+    bump(byServer, spanAttr(span, "service.peer.name") ?? "unknown");
+    bump(byTransport, spanAttr(span, "network.transport") ?? "unknown");
     bump(byMethod, cls.method);
 
     if (cls.tool !== undefined) accumulate(toolAcc, cls.tool, error, ms);
-    if (cls.resourceUri !== undefined) accumulate(resourceAcc, cls.resourceUri, error, ms);
   }
 
   const toNameRequests = (map: Map<string, number>) =>
@@ -184,7 +166,6 @@ export function aggregateMcpStats(
     by_transport: toNameRequests(byTransport),
     by_method: toNameRequests(byMethod),
     tools: toRows(toolAcc),
-    resources: toRows(resourceAcc),
     span_count_analyzed: requests,
   };
 }

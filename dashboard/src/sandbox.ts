@@ -6,6 +6,8 @@ import { buildAllowAttribute } from "@modelcontextprotocol/ext-apps/app-bridge";
 
 const ALLOWED_REFERRER_ORIGINS = [
   "http://127.0.0.1:18888",
+  "http://localhost:18888",
+  "http://127.0.0.1:5173",
   "http://localhost:5173",
 ];
 

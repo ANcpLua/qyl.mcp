@@ -1,8 +1,9 @@
-// ≈ Qyl.Run/Internal/QylLogStore.cs — bounded, per-resource log buffer with broadcast fan-out.
+// Bounded, per-resource log buffer with broadcast fan-out.
 // Producers (the orchestrator's stderr followers) append lines; consumers take a snapshot of
 // recent lines and subscribe for subsequent ones (the /runner API, and through it the dashboard).
 
 import type { LogLine } from "./resources.js";
+import { RunnerLogLineSchema } from "./contracts.js";
 
 const MaxLinesPerResource = 1000;
 
@@ -11,7 +12,7 @@ export class LogStore {
     private readonly subscribers = new Set<{ resource: string; push: (line: LogLine) => void }>();
 
     append(resource: string, stream: "out" | "err", line: string): void {
-        const entry: LogLine = { resource, stream, line };
+        const entry = RunnerLogLineSchema.parse({ resource, stream, line });
         let buffer = this.buffers.get(resource);
         if (!buffer) {
             buffer = [];

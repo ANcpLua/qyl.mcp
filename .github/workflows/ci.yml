@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Check out the live collector
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          repository: ANcpLua/qyl
+          path: qyl
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: qyl/global.json
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: npm run smoke
+      - name: Verify live OTLP and all seven tool contracts
+        run: npm run smoke:otlp
+        env:
+          QYL_COLLECTOR_PROJECT: ${{ github.workspace }}/qyl/services/qyl.collector/qyl.collector.csproj

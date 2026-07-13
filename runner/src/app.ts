@@ -1,5 +1,5 @@
-// ≈ Qyl.Run/QylApp.cs — the built, runnable host. run() starts the orchestrator and the runner
-// API, then blocks until SIGINT/SIGTERM, gracefully stops every resource, and resolves.
+// Built, runnable host. run() starts the orchestrator and runner API, then
+// blocks until SIGINT/SIGTERM and gracefully stops every resource.
 
 import { LogStore } from "./log-store.js";
 import { Orchestrator, validateDependencies } from "./orchestrator.js";

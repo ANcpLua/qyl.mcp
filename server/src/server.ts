@@ -1,17 +1,15 @@
 /**
  * qyl telemetry MCP Apps server (the visual half of qyl.mcp).
  *
- * Tool surface (tool-slot economy — see surfaces.ts, enforced in code here):
+ * Tool surface:
  * - display_traces:        trace explorer UI (waterfall + logs) — THE app tool
  * - display_mcp_dashboard: aggregate MCP traffic dashboard UI
- * - search_qyl_tools / execute_qyl_tool: the catalog holding list_traces,
- *   get_trace, list_sessions, search_logs (src/tools.ts)
+ * - list_traces, get_trace, list_sessions, search_logs: direct read tools
  * - fetch_telemetry:       app-only (viewer iframes; hidden from the model)
  *
  * Modes: live against the qyl collector REST API (QYL_COLLECTOR_URL, default
- * http://127.0.0.1:5100) with automatic demo fallback — QYL_DEMO=1 or a
- * connection-refused startup probe serves canned telemetry so every tool is
- * fully functional offline (filters included).
+ * http://127.0.0.1:5100), or explicit generated demo telemetry when
+ * QYL_DEMO=1. A collector failure remains an error and never changes modes.
  */
 
 import {
@@ -19,6 +17,14 @@ import {
   registerAppTool,
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
+import type {
+  DisplayMcpDashboardInput,
+  DisplayMcpDashboardOutput,
+  DisplayTracesInput,
+  DisplayTracesOutput,
+  FetchTelemetryInput,
+  FetchTelemetryOutput,
+} from "@ancplua/qyl-api-schema/types";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type {
   CallToolResult,
@@ -26,10 +32,17 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { z } from "zod";
-import { registerCatalogInfrastructure } from "./catalog.js";
+import packageMetadata from "../package.json" with { type: "json" };
 import { DASHBOARD_RESOURCE_URI, RESOURCE_URI } from "./config.js";
 import { CollectorError } from "./collector.js";
+import {
+  DisplayMcpDashboardInputSchema,
+  DisplayMcpDashboardOutputSchema,
+  DisplayTracesInputSchema,
+  DisplayTracesOutputSchema,
+  FetchTelemetryInputSchema,
+  FetchTelemetryOutputSchema,
+} from "./contracts.js";
 import {
   fetchLogs,
   fetchMcpStats,
@@ -43,23 +56,7 @@ import {
   shortId,
   summarizeMcpStats,
 } from "./summaries.js";
-import { assertToolSurface, registeredModelVisibleToolNames } from "./surfaces.js";
-import { toolError } from "./tools.js";
-import {
-  LogRecordSchema,
-  McpDashboardStatsSchema,
-  ModeSchema,
-  TraceSchema,
-} from "./wire.js";
-
-export { CATALOG_TOOLS, type QylToolDef } from "./tools.js";
-export {
-  assertToolSurface,
-  APP_ONLY_TOOL_NAMES,
-  CATALOG_INFRASTRUCTURE_TOOL_NAMES,
-  MODEL_VISIBLE_TOOL_BUDGET,
-  TOP_LEVEL_TOOL_NAMES,
-} from "./surfaces.js";
+import { registerTelemetryTools, toolError } from "./tools.js";
 
 // The vite-built single-file viewers live next to the compiled server code.
 const DIST_DIR = import.meta.dirname;
@@ -69,23 +66,15 @@ const DIST_DIR = import.meta.dirname;
 let cachedAppHtml: string | undefined;
 let cachedDashboardHtml: string | undefined;
 
-const limitSchema = z
-  .number()
-  .int()
-  .min(1)
-  .max(100)
-  .default(20)
-  .describe("Number of traces to return (1–100, default 20)");
+function asStructuredContent<T extends object>(value: T): Record<string, unknown> {
+  return value as unknown as Record<string, unknown>;
+}
 
-/**
- * Creates a new MCP server instance with the curated qyl telemetry tool
- * surface and both UI resources registered. Throws when the registered
- * surface violates the surfaces.ts policy (budget or curation drift).
- */
+/** Creates a server with the direct telemetry tools and both UI resources. */
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "qyl.mcp",
-    version: "0.1.0",
+    version: packageMetadata.version,
   });
 
   // ---------------------------------------------------------------------------
@@ -100,27 +89,13 @@ export function createServer(): McpServer {
         "Show qyl traces in the interactive trace explorer with a span waterfall, " +
         "detail panel, and correlated logs. Pass a trace_id to open one trace, a " +
         "session_id for that session's traces, or neither for recent traces. Prefer " +
-        "this over the catalog's list_traces/get_trace whenever the user wants to " +
+        "this over list_traces/get_trace whenever the user wants to " +
         "look at traces.",
-      inputSchema: {
-        trace_id: z
-          .string()
-          .optional()
-          .describe("Open this single trace in the explorer"),
-        session_id: z
-          .string()
-          .optional()
-          .describe("Show this session's traces"),
-        limit: limitSchema.optional(),
-      },
-      outputSchema: z.object({
-        traces: z.array(TraceSchema),
-        selected_trace_id: z.string().optional(),
-        mode: ModeSchema,
-      }),
+      inputSchema: DisplayTracesInputSchema,
+      outputSchema: DisplayTracesOutputSchema,
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
-    async ({ trace_id, session_id, limit }): Promise<CallToolResult> => {
+    async ({ trace_id, session_id, limit }: DisplayTracesInput): Promise<CallToolResult> => {
       try {
         const result = await fetchTracesForDisplay({
           trace_id,
@@ -144,7 +119,7 @@ export function createServer(): McpServer {
             `${result.mode === "demo" ? " (demo data)" : ""}.`;
         }
 
-        const structuredContent = {
+        const output: DisplayTracesOutput = {
           traces: result.traces,
           ...(result.selected_trace_id
             ? { selected_trace_id: result.selected_trace_id }
@@ -154,7 +129,7 @@ export function createServer(): McpServer {
 
         return {
           content: [{ type: "text", text }],
-          structuredContent: structuredContent as any,
+          structuredContent: asStructuredContent(output),
         };
       } catch (err) {
         return toolError(err);
@@ -173,29 +148,21 @@ export function createServer(): McpServer {
       description:
         "Show an aggregate dashboard of MCP traffic (spans carrying an " +
         "`mcp.method.name` attribute): request/error timeline, per-server and " +
-        "per-transport breakdowns, and per-tool/per-resource latency and error " +
+        "per-transport breakdowns, and per-tool latency and error " +
         "rates. Prefer this when the user asks about MCP usage, tool health, " +
         "or MCP monitoring.",
-      inputSchema: {
-        hours: z
-          .number()
-          .min(1)
-          .max(168)
-          .default(24)
-          .describe("Aggregation window in hours (1–168, default 24)"),
-      },
-      outputSchema: z.object({
-        stats: McpDashboardStatsSchema,
-      }),
+      inputSchema: DisplayMcpDashboardInputSchema,
+      outputSchema: DisplayMcpDashboardOutputSchema,
       _meta: { ui: { resourceUri: DASHBOARD_RESOURCE_URI } },
     },
-    async ({ hours }): Promise<CallToolResult> => {
+    async ({ hours }: DisplayMcpDashboardInput): Promise<CallToolResult> => {
       try {
         const window = hours ?? 24;
         const stats = await fetchMcpStats(window);
+        const output: DisplayMcpDashboardOutput = { stats };
         return {
           content: [{ type: "text", text: summarizeMcpStats(stats, window) }],
-          structuredContent: { stats } as any,
+          structuredContent: asStructuredContent(output),
         };
       } catch (err) {
         return toolError(err);
@@ -204,9 +171,9 @@ export function createServer(): McpServer {
   );
 
   // ---------------------------------------------------------------------------
-  // search_qyl_tools + execute_qyl_tool — the catalog (src/tools.ts)
+  // Direct read-only telemetry tools (src/tools.ts)
   // ---------------------------------------------------------------------------
-  registerCatalogInfrastructure(server);
+  registerTelemetryTools(server);
 
   // ---------------------------------------------------------------------------
   // fetch_telemetry — app-only (hidden from the model, no model tool slot)
@@ -221,59 +188,23 @@ export function createServer(): McpServer {
       description:
         "Fetch traces, a single trace, or logs for the trace explorer UI. " +
         "The model should NOT call this tool directly.",
-      inputSchema: {
-        view: z
-          .enum(["traces", "trace", "logs", "mcp_stats"])
-          .describe(
-            '"traces" for the recent trace list, "trace" for one trace, ' +
-              '"logs" for a log search, "mcp_stats" for the MCP dashboard aggregate',
-          ),
-        trace_id: z
-          .string()
-          .optional()
-          .describe('Trace id (required for view "trace"; filters view "logs")'),
-        service_name: z
-          .string()
-          .optional()
-          .describe('Service filter for view "logs"'),
-        severity_min: z
-          .number()
-          .int()
-          .min(1)
-          .max(24)
-          .optional()
-          .describe('Minimum OTel severity for view "logs"'),
-        query: z
-          .string()
-          .optional()
-          .describe('Body substring filter for view "logs"'),
-        limit: z
-          .number()
-          .int()
-          .min(1)
-          .max(200)
-          .optional()
-          .describe("Max items (default: 20 traces / 50 logs)"),
-        hours: z
-          .number()
-          .min(1)
-          .max(168)
-          .optional()
-          .describe('Aggregation window for view "mcp_stats" (default 24)'),
-      },
-      outputSchema: z.object({
-        traces: z.array(TraceSchema).optional(),
-        trace: TraceSchema.optional(),
-        logs: z.array(LogRecordSchema).optional(),
-        stats: McpDashboardStatsSchema.optional(),
-        mode: ModeSchema,
-      }),
+      inputSchema: FetchTelemetryInputSchema,
+      outputSchema: FetchTelemetryOutputSchema,
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ view, trace_id, service_name, severity_min, query, limit, hours }): Promise<CallToolResult> => {
+    async ({
+      view,
+      trace_id,
+      service_name,
+      severity_min,
+      query,
+      limit,
+      hours,
+    }: FetchTelemetryInput): Promise<CallToolResult> => {
       try {
         if (view === "mcp_stats") {
           const stats = await fetchMcpStats(hours ?? 24);
+          const output: FetchTelemetryOutput = { stats, mode: stats.mode };
           return {
             content: [
               {
@@ -281,7 +212,7 @@ export function createServer(): McpServer {
                 text: `Fetched MCP stats: ${stats.totals.requests} requests over ${hours ?? 24}h (${stats.mode} mode).`,
               },
             ],
-            structuredContent: { stats, mode: stats.mode } as any,
+            structuredContent: asStructuredContent(output),
           };
         }
 
@@ -290,6 +221,7 @@ export function createServer(): McpServer {
             throw new CollectorError('view "trace" requires a `trace_id`.');
           }
           const { trace, mode } = await fetchTrace(trace_id);
+          const output: FetchTelemetryOutput = { trace, mode };
           return {
             content: [
               {
@@ -297,7 +229,7 @@ export function createServer(): McpServer {
                 text: `Fetched trace ${shortId(trace.trace_id)} (${trace.span_count} spans, ${mode} mode).`,
               },
             ],
-            structuredContent: { trace, mode } as any,
+            structuredContent: asStructuredContent(output),
           };
         }
 
@@ -309,6 +241,7 @@ export function createServer(): McpServer {
             query,
             limit: limit ?? 50,
           });
+          const output: FetchTelemetryOutput = { logs, mode };
           return {
             content: [
               {
@@ -316,11 +249,12 @@ export function createServer(): McpServer {
                 text: `Fetched ${logs.length} logs (${mode} mode).`,
               },
             ],
-            structuredContent: { logs, mode } as any,
+            structuredContent: asStructuredContent(output),
           };
         }
 
         const { traces, mode } = await fetchTraces(limit ?? 20);
+        const output: FetchTelemetryOutput = { traces, mode };
         return {
           content: [
             {
@@ -328,18 +262,13 @@ export function createServer(): McpServer {
               text: `Fetched ${traces.length} traces (${mode} mode).`,
             },
           ],
-          structuredContent: { traces, mode } as any,
+          structuredContent: asStructuredContent(output),
         };
       } catch (err) {
         return toolError(err);
       }
     },
   );
-
-  // The budget and curation are enforced here, not by convention: the
-  // assertion enumerates what is ACTUALLY registered on the server, so adding
-  // a model-visible tool without updating surfaces.ts makes construction throw.
-  assertToolSurface(registeredModelVisibleToolNames(server));
 
   // ---------------------------------------------------------------------------
   // UI resource: the bundled trace explorer HTML

@@ -8,11 +8,29 @@ import {
   type McpUiResourceCsp,
   type McpUiResourcePermissions,
 } from "@modelcontextprotocol/ext-apps/app-bridge";
+import type {
+  RunnerMcpResourceReadResponse,
+  RunnerMcpToolCallResponse,
+} from "@ancplua/qyl-api-schema/types";
 import type { McpUiStyles } from "@modelcontextprotocol/ext-apps";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { ReadResourceResult, ServerCapabilities } from "@modelcontextprotocol/sdk/types.js";
+import {
+  CallToolResultSchema,
+  type CallToolResult,
+  type ServerCapabilities,
+} from "@modelcontextprotocol/sdk/types.js";
+import packageMetadata from "../package.json";
+import {
+  ProblemDetailsSchema,
+  McpUiResourceMetaSchema,
+  RunnerMcpResourceReadRequestSchema,
+  RunnerMcpResourceReadResponseSchema,
+  RunnerMcpToolCallRequestSchema,
+  RunnerMcpToolCallResponseSchema,
+} from "./contracts";
+import type { z } from "zod";
 
-const HOST_INFO = { name: "qyl.mcp", version: "0.1.0" };
+const HOST_INFO = { name: "qyl.mcp", version: packageMetadata.version };
 
 export const log = {
   info: console.log.bind(console, "[HOST]"),
@@ -22,7 +40,24 @@ export const log = {
 
 // --- Runner REST helpers -----------------------------------------------------
 
-async function runnerPost<T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> {
+export async function responseErrorDetail(res: Response): Promise<string> {
+  const fallback = `${res.status} ${res.statusText}`;
+  const mediaType = res.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
+  if (mediaType !== "application/problem+json") return fallback;
+  try {
+    const parsed = ProblemDetailsSchema.safeParse(await res.json());
+    return parsed.success ? (parsed.data.detail ?? parsed.data.title) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+async function runnerPost<T>(
+  url: string,
+  body: unknown,
+  responseSchema: z.ZodType<T>,
+  signal?: AbortSignal,
+): Promise<T> {
   const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -30,16 +65,9 @@ async function runnerPost<T>(url: string, body: unknown, signal?: AbortSignal): 
     signal,
   });
   if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`;
-    try {
-      const payload = (await res.json()) as { error?: string };
-      if (payload.error) detail = payload.error;
-    } catch {
-      // non-JSON error body
-    }
-    throw new Error(detail);
+    throw new Error(await responseErrorDetail(res));
   }
-  return (await res.json()) as T;
+  return responseSchema.parse(await res.json());
 }
 
 export function callResourceTool(
@@ -47,32 +75,37 @@ export function callResourceTool(
   name: string,
   args: Record<string, unknown>,
   signal?: AbortSignal,
-): Promise<unknown> {
-  return runnerPost(
+): Promise<CallToolResult> {
+  const request = RunnerMcpToolCallRequestSchema.parse({ name, arguments: args });
+  return runnerPost<RunnerMcpToolCallResponse>(
     `/runner/mcp/${encodeURIComponent(resource)}/tools/call`,
-    { name, arguments: args },
+    request,
+    RunnerMcpToolCallResponseSchema,
     signal,
-  );
+  ).then((result) => CallToolResultSchema.parse(result));
 }
 
 export function readResourceUri(
   resource: string,
   uri: string,
   signal?: AbortSignal,
-): Promise<ReadResourceResult> {
-  return runnerPost<ReadResourceResult>(
+): Promise<RunnerMcpResourceReadResponse> {
+  const request = RunnerMcpResourceReadRequestSchema.parse({ uri });
+  return runnerPost<RunnerMcpResourceReadResponse>(
     `/runner/mcp/${encodeURIComponent(resource)}/resources/read`,
-    { uri },
+    request,
+    RunnerMcpResourceReadResponseSchema,
     signal,
   );
 }
 
-// POST /runner/resources/:name/restart | /stop — the runner answers 202 with no body.
+// POST /runner/resources/:name/restart | /stop — accepted actions answer 202.
 export async function runnerAction(resource: string, action: "restart" | "stop"): Promise<void> {
   const url = `/runner/resources/${encodeURIComponent(resource)}/${action}`;
   const res = await fetch(url, { method: "POST" });
   if (!res.ok) {
-    throw new Error(`${action} '${resource}' failed: ${res.status} ${res.statusText}`);
+    const detail = await responseErrorDetail(res);
+    throw new Error(`${action} '${resource}' failed: ${detail}`);
   }
 }
 
@@ -85,28 +118,25 @@ interface SchemaLike {
 }
 
 /**
- * Minimal REST-backed stand-in for the SDK `Client` that AppBridge consumes.
+ * REST-backed adapter for the SDK `Client` surface that AppBridge consumes.
  *
  * AppBridge (ext-apps/src/app-bridge.ts, connect()) uses exactly three members
  * of its `client` argument:
  *   - getServerCapabilities() — read once to decide which forwarders to install
- *   - request({ method, params }, resultSchema, { signal }) — for "tools/call",
- *     "resources/list", "resources/templates/list", "resources/read" and
- *     "prompts/list"
+ *   - request({ method, params }, resultSchema, { signal }) — for "tools/call"
  *   - setNotificationHandler(schema, handler) — only when the reported
  *     capabilities include listChanged, which this facade never reports
  *
  * This class implements exactly that surface over the runner's REST
  * passthrough; the runner holds the real SDK Client per resource.
  */
-export class RunnerRestClient {
+export class RunnerClientAdapter {
   constructor(private readonly resource: string) {}
 
   getServerCapabilities(): ServerCapabilities {
-    // No listChanged flags and no prompts: the passthrough proxies tool calls
-    // and resource reads only, so AppBridge never installs notification
-    // handlers or a prompts forwarder.
-    return { tools: {}, resources: {} };
+    // Advertise exactly the facade implemented below. Resource loading for the
+    // host itself is separate from resources exposed to an embedded app.
+    return { tools: {} };
   }
 
   async request(
@@ -124,26 +154,19 @@ export class RunnerRestClient {
             options?.signal,
           ),
         );
-      case "resources/read":
-        return resultSchema.parse(
-          await readResourceUri(this.resource, String(req.params?.uri ?? ""), options?.signal),
-        );
-      // The runner exposes no listing passthrough; empty lists are valid results.
-      case "resources/list":
-        return resultSchema.parse({ resources: [] });
-      case "resources/templates/list":
-        return resultSchema.parse({ resourceTemplates: [] });
       default:
-        throw new Error(`RunnerRestClient does not proxy '${req.method}'`);
+        throw new Error(`RunnerClientAdapter does not proxy '${req.method}'`);
     }
   }
 
   setNotificationHandler(_schema: unknown, _handler: unknown): void {
-    // Unreachable: getServerCapabilities() reports no listChanged capability.
+    throw new Error(
+      "RunnerClientAdapter does not expose notifications; its capabilities report no listChanged support.",
+    );
   }
 }
 
-// --- UI resource loading (≈ basic-host getUiResource) ------------------------
+// --- UI resource loading -----------------------------------------------------
 
 export interface UiResourceData {
   html: string;
@@ -166,21 +189,23 @@ export async function readAppResource(resource: string, uri: string): Promise<Ui
     throw new Error(`Unsupported MIME type: ${content.mimeType}`);
   }
 
-  const html = "blob" in content ? atob(content.blob as string) : (content.text as string);
+  let html: string;
+  if (typeof content.blob === "string") html = atob(content.blob);
+  else if (typeof content.text === "string") html = content.text;
+  else throw new Error("MCP App resource contains neither text nor blob data");
 
   // Content-level _meta.ui only — the runner has no resources/list passthrough,
   // so basic-host's listing-level fallback does not apply here.
-  const contentMeta = (content as { _meta?: { ui?: UiResourceMeta } })._meta;
-  const uiMeta = contentMeta?.ui;
+  const candidate = content._meta?.ui;
+  const parsedMeta = candidate === undefined ? undefined : McpUiResourceMetaSchema.safeParse(candidate);
+  if (parsedMeta && !parsedMeta.success) {
+    throw new Error(`Invalid MCP App resource metadata: ${parsedMeta.error.message}`);
+  }
+  const uiMeta = parsedMeta?.data;
   return { html, csp: uiMeta?.csp, permissions: uiMeta?.permissions };
 }
 
-interface UiResourceMeta {
-  csp?: McpUiResourceCsp;
-  permissions?: McpUiResourcePermissions;
-}
-
-// --- Theme + host styles (≈ basic-host theme.ts / host-styles.ts) ------------
+// --- Theme + host styles -----------------------------------------------------
 
 type Theme = "light" | "dark";
 
@@ -296,12 +321,12 @@ const HOST_STYLE_VARIABLES: McpUiStyles = {
   "--shadow-lg": "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)",
 };
 
-// --- AppBridge construction (≈ basic-host newAppBridge) ----------------------
+// --- AppBridge construction --------------------------------------------------
 
-export function newAppBridge(client: RunnerRestClient, iframe: HTMLIFrameElement): AppBridge {
+export function newAppBridge(client: RunnerClientAdapter, iframe: HTMLIFrameElement): AppBridge {
   const serverCapabilities = client.getServerCapabilities();
 
-  // RunnerRestClient implements exactly the member surface AppBridge uses from
+  // RunnerClientAdapter implements exactly the member surface AppBridge uses from
   // its `client` argument (getServerCapabilities / request /
   // setNotificationHandler — see the class doc above), so this single cast is
   // sound; the full SDK Client type is not otherwise reachable from AppBridge.
@@ -312,7 +337,6 @@ export function newAppBridge(client: RunnerRestClient, iframe: HTMLIFrameElement
       openLinks: {},
       logging: {},
       serverTools: serverCapabilities.tools,
-      serverResources: serverCapabilities.resources,
     },
     {
       hostContext: {
@@ -359,8 +383,8 @@ export function newAppBridge(client: RunnerRestClient, iframe: HTMLIFrameElement
 
   // Register all handlers before connect() so early requests are not missed.
 
-  appBridge.onmessage = async (params) => {
-    log.info("Message from MCP App:", params);
+  appBridge.onmessage = async (_params) => {
+    log.info("Message received from MCP App");
     return {};
   };
 

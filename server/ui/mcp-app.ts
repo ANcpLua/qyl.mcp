@@ -17,72 +17,28 @@ import {
   applyHostStyleVariables,
   type McpUiHostContext,
 } from "@modelcontextprotocol/ext-apps";
+import type {
+  DisplayTracesOutput,
+  FetchTelemetryOutput,
+  LogRecord as QylLogRecord,
+  McpDataMode as Mode,
+  Span as QylSpan,
+  SpanEvent as QylSpanEvent,
+  Trace as QylTrace,
+} from "@ancplua/qyl-api-schema/types";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import packageMetadata from "../package.json";
+import {
+  DisplayTracesOutputSchema,
+  FetchTelemetryOutputSchema,
+} from "../src/contracts.ts";
+import { logBodyText } from "../src/log-body.ts";
 import { computeWaterfall, type WaterfallRow } from "./waterfall.ts";
 import "./global.css";
 import "./mcp-app.css";
 
-// ---------------------------------------------------------------------------
-// Shapes (mirrors INTERFACE.md — snake_case wire format from the collector)
-// ---------------------------------------------------------------------------
-
-interface QylSpanEvent {
-  name: string;
-  time_unix_nano: number;
-  attributes?: unknown[];
-}
-
-interface QylSpan {
-  span_id: string;
-  trace_id: string;
-  parent_span_id?: string;
-  name: string;
-  kind: 0 | 1 | 2 | 3 | 4 | 5;
-  start_time_unix_nano: number;
-  end_time_unix_nano: number;
-  attributes?: Array<{ key: string; value: unknown }>;
-  events?: QylSpanEvent[];
-  status: { code: 0 | 1 | 2; message?: string };
-  resource: Record<string, unknown>;
-}
-
-interface QylTrace {
-  trace_id: string;
-  spans: QylSpan[];
-  root_span?: QylSpan;
-  span_count: number;
-  duration_ns: number;
-  start_time: string;
-  end_time: string;
-  services: string[];
-  has_error: boolean;
-}
-
-interface QylLogRecord {
-  time_unix_nano: number;
-  severity_number: number;
-  severity_text?: string;
-  body: string;
-  attributes?: Array<{ key: string; value: unknown }>;
-  trace_id?: string;
-  span_id?: string;
-  resource: Record<string, unknown>;
-}
-
-type Mode = "live" | "demo";
-
-/** structuredContent of `display_traces` / `fetch_telemetry view:"traces"`. */
-interface TracesPayload {
-  traces: QylTrace[];
-  selected_trace_id?: string;
-  mode: Mode;
-}
-
-/** structuredContent of `fetch_telemetry view:"logs"`. */
-interface LogsPayload {
-  logs: QylLogRecord[];
-  mode: Mode;
-}
+type TracesPayload = DisplayTracesOutput;
+type LogsPayload = Required<Pick<FetchTelemetryOutput, "logs" | "mode">>;
 
 // ---------------------------------------------------------------------------
 // State
@@ -91,7 +47,7 @@ interface LogsPayload {
 type Tab = "waterfall" | "logs";
 
 const state = {
-  mode: "demo" as Mode,
+  mode: undefined as Mode | undefined,
   traces: [] as QylTrace[],
   selectedTraceId: undefined as string | undefined,
   selectedSpanId: undefined as string | undefined,
@@ -288,7 +244,7 @@ function handleHostContextChanged(ctx: McpUiHostContext) {
   }
 }
 
-const app = new App({ name: "qyl Trace Explorer", version: "1.0.0" });
+const app = new App({ name: "qyl Trace Explorer", version: packageMetadata.version });
 
 app.onteardown = async () => {
   console.info("App is being torn down");
@@ -297,7 +253,6 @@ app.onteardown = async () => {
 
 app.ontoolinput = (params) => {
   // display_traces is running server-side; show an argument-aware spinner.
-  console.info("Received tool call input:", params);
   const args = (params.arguments ?? {}) as { trace_id?: string; session_id?: string };
   if (typeof args.trace_id === "string" && args.trace_id) {
     loadingTextEl.textContent = `Loading trace ${shortId(args.trace_id)}…`;
@@ -310,7 +265,6 @@ app.ontoolinput = (params) => {
 };
 
 app.ontoolresult = (result) => {
-  console.info("Received tool call result:", result);
   const payload = parseTracesPayload(result);
   if (!payload) {
     showError(toolErrorText(result) ?? "Received an invalid tool result.");
@@ -319,8 +273,7 @@ app.ontoolresult = (result) => {
   applyTraces(payload);
 };
 
-app.ontoolcancelled = (params) => {
-  console.info("Tool call cancelled:", params.reason);
+app.ontoolcancelled = () => {
   // ontoolinput already switched to the loading spinner; restore the prior
   // view so a cancelled call doesn't leave the viewer stuck on "Loading…".
   showView(state.traces.length > 0 ? "explorer" : "empty");
@@ -343,63 +296,16 @@ function toolErrorText(result: CallToolResult): string | undefined {
   return text || undefined;
 }
 
-/** Runtime-validate a span enough to render it without throwing. */
-function isRenderableSpan(s: unknown): s is QylSpan {
-  if (typeof s !== "object" || s === null) return false;
-  const span = s as Partial<QylSpan>;
-  return (
-    typeof span.span_id === "string" &&
-    typeof span.name === "string" &&
-    typeof span.start_time_unix_nano === "number" &&
-    typeof span.end_time_unix_nano === "number"
-  );
-}
-
-/** Normalize a wire trace, dropping unrenderable spans. */
-function sanitizeTrace(t: unknown): QylTrace | null {
-  if (typeof t !== "object" || t === null) return null;
-  const trace = t as Partial<QylTrace>;
-  if (typeof trace.trace_id !== "string" || !trace.trace_id) return null;
-  const spans = (Array.isArray(trace.spans) ? trace.spans : []).filter(isRenderableSpan);
-  return {
-    trace_id: trace.trace_id,
-    spans,
-    root_span: isRenderableSpan(trace.root_span) ? trace.root_span : undefined,
-    span_count: typeof trace.span_count === "number" ? trace.span_count : spans.length,
-    duration_ns: typeof trace.duration_ns === "number" ? trace.duration_ns : 0,
-    start_time: typeof trace.start_time === "string" ? trace.start_time : "",
-    end_time: typeof trace.end_time === "string" ? trace.end_time : "",
-    services: Array.isArray(trace.services)
-      ? trace.services.filter((s): s is string => typeof s === "string")
-      : [],
-    has_error: trace.has_error === true,
-  };
-}
-
 function parseTracesPayload(result: CallToolResult): TracesPayload | null {
-  const sc = result.structuredContent as Partial<TracesPayload> | undefined;
-  if (!sc || !Array.isArray(sc.traces)) return null;
-  return {
-    traces: sc.traces.map(sanitizeTrace).filter((t): t is QylTrace => t !== null),
-    selected_trace_id:
-      typeof sc.selected_trace_id === "string" ? sc.selected_trace_id : undefined,
-    mode: sc.mode === "live" ? "live" : "demo",
-  };
-}
-
-function isRenderableLog(l: unknown): l is QylLogRecord {
-  if (typeof l !== "object" || l === null) return false;
-  const log = l as Partial<QylLogRecord>;
-  return typeof log.body === "string" && typeof log.severity_number === "number";
+  const parsed = DisplayTracesOutputSchema.safeParse(result.structuredContent);
+  return parsed.success ? parsed.data : null;
 }
 
 function parseLogsPayload(result: CallToolResult): LogsPayload | null {
-  const sc = result.structuredContent as Partial<LogsPayload> | undefined;
-  if (!sc || !Array.isArray(sc.logs)) return null;
-  return {
-    logs: sc.logs.filter(isRenderableLog),
-    mode: sc.mode === "live" ? "live" : "demo",
-  };
+  const parsed = FetchTelemetryOutputSchema.safeParse(result.structuredContent);
+  return parsed.success && parsed.data.logs !== undefined
+    ? { logs: parsed.data.logs, mode: parsed.data.mode }
+    : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -947,7 +853,7 @@ function renderLogs(logs: QylLogRecord[]) {
     row.appendChild(badge);
     const logBody = document.createElement("span");
     logBody.className = "log-body mono";
-    logBody.textContent = log.body;
+    logBody.textContent = logBodyText(log.body);
     row.appendChild(logBody);
     fragment.appendChild(row);
   }
@@ -982,7 +888,6 @@ async function showLogsTab(trace: QylTrace) {
     if (seq !== state.logsRequestSeq || state.selectedTraceId !== trace.trace_id) return;
     if (state.activeTab === "logs") renderLogs(payload.logs);
   } catch (err) {
-    console.error("Logs fetch failed:", err);
     if (seq !== state.logsRequestSeq || state.selectedTraceId !== trace.trace_id) return;
     logsStateEl.hidden = false;
     logsStateEl.textContent = `Couldn't load logs: ${err instanceof Error ? err.message : String(err)}`;
@@ -1017,7 +922,6 @@ async function refreshTraces() {
     }
     applyTraces(payload);
   } catch (err) {
-    console.error("Refresh failed:", err);
     if (hadTraces) {
       // Keep what we have; surface the failure non-destructively.
       showView("explorer");

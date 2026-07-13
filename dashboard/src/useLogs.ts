@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LogLine } from "./types";
+import { RunnerLogLineSchema } from "./contracts";
 
 const MAX_LINES = 500;
 
@@ -19,7 +20,7 @@ export function useLogs(resource: string | null): LogLine[] {
     source.onmessage = (event) => {
       if (cancelled) return;
       try {
-        const line = JSON.parse(event.data) as LogLine;
+        const line = RunnerLogLineSchema.parse(JSON.parse(event.data));
         setLines((prev) => {
           const next = [...prev, line];
           return next.length > MAX_LINES ? next.slice(next.length - MAX_LINES) : next;

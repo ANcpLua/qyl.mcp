@@ -1,37 +1,73 @@
-// ≈ Qyl.Run/Internal/QylRunnerApi.cs — loopback-only HTTP surface for the dashboard, extended
-// with control verbs (restart/stop) and the MCP passthrough: one origin for every managed
+// Loopback-only HTTP surface for the dashboard, with control verbs
+// (restart/stop) and MCP passthrough: one origin for every managed
 // server, backed by the orchestrator's per-resource SDK Client.
 //
 // A second, separate-origin server (:18889) serves ONLY the dashboard's sandbox.html with CSP
 // response headers derived from a ?csp= query param — same mechanism as ext-apps basic-host's
 // serve.ts (headers, unlike meta tags, cannot be tampered with by the sandboxed content).
 
-import cors from "cors";
-import express, { type Request, type Response } from "express";
+import extAppsSchema from "@modelcontextprotocol/ext-apps/schema.json" with { type: "json" };
+import qylOpenApi from "@ancplua/qyl-api-schema/openapi" with { type: "json" };
+import type { McpUiAppResourceConfig } from "@modelcontextprotocol/ext-apps/server";
+import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import {
+    CallToolRequestParamsSchema,
+    ReadResourceRequestParamsSchema,
+} from "@modelcontextprotocol/sdk/types.js";
+import express, { type ErrorRequestHandler, type Request, type Response } from "express";
 import { existsSync } from "node:fs";
 import type { Server } from "node:http";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 import { Constants } from "./constants.js";
+import {
+    RunnerMcpResourceReadRequestSchema,
+    RunnerMcpResourceReadResponseSchema,
+    RunnerMcpToolCallRequestSchema,
+    RunnerMcpToolCallResponseSchema,
+    RunnerMcpToolsResponseSchema,
+} from "./contracts.js";
+import {
+    loopbackRequestGuard,
+    RunnerAllowedOrigins,
+    SandboxAllowedOrigins,
+} from "./http-security.js";
 import { LogStore } from "./log-store.js";
 import { Orchestrator } from "./orchestrator.js";
+import {
+    sendBadGateway,
+    sendConflict,
+    sendInternalServerError,
+    sendNotFound,
+    sendValidationProblem,
+} from "./problems.js";
 import { McpTelemetry } from "./telemetry.js";
 
 const { Ports, Network, Routes, LogEvents } = Constants;
+const RUNNER_SSE_EVENT =
+    qylOpenApi.paths["/runner/resources/stream"].get.responses["200"]
+        .content["text/event-stream"].itemSchema.oneOf[0].properties.event.const;
+if (typeof RUNNER_SSE_EVENT !== "string" || RUNNER_SSE_EVENT.length === 0) {
+    throw new Error("published Qyl OpenAPI has no runner SSE event name");
+}
+
+// The ext-apps package's root declaration file currently uses extensionless
+// relative exports, which NodeNext cannot resolve. Build the runtime validator
+// and its inferred type from the package's official JSON Schema instead of
+// copying the Apps contract into the runner.
+type McpUiResourceMeta = NonNullable<NonNullable<McpUiAppResourceConfig["_meta"]>["ui"]>;
+type McpUiResourceCsp = NonNullable<McpUiResourceMeta["csp"]>;
+const McpUiResourceCspSchema = z.fromJSONSchema({
+    $schema: extAppsSchema.$schema,
+    $defs: extAppsSchema.$defs,
+    $ref: "#/$defs/McpUiResourceCsp",
+} as unknown as Parameters<typeof z.fromJSONSchema>[0]) as z.ZodType<McpUiResourceCsp>;
 
 // runner/dist/src/ → ../../.. = the workspace root that holds dashboard/.
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const dashboardDist = join(workspaceRoot, "dashboard", "dist");
 const sandboxHtml = join(workspaceRoot, "dashboard", "dist-sandbox", "sandbox.html");
-
-// Shape of the ?csp= JSON (mirrors ext-apps' McpUiResourceCsp; declared locally so the runner
-// does not depend on the ext-apps package).
-interface UiResourceCsp {
-    connectDomains?: string[];
-    resourceDomains?: string[];
-    frameDomains?: string[];
-    baseUriDomains?: string[];
-}
 
 export class RunnerApi {
     private server: Server | null = null;
@@ -45,7 +81,12 @@ export class RunnerApi {
     ) {}
 
     async listen(): Promise<void> {
-        await Promise.all([this.listenMain(), this.listenSandbox()]);
+        try {
+            await Promise.all([this.listenMain(), this.listenSandbox()]);
+        } catch (error) {
+            await this.close();
+            throw error;
+        }
     }
 
     async close(): Promise<void> {
@@ -56,7 +97,7 @@ export class RunnerApi {
 
     private listenMain(): Promise<void> {
         const app = express();
-        app.use(cors());
+        app.use(loopbackRequestGuard(RunnerAllowedOrigins));
         app.use(express.json());
 
         app.get(`${Routes.Runner}/resources`, (_req, res) => {
@@ -74,9 +115,9 @@ export class RunnerApi {
         });
 
         app.get(`${Routes.Runner}/resources/:name/logs/stream`, (req, res) => {
-            const name = req.params.name;
+            const name = String(req.params.name);
             if (!this.orchestrator.lookup(name)) {
-                res.status(404).json({ error: `Unknown resource '${name}'` });
+                sendNotFound(res, "runner resource", name);
                 return;
             }
             openSse(res);
@@ -85,129 +126,188 @@ export class RunnerApi {
             req.on("close", unsubscribe);
         });
 
-        app.post(`${Routes.Runner}/resources/:name/restart`, (req, res) => {
-            const name = req.params.name;
+        app.get(`${Routes.Runner}/resources/:name/logs`, (req, res) => {
+            const name = String(req.params.name);
             if (!this.orchestrator.lookup(name)) {
-                res.status(404).json({ error: `Unknown resource '${name}'` });
+                sendNotFound(res, "runner resource", name);
                 return;
             }
-            void this.orchestrator.restart(name);
-            res.status(202).end();
+            res.setHeader("Cache-Control", "no-store");
+            res.json(this.logStore.snapshot(name));
+        });
+
+        app.post(`${Routes.Runner}/resources/:name/restart`, (req, res) => {
+            this.respondToAction(res, String(req.params.name), "restart");
         });
 
         app.post(`${Routes.Runner}/resources/:name/stop`, (req, res) => {
-            const name = req.params.name;
-            if (!this.orchestrator.lookup(name)) {
-                res.status(404).json({ error: `Unknown resource '${name}'` });
-                return;
-            }
-            void this.orchestrator.stop(name);
-            res.status(202).end();
+            this.respondToAction(res, String(req.params.name), "stop");
         });
 
-        // MCP passthrough. Errors: 404 unknown resource, 409 not Ready, 502 upstream MCP error.
+        // MCP passthrough. Errors: 404 unknown resource, 409 not ready, 502 upstream MCP error.
         app.get(`${Routes.Runner}/mcp/:name/tools`, (req, res) => {
-            void this.passthrough(req, res, { method: "tools/list" }, (client) =>
-                client.listTools().then(({ tools }) => ({ tools })),
+            void this.passthrough(req, res, { method: "tools/list" }, async (client) =>
+                RunnerMcpToolsResponseSchema.parse(await client.listTools()),
             );
         });
 
         app.post(`${Routes.Runner}/mcp/:name/tools/call`, (req, res) => {
-            const { name, arguments: args } = (req.body ?? {}) as { name?: unknown; arguments?: unknown };
-            if (typeof name !== "string" || name.length === 0) {
-                res.status(400).json({ error: "Body must be { name: string, arguments?: object }" });
+            const productRequest = RunnerMcpToolCallRequestSchema.safeParse(req.body ?? {});
+            if (!productRequest.success) {
+                sendValidationProblem(
+                    res,
+                    "body",
+                    productRequest.error.issues.map((issue) => issue.message).join("; "),
+                );
                 return;
             }
-            const callArgs = (args ?? {}) as Record<string, unknown>;
-            void this.passthrough(req, res, { method: "tools/call", toolName: name, arguments: callArgs }, (client) =>
-                client.callTool({ name, arguments: callArgs }),
+            const protocolRequest = CallToolRequestParamsSchema.safeParse(productRequest.data);
+            if (!protocolRequest.success) {
+                sendValidationProblem(
+                    res,
+                    "body",
+                    protocolRequest.error.issues.map((issue) => issue.message).join("; "),
+                );
+                return;
+            }
+            void this.passthrough(
+                req,
+                res,
+                { method: "tools/call", toolName: protocolRequest.data.name },
+                async (client) => {
+                    const result = await client.callTool(protocolRequest.data);
+                    return RunnerMcpToolCallResponseSchema.parse({
+                        ...result,
+                        isError: result.isError ?? false,
+                    });
+                },
             );
         });
 
         app.post(`${Routes.Runner}/mcp/:name/resources/read`, (req, res) => {
-            const { uri } = (req.body ?? {}) as { uri?: unknown };
-            if (typeof uri !== "string" || uri.length === 0) {
-                res.status(400).json({ error: "Body must be { uri: string }" });
+            const productRequest = RunnerMcpResourceReadRequestSchema.safeParse(req.body ?? {});
+            if (!productRequest.success) {
+                sendValidationProblem(
+                    res,
+                    "body",
+                    productRequest.error.issues.map((issue) => issue.message).join("; "),
+                );
                 return;
             }
-            void this.passthrough(req, res, { method: "resources/read", resourceUri: uri }, (client) =>
-                client.readResource({ uri }),
+            const protocolRequest = ReadResourceRequestParamsSchema.safeParse(productRequest.data);
+            if (!protocolRequest.success) {
+                sendValidationProblem(
+                    res,
+                    "body",
+                    protocolRequest.error.issues.map((issue) => issue.message).join("; "),
+                );
+                return;
+            }
+            void this.passthrough(
+                req,
+                res,
+                { method: "resources/read", resourceUri: protocolRequest.data.uri },
+                async (client) =>
+                    RunnerMcpResourceReadResponseSchema.parse(
+                        await client.readResource(protocolRequest.data),
+                    ),
             );
-        });
-
-        app.get(Routes.Health, (_req, res) => {
-            res.json({ status: "ok" });
         });
 
         // Prod mode: the built dashboard is served from the runner's own origin.
         if (existsSync(dashboardDist)) {
             app.use(express.static(dashboardDist));
         }
+        app.use(errorHandler);
 
-        return new Promise((resolvePromise) => {
+        return new Promise((resolvePromise, rejectPromise) => {
             this.server = app.listen(Ports.RunnerApi, Network.Loopback, () => {
                 console.error(
                     `[${LogEvents.RunnerApiListening}] Runner API listening on ${Network.HttpScheme}://${Network.Loopback}:${Ports.RunnerApi}${Routes.Runner}`,
                 );
                 resolvePromise();
             });
-            // Mirrors qyl: a bind failure disables the state feed but does not kill the runner.
             this.server.on("error", (error) => {
                 console.error(
-                    `[${LogEvents.RunnerApiBindFailed}] Runner API could not bind :${Ports.RunnerApi} — dashboard state feed disabled: ${error.message}`,
+                    `[${LogEvents.RunnerApiBindFailed}] Runner API could not bind :${Ports.RunnerApi}: ${error.message}`,
                 );
                 this.server = null;
-                resolvePromise();
+                rejectPromise(error);
             });
         });
+    }
+
+    private respondToAction(response: Response, name: string, action: "restart" | "stop"): void {
+        const result = this.orchestrator[action](name);
+        if (result === "not_found") {
+            sendNotFound(response, "runner resource", name);
+            return;
+        }
+        if (result === "conflict") {
+            const lifecycle = this.orchestrator.lookup(name)?.state.lifecycle ?? "unknown";
+            sendConflict(
+                response,
+                name,
+                `Resource '${name}' cannot ${action} while its lifecycle is '${lifecycle}'.`,
+            );
+            return;
+        }
+        response.status(202).end();
     }
 
     private async passthrough(
         req: Request,
         res: Response,
-        call: { method: string; toolName?: string; resourceUri?: string; arguments?: Record<string, unknown> },
-        invoke: (client: import("@modelcontextprotocol/sdk/client/index.js").Client) => Promise<unknown>,
+        call: { method: string; toolName?: string; resourceUri?: string },
+        invoke: (client: Client) => Promise<unknown>,
     ): Promise<void> {
-        const name = req.params.name as string;
+        const name = String(req.params.name);
         const entry = this.orchestrator.lookup(name);
         if (!entry) {
-            res.status(404).json({ error: `Unknown resource '${name}'` });
+            sendNotFound(res, "runner resource", name);
             return;
         }
-        if (entry.state.lifecycle !== "Ready" || !entry.client) {
-            res.status(409).json({ error: `Resource '${name}' is not Ready (currently ${entry.state.lifecycle})` });
+        if (entry.state.lifecycle !== "ready" || !entry.client) {
+            sendConflict(
+                res,
+                name,
+                `Resource '${name}' is not ready (currently '${entry.state.lifecycle}').`,
+            );
             return;
         }
         const startTimeMs = Date.now();
         try {
             const result = await invoke(entry.client);
             this.telemetry.recordCall({
-                ...call,
+                method: call.method,
+                toolName: call.toolName,
+                resourceUri: call.resourceUri,
                 serverName: name,
                 transport: entry.resource.kind,
                 startTimeMs,
                 endTimeMs: Date.now(),
-                result,
             });
             res.json(result);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             this.telemetry.recordCall({
-                ...call,
+                method: call.method,
+                toolName: call.toolName,
+                resourceUri: call.resourceUri,
                 serverName: name,
                 transport: entry.resource.kind,
                 startTimeMs,
                 endTimeMs: Date.now(),
-                error: message,
+                failed: true,
             });
             console.error(`[${LogEvents.RunnerApiRequestFailed}] Runner API request failed: ${message}`);
-            res.status(502).json({ error: message });
+            sendBadGateway(res);
         }
     }
 
     private listenSandbox(): Promise<void> {
         const app = express();
-        app.use(cors());
+        app.use(loopbackRequestGuard(SandboxAllowedOrigins));
 
         app.get("/sandbox.html", (req, res) => {
             if (!existsSync(sandboxHtml)) {
@@ -215,17 +315,34 @@ export class RunnerApi {
                 return;
             }
 
-            let cspConfig: UiResourceCsp | undefined;
+            let cspConfig: McpUiResourceCsp | undefined;
             if (typeof req.query.csp === "string") {
                 try {
-                    cspConfig = JSON.parse(req.query.csp) as UiResourceCsp;
-                } catch (error) {
-                    console.warn("[Sandbox] Invalid CSP query param:", error);
+                    const parsed = McpUiResourceCspSchema.safeParse(JSON.parse(req.query.csp));
+                    if (!parsed.success) {
+                        sendValidationProblem(
+                            res,
+                            "csp",
+                            parsed.error.issues.map((issue) => issue.message).join("; "),
+                        );
+                        return;
+                    }
+                    cspConfig = parsed.data;
+                } catch {
+                    sendValidationProblem(res, "csp", "The CSP query parameter must be valid JSON.");
+                    return;
                 }
             }
 
             // CSP via HTTP header — tamper-proof unlike meta tags.
-            res.setHeader("Content-Security-Policy", buildCspHeader(cspConfig));
+            let cspHeader: string;
+            try {
+                cspHeader = buildCspHeader(cspConfig);
+            } catch (error) {
+                sendValidationProblem(res, "csp", error instanceof Error ? error.message : String(error));
+                return;
+            }
+            res.setHeader("Content-Security-Policy", cspHeader);
             // Prevent caching to ensure fresh CSP on each load.
             res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
             res.setHeader("Pragma", "no-cache");
@@ -236,8 +353,9 @@ export class RunnerApi {
         app.use((_req, res) => {
             res.status(404).send("Only sandbox.html is served on this port");
         });
+        app.use(errorHandler);
 
-        return new Promise((resolvePromise) => {
+        return new Promise((resolvePromise, rejectPromise) => {
             this.sandboxServer = app.listen(Ports.Sandbox, Network.Loopback, () => {
                 console.error(
                     `[${LogEvents.RunnerApiListening}] Sandbox server listening on ${Network.HttpScheme}://${Network.Loopback}:${Ports.Sandbox}/sandbox.html`,
@@ -249,21 +367,24 @@ export class RunnerApi {
                     `[${LogEvents.RunnerApiBindFailed}] Sandbox server could not bind :${Ports.Sandbox}: ${error.message}`,
                 );
                 this.sandboxServer = null;
-                resolvePromise();
+                rejectPromise(error);
             });
         });
     }
 }
 
-// Validate CSP domain entries to prevent injection attacks. Rejects entries containing characters
-// that could break out to a new CSP directive (;, newlines), inject CSP keywords (quotes), or
-// inject multiple sources in one entry (space). Same logic as basic-host's serve.ts.
+// Validate CSP domain entries to prevent injection attacks. Entries containing characters
+// that could break out to a new directive are rejected as an invalid request.
 function sanitizeCspDomains(domains?: string[]): string[] {
     if (!domains) return [];
-    return domains.filter((d) => typeof d === "string" && !/[;\r\n'" ]/.test(d));
+    const invalid = domains.find((domain) => domain.length === 0 || /[;\s'"]/u.test(domain));
+    if (invalid !== undefined) {
+        throw new Error("CSP domains must be non-empty and cannot contain semicolons, whitespace, or quotes.");
+    }
+    return domains;
 }
 
-function buildCspHeader(csp?: UiResourceCsp): string {
+function buildCspHeader(csp?: McpUiResourceCsp): string {
     const resourceDomains = sanitizeCspDomains(csp?.resourceDomains).join(" ");
     const connectDomains = sanitizeCspDomains(csp?.connectDomains).join(" ");
     const frameDomains = sanitizeCspDomains(csp?.frameDomains).join(" ") || null;
@@ -291,8 +412,9 @@ function buildCspHeader(csp?: UiResourceCsp): string {
         frameDomains ? `frame-src ${frameDomains}` : "frame-src 'none'",
         // Plugins: always blocked (defense in depth)
         "object-src 'none'",
-        // Base URI: use baseUriDomains if provided, otherwise block all
-        baseUriDomains ? `base-uri ${baseUriDomains}` : "base-uri 'none'",
+        // Base URI: use approved domains if provided; otherwise keep the
+        // Apps schema's same-origin default.
+        baseUriDomains ? `base-uri ${baseUriDomains}` : "base-uri 'self'",
     ];
 
     return directives.join("; ");
@@ -306,7 +428,7 @@ function openSse(res: Response): void {
 }
 
 function writeFrame(res: Response, payload: unknown): void {
-    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    res.write(`event: ${RUNNER_SSE_EVENT}\ndata: ${JSON.stringify(payload)}\n\n`);
 }
 
 function closeServer(server: Server | null): Promise<void> {
@@ -317,3 +439,19 @@ function closeServer(server: Server | null): Promise<void> {
         server.closeAllConnections();
     });
 }
+
+const errorHandler: ErrorRequestHandler = (error, _request, response, _next) => {
+    if (
+        typeof error === "object" &&
+        error !== null &&
+        "status" in error &&
+        error.status === 400 &&
+        "type" in error &&
+        error.type === "entity.parse.failed"
+    ) {
+        sendValidationProblem(response, "body", "The request body must be valid JSON.");
+        return;
+    }
+    console.error(`[${LogEvents.RunnerApiRequestFailed}] Runner API request failed: ${String(error)}`);
+    if (!response.headersSent) sendInternalServerError(response);
+};

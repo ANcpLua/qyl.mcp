@@ -3,22 +3,35 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Qyl.Run-shaped app host for MCP servers: orchestrator + runner API + MCP passthrough, hosting the qyl telemetry tools in-process",
+  "description": "Local MCP server host with orchestration, runner API, passthrough, and in-process qyl telemetry tools",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/main.js"
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && tsc",
+    "test": "npm run build && node --test dist/src/*.test.js",
+    "smoke": "node smoke.mjs",
+    "start": "node dist/main.js",
+    "smoke:otlp": "node telemetry-smoke.mjs"
   },
   "dependencies": {
+    "@ancplua/qyl-api-schema": "0.5.4",
+    "@modelcontextprotocol/ext-apps": "^1.7.4",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "cors": "^2.8.5",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.220.0",
+    "@opentelemetry/resources": "^2.9.0",
+    "@opentelemetry/sdk-trace-base": "^2.9.0",
+    "@opentelemetry/sdk-trace-node": "^2.9.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
     "express": "^5.2.1",
-    "qyl-mcp-server": "^0.1.0"
+    "qyl-mcp-server": "^0.1.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
-    "@types/node": "^24.0.0",
+    "@types/node": "^22.0.0",
     "typescript": "^5.9.3"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22.12.0"
+  }
 }

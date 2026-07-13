@@ -1,4 +1,4 @@
-// ≈ Qyl.Run.Host/Program.cs — the runnable qyl.mcp host. From the repo root:
+// The runnable qyl.mcp host. From the repo root:
 //     node runner/dist/main.js
 //
 // Hosts the qyl telemetry MCP server IN-PROCESS (no child process, no sibling
@@ -8,16 +8,13 @@
 //
 // The in-process server reads its configuration from THIS process's
 // environment: QYL_COLLECTOR_URL (default http://127.0.0.1:5100) for live
-// mode, QYL_DEMO=1 to force demo telemetry (otherwise it probes the collector
-// and falls back to demo by itself).
+// mode, or QYL_DEMO=1 to select generated demo telemetry explicitly.
 
 import { createServer } from "qyl-mcp-server";
 import { McpAppBuilder } from "./src/app-builder.js";
 
-const app = McpAppBuilder.create(process.argv.slice(2));
+const app = McpAppBuilder.create();
 
-app.addInProcessServer("qyl-telemetry", createServer, {
-    description: "qyl telemetry explorer (MCP Apps; in-process, live against the collector with demo fallback)",
-});
+app.addInProcessServer("qyl-telemetry", createServer);
 
 await app.build().run();

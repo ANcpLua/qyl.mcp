@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { ToolSchema, type Tool } from "@modelcontextprotocol/sdk/types.js";
+import { RunnerMcpToolsResponseSchema } from "./contracts";
+import { responseErrorDetail } from "./bridge";
 
 export interface ToolsState {
   tools: Tool[];
@@ -10,7 +12,7 @@ export interface ToolsState {
 const EMPTY: ToolsState = { tools: [], loading: false, error: null };
 
 // Fetches the tool list for a resource via the runner's MCP passthrough once
-// the resource is Ready. Refetches whenever the resource flips back to Ready
+// the resource is ready. Refetches whenever the resource flips back to ready
 // (e.g. after a restart).
 export function useTools(resource: string | null, ready: boolean): ToolsState {
   const [state, setState] = useState<ToolsState>(EMPTY);
@@ -27,18 +29,14 @@ export function useTools(resource: string | null, ready: boolean): ToolsState {
     fetch(`/runner/mcp/${encodeURIComponent(resource)}/tools`, { signal: controller.signal })
       .then(async (res) => {
         if (!res.ok) {
-          let detail = `${res.status} ${res.statusText}`;
-          try {
-            const payload = (await res.json()) as { error?: string };
-            if (payload.error) detail = payload.error;
-          } catch {
-            // non-JSON error body
-          }
-          throw new Error(detail);
+          throw new Error(await responseErrorDetail(res));
         }
-        return res.json() as Promise<{ tools: Tool[] }>;
+        return RunnerMcpToolsResponseSchema.parse(await res.json());
       })
-      .then(({ tools }) => setState({ tools, loading: false, error: null }))
+      .then(({ tools }) => {
+        const protocolTools = tools.map((tool) => ToolSchema.parse(tool));
+        setState({ tools: protocolTools, loading: false, error: null });
+      })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
         setState({

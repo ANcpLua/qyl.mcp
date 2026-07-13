@@ -6,12 +6,16 @@
 import {
   CollectorError,
   collectorGet,
-  normalizeTrace,
+  parseCollectorLog,
+  parseCollectorPage,
+  parseCollectorSession,
+  parseCollectorTrace,
   resolveMode,
-  unwrapItems,
 } from "./collector.js";
 import { getDemo, getDemoMcpSpans } from "./demo.js";
+import { logBodyText } from "./log-body.js";
 import { aggregateMcpStats, pickBucketMs } from "./stats.js";
+import type { SessionId, TraceId } from "@ancplua/qyl-api-schema/types";
 import type {
   McpDashboardStats,
   Mode,
@@ -26,7 +30,10 @@ export async function fetchTraces(limit: number): Promise<{ traces: QylTrace[]; 
     return { traces: getDemo().traces.slice(0, limit), mode };
   }
   const body = await collectorGet("/api/v1/traces", { limit });
-  return { traces: unwrapItems<any>(body).map(normalizeTrace), mode };
+  return {
+    traces: parseCollectorPage(body, "/api/v1/traces", parseCollectorTrace).items,
+    mode,
+  };
 }
 
 export async function fetchTrace(traceId: string): Promise<{ trace: QylTrace; mode: Mode }> {
@@ -37,8 +44,9 @@ export async function fetchTrace(traceId: string): Promise<{ trace: QylTrace; mo
     return { trace, mode };
   }
   try {
-    const trace = normalizeTrace(
+    const trace = parseCollectorTrace(
       await collectorGet(`/api/v1/traces/${encodeURIComponent(traceId)}`),
+      `/api/v1/traces/${traceId}`,
     );
     return { trace, mode };
   } catch (err) {
@@ -64,7 +72,14 @@ export async function fetchSessionTraces(
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/traces`,
       { limit },
     );
-    return { traces: unwrapItems<any>(body).map(normalizeTrace), mode };
+    return {
+      traces: parseCollectorPage(
+        body,
+        `/api/v1/sessions/${sessionId}/traces`,
+        parseCollectorTrace,
+      ).items,
+      mode,
+    };
   } catch (err) {
     if (err instanceof CollectorError && err.status === 404) {
       throw new CollectorError(`session not found: ${sessionId}`);
@@ -88,7 +103,10 @@ export async function fetchSessions(
     limit,
     isActive: activeOnly ? true : undefined,
   });
-  return { sessions: unwrapItems<QylSession>(body), mode };
+  return {
+    sessions: parseCollectorPage(body, "/api/v1/sessions", parseCollectorSession).items,
+    mode,
+  };
 }
 
 export interface LogFilters {
@@ -111,12 +129,13 @@ export async function fetchLogs(
         (l) => String(l.resource["service.name"]) === filters.service_name,
       );
     }
-    if (filters.severity_min !== undefined) {
-      logs = logs.filter((l) => l.severity_number >= filters.severity_min!);
+    const severityMin = filters.severity_min;
+    if (severityMin !== undefined) {
+      logs = logs.filter((l) => l.severity_number >= severityMin);
     }
     if (filters.query) {
       const needle = filters.query.toLowerCase();
-      logs = logs.filter((l) => l.body.toLowerCase().includes(needle));
+      logs = logs.filter((l) => logBodyText(l.body).toLowerCase().includes(needle));
     }
     return { logs: logs.slice(0, filters.limit), mode };
   }
@@ -127,15 +146,18 @@ export async function fetchLogs(
     query: filters.query,
     limit: filters.limit,
   });
-  return { logs: unwrapItems<QylLogRecord>(body), mode };
+  return {
+    logs: parseCollectorPage(body, "/api/v1/logs", parseCollectorLog).items,
+    mode,
+  };
 }
 
 /** Shared by display_traces and fetch_telemetry (view "traces"). */
 export async function fetchTracesForDisplay(args: {
-  trace_id?: string;
-  session_id?: string;
+  trace_id?: TraceId;
+  session_id?: SessionId;
   limit: number;
-}): Promise<{ traces: QylTrace[]; selected_trace_id?: string; mode: Mode }> {
+}): Promise<{ traces: QylTrace[]; selected_trace_id?: TraceId; mode: Mode }> {
   if (args.trace_id) {
     const { trace, mode } = await fetchTrace(args.trace_id);
     return { traces: [trace], selected_trace_id: args.trace_id, mode };
@@ -159,9 +181,10 @@ export async function fetchMcpStats(hours: number): Promise<McpDashboardStats> {
   }
 
   const body = await collectorGet("/api/v1/traces", { limit: 1000 });
-  const traces = unwrapItems<any>(body).map(normalizeTrace);
+  const page = parseCollectorPage(body, "/api/v1/traces", parseCollectorTrace);
+  const traces = page.items;
   const spans = traces.flatMap((t) => t.spans);
   const stats = aggregateMcpStats(spans, windowStart, windowEnd, bucketMs);
-  const truncated = traces.length >= 1000 || Boolean((body as any)?.has_more);
+  const truncated = traces.length >= 1000 || page.hasMore;
   return { ...stats, truncated, mode };
 }

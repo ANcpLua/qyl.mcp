@@ -1,42 +1,65 @@
 # qyl.mcp
 
-ONE MCP surface for [qyl](https://github.com/ANcpLua/qyl) — the merge of the former
-`mcp-run` (host half) and `qyl-apps-server` (visual half), both histories preserved.
+qyl.mcp is Qyl's local Model Context Protocol host and telemetry explorer. It
+runs MCP servers, exposes their resource state through a loopback dashboard, and
+provides trace, log, session, and MCP-traffic tools backed by a Qyl collector.
 
-Two runtime concerns, one repo:
-
-- **`runner/`** — a Qyl.Run-shaped app host for MCP servers (Aspire-style orchestrator,
-  runner API on `:18888`, MCP passthrough at `/runner/mcp/<name>`, OTLP self-monitoring).
-  Hosts the qyl telemetry tools **in-process** — no child process, no sibling checkout.
-- **`server/`** — the qyl telemetry MCP Apps server: interactive trace explorer +
-  MCP dashboard rendered in-chat, live against the qyl collector with automatic
-  demo fallback. Curated `tools/list` + search/execute catalog, budget enforced in code.
-- **`dashboard/`** — the runner's resource dashboard (React 19 + Vite) with sandboxed
-  MCP Apps rendering via a separate-origin CSP-headered sandbox on `:18889`.
-
-Binding contracts: [ARCHITECTURE.md](./ARCHITECTURE.md) (host) and
-[server/INTERFACE.md](./server/INTERFACE.md) (visual).
-
-## Quickstart
+## Run
 
 ```bash
-npm ci && npm run build     # server → runner → dashboard
-npm start                   # boots the host; dashboard at http://127.0.0.1:18888
+npm ci
+npm run build
+npm start
 ```
 
-Live mode needs a qyl collector on `:5100`
-(`QYL_OTLP_AUTH_MODE=Unsecured dotnet run --project services/qyl.collector` in the qyl
-repo); without one, the telemetry tools serve a fully functional demo dataset.
-
-Direct chat-client wiring (stdio, no runner): `node server/dist/main.js --stdio`.
+The dashboard is served at <http://127.0.0.1:18888>. Live telemetry requires a
+collector at `QYL_COLLECTOR_URL` (default `http://127.0.0.1:5100`). For local
+development, start the collector with read access enabled:
 
 ```bash
-npm run smoke               # server contract smoke test (demo mode)
+QYL_OTLP_AUTH_MODE=Unsecured dotnet run --project ../qyl/services/qyl.collector
 ```
 
-## Strategy
+For a collector running in API-key mode, set `QYL_API_KEY`; qyl.mcp sends it
+under the header owned by the generated Qyl OpenAPI contract.
 
-Why this exists and where it goes next (hosted remote endpoint, NL→query agent on
-first-party semconv, visual root cause, self-instrumenting polyglot host):
-`qyl/docs/design/qyl-host/MCP-STRATEGY.md`, grounded against the `sentry-mcp` clone
-in `~/RiderProjects/qyl-references/`.
+The standalone MCP server can also be wired directly to a chat client over
+stdio:
+
+```bash
+node server/dist/main.js --stdio
+```
+
+Collector failures are returned as errors. Generated demo telemetry is never an
+automatic fallback; enable it deliberately when demonstrating the UI offline:
+
+```bash
+QYL_DEMO=1 npm start
+```
+
+Demo results carry `mode: "demo"` so clients can label them accurately.
+
+## MCP surface
+
+The model-visible tools are `display_traces`, `display_mcp_dashboard`,
+`list_traces`, `get_trace`, `list_sessions`, and `search_logs`.
+`fetch_telemetry` is app-only and supports the bundled viewers.
+
+Qyl request, response, event, and error models are owned by
+[`qyl-api-schema`](https://github.com/ANcpLua/qyl-api-schema). Standard MCP
+envelopes come from the official MCP SDK; OTLP comes from official OpenTelemetry
+types.
+
+## Verify
+
+```bash
+npm run build
+npm test
+npm run smoke
+npm run smoke:otlp
+```
+
+The local smoke test uses explicit demo mode. `smoke:otlp` starts a real,
+API-key-protected Qyl collector, proves its official OTLP/protobuf receiver
+parses and persists the runner's SDK export without user-content leakage, and
+validates all seven tool results against the published Qyl schemas.

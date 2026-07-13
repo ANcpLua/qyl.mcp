@@ -1,14 +1,26 @@
 /**
  * Collector REST client + live/demo mode selection.
  *
- * QYL_DEMO=1 forces demo. Otherwise the first tool call probes the collector
- * (GET /api/v1/traces?limit=1); a connection-refused there pins demo mode for
- * the process lifetime. Any other outcome (including HTTP errors) pins live —
- * the collector is reachable, so real calls should surface real errors.
+ * QYL_DEMO=1 selects explicit demo mode. Every other invocation is live;
+ * connection, HTTP, JSON, and contract failures surface to the caller rather
+ * than silently substituting generated telemetry or invented defaults.
  */
 
-import { collectorUrl } from "./config.js";
-import type { Mode, QylTrace } from "./wire.js";
+import type {
+  LogRecord,
+  ProblemDetails,
+  SessionEntity,
+  Trace,
+} from "@ancplua/qyl-api-schema/types";
+import { z } from "zod";
+import { collectorHeaders, collectorUrl } from "./config.js";
+import {
+  LogRecordSchema,
+  ProblemDetailsSchema,
+  SessionSchema,
+  TraceSchema,
+} from "./contracts.js";
+import type { Mode } from "./wire.js";
 
 /** Error with a message already suitable for showing to the model/user. */
 export class CollectorError extends Error {
@@ -22,15 +34,130 @@ export class CollectorError extends Error {
   }
 }
 
+function asRecord(value: unknown, context: string): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new CollectorError(`collector contract mismatch for ${context}: expected an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function contractMismatch(context: string, error: z.ZodError): CollectorError {
+  return new CollectorError(
+    `collector contract mismatch for ${context}: ${z.prettifyError(error)}`,
+  );
+}
+
 /**
- * GET a collector endpoint. Query params are camelCase per the collector
- * API; `undefined` values are omitted. Connection failures map to a clear,
- * actionable message.
+ * The published JSON Schema accepts RFC 3339 offsets. Zod's JSON-Schema
+ * converter currently accepts only the canonical `Z` spelling, so normalize a
+ * valid collector timestamp before applying the generated contract validator.
+ */
+const rfc3339 = z.iso.datetime({ offset: true });
+
+function canonicalDateTime(value: unknown, context: string): string {
+  const parsed = rfc3339.safeParse(value);
+  if (!parsed.success) throw contractMismatch(context, parsed.error);
+  return new Date(parsed.data).toISOString();
+}
+
+/** Normalize RFC 3339 spelling, then enforce the public Trace schema exactly. */
+export function parseCollectorTrace(value: unknown, context = "trace"): Trace {
+  const trace = asRecord(value, context);
+  const normalized: Record<string, unknown> = {
+    ...trace,
+    start_time: canonicalDateTime(trace.start_time, `${context}.start_time`),
+    end_time: canonicalDateTime(trace.end_time, `${context}.end_time`),
+  };
+  const parsed = TraceSchema.safeParse(normalized);
+  if (!parsed.success) throw contractMismatch(context, parsed.error);
+  return parsed.data;
+}
+
+/** Normalize RFC 3339 spelling, then enforce the public Session schema exactly. */
+export function parseCollectorSession(value: unknown, context = "session"): SessionEntity {
+  const session = asRecord(value, context);
+  const normalized: Record<string, unknown> = {
+    ...session,
+    start_time: canonicalDateTime(session.start_time, `${context}.start_time`),
+  };
+  if (session.end_time !== undefined) {
+    normalized.end_time = canonicalDateTime(session.end_time, `${context}.end_time`);
+  }
+
+  const parsed = SessionSchema.safeParse(normalized);
+  if (!parsed.success) throw contractMismatch(context, parsed.error);
+  return parsed.data;
+}
+
+/** Enforce the public LogRecord schema without alternate wire encodings. */
+export function parseCollectorLog(value: unknown, context = "log"): LogRecord {
+  const parsed = LogRecordSchema.safeParse(asRecord(value, context));
+  if (!parsed.success) throw contractMismatch(context, parsed.error);
+  return parsed.data;
+}
+
+interface ParsedCollectorPage<T> {
+  items: T[];
+  hasMore: boolean;
+}
+
+/**
+ * Validate the generated CursorPage wire invariant and every item. The
+ * published JSON Schema does not emit generic page definitions, so this
+ * internal parser checks their generated TypeScript shape without inventing a
+ * second API DTO.
+ */
+export function parseCollectorPage<T>(
+  value: unknown,
+  context: string,
+  parseItem: (item: unknown, context: string) => T,
+): ParsedCollectorPage<T> {
+  const page = asRecord(value, context);
+  if (!Array.isArray(page.items) || typeof page.has_more !== "boolean") {
+    throw new CollectorError(
+      `collector contract mismatch for ${context}: expected items[] and has_more:boolean`,
+    );
+  }
+  for (const cursor of ["next_cursor", "prev_cursor"] as const) {
+    if (page[cursor] !== undefined && typeof page[cursor] !== "string") {
+      throw new CollectorError(
+        `collector contract mismatch for ${context}.${cursor}: expected a string`,
+      );
+    }
+  }
+  return {
+    items: page.items.map((item, index) => parseItem(item, `${context}.items[${index}]`)),
+    hasMore: page.has_more,
+  };
+}
+
+function normalizeProblemDetails(value: unknown): unknown {
+  const problem = asRecord(value, "error response");
+  if (problem.timestamp === undefined) return problem;
+  return {
+    ...problem,
+    timestamp: canonicalDateTime(problem.timestamp, "error response.timestamp"),
+  };
+}
+
+function parseProblemDetails(value: unknown): ProblemDetails | undefined {
+  try {
+    const parsed = ProblemDetailsSchema.safeParse(normalizeProblemDetails(value));
+    return parsed.success ? parsed.data : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * GET a collector endpoint. Query params are camelCase per the collector API;
+ * `undefined` values are omitted. All response data remains unknown until the
+ * endpoint-specific generated contract parser accepts it.
  */
 export async function collectorGet(
   pathname: string,
   params: Record<string, string | number | boolean | undefined> = {},
-): Promise<any> {
+): Promise<unknown> {
   const url = new URL(pathname, collectorUrl());
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined) url.searchParams.set(key, String(value));
@@ -38,7 +165,7 @@ export async function collectorGet(
 
   let response: Response;
   try {
-    response = await fetch(url);
+    response = await fetch(url, { headers: collectorHeaders() });
   } catch {
     throw new CollectorError(
       `collector unreachable at ${collectorUrl()} — start it with ` +
@@ -47,14 +174,35 @@ export async function collectorGet(
     );
   }
 
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new CollectorError(
+      `collector returned invalid JSON (${response.status} ${response.statusText}) for ${pathname}`,
+      false,
+      response.status,
+    );
+  }
+
   if (!response.ok) {
-    let detail = "";
-    try {
-      const body: any = await response.json();
-      detail = body?.error || body?.detail || body?.title || "";
-    } catch {
-      /* non-JSON body — status alone will have to do */
+    const mediaType = response.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
+    if (mediaType !== "application/problem+json") {
+      throw new CollectorError(
+        `collector contract mismatch for ${pathname}: expected application/problem+json, got ${mediaType ?? "no content type"}`,
+        false,
+        response.status,
+      );
     }
+    const problem = parseProblemDetails(body);
+    if (!problem) {
+      throw new CollectorError(
+        `collector contract mismatch for ${pathname}: invalid Problem Details body`,
+        false,
+        response.status,
+      );
+    }
+    const detail = problem.detail ?? problem.title;
     throw new CollectorError(
       `collector request failed (${response.status} ${response.statusText}) for ${pathname}` +
         (detail ? `: ${detail}` : ""),
@@ -63,92 +211,9 @@ export async function collectorGet(
     );
   }
 
-  return response.json();
+  return body;
 }
-
-/** Collector list endpoints return CursorPage<T>; tolerate bare arrays too. */
-export function unwrapItems<T>(body: any): T[] {
-  if (Array.isArray(body)) return body as T[];
-  return (body?.items ?? []) as T[];
-}
-
-// The generated OpenAPI types say span.kind / status.code are numbers, but the live
-// collector serializes them as string enums ("client", "ok" — JsonStringEnumConverter).
-// Normalize to the numeric contract at the fetch boundary, tolerating both encodings.
-const SPAN_KIND_BY_NAME: Record<string, number> = {
-  unspecified: 0, internal: 1, server: 2, client: 3, producer: 4, consumer: 5,
-};
-const STATUS_CODE_BY_NAME: Record<string, number> = { unset: 0, ok: 1, error: 2 };
-
-function toEnumNumber(value: unknown, byName: Record<string, number>): number {
-  if (typeof value === "number") return value;
-  if (typeof value === "string") return byName[value.toLowerCase()] ?? 0;
-  return 0;
-}
-
-export function normalizeSpan(span: any): any {
-  if (!span) return span;
-  // Project to exactly the contract's QylSpan fields: the live collector also sends
-  // trace_state / links / flags / dropped_*_count / instrumentation_scope, which the
-  // strict output schema (additionalProperties: false) rejects and the viewer ignores.
-  return {
-    span_id: span.span_id,
-    trace_id: span.trace_id,
-    ...(span.parent_span_id ? { parent_span_id: span.parent_span_id } : {}),
-    name: span.name,
-    kind: toEnumNumber(span.kind, SPAN_KIND_BY_NAME),
-    start_time_unix_nano: Number(span.start_time_unix_nano ?? 0),
-    end_time_unix_nano: Number(span.end_time_unix_nano ?? 0),
-    ...(Array.isArray(span.attributes) ? { attributes: span.attributes } : {}),
-    ...(Array.isArray(span.events)
-      ? {
-          events: span.events.map((e: any) => ({
-            name: e?.name ?? "",
-            time_unix_nano: Number(e?.time_unix_nano ?? 0),
-            ...(Array.isArray(e?.attributes) ? { attributes: e.attributes } : {}),
-          })),
-        }
-      : {}),
-    status: span.status
-      ? {
-          code: toEnumNumber(span.status.code, STATUS_CODE_BY_NAME),
-          ...(span.status.message ? { message: span.status.message } : {}),
-        }
-      : { code: 0 },
-    resource: span.resource ?? {},
-  };
-}
-
-export function normalizeTrace(trace: any): QylTrace {
-  return {
-    trace_id: trace?.trace_id ?? "",
-    spans: Array.isArray(trace?.spans) ? trace.spans.map(normalizeSpan) : [],
-    ...(trace?.root_span ? { root_span: normalizeSpan(trace.root_span) } : {}),
-    span_count: Number(trace?.span_count ?? 0),
-    duration_ns: Number(trace?.duration_ns ?? 0),
-    start_time: trace?.start_time ?? "",
-    end_time: trace?.end_time ?? "",
-    services: Array.isArray(trace?.services) ? trace.services : [],
-    has_error: Boolean(trace?.has_error),
-  } as QylTrace;
-}
-
-let modeProbe: Promise<Mode> | undefined;
 
 export function resolveMode(): Promise<Mode> {
-  if (process.env.QYL_DEMO === "1") return Promise.resolve("demo");
-  return (modeProbe ??= (async () => {
-    try {
-      await collectorGet("/api/v1/traces", { limit: 1 });
-      return "live";
-    } catch (err) {
-      if (err instanceof CollectorError && err.connectionError) {
-        console.error(
-          `qyl-mcp-server: ${err.message}. Serving demo telemetry for the rest of this process.`,
-        );
-        return "demo";
-      }
-      return "live";
-    }
-  })());
+  return Promise.resolve(process.env.QYL_DEMO === "1" ? "demo" : "live");
 }

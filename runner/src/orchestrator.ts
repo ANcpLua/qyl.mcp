@@ -1,5 +1,5 @@
-// ≈ Qyl.Run/Internal/QylOrchestrator.cs + QylResourceRegistry.cs — dependency-ordered startup,
-// MCP-handshake health, bounded restart-on-crash supervision, graceful teardown.
+// Dependency-ordered process startup, MCP-handshake health, bounded
+// restart-on-crash supervision, and graceful teardown.
 //
 // A stdio resource's "spawn" is the SDK's StdioClientTransport spawning the child itself: the
 // runner owns the child's stdio, so the ONE Client opened over that transport is both the health
@@ -18,10 +18,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { Constants } from "./constants.js";
+import { RunnerResourceStateSchema } from "./contracts.js";
 import { LogStore } from "./log-store.js";
 import type { McpResource, McpResourceState, ResourceLifecycle } from "./resources.js";
 
-const { Orchestrator: Timing, LogEvents, Ports, Network, Product, Env } = Constants;
+const { Orchestrator: Timing, LogEvents, Product } = Constants;
 
 // Broadcast fan-out of timestamped state transitions: every subscriber gets every event, and a
 // late subscriber replays the snapshot first (keyed by name, so duplicate replay is idempotent).
@@ -40,20 +41,21 @@ export class ResourceRegistry {
     }
 
     publish(state: McpResourceState): void {
-        this.latest.set(state.name, state);
-        if (state.lifecycle === "Ready") this.signal(state.name).resolve();
-        for (const push of this.subscribers) push(state);
+        const published = RunnerResourceStateSchema.parse(state);
+        this.latest.set(published.name, published);
+        if (published.lifecycle === "ready") this.signal(published.name).resolve();
+        for (const push of this.subscribers) push(published);
     }
 
     get(name: string): McpResourceState | undefined {
         return this.latest.get(name);
     }
 
-    // Completes the first time the named resource reaches Ready.
+    // Completes the first time the named resource reaches ready.
     whenReady(name: string): Promise<void> {
         const signal = this.signal(name);
         const state = this.latest.get(name);
-        if (state?.lifecycle === "Ready") signal.resolve();
+        if (state?.lifecycle === "ready") signal.resolve();
         return signal.promise;
     }
 
@@ -106,13 +108,15 @@ interface Managed {
     restarts: number; // crash budget consumed; user restarts reset it
     generation: number; // guards stale onclose/ping callbacks across restarts
     stopping: boolean;
+    actionInProgress: boolean;
     // Published facts, carried into every state transition:
-    endpoint: string; // the runner proxy url for this server
-    allocatedPort: number | null;
-    serverInfo: { name: string; version: string } | null;
-    toolCount: number | null;
-    hasAppUi: boolean;
+    endpoint?: string; // http kind only: the actual upstream MCP endpoint
+    allocatedPort?: number;
+    serverInfo?: { name: string; version: string };
+    toolCount?: number;
 }
+
+export type RunnerActionResult = "accepted" | "not_found" | "conflict";
 
 export class Orchestrator {
     readonly registry = new ResourceRegistry();
@@ -143,14 +147,14 @@ export class Orchestrator {
                 restarts: 0,
                 generation: 0,
                 stopping: false,
-                endpoint: proxyUrl(resource.name),
-                allocatedPort: resource.kind === "http" ? parsePort(resource.endpoint) : null,
-                serverInfo: null,
-                toolCount: null,
-                hasAppUi: false,
+                actionInProgress: false,
+                endpoint: resource.kind === "http" ? resource.endpoint : undefined,
+                allocatedPort: resource.kind === "http" ? parsePort(resource.endpoint) : undefined,
+                serverInfo: undefined,
+                toolCount: undefined,
             };
             this.managed.set(resource.name, managed);
-            this.publish(managed, "Pending");
+            this.publish(managed, "pending");
         }
 
         for (const managed of this.managed.values()) {
@@ -166,27 +170,52 @@ export class Orchestrator {
         return { state, client: managed.client, resource: managed.resource };
     }
 
-    // User-initiated restart: same launch spec, fresh crash budget — does not count toward
-    // MaxRestarts (mirrors QylRestartRequests, LogEvent 1114).
-    async restart(name: string): Promise<boolean> {
+    // User-initiated restart: same launch spec, fresh crash budget. Acceptance is
+    // synchronous and exclusive; completion continues through lifecycle events.
+    restart(name: string): RunnerActionResult {
         const managed = this.managed.get(name);
-        if (!managed) return false;
+        const state = this.registry.get(name);
+        if (!managed || !state) return "not_found";
+        if (
+            managed.actionInProgress ||
+            state.lifecycle === "pending" ||
+            state.lifecycle === "starting" ||
+            state.lifecycle === "stopping"
+        ) {
+            return "conflict";
+        }
 
+        managed.actionInProgress = true;
+        void this.restartResource(managed).finally(() => {
+            managed.actionInProgress = false;
+        });
+        return "accepted";
+    }
+
+    private async restartResource(managed: Managed): Promise<void> {
+        const name = managed.resource.name;
         console.error(`[${LogEvents.ResourceUserRestart}] resource '${name}' restarting on request`);
         managed.generation++;
         managed.stopping = false;
         managed.restarts = 0;
         this.clearPing(managed);
         await this.closeConnection(managed);
-        void this.launch(managed, "Restart requested");
-        return true;
+        void this.launch(managed);
     }
 
-    async stop(name: string): Promise<boolean> {
+    stop(name: string): RunnerActionResult {
         const managed = this.managed.get(name);
-        if (!managed) return false;
-        await this.stopResource(managed);
-        return true;
+        const state = this.registry.get(name);
+        if (!managed || !state) return "not_found";
+        if (managed.actionInProgress || state.lifecycle === "stopping" || state.lifecycle === "stopped") {
+            return "conflict";
+        }
+
+        managed.actionInProgress = true;
+        void this.stopResource(managed).finally(() => {
+            managed.actionInProgress = false;
+        });
+        return "accepted";
     }
 
     async stopAll(): Promise<void> {
@@ -195,17 +224,18 @@ export class Orchestrator {
 
     private async runResource(managed: Managed): Promise<void> {
         await Promise.all(managed.resource.waitForNames.map((name) => this.registry.whenReady(name)));
+        if (managed.stopping) return;
         await this.launch(managed);
     }
 
     // One start attempt: connect the SDK client (which spawns the child for stdio), then require a
     // successful tools/list before declaring Ready. The whole handshake fits in the startup budget.
-    private async launch(managed: Managed, startingNote?: string): Promise<void> {
+    private async launch(managed: Managed): Promise<void> {
         const generation = ++managed.generation;
         const name = managed.resource.name;
 
-        this.publish(managed, "Starting", startingNote ?? null);
-        console.error(`[${LogEvents.ResourceStarting}] resource '${name}' Starting`);
+        this.publish(managed, "starting");
+        console.error(`[${LogEvents.ResourceStarting}] resource '${name}' starting`);
 
         const deadline = Date.now() + Timing.StartupTimeoutSeconds * 1000;
         // Tracked outside the try so the catch can close a connection that was
@@ -241,17 +271,16 @@ export class Orchestrator {
             managed.transport = transport;
             managed.server = server ?? null;
             const serverVersion = client.getServerVersion();
-            managed.serverInfo = serverVersion ? { name: serverVersion.name, version: serverVersion.version } : null;
+            managed.serverInfo = serverVersion ? { name: serverVersion.name, version: serverVersion.version } : undefined;
             managed.toolCount = tools.length;
-            managed.hasAppUi = tools.some((tool) => Boolean((tool._meta as { ui?: { resourceUri?: string } })?.ui?.resourceUri));
 
             client.onclose = () => this.onConnectionLost(managed, generation, "connection closed");
             client.onerror = () => {
                 // Fatal transport errors also fire onclose; non-fatal ones are not a lifecycle event.
             };
 
-            this.publish(managed, "Ready");
-            console.error(`[${LogEvents.ResourceReady}] resource '${name}' Ready`);
+            this.publish(managed, "ready");
+            console.error(`[${LogEvents.ResourceReady}] resource '${name}' ready`);
             this.startPing(managed, generation);
         } catch (error) {
             if (connection) {
@@ -267,14 +296,16 @@ export class Orchestrator {
         managed: Managed,
         deadline: number,
     ): Promise<{ client: Client; transport: StdioClientTransport; server?: McpServer }> {
+        if (managed.resource.kind !== "stdio") {
+            throw new Error(`Resource '${managed.resource.name}' is not a stdio resource.`);
+        }
         const { launch } = managed.resource;
 
-        // The SDK filters the child env down to a safe allowlist by default — merge explicitly so
-        // launch.env and the injected MCP_ENDPOINT_* references actually reach the child.
+        // The SDK filters the child env down to a safe allowlist by default, so merge the
+        // explicitly configured launch environment before spawning.
         const env: Record<string, string> = {
             ...getDefaultEnvironment(),
             ...launch.env,
-            ...this.referenceEnv(managed.resource),
         };
 
         const transport = new StdioClientTransport({
@@ -304,7 +335,10 @@ export class Orchestrator {
         generation: number,
         deadline: number,
     ): Promise<{ client: Client; transport: StreamableHTTPClientTransport; server?: McpServer }> {
-        const url = new URL(managed.resource.endpoint!);
+        if (managed.resource.kind !== "http") {
+            throw new Error(`Resource '${managed.resource.name}' is not an HTTP resource.`);
+        }
+        const url = new URL(managed.resource.endpoint);
         for (;;) {
             const transport = new StreamableHTTPClientTransport(url);
             const client = new Client({ name: Product.name, version: Product.version });
@@ -328,10 +362,10 @@ export class Orchestrator {
         managed: Managed,
         deadline: number,
     ): Promise<{ client: Client; transport: InMemoryTransport; server: McpServer }> {
-        const factory = managed.resource.serverFactory;
-        if (!factory) {
-            throw new Error(`Resource '${managed.resource.name}' is inproc but has no serverFactory.`);
+        if (managed.resource.kind !== "inproc") {
+            throw new Error(`Resource '${managed.resource.name}' is not an in-process resource.`);
         }
+        const factory = managed.resource.serverFactory;
         const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
         const server = factory();
         await server.connect(serverTransport);
@@ -367,7 +401,7 @@ export class Orchestrator {
 
         const name = managed.resource.name;
         if (managed.restarts >= Timing.MaxRestarts) {
-            this.publish(managed, "Failed", `${reason}; restart limit (${Timing.MaxRestarts}) reached`);
+            this.publish(managed, "failed", `${reason}; restart limit (${Timing.MaxRestarts}) reached`);
             console.error(
                 `[${LogEvents.ResourceFailed}] resource '${name}' failed: ${reason}; restart limit (${Timing.MaxRestarts}) reached`,
             );
@@ -378,31 +412,35 @@ export class Orchestrator {
         console.error(
             `[${LogEvents.ResourceRestarting}] resource '${name}' ${reason}; restarting (attempt ${managed.restarts})`,
         );
-        void this.launch(managed, `${reason}; restarting (${managed.restarts}/${Timing.MaxRestarts})`);
+        void this.launch(managed);
     }
 
     private onLaunchFailed(managed: Managed, reason: string): void {
         managed.generation++;
         this.clearPing(managed);
         void this.closeConnection(managed);
-        this.publish(managed, "Failed", reason);
+        this.publish(managed, "failed", reason);
         console.error(`[${LogEvents.ResourceFailed}] resource '${managed.resource.name}' failed to start: ${reason}`);
     }
 
-    // Graceful stop: Stopping → close the MCP client (SIGTERMs a stdio child) → 2s grace, then
-    // SIGKILL if the child is still alive → Stopped.
+    // Graceful stop: stopping → close the MCP client (SIGTERMs a stdio child) → 2s grace, then
+    // SIGKILL if the child is still alive → stopped.
     private async stopResource(managed: Managed): Promise<void> {
         managed.generation++;
         managed.stopping = true;
         this.clearPing(managed);
 
-        this.publish(managed, "Stopping");
+        this.publish(managed, "stopping");
         const pid = managed.transport instanceof StdioClientTransport ? managed.transport.pid : null;
         await this.closeConnection(managed);
         if (pid !== null) await ensureExited(pid);
 
-        this.publish(managed, "Stopped");
-        console.error(`[${LogEvents.ResourceStopped}] resource '${managed.resource.name}' Stopped`);
+        // Once `stopped` is observable, a new restart may be accepted immediately.
+        // Clear the action gate before publishing the terminal state rather than
+        // leaving a one-microtask window where state and accepted actions disagree.
+        managed.actionInProgress = false;
+        this.publish(managed, "stopped");
+        console.error(`[${LogEvents.ResourceStopped}] resource '${managed.resource.name}' stopped`);
     }
 
     private async closeConnection(managed: Managed): Promise<void> {
@@ -411,6 +449,8 @@ export class Orchestrator {
         managed.client = null;
         managed.transport = null;
         managed.server = null;
+        managed.serverInfo = undefined;
+        managed.toolCount = undefined;
         if (client) await client.close().catch(() => {});
         if (server) await server.close().catch(() => {});
     }
@@ -422,49 +462,31 @@ export class Orchestrator {
         }
     }
 
-    // Env-based service discovery: each referenced resource's runner proxy url is published into
-    // this resource's environment (start ordering guarantees the reference is Ready by then).
-    private referenceEnv(resource: McpResource): Record<string, string> {
-        const env: Record<string, string> = {};
-        for (const referenceName of resource.references) {
-            env[`${Env.McpEndpointPrefix}${upperSnake(referenceName)}`] = proxyUrl(referenceName);
-        }
-        return env;
-    }
-
-    private publish(managed: Managed, lifecycle: ResourceLifecycle, lastError: string | null = null): void {
-        this.registry.publish({
+    private publish(managed: Managed, lifecycle: ResourceLifecycle, lastError?: string): void {
+        const state: McpResourceState = {
             name: managed.resource.name,
             kind: managed.resource.kind,
             lifecycle,
             timestamp: new Date().toISOString(),
-            allocatedPort: managed.allocatedPort,
-            endpoint: managed.endpoint,
-            lastError,
-            serverInfo: managed.serverInfo,
-            toolCount: managed.toolCount,
-            hasAppUi: managed.hasAppUi,
             restarts: managed.restarts,
-        });
+        };
+        if (managed.allocatedPort !== undefined) state.allocatedPort = managed.allocatedPort;
+        if (managed.endpoint !== undefined) state.endpoint = managed.endpoint;
+        if (lastError !== undefined) state.lastError = lastError;
+        if (managed.serverInfo !== undefined) state.serverInfo = managed.serverInfo;
+        if (managed.toolCount !== undefined) state.toolCount = managed.toolCount;
+        this.registry.publish(state);
     }
 }
 
-function proxyUrl(name: string): string {
-    return `${Network.HttpScheme}://${Network.Loopback}:${Ports.RunnerApi}${Constants.Routes.Runner}/mcp/${name}`;
-}
-
-function upperSnake(name: string): string {
-    return name.replace(/[^A-Za-z0-9]+/g, "_").toUpperCase();
-}
-
-function parsePort(endpoint: string | undefined): number | null {
-    if (!endpoint) return null;
+function parsePort(endpoint: string | undefined): number | undefined {
+    if (!endpoint) return undefined;
     try {
         const url = new URL(endpoint);
         if (url.port) return Number.parseInt(url.port, 10);
-        return url.protocol === "https:" ? 443 : url.protocol === "http:" ? 80 : null;
+        return url.protocol === "https:" ? 443 : url.protocol === "http:" ? 80 : undefined;
     } catch {
-        return null;
+        return undefined;
     }
 }
 

@@ -11,7 +11,7 @@ import {
   type McpUiSandboxProxyReadyNotification,
 } from "@modelcontextprotocol/ext-apps/app-bridge";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { RunnerRestClient, log, newAppBridge, readAppResource, type UiResourceData } from "./bridge";
+import { RunnerClientAdapter, log, newAppBridge, readAppResource, type UiResourceData } from "./bridge";
 
 // The runner serves the built dist-sandbox/sandbox.html from a separate origin
 // (Ports.Sandbox) so the sandbox proxy can never be same-origin with the host.
@@ -86,17 +86,17 @@ async function initializeApp(
   log.info("MCP App initialized");
 
   // Send tool call input to iframe
-  log.info("Sending tool call input to MCP App:", input);
+  log.info("Sending tool call input to MCP App");
   appBridge.sendToolInput({ arguments: input });
 
   // Schedule tool call result (or cancellation) to be sent to the MCP App
   resultPromise.then(
     (result) => {
-      log.info("Sending tool call result to MCP App:", result);
+      log.info("Sending tool call result to MCP App");
       appBridge.sendToolResult(result);
     },
     (error: unknown) => {
-      log.error("Tool call failed, sending cancellation to MCP App:", error);
+      log.error("Tool call failed; sending cancellation to MCP App");
       appBridge.sendToolCancelled({
         reason: error instanceof Error ? error.message : String(error),
       });
@@ -153,7 +153,7 @@ export function AppFrame({
           // `firstTime` guards against React Strict Mode's double invocation;
           // outside Strict Mode this effect runs once per tool call entry.
           if (!firstTime) return;
-          const appBridge = newAppBridge(new RunnerRestClient(resource), iframe);
+          const appBridge = newAppBridge(new RunnerClientAdapter(resource), iframe);
           appBridgeRef.current = appBridge;
           return initializeApp(iframe, appBridge, resourceData, input, resultPromise);
         }),

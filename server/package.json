@@ -2,7 +2,7 @@
   "name": "qyl-mcp-server",
   "version": "0.1.0",
   "type": "module",
-  "description": "qyl telemetry MCP Apps server: interactive trace explorer + MCP dashboard, live against the qyl collector with demo fallback",
+  "description": "qyl telemetry MCP Apps server: trace explorer and MCP dashboard for a live collector or explicit demo mode",
   "repository": {
     "type": "git",
     "url": "https://github.com/ANcpLua/qyl.mcp",
@@ -24,23 +24,27 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc --noEmit && vite build --mode mcp-app && vite build --mode mcp-dashboard && tsc -p tsconfig.server.json",
-    "smoke": "node smoke-test.mjs"
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true }); require('node:fs').rmSync('dist-test', { recursive: true, force: true })\"",
+    "build": "npm run clean && tsc --noEmit && vite build --mode mcp-app && vite build --mode mcp-dashboard && tsc -p tsconfig.server.json && node -e \"require('node:fs').chmodSync('dist/main.js', 0o755)\"",
+    "test": "npm run build && tsc -p tsconfig.test.json && node --test dist-test/*.test.js",
+    "smoke": "node smoke-test.mjs",
+    "prepack": "npm run build"
   },
   "dependencies": {
+    "@ancplua/qyl-api-schema": "0.5.4",
     "@modelcontextprotocol/ext-apps": "^1.7.4",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "cors": "^2.8.5",
     "express": "^5.2.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
-    "@types/node": "^24.0.0",
+    "@types/node": "^22.0.0",
     "typescript": "^5.9.3",
     "vite": "^8.1.4",
     "vite-plugin-singlefile": "^2.3.3"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22.12.0"
+  }
 }

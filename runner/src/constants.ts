@@ -1,32 +1,24 @@
-// ≈ Qyl.Run/QylConstants.cs — same nesting, same values where qyl defines them.
+// Shared runner defaults and environment keys.
+
+import { readFileSync } from "node:fs";
+
+const packageMetadata = JSON.parse(
+    readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+) as { version?: unknown };
+if (typeof packageMetadata.version !== "string" || packageMetadata.version.length === 0) {
+    throw new Error("runner package metadata has no version");
+}
+const productVersion = packageMetadata.version;
 
 export const Constants = {
     Product: {
         name: "qyl.mcp",
-        banner: "qyl",
-        version: "0.1.0",
-        userAgent: "qyl.mcp/0.1.0",
-        tagline: "qyl mcp app host",
+        version: productVersion,
     },
 
     Ports: {
         RunnerApi: 18888,
         Sandbox: 18889,
-        DynamicAllocation: 0,
-    },
-
-    ResourceKinds: {
-        Stdio: "stdio",
-        Http: "http",
-        // In-process MCP server over an in-memory transport — no child process,
-        // no socket; the qyl telemetry tools are hosted inside the runner itself.
-        InProc: "inproc",
-    },
-
-    Environments: {
-        Dev: "dev",
-        Staging: "staging",
-        Prod: "prod",
     },
 
     Network: {
@@ -34,14 +26,7 @@ export const Constants = {
         HttpScheme: "http",
     },
 
-    Env: {
-        // Env-based service discovery: MCP_ENDPOINT_<NAME_UPPER_SNAKE>=<runner proxy url>
-        // is injected into a resource's child environment for each of its references.
-        McpEndpointPrefix: "MCP_ENDPOINT_",
-    },
-
     Routes: {
-        Health: "/health",
         Runner: "/runner",
     },
 
@@ -58,14 +43,9 @@ export const Constants = {
         ResourceReady: 1102,
         ResourceFailed: 1103,
         ResourceStopped: 1104,
-        ChildStdout: 1105,
-        ChildStderr: 1106,
         RunnerApiListening: 1107,
         RunnerApiBindFailed: 1108,
         RunnerApiRequestFailed: 1109,
-        ContainerStarted: 1110,
-        ContainerStopped: 1111,
-        ContainerLogFollowerFailed: 1112,
         ResourceRestarting: 1113,
         ResourceUserRestart: 1114,
     },
