@@ -92,6 +92,24 @@ test("64-bit JSON integers keep the published integer rule without a safe-intege
   assert(!SpanSchema.safeParse({ ...span, start_time_unix_nano: 1.5 }).success);
 });
 
+test("TypeSpec record dictionaries retain their value contract at runtime", () => {
+  const span = structuredClone(getDemo().traces[0].spans[0]);
+  span.attributes = [
+    {
+      key: "nested",
+      value: {
+        message: "Grüße",
+        retryable: true,
+        attempts: 2,
+      },
+    },
+  ];
+
+  assert(SpanSchema.safeParse(span).success);
+  span.attributes[0].value = { unsupported: null } as never;
+  assert(!SpanSchema.safeParse(span).success);
+});
+
 test("collector boundary normalizes RFC 3339 offsets and rejects alternate wire encodings", () => {
   const demo = getDemo();
   const sourceTrace = structuredClone(demo.traces[0]);

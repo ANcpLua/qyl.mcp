@@ -7,10 +7,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && vite build --mode sandbox",
+    "test": "node -e \"require('node:fs').rmSync('dist-test', { recursive: true, force: true })\" && tsc -p tsconfig.test.json && node --test dist-test/*.test.js",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ancplua/qyl-api-schema": "0.5.4",
+    "@ancplua/qyl-api-schema": "0.5.10",
     "@modelcontextprotocol/ext-apps": "^1.7.4",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "react": "^19.2.0",

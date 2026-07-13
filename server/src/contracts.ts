@@ -25,20 +25,46 @@ import type {
 } from "@ancplua/qyl-api-schema/types";
 import { z } from "zod";
 
-/**
- * JSON Schema integers are not limited to JavaScript's safe-integer range,
- * while Zod's `int64` conversion is. Qyl's current JSON DTO intentionally uses
- * numbers for Unix nanoseconds, so preserve the published integer constraint
- * with `multipleOf: 1` without adding Zod's non-contract safe-range ceiling.
- */
-function adaptInt64ForJavaScript(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(adaptInt64ForJavaScript);
+/** Adapt published JSON Schema features that Zod cannot represent directly. */
+function adaptSchemaForZod(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(adaptSchemaForZod);
   if (typeof value !== "object" || value === null) return value;
 
   const source = value as Record<string, unknown>;
   const adapted = Object.fromEntries(
-    Object.entries(source).map(([key, entry]) => [key, adaptInt64ForJavaScript(entry)]),
+    Object.entries(source).map(([key, entry]) => [key, adaptSchemaForZod(entry)]),
   );
+
+  // TypeSpec emits record-only dictionaries with the JSON Schema 2020-12
+  // `unevaluatedProperties` keyword. Zod's converter supports the equivalent
+  // `additionalProperties` form but otherwise throws while loading the schema.
+  // Refuse to rewrite composed objects, where the two keywords differ.
+  if ("unevaluatedProperties" in source) {
+    const composedObjectKeywords = [
+      "properties",
+      "patternProperties",
+      "allOf",
+      "anyOf",
+      "oneOf",
+      "not",
+      "if",
+      "then",
+      "else",
+    ];
+    if (
+      "additionalProperties" in source ||
+      composedObjectKeywords.some((keyword) => keyword in source)
+    ) {
+      throw new Error("Cannot safely adapt composed unevaluatedProperties schema for Zod");
+    }
+    adapted.additionalProperties = adapted.unevaluatedProperties;
+    delete adapted.unevaluatedProperties;
+  }
+
+  // JSON Schema integers are not limited to JavaScript's safe-integer range,
+  // while Zod's `int64` conversion is. Qyl's current JSON DTO intentionally
+  // uses numbers for Unix nanoseconds, so retain the published integer rule
+  // without adding Zod's non-contract safe-range ceiling.
   if (
     source.type === "integer" &&
     (source.format === "int64" || source.format === "uint64")
@@ -50,7 +76,7 @@ function adaptInt64ForJavaScript(value: unknown): unknown {
   return adapted;
 }
 
-const runtimeJsonSchema = adaptInt64ForJavaScript(contractJsonSchema) as typeof contractJsonSchema;
+const runtimeJsonSchema = adaptSchemaForZod(contractJsonSchema) as typeof contractJsonSchema;
 
 /** Build a Zod validator from the published TypeSpec-owned JSON Schema. */
 function contractSchema<T>(definition: string): z.ZodType<T> {

@@ -28,6 +28,7 @@ import {
   RunnerMcpToolCallRequestSchema,
   RunnerMcpToolCallResponseSchema,
 } from "./contracts";
+import { decodeMcpAppHtml } from "./resource-content";
 import type { z } from "zod";
 
 const HOST_INFO = { name: "qyl.mcp", version: packageMetadata.version };
@@ -189,10 +190,7 @@ export async function readAppResource(resource: string, uri: string): Promise<Ui
     throw new Error(`Unsupported MIME type: ${content.mimeType}`);
   }
 
-  let html: string;
-  if (typeof content.blob === "string") html = atob(content.blob);
-  else if (typeof content.text === "string") html = content.text;
-  else throw new Error("MCP App resource contains neither text nor blob data");
+  const html = decodeMcpAppHtml(content);
 
   // Content-level _meta.ui only — the runner has no resources/list passthrough,
   // so basic-host's listing-level fallback does not apply here.
