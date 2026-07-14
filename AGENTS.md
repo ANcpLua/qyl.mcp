@@ -41,8 +41,8 @@ metadata rather than duplicated string constants.
 
 ## Repository shape
 
-Keep the root README current and concise. Git preserves completed architecture
-work and comparisons; do not retain them as active specifications. Retain plugin
+Keep the root README current and concise. Do not retain architecture diaries or
+comparison ledgers as active specifications. Retain plugin
 prompts or skills only when they have an installable manifest, a real
 distribution path, and executable tests, and keep their API claims generated or
 linked rather than copied.
