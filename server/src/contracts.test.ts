@@ -16,7 +16,7 @@ import {
   SearchLogsInputSchema,
   SearchLogsOutputSchema,
   SpanSchema,
-} from "./contracts.js";
+} from "./contract-validation.js";
 import {
   parseCollectorLog,
   parseCollectorPage,

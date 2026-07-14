@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LogLine } from "./types";
-import { RunnerLogLineSchema } from "./contracts";
+import { RunnerLogLineSchema } from "qyl-mcp-server/contract-validation";
 
 const MAX_LINES = 500;
 

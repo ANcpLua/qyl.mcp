@@ -3,7 +3,7 @@
 // recent lines and subscribe for subsequent ones (the /runner API, and through it the dashboard).
 
 import type { LogLine } from "./resources.js";
-import { RunnerLogLineSchema } from "./contracts.js";
+import { RunnerLogLineSchema } from "qyl-mcp-server/contract-validation";
 
 const MaxLinesPerResource = 1000;
 

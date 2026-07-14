@@ -18,7 +18,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { Constants } from "./constants.js";
-import { RunnerResourceStateSchema } from "./contracts.js";
+import { RunnerResourceStateSchema } from "qyl-mcp-server/contract-validation";
 import { LogStore } from "./log-store.js";
 import type { McpResource, McpResourceState, ResourceLifecycle } from "./resources.js";
 

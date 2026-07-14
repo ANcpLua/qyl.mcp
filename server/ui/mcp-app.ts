@@ -31,7 +31,7 @@ import packageMetadata from "../package.json";
 import {
   DisplayTracesOutputSchema,
   FetchTelemetryOutputSchema,
-} from "../src/contracts.ts";
+} from "../src/contract-validation.ts";
 import { logBodyText } from "../src/log-body.ts";
 import { computeWaterfall, type WaterfallRow } from "./waterfall.ts";
 import "./global.css";

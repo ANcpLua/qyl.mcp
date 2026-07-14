@@ -21,7 +21,7 @@ import {
   ListTracesOutputSchema,
   SearchLogsInputSchema,
   SearchLogsOutputSchema,
-} from "./contracts.js";
+} from "./contract-validation.js";
 import { fetchLogs, fetchSessions, fetchTrace, fetchTraces } from "./data.js";
 import {
   summarizeLogs,

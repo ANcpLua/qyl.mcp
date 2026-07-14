@@ -42,7 +42,7 @@ import {
   DisplayTracesOutputSchema,
   FetchTelemetryInputSchema,
   FetchTelemetryOutputSchema,
-} from "./contracts.js";
+} from "./contract-validation.js";
 import {
   fetchLogs,
   fetchMcpStats,

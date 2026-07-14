@@ -15,7 +15,7 @@
     "start": "node runner/dist/main.js",
     "smoke": "npm run smoke --workspace server && npm run smoke --workspace runner",
     "smoke:otlp": "npm run smoke:otlp --workspace runner",
-    "dev": "npm run dev --workspace dashboard"
+    "dev": "npm run build --workspace server && npm run dev --workspace dashboard"
   },
   "engines": {
     "node": ">=22.12.0"

@@ -27,7 +27,7 @@ import {
     RunnerMcpToolCallRequestSchema,
     RunnerMcpToolCallResponseSchema,
     RunnerMcpToolsResponseSchema,
-} from "./contracts.js";
+} from "qyl-mcp-server/contract-validation";
 import {
     loopbackRequestGuard,
     RunnerAllowedOrigins,
@@ -100,9 +100,9 @@ export class RunnerApi {
         app.use(loopbackRequestGuard(RunnerAllowedOrigins));
         app.use(express.json());
 
-        app.get(`${Routes.Runner}/resources`, (_req, res) => {
-            res.setHeader("Cache-Control", "no-store");
-            res.json(this.orchestrator.registry.snapshot());
+        app.get(`${Routes.Runner}/resources`, (_request, response) => {
+            response.setHeader("Cache-Control", "no-store");
+            response.json(this.orchestrator.registry.snapshot());
         });
 
         app.get(`${Routes.Runner}/resources/stream`, (req, res) => {
@@ -350,8 +350,8 @@ export class RunnerApi {
             res.sendFile(sandboxHtml);
         });
 
-        app.use((_req, res) => {
-            res.status(404).send("Only sandbox.html is served on this port");
+        app.use((_request, response) => {
+            response.status(404).send("Only sandbox.html is served on this port");
         });
         app.use(errorHandler);
 
@@ -440,7 +440,8 @@ function closeServer(server: Server | null): Promise<void> {
     });
 }
 
-const errorHandler: ErrorRequestHandler = (error, _request, response, _next) => {
+// Express distinguishes error middleware by this required four-parameter signature.
+const errorHandler: ErrorRequestHandler = (error, _request, response, _nextMiddleware) => {
     if (
         typeof error === "object" &&
         error !== null &&

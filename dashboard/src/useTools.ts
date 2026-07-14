@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ToolSchema, type Tool } from "@modelcontextprotocol/sdk/types.js";
-import { RunnerMcpToolsResponseSchema } from "./contracts";
+import { RunnerMcpToolsResponseSchema } from "qyl-mcp-server/contract-validation";
 import { responseErrorDetail } from "./bridge";
 
 export interface ToolsState {
@@ -27,11 +27,11 @@ export function useTools(resource: string | null, ready: boolean): ToolsState {
     setState({ tools: [], loading: true, error: null });
 
     fetch(`/runner/mcp/${encodeURIComponent(resource)}/tools`, { signal: controller.signal })
-      .then(async (res) => {
-        if (!res.ok) {
-          throw new Error(await responseErrorDetail(res));
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await responseErrorDetail(response));
         }
-        return RunnerMcpToolsResponseSchema.parse(await res.json());
+        return RunnerMcpToolsResponseSchema.parse(await response.json());
       })
       .then(({ tools }) => {
         const protocolTools = tools.map((tool) => ToolSchema.parse(tool));

@@ -4,6 +4,7 @@
 // origin for every managed server.
 import {
   AppBridge,
+  McpUiResourceMetaSchema,
   RESOURCE_MIME_TYPE,
   type McpUiResourceCsp,
   type McpUiResourcePermissions,
@@ -22,12 +23,11 @@ import {
 import packageMetadata from "../package.json";
 import {
   ProblemDetailsSchema,
-  McpUiResourceMetaSchema,
   RunnerMcpResourceReadRequestSchema,
   RunnerMcpResourceReadResponseSchema,
   RunnerMcpToolCallRequestSchema,
   RunnerMcpToolCallResponseSchema,
-} from "./contracts";
+} from "qyl-mcp-server/contract-validation";
 import { decodeMcpAppHtml } from "./resource-content";
 import type { z } from "zod";
 
@@ -41,12 +41,12 @@ export const log = {
 
 // --- Runner REST helpers -----------------------------------------------------
 
-export async function responseErrorDetail(res: Response): Promise<string> {
-  const fallback = `${res.status} ${res.statusText}`;
-  const mediaType = res.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
+export async function responseErrorDetail(response: Response): Promise<string> {
+  const fallback = `${response.status} ${response.statusText}`;
+  const mediaType = response.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
   if (mediaType !== "application/problem+json") return fallback;
   try {
-    const parsed = ProblemDetailsSchema.safeParse(await res.json());
+    const parsed = ProblemDetailsSchema.safeParse(await response.json());
     return parsed.success ? (parsed.data.detail ?? parsed.data.title) : fallback;
   } catch {
     return fallback;
@@ -141,26 +141,26 @@ export class RunnerClientAdapter {
   }
 
   async request(
-    req: { method: string; params?: Record<string, unknown> },
+    request: { method: string; params?: Record<string, unknown> },
     resultSchema: SchemaLike,
     options?: { signal?: AbortSignal },
   ): Promise<unknown> {
-    switch (req.method) {
+    switch (request.method) {
       case "tools/call":
         return resultSchema.parse(
           await callResourceTool(
             this.resource,
-            String(req.params?.name ?? ""),
-            (req.params?.arguments ?? {}) as Record<string, unknown>,
+            String(request.params?.name ?? ""),
+            (request.params?.arguments ?? {}) as Record<string, unknown>,
             options?.signal,
           ),
         );
       default:
-        throw new Error(`RunnerClientAdapter does not proxy '${req.method}'`);
+        throw new Error(`RunnerClientAdapter does not proxy '${request.method}'`);
     }
   }
 
-  setNotificationHandler(_schema: unknown, _handler: unknown): void {
+  setNotificationHandler(): never {
     throw new Error(
       "RunnerClientAdapter does not expose notifications; its capabilities report no listChanged support.",
     );
@@ -381,7 +381,7 @@ export function newAppBridge(client: RunnerClientAdapter, iframe: HTMLIFrameElem
 
   // Register all handlers before connect() so early requests are not missed.
 
-  appBridge.onmessage = async (_params) => {
+  appBridge.onmessage = async () => {
     log.info("Message received from MCP App");
     return {};
   };

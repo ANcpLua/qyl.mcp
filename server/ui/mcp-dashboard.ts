@@ -29,7 +29,7 @@ import packageMetadata from "../package.json";
 import {
   DisplayMcpDashboardOutputSchema,
   FetchTelemetryOutputSchema,
-} from "../src/contracts.ts";
+} from "../src/contract-validation.ts";
 import "./global.css";
 import "./mcp-dashboard.css";
 

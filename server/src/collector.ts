@@ -19,7 +19,7 @@ import {
   ProblemDetailsSchema,
   SessionSchema,
   TraceSchema,
-} from "./contracts.js";
+} from "./contract-validation.js";
 import type { Mode } from "./wire.js";
 
 /** Error with a message already suitable for showing to the model/user. */

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ResourceState } from "./types";
-import { RunnerResourceStateSchema } from "./contracts";
+import { RunnerResourceStateSchema } from "qyl-mcp-server/contract-validation";
 
 const STREAM_URL = "/runner/resources/stream";
 

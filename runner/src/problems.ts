@@ -15,7 +15,7 @@ import {
     InternalServerErrorSchema,
     NotFoundErrorSchema,
     ValidationErrorSchema,
-} from "./contracts.js";
+} from "qyl-mcp-server/contract-validation";
 
 function sendProblem(response: Response, body: ProblemDetails): void {
     response.status(body.status).type("application/problem+json").json(body);

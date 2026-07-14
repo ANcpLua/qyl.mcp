@@ -29,4 +29,4 @@ export {
   SpanSchema,
   TraceSchema,
   TraceSummarySchema,
-} from "./contracts.js";
+} from "./contract-validation.js";
