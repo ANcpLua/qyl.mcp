@@ -77,9 +77,6 @@ export function createServer(): McpServer {
     version: packageMetadata.version,
   });
 
-  // ---------------------------------------------------------------------------
-  // display_traces — THE app tool (renders the trace explorer UI)
-  // ---------------------------------------------------------------------------
   registerAppTool(
     server,
     "display_traces",
@@ -137,9 +134,6 @@ export function createServer(): McpServer {
     },
   );
 
-  // ---------------------------------------------------------------------------
-  // display_mcp_dashboard — aggregate MCP traffic dashboard
-  // ---------------------------------------------------------------------------
   registerAppTool(
     server,
     "display_mcp_dashboard",
@@ -170,16 +164,8 @@ export function createServer(): McpServer {
     },
   );
 
-  // ---------------------------------------------------------------------------
-  // Direct read-only telemetry tools (src/tools.ts)
-  // ---------------------------------------------------------------------------
   registerTelemetryTools(server);
 
-  // ---------------------------------------------------------------------------
-  // fetch_telemetry — app-only (hidden from the model, no model tool slot)
-  // Used by the viewer iframes for refresh, drill-down, logs tab, and the
-  // dashboard's window selector.
-  // ---------------------------------------------------------------------------
   registerAppTool(
     server,
     "fetch_telemetry",
@@ -270,9 +256,6 @@ export function createServer(): McpServer {
     },
   );
 
-  // ---------------------------------------------------------------------------
-  // UI resource: the bundled trace explorer HTML
-  // ---------------------------------------------------------------------------
   registerAppResource(
     server,
     RESOURCE_URI,
@@ -292,8 +275,6 @@ export function createServer(): McpServer {
             _meta: {
               ui: {
                 csp: {
-                  // Fully self-contained viewer: system font stack, no CDN,
-                  // all data via fetch_telemetry — no external origins.
                   connectDomains: [],
                   resourceDomains: [],
                 },
@@ -305,9 +286,6 @@ export function createServer(): McpServer {
     },
   );
 
-  // ---------------------------------------------------------------------------
-  // UI resource: the bundled MCP dashboard HTML
-  // ---------------------------------------------------------------------------
   registerAppResource(
     server,
     DASHBOARD_RESOURCE_URI,
@@ -336,8 +314,6 @@ export function createServer(): McpServer {
             _meta: {
               ui: {
                 csp: {
-                  // Same as the explorer: fully self-contained, hand-rolled
-                  // inline SVG charts, all data via fetch_telemetry.
                   connectDomains: [],
                   resourceDomains: [],
                 },

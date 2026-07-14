@@ -1,6 +1,3 @@
-// Dependency-ordered process startup, MCP-handshake health, bounded
-// restart-on-crash supervision, and graceful teardown.
-//
 // A stdio resource's "spawn" is the SDK's StdioClientTransport spawning the child itself: the
 // runner owns the child's stdio, so the ONE Client opened over that transport is both the health
 // probe and the proxy backend. stdout is the JSON-RPC channel and never goes to the log store;
@@ -51,7 +48,6 @@ export class ResourceRegistry {
         return this.latest.get(name);
     }
 
-    // Completes the first time the named resource reaches ready.
     whenReady(name: string): Promise<void> {
         const signal = this.signal(name);
         const state = this.latest.get(name);
@@ -102,14 +98,12 @@ interface Managed {
     resource: McpResource;
     client: Client | null;
     transport: StdioClientTransport | StreamableHTTPClientTransport | InMemoryTransport | null;
-    // inproc kind only: the hosted server instance, closed on stop/restart.
     server: McpServer | null;
     pingTimer: NodeJS.Timeout | null;
     restarts: number; // crash budget consumed; user restarts reset it
     generation: number; // guards stale onclose/ping callbacks across restarts
     stopping: boolean;
     actionInProgress: boolean;
-    // Published facts, carried into every state transition:
     endpoint?: string; // http kind only: the actual upstream MCP endpoint
     allocatedPort?: number;
     serverInfo?: { name: string; version: string };
@@ -162,7 +156,6 @@ export class Orchestrator {
         }
     }
 
-    // For the API's MCP passthrough: null means unknown resource.
     lookup(name: string): { state: McpResourceState; client: Client | null; resource: McpResource } | null {
         const managed = this.managed.get(name);
         const state = this.registry.get(name);
@@ -170,8 +163,6 @@ export class Orchestrator {
         return { state, client: managed.client, resource: managed.resource };
     }
 
-    // User-initiated restart: same launch spec, fresh crash budget. Acceptance is
-    // synchronous and exclusive; completion continues through lifecycle events.
     restart(name: string): RunnerActionResult {
         const managed = this.managed.get(name);
         const state = this.registry.get(name);
@@ -228,8 +219,6 @@ export class Orchestrator {
         await this.launch(managed);
     }
 
-    // One start attempt: connect the SDK client (which spawns the child for stdio), then require a
-    // successful tools/list before declaring Ready. The whole handshake fits in the startup budget.
     private async launch(managed: Managed): Promise<void> {
         const generation = ++managed.generation;
         const name = managed.resource.name;
@@ -254,7 +243,6 @@ export class Orchestrator {
             connection = { client, server };
 
             if (generation !== managed.generation) {
-                // Superseded by a stop/restart while connecting — discard quietly.
                 await client.close().catch(() => {});
                 await server?.close().catch(() => {});
                 return;
@@ -276,7 +264,6 @@ export class Orchestrator {
 
             client.onclose = () => this.onConnectionLost(managed, generation, "connection closed");
             client.onerror = () => {
-                // Fatal transport errors also fire onclose; non-fatal ones are not a lifecycle event.
             };
 
             this.publish(managed, "ready");
@@ -329,7 +316,6 @@ export class Orchestrator {
         return { client, transport };
     }
 
-    // No process to own — retry the connect within the startup budget until the upstream answers.
     private async connectHttp(
         managed: Managed,
         generation: number,
@@ -392,7 +378,6 @@ export class Orchestrator {
         }, Timing.HealthPollIntervalMs * 10);
     }
 
-    // A lost connection while the runner is up is a crash: relaunch, bounded by MaxRestarts.
     private onConnectionLost(managed: Managed, generation: number, reason: string): void {
         if (managed.stopping || generation !== managed.generation) return;
         managed.generation++;
@@ -507,7 +492,6 @@ async function ensureExited(pid: number): Promise<void> {
     try {
         process.kill(pid, "SIGKILL");
     } catch {
-        // already gone
     }
 }
 

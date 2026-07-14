@@ -1,6 +1,4 @@
-// Sandboxed MCP App frame — the double-iframe pattern from ext-apps basic-host
-// (loadSandboxProxy + initializeApp + AppIFramePanel), backed by the runner's
-// REST passthrough instead of a direct SDK Client.
+// Double-iframe MCP App sandbox backed by the runner's REST passthrough.
 import { useEffect, useRef } from "react";
 import {
   AppBridge,
@@ -13,8 +11,6 @@ import {
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { RunnerClientAdapter, log, newAppBridge, readAppResource, type UiResourceData } from "./bridge";
 
-// The runner serves the built dist-sandbox/sandbox.html from a separate origin
-// (Ports.Sandbox) so the sandbox proxy can never be same-origin with the host.
 const SANDBOX_PROXY_BASE_URL = "http://127.0.0.1:18889/sandbox.html";
 
 function loadSandboxProxy(
@@ -22,12 +18,10 @@ function loadSandboxProxy(
   csp?: McpUiResourceCsp,
   permissions?: McpUiResourcePermissions,
 ): Promise<boolean> {
-  // Prevent reload (also guards React Strict Mode's double effect invocation)
   if (iframe.src) return Promise.resolve(false);
 
   iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
 
-  // Set Permission Policy allow attribute based on requested permissions
   const allowAttribute = buildAllowAttribute(permissions);
   if (allowAttribute) {
     iframe.setAttribute("allow", allowAttribute);
@@ -47,7 +41,6 @@ function loadSandboxProxy(
     window.addEventListener("message", listener);
   });
 
-  // Build sandbox URL with CSP query param for HTTP header-based CSP
   const sandboxUrl = new URL(SANDBOX_PROXY_BASE_URL);
   if (csp) {
     sandboxUrl.searchParams.set("csp", JSON.stringify(csp));
@@ -68,28 +61,21 @@ async function initializeApp(
 ): Promise<void> {
   const appInitializedPromise = hookInitializedCallback(appBridge);
 
-  // Connect app bridge (triggers MCP initialization handshake)
-  //
-  // IMPORTANT: Pass `iframe.contentWindow` as BOTH target and source to ensure
-  // this proxy only responds to messages from its specific iframe.
+  // Confining both bridge directions to this contentWindow prevents cross-frame messages.
   await appBridge.connect(
     new PostMessageTransport(iframe.contentWindow!, iframe.contentWindow!),
   );
 
-  // Load inner iframe HTML with CSP and permissions metadata
   log.info("Sending UI resource HTML to MCP App", csp ? `(CSP: ${JSON.stringify(csp)})` : "");
   await appBridge.sendSandboxResourceReady({ html, csp, permissions });
 
-  // Wait for inner iframe to be ready
   log.info("Waiting for MCP App to initialize...");
   await appInitializedPromise;
   log.info("MCP App initialized");
 
-  // Send tool call input to iframe
   log.info("Sending tool call input to MCP App");
   appBridge.sendToolInput({ arguments: input });
 
-  // Schedule tool call result (or cancellation) to be sent to the MCP App
   resultPromise.then(
     (result) => {
       log.info("Sending tool call result to MCP App");
@@ -144,14 +130,9 @@ export function AppFrame({
   useEffect(() => {
     const iframe = iframeRef.current!;
 
-    // First get CSP and permissions from the resource, then load the sandbox.
-    // CSP is enforced via HTTP headers on :18889, permissions via the iframe
-    // allow attribute.
     readAppResource(resource, resourceUri)
       .then((resourceData) =>
         loadSandboxProxy(iframe, resourceData.csp, resourceData.permissions).then((firstTime) => {
-          // `firstTime` guards against React Strict Mode's double invocation;
-          // outside Strict Mode this effect runs once per tool call entry.
           if (!firstTime) return;
           const appBridge = newAppBridge(new RunnerClientAdapter(resource), iframe);
           appBridgeRef.current = appBridge;
@@ -171,7 +152,6 @@ export function AppFrame({
 
     const appBridge = appBridgeRef.current;
     if (!appBridge) {
-      // Bridge not ready yet (e.g., user closed before the iframe loaded)
       onTeardownComplete?.();
       return;
     }

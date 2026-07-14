@@ -1,15 +1,4 @@
-/**
- * @file qyl MCP Dashboard — MCP App.
- *
- * Aggregate dashboard over the MCP spans that the qyl.mcp runner's passthrough emits
- * into the collector. Renders the pre-aggregated `McpDashboardStats` from
- * the `display_mcp_dashboard` tool result; the window selector and refresh
- * button re-fetch via the app-only `fetch_telemetry view:"mcp_stats"` tool.
- *
- * Charts are hand-rolled inline SVG (no libraries). Rendering is XSS-safe by
- * construction: all telemetry strings reach the DOM exclusively through
- * `textContent`; SVG attributes are built from numbers and constants only.
- */
+// Telemetry reaches the DOM only through textContent; SVG attributes are numeric or constant.
 import {
   App,
   applyDocumentTheme,
@@ -33,9 +22,6 @@ import {
 import "./global.css";
 import "./mcp-dashboard.css";
 
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
 
 type SortKey = "name" | "requests" | "error_rate" | "avg_ms" | "p95_ms";
 
@@ -50,14 +36,11 @@ const state = {
   mode: undefined as Mode | undefined,
   stats: undefined as McpDashboardStats | undefined,
   hours: 24,
-  /** Monotonic token so a stale fetch can't clobber a newer one. */
+  // Prevent an older fetch from replacing newer data.
   requestSeq: 0,
   toolsSort: { key: "requests", dir: -1 } as SortState,
 };
 
-// ---------------------------------------------------------------------------
-// DOM references
-// ---------------------------------------------------------------------------
 
 const mainEl = document.querySelector(".main") as HTMLElement;
 const demoBadgeEl = document.getElementById("demo-badge")!;
@@ -85,18 +68,12 @@ const windowButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>(".win-btn"),
 );
 
-// ---------------------------------------------------------------------------
-// Formatting helpers
-// ---------------------------------------------------------------------------
-
-/** 640 → "640", 1236 → "1.24", 87.4 → "87.4", 234000 → "234". */
 function sigFig(v: number): string {
   if (v >= 100) return String(Math.round(v));
   const s = v >= 10 ? v.toFixed(1) : v.toFixed(2);
   return s.replace(/\.?0+$/, "");
 }
 
-/** 412 → "412", 1834 → "1.8K", 2400000 → "2.4M". */
 function formatCompact(n: number): string {
   if (!Number.isFinite(n)) return "—";
   if (n < 1000) return String(n);
@@ -114,7 +91,6 @@ function formatCompact(n: number): string {
   return String(n);
 }
 
-/** Milliseconds → "0.42 ms" / "87 ms" / "1.24 s". */
 function formatMs(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return "—";
   if (ms >= 1000) return `${sigFig(ms / 1000)} s`;
@@ -122,7 +98,6 @@ function formatMs(ms: number): string {
   return `${ms.toFixed(2)} ms`;
 }
 
-/** Fraction 0..1 → "0%" / "<0.1%" / "2.4%" / "12%". */
 function formatRate(rate: number): string {
   if (!Number.isFinite(rate) || rate < 0) return "—";
   const pct = rate * 100;
@@ -136,7 +111,6 @@ function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-/** Bucket-start ISO timestamp → axis/tooltip label scaled to the window. */
 function formatBucketTime(iso: string, windowHours: number): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
@@ -145,11 +119,6 @@ function formatBucketTime(iso: string, windowHours: number): string {
   return `${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })} ${hm}`;
 }
 
-// ---------------------------------------------------------------------------
-// Payload parsing
-// ---------------------------------------------------------------------------
-
-/** Extract joined text content from a tool result (for error reporting). */
 function toolErrorText(result: CallToolResult): string | undefined {
   const text = result.content
     ?.map((c) => ("text" in c ? c.text : ""))
@@ -168,9 +137,6 @@ function parseStatsPayload(result: CallToolResult): McpDashboardStats | null {
     : null;
 }
 
-// ---------------------------------------------------------------------------
-// View state helpers
-// ---------------------------------------------------------------------------
 
 type ViewName = "loading" | "empty" | "error" | "dashboard";
 
@@ -188,7 +154,6 @@ function showError(message: string) {
 
 let bannerTimer: ReturnType<typeof setTimeout> | undefined;
 
-/** Transient, non-destructive error notice (keeps the dashboard visible). */
 function showBanner(message: string) {
   bannerEl.textContent = message;
   bannerEl.hidden = false;
@@ -212,9 +177,6 @@ function renderHeader() {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Traffic chart (inline SVG: stacked ok/error columns + error-rate line)
-// ---------------------------------------------------------------------------
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -229,7 +191,6 @@ function svgEl<K extends keyof SVGElementTagNameMap>(
   return el;
 }
 
-/** Smallest 1/2/5×10^k ≥ v (clean axis maxima). */
 function niceCeil(v: number): number {
   if (!(v > 0)) return 1;
   const exp = Math.pow(10, Math.floor(Math.log10(v)));
@@ -238,7 +199,6 @@ function niceCeil(v: number): number {
   return f * exp;
 }
 
-/** Column with a rounded data-end (top) and a square baseline (bottom). */
 function roundedTopColumn(x: number, y: number, w: number, h: number): string {
   const r = Math.min(4, w / 2, h);
   const x2 = x + w;
@@ -352,7 +312,6 @@ function renderTrafficChart() {
 
   const yBase = padTop + plotH;
 
-  // Gridlines + left axis ticks (request counts), solid hairlines.
   for (const frac of [0.5, 1]) {
     const y = yBase - plotH * frac;
     svg.appendChild(
@@ -371,7 +330,6 @@ function renderTrafficChart() {
     svg.appendChild(label);
   }
 
-  // Baseline.
   svg.appendChild(
     svgEl(
       "line",
@@ -380,7 +338,6 @@ function renderTrafficChart() {
     ),
   );
 
-  // Right axis (error-rate %) — 0 at baseline, rMax at top.
   const rateTickTop = svgEl(
     "text",
     { x: String(padLeft + plotW + 5), y: String(padTop + 3), "text-anchor": "start" },
@@ -396,8 +353,6 @@ function renderTrafficChart() {
   rateTickZero.textContent = "0%";
   svg.appendChild(rateTickZero);
 
-  // Stacked columns: ok grows from the baseline, errors ride on top with a
-  // 2px surface gap; the topmost segment carries the rounded data-end.
   const barsGroup = svgEl("g");
   for (let i = 0; i < n; i++) {
     const b = buckets[i]!;
@@ -436,7 +391,6 @@ function renderTrafficChart() {
   }
   svg.appendChild(barsGroup);
 
-  // Error-rate line over bucket centers (right-axis scale), 2px round.
   const points = buckets.map((b, i) => {
     const cx = padLeft + i * slot + slot / 2;
     const cy = yBase - (Math.min(bucketRate(b) * 100, rMax) / rMax) * plotH;
@@ -445,13 +399,11 @@ function renderTrafficChart() {
   if (points.length > 1) {
     svg.appendChild(svgEl("path", { d: `M${points.join(" L")}` }, "traffic-rate-line"));
   }
-  // End-dot marker with a surface ring so it stays legible over columns.
   const lastPoint = points[points.length - 1]!.split(",");
   svg.appendChild(
     svgEl("circle", { cx: lastPoint[0]!, cy: lastPoint[1]!, r: "4" }, "rate-dot"),
   );
 
-  // X axis time labels: first, middle, last bucket.
   const tickIdx = n >= 3 ? [0, Math.floor((n - 1) / 2), n - 1] : [0, n - 1];
   const anchors = ["start", "middle", "end"];
   tickIdx.forEach((idx, k) => {
@@ -471,8 +423,6 @@ function renderTrafficChart() {
     svg.appendChild(label);
   });
 
-  // Hover/focus layer: one full-height hit rect per bucket (bigger than the
-  // marks), driving the tooltip; values also live in the totals + tables.
   for (let i = 0; i < n; i++) {
     const b = buckets[i]!;
     const hit = svgEl(
@@ -503,7 +453,6 @@ function renderTrafficChart() {
   trafficChartEl.appendChild(svg);
 }
 
-// Re-render the SVG when the card resizes (host width changes).
 let lastChartWidth = 0;
 const chartResizeObserver = new ResizeObserver(() => {
   const w = trafficChartEl.clientWidth;
@@ -514,9 +463,6 @@ const chartResizeObserver = new ResizeObserver(() => {
 });
 chartResizeObserver.observe(trafficChartEl);
 
-// ---------------------------------------------------------------------------
-// Ranked bar lists
-// ---------------------------------------------------------------------------
 
 interface BarListItem {
   name: string;
@@ -637,9 +583,6 @@ function renderRankedWidgets(stats: McpDashboardStats) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Detail tables (sortable)
-// ---------------------------------------------------------------------------
 
 const TABLE_COLUMNS: Array<{ key: SortKey; label: string; numeric: boolean }> = [
   { key: "name", label: "Name", numeric: false },
@@ -762,9 +705,6 @@ function renderToolsTable() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Top-level render
-// ---------------------------------------------------------------------------
 
 function applyStats(stats: McpDashboardStats) {
   state.stats = stats;
@@ -780,9 +720,6 @@ function applyStats(stats: McpDashboardStats) {
   renderToolsTable();
 }
 
-// ---------------------------------------------------------------------------
-// Fetch (app-only fetch_telemetry view:"mcp_stats")
-// ---------------------------------------------------------------------------
 
 async function fetchStats() {
   const seq = ++state.requestSeq;
@@ -790,7 +727,6 @@ async function fetchStats() {
   refreshBtn.classList.add("spinning");
   const hadStats = Boolean(state.stats);
   if (hadStats) {
-    // Refetch keeps the frame: hold the previous render at reduced opacity.
     dashboardEl.classList.add("refreshing");
   } else {
     loadingTextEl.textContent = "Loading MCP stats…";
@@ -834,9 +770,6 @@ function setWindow(hours: number) {
   void fetchStats();
 }
 
-// ---------------------------------------------------------------------------
-// Event listeners
-// ---------------------------------------------------------------------------
 
 for (const btn of windowButtons) {
   btn.addEventListener("click", () => {
@@ -850,9 +783,6 @@ refreshBtn.addEventListener("click", () => void fetchStats());
 emptyRefreshBtn.addEventListener("click", () => void fetchStats());
 retryBtn.addEventListener("click", () => void fetchStats());
 
-// ---------------------------------------------------------------------------
-// App wiring (same shape as the trace explorer)
-// ---------------------------------------------------------------------------
 
 function handleHostContextChanged(ctx: McpUiHostContext) {
   if (ctx.theme) {
@@ -880,10 +810,8 @@ app.onteardown = async () => {
 };
 
 app.ontoolinput = (params) => {
-  // display_mcp_dashboard is running server-side; show a window-aware spinner.
   const args = (params.arguments ?? {}) as { hours?: number };
   if (typeof args.hours === "number" && Number.isFinite(args.hours)) {
-    // Snap the selector to the nearest preset for display.
     state.hours = args.hours <= 1 ? 1 : args.hours <= 24 ? 24 : 168;
     renderHeader();
     loadingTextEl.textContent = `Loading MCP stats (last ${args.hours}h)…`;
@@ -903,8 +831,7 @@ app.ontoolresult = (result) => {
 };
 
 app.ontoolcancelled = () => {
-  // ontoolinput already switched to the loading spinner; restore the prior
-  // view so a cancelled call doesn't leave the viewer stuck on "Loading…".
+  // Restore the prior view after a cancelled call.
   showView(state.stats ? "dashboard" : "empty");
 };
 
@@ -912,9 +839,6 @@ app.onerror = console.error;
 
 app.onhostcontextchanged = handleHostContextChanged;
 
-// ---------------------------------------------------------------------------
-// Connect to host
-// ---------------------------------------------------------------------------
 
 app.connect().then(() => {
   const ctx = app.getHostContext();

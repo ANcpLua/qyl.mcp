@@ -1,7 +1,4 @@
-// Loopback-only HTTP surface for the dashboard, with control verbs
-// (restart/stop) and MCP passthrough: one origin for every managed
-// server, backed by the orchestrator's per-resource SDK Client.
-//
+// Loopback API and same-origin MCP passthrough backed by the orchestrator's SDK clients.
 // A second, separate-origin server (:18889) serves ONLY the dashboard's sandbox.html with CSP
 // response headers derived from a ?csp= query param — same mechanism as ext-apps basic-host's
 // serve.ts (headers, unlike meta tags, cannot be tampered with by the sandboxed content).
@@ -64,7 +61,6 @@ const McpUiResourceCspSchema = z.fromJSONSchema({
     $ref: "#/$defs/McpUiResourceCsp",
 } as unknown as Parameters<typeof z.fromJSONSchema>[0]) as z.ZodType<McpUiResourceCsp>;
 
-// runner/dist/src/ → ../../.. = the workspace root that holds dashboard/.
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const dashboardDist = join(workspaceRoot, "dashboard", "dist");
 const sandboxHtml = join(workspaceRoot, "dashboard", "dist-sandbox", "sandbox.html");
@@ -72,7 +68,6 @@ const sandboxHtml = join(workspaceRoot, "dashboard", "dist-sandbox", "sandbox.ht
 export class RunnerApi {
     private server: Server | null = null;
     private sandboxServer: Server | null = null;
-    // MCP self-monitoring: every passthrough call becomes an OTLP span (see telemetry.ts).
     private readonly telemetry = new McpTelemetry();
 
     constructor(
@@ -144,7 +139,6 @@ export class RunnerApi {
             this.respondToAction(res, String(req.params.name), "stop");
         });
 
-        // MCP passthrough. Errors: 404 unknown resource, 409 not ready, 502 upstream MCP error.
         app.get(`${Routes.Runner}/mcp/:name/tools`, (req, res) => {
             void this.passthrough(req, res, { method: "tools/list" }, async (client) =>
                 RunnerMcpToolsResponseSchema.parse(await client.listTools()),
@@ -214,7 +208,6 @@ export class RunnerApi {
             );
         });
 
-        // Prod mode: the built dashboard is served from the runner's own origin.
         if (existsSync(dashboardDist)) {
             app.use(express.static(dashboardDist));
         }
@@ -334,7 +327,6 @@ export class RunnerApi {
                 }
             }
 
-            // CSP via HTTP header — tamper-proof unlike meta tags.
             let cspHeader: string;
             try {
                 cspHeader = buildCspHeader(cspConfig);
@@ -343,7 +335,6 @@ export class RunnerApi {
                 return;
             }
             res.setHeader("Content-Security-Policy", cspHeader);
-            // Prevent caching to ensure fresh CSP on each load.
             res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
             res.setHeader("Pragma", "no-cache");
             res.setHeader("Expires", "0");
@@ -391,29 +382,18 @@ function buildCspHeader(csp?: McpUiResourceCsp): string {
     const baseUriDomains = sanitizeCspDomains(csp?.baseUriDomains).join(" ") || null;
 
     const directives = [
-        // Default: allow same-origin + inline styles/scripts (needed for bundled apps)
         "default-src 'self' 'unsafe-inline'",
-        // Scripts: same-origin + inline + eval (some libs need eval) + blob (workers) + specified domains
         `script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: ${resourceDomains}`.trim(),
-        // Styles: same-origin + inline + specified domains
         `style-src 'self' 'unsafe-inline' blob: data: ${resourceDomains}`.trim(),
-        // Images: same-origin + data/blob URIs + specified domains
         `img-src 'self' data: blob: ${resourceDomains}`.trim(),
-        // Fonts: same-origin + data/blob URIs + specified domains
         `font-src 'self' data: blob: ${resourceDomains}`.trim(),
-        // Media (audio/video): same-origin + data/blob URIs + specified domains
         `media-src 'self' data: blob: ${resourceDomains}`.trim(),
-        // Network requests: same-origin + specified API/tile domains
         `connect-src 'self' ${connectDomains}`.trim(),
         // Workers: same-origin + blob (dynamic workers) + specified domains — critical for WebGL
         // apps (CesiumJS, Three.js) that use workers for tile decoding, textures, physics
         `worker-src 'self' blob: ${resourceDomains}`.trim(),
-        // Nested iframes: use frameDomains if provided, otherwise block all
         frameDomains ? `frame-src ${frameDomains}` : "frame-src 'none'",
-        // Plugins: always blocked (defense in depth)
         "object-src 'none'",
-        // Base URI: use approved domains if provided; otherwise keep the
-        // Apps schema's same-origin default.
         baseUriDomains ? `base-uri ${baseUriDomains}` : "base-uri 'self'",
     ];
 
@@ -440,7 +420,6 @@ function closeServer(server: Server | null): Promise<void> {
     });
 }
 
-// Express distinguishes error middleware by this required four-parameter signature.
 const errorHandler: ErrorRequestHandler = (error, _request, response, _nextMiddleware) => {
     if (
         typeof error === "object" &&

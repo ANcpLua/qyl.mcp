@@ -1,15 +1,4 @@
-/**
- * @file qyl Trace Explorer — MCP App.
- *
- * Renders qyl telemetry traces from the `display_traces` tool result and lets
- * the user refresh / drill into logs via the app-only `fetch_telemetry`
- * server tool. Trace list on the left, span waterfall on the right, slide-in
- * span detail panel, and a logs tab scoped to the selected trace.
- *
- * Rendering is XSS-safe by construction: all telemetry strings reach the DOM
- * exclusively through `textContent` / `createTextNode`. The only `innerHTML`
- * in this app is the constant SVG markup in mcp-app.html.
- */
+// Telemetry reaches the DOM only through textContent/createTextNode; innerHTML is constant SVG.
 import {
   App,
   applyDocumentTheme,
@@ -40,9 +29,6 @@ import "./mcp-app.css";
 type TracesPayload = DisplayTracesOutput;
 type LogsPayload = Required<Pick<FetchTelemetryOutput, "logs" | "mode">>;
 
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
 
 type Tab = "waterfall" | "logs";
 
@@ -52,17 +38,12 @@ const state = {
   selectedTraceId: undefined as string | undefined,
   selectedSpanId: undefined as string | undefined,
   activeTab: "waterfall" as Tab,
-  /** Fetched logs per trace id (cleared on refresh so live data stays fresh). */
   logsCache: new Map<string, QylLogRecord[]>(),
-  /** In-flight guard for refresh. */
   busy: false,
-  /** Monotonic token so a stale logs response can't clobber a newer trace's tab. */
+  // Prevent an older response from replacing the active trace's logs.
   logsRequestSeq: 0,
 };
 
-// ---------------------------------------------------------------------------
-// DOM references
-// ---------------------------------------------------------------------------
 
 const mainEl = document.querySelector(".main") as HTMLElement;
 const demoBadgeEl = document.getElementById("demo-badge")!;
@@ -99,9 +80,6 @@ const detailTitleEl = document.getElementById("detail-title")!;
 const detailBodyEl = document.getElementById("detail-body")!;
 const detailCloseBtn = document.getElementById("detail-close-btn") as HTMLButtonElement;
 
-// ---------------------------------------------------------------------------
-// Domain constants & helpers
-// ---------------------------------------------------------------------------
 
 const KIND_LABELS: Record<number, string> = {
   0: "Unspecified",
@@ -114,7 +92,6 @@ const KIND_LABELS: Record<number, string> = {
 
 type Flavor = "genai" | "http" | "db" | "messaging" | "neutral";
 
-/** Span flavor from attribute-key prefixes, falling back to span kind. */
 function spanFlavor(span: QylSpan): Flavor {
   let flavor: Flavor | undefined;
   for (const attr of span.attributes ?? []) {
@@ -140,7 +117,6 @@ interface SeverityInfo {
   cls: "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 }
 
-/** OTel severity_number bands → label + tint class. */
 function severityInfo(log: QylLogRecord): SeverityInfo {
   const n = log.severity_number;
   let info: SeverityInfo;
@@ -156,18 +132,12 @@ function severityInfo(log: QylLogRecord): SeverityInfo {
   return info;
 }
 
-// ---------------------------------------------------------------------------
-// Formatting helpers
-// ---------------------------------------------------------------------------
-
-/** 640 → "640", 1236 → "1.24", 87400 → "87.4", 234000 → "234". */
 function sigFig(v: number): string {
   if (v >= 100) return String(Math.round(v));
   const s = v >= 10 ? v.toFixed(1) : v.toFixed(2);
   return s.replace(/\.?0+$/, "");
 }
 
-/** Nanoseconds → "312 ns" / "640 µs" / "87 ms" / "1.24 s". */
 function formatNs(ns: number): string {
   if (!Number.isFinite(ns) || ns < 0) return "—";
   if (ns < 1e3) return `${Math.round(ns)} ns`;
@@ -176,12 +146,10 @@ function formatNs(ns: number): string {
   return `${sigFig(ns / 1e9)} s`;
 }
 
-/** First 8 hex chars of an id, for dense display. */
 function shortId(id: string): string {
   return id.length > 8 ? id.slice(0, 8) : id;
 }
 
-/** Unix-nano timestamp → local "HH:MM:SS.mmm". */
 function formatLogTime(ns: number): string {
   if (!Number.isFinite(ns) || ns <= 0) return "—";
   const date = new Date(ns / 1e6);
@@ -192,7 +160,6 @@ function formatLogTime(ns: number): string {
   return `${hh}:${mm}:${ss}.${ms}`;
 }
 
-/** 412 → "412", 1834 → "1.8K", 2400000 → "2.4M". */
 function formatCompact(n: number): string {
   if (!Number.isFinite(n)) return "—";
   if (n < 1000) return String(n);
@@ -210,7 +177,6 @@ function formatCompact(n: number): string {
   return String(n);
 }
 
-/** Attribute value → display string (arrays/objects JSON-stringified). */
 function stringifyValue(value: unknown): string {
   if (typeof value === "string") return value;
   if (value === null || value === undefined) return "";
@@ -222,9 +188,6 @@ function stringifyValue(value: unknown): string {
   }
 }
 
-// ---------------------------------------------------------------------------
-// App wiring (same shape as the vanillajs template)
-// ---------------------------------------------------------------------------
 
 function handleHostContextChanged(ctx: McpUiHostContext) {
   if (ctx.theme) {
@@ -252,7 +215,6 @@ app.onteardown = async () => {
 };
 
 app.ontoolinput = (params) => {
-  // display_traces is running server-side; show an argument-aware spinner.
   const args = (params.arguments ?? {}) as { trace_id?: string; session_id?: string };
   if (typeof args.trace_id === "string" && args.trace_id) {
     loadingTextEl.textContent = `Loading trace ${shortId(args.trace_id)}…`;
@@ -274,8 +236,7 @@ app.ontoolresult = (result) => {
 };
 
 app.ontoolcancelled = () => {
-  // ontoolinput already switched to the loading spinner; restore the prior
-  // view so a cancelled call doesn't leave the viewer stuck on "Loading…".
+  // Restore the prior view after a cancelled call.
   showView(state.traces.length > 0 ? "explorer" : "empty");
 };
 
@@ -283,11 +244,6 @@ app.onerror = console.error;
 
 app.onhostcontextchanged = handleHostContextChanged;
 
-// ---------------------------------------------------------------------------
-// Payload parsing
-// ---------------------------------------------------------------------------
-
-/** Extract joined text content from a tool result (for error reporting). */
 function toolErrorText(result: CallToolResult): string | undefined {
   const text = result.content
     ?.map((c) => ("text" in c ? c.text : ""))
@@ -308,9 +264,6 @@ function parseLogsPayload(result: CallToolResult): LogsPayload | null {
     : null;
 }
 
-// ---------------------------------------------------------------------------
-// View state helpers
-// ---------------------------------------------------------------------------
 
 type ViewName = "loading" | "empty" | "error" | "explorer";
 
@@ -328,7 +281,6 @@ function showError(message: string) {
 
 let bannerTimer: ReturnType<typeof setTimeout> | undefined;
 
-/** Transient, non-destructive error notice (keeps the explorer visible). */
 function showBanner(message: string) {
   bannerEl.textContent = message;
   bannerEl.hidden = false;
@@ -344,9 +296,6 @@ function renderHeader() {
   traceCountLabelEl.textContent = n === 0 ? "" : `${n} trace${n === 1 ? "" : "s"}`;
 }
 
-// ---------------------------------------------------------------------------
-// Trace selection & top-level render
-// ---------------------------------------------------------------------------
 
 function selectedTrace(): QylTrace | undefined {
   return state.traces.find((t) => t.trace_id === state.selectedTraceId);
@@ -354,7 +303,6 @@ function selectedTrace(): QylTrace | undefined {
 
 function traceDisplayName(trace: QylTrace): string {
   if (trace.root_span?.name) return trace.root_span.name;
-  // Fallback: earliest span's name.
   let first: QylSpan | undefined;
   for (const span of trace.spans) {
     if (!first || span.start_time_unix_nano < first.start_time_unix_nano) first = span;
@@ -362,7 +310,6 @@ function traceDisplayName(trace: QylTrace): string {
   return first?.name ?? "(unnamed trace)";
 }
 
-/** Replace the trace set (tool result or refresh) and re-render everything. */
 function applyTraces(payload: TracesPayload) {
   state.traces = payload.traces;
   state.mode = payload.mode;
@@ -391,7 +338,6 @@ function selectTrace(traceId: string) {
   renderTraceView();
 }
 
-/** Arrow-key navigation: move selection by ±1 within the list order. */
 function moveTraceSelection(delta: number) {
   if (state.traces.length === 0) return;
   const idx = state.traces.findIndex((t) => t.trace_id === state.selectedTraceId);
@@ -404,9 +350,6 @@ function moveTraceSelection(delta: number) {
     ?.scrollIntoView({ block: "nearest" });
 }
 
-// ---------------------------------------------------------------------------
-// Trace list rendering
-// ---------------------------------------------------------------------------
 
 function createServiceChip(name: string): HTMLElement {
   const chip = document.createElement("span");
@@ -486,9 +429,6 @@ function renderTraceList() {
   traceListEl.replaceChildren(fragment);
 }
 
-// ---------------------------------------------------------------------------
-// Trace view (summary + tabs)
-// ---------------------------------------------------------------------------
 
 function renderTraceView() {
   const trace = selectedTrace();
@@ -529,9 +469,6 @@ function setTab(tab: Tab) {
   if (tab === "logs" && trace) void showLogsTab(trace);
 }
 
-// ---------------------------------------------------------------------------
-// Waterfall rendering
-// ---------------------------------------------------------------------------
 
 function renderTimeRuler(totalNs: number) {
   timeRulerEl.replaceChildren();
@@ -562,7 +499,6 @@ function createSpanRow(row: WaterfallRow<QylSpan>, traceStartNs: number): HTMLEl
   el.setAttribute("role", "button");
   el.setAttribute("aria-label", `Span ${span.name}, ${formatNs(span.end_time_unix_nano - span.start_time_unix_nano)}`);
 
-  // --- Name column (depth-indented) ---
   const nameCol = document.createElement("div");
   nameCol.className = "span-name-col";
   nameCol.style.paddingLeft = `${8 + Math.min(depth, 24) * 14}px`;
@@ -580,7 +516,6 @@ function createSpanRow(row: WaterfallRow<QylSpan>, traceStartNs: number): HTMLEl
   nameCol.appendChild(service);
   el.appendChild(nameCol);
 
-  // --- Bar column ---
   const barCol = document.createElement("div");
   barCol.className = "span-bar-col";
   const bar = document.createElement("span");
@@ -630,9 +565,6 @@ function renderWaterfall(trace: QylTrace) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Span detail panel
-// ---------------------------------------------------------------------------
 
 function detailSection(label: string): { section: HTMLElement; body: HTMLElement } {
   const section = document.createElement("section");
@@ -679,7 +611,6 @@ function attributeRows(container: HTMLElement, attrs: Array<{ key: string; value
   container.appendChild(table);
 }
 
-/** Render one span event; `key: value` pairs when items are {key,value}. */
 function renderEvent(event: QylSpanEvent, spanStartNs: number): HTMLElement {
   const card = document.createElement("div");
   card.className = "event-card";
@@ -728,7 +659,6 @@ function renderEvent(event: QylSpanEvent, spanStartNs: number): HTMLElement {
 
 function openDetail(span: QylSpan, traceStartNs: number) {
   state.selectedSpanId = span.span_id;
-  // Refresh row highlight without a full waterfall re-render.
   for (const row of spanRowsEl.querySelectorAll<HTMLElement>(".span-row")) {
     row.classList.toggle("selected", row.dataset.spanId === span.span_id);
   }
@@ -828,9 +758,6 @@ function closeDetail() {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Logs tab
-// ---------------------------------------------------------------------------
 
 function renderLogs(logs: QylLogRecord[]) {
   logsStateEl.hidden = logs.length > 0;
@@ -894,9 +821,6 @@ async function showLogsTab(trace: QylTrace) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Refresh (app-only fetch_telemetry view:"traces")
-// ---------------------------------------------------------------------------
 
 async function refreshTraces() {
   if (state.busy) return;
@@ -923,7 +847,6 @@ async function refreshTraces() {
     applyTraces(payload);
   } catch (err) {
     if (hadTraces) {
-      // Keep what we have; surface the failure non-destructively.
       showView("explorer");
       showBanner(`Refresh failed: ${err instanceof Error ? err.message : String(err)}`);
     } else {
@@ -936,9 +859,6 @@ async function refreshTraces() {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Event listeners
-// ---------------------------------------------------------------------------
 
 refreshBtn.addEventListener("click", () => void refreshTraces());
 emptyRefreshBtn.addEventListener("click", () => void refreshTraces());
@@ -959,9 +879,6 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// Connect to host
-// ---------------------------------------------------------------------------
 
 app.connect().then(() => {
   const ctx = app.getHostContext();

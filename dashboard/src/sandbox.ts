@@ -1,6 +1,4 @@
-// Sandbox proxy — port of ext-apps basic-host sandbox.ts with the referrer
-// allowlist adjusted for qyl.mcp: the runner-served dashboard (:18888) and the
-// vite dev server (localhost:5173).
+// Separate-origin proxy between the host and untrusted MCP App iframe.
 import type { McpUiSandboxProxyReadyNotification, McpUiSandboxResourceReadyNotification } from "@modelcontextprotocol/ext-apps/app-bridge";
 import { buildAllowAttribute } from "@modelcontextprotocol/ext-apps/app-bridge";
 
@@ -25,15 +23,11 @@ if (!ALLOWED_REFERRER_ORIGINS.includes(new URL(document.referrer).origin)) {
   );
 }
 
-// Extract the expected host origin from the referrer for origin validation.
-// This is the origin we expect all parent messages to come from.
 const EXPECTED_HOST_ORIGIN = new URL(document.referrer).origin;
 
 const OWN_ORIGIN = new URL(window.location.href).origin;
 
-// Security self-test: verify iframe isolation is working correctly.
-// This MUST throw a SecurityError -- if `window.top` is accessible, the sandbox
-// configuration is dangerously broken and untrusted content could escape.
+// Same-origin access here would make untrusted content able to escape the sandbox.
 try {
   window.top!.alert("If you see this, the sandbox is not setup securely.");
   throw "FAIL";
@@ -42,18 +36,11 @@ try {
     throw new Error("The sandbox is not setup securely.");
   }
 
-  // Expected: SecurityError confirms proper sandboxing.
 }
 
-// Double-iframe sandbox architecture: THIS file is the outer sandbox proxy
-// iframe on a separate origin. It creates an inner iframe for untrusted HTML
-// content. Per the specification, the Host and the Sandbox MUST have different
-// origins.
 const inner = document.createElement("iframe");
 inner.style.cssText = "width:100%; height:100%; border:none;";
 inner.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
-// Note: allow attribute is set later when receiving sandbox-resource-ready notification
-// based on the permissions requested by the app
 document.body.appendChild(inner);
 
 const RESOURCE_READY_NOTIFICATION: McpUiSandboxResourceReadyNotification["method"] =
@@ -61,27 +48,10 @@ const RESOURCE_READY_NOTIFICATION: McpUiSandboxResourceReadyNotification["method
 const PROXY_READY_NOTIFICATION: McpUiSandboxProxyReadyNotification["method"] =
   "ui/notifications/sandbox-proxy-ready";
 
-// Message relay: This Sandbox (outer iframe) acts as a bidirectional bridge,
-// forwarding messages between:
-//
-//   Host (parent window) ↔ Sandbox (outer frame) ↔ View (inner iframe)
-//
-// Reason: the parent window and inner iframe have different origins and can't
-// communicate directly, so the outer iframe forwards messages in both
-// directions to connect them.
-//
-// Special case: The "ui/notifications/sandbox-resource-ready" message is
-// intercepted here (not relayed) because the Sandbox uses it to configure and
-// load the inner iframe with the view HTML content.
-//
-// Security: CSP is enforced via HTTP headers on sandbox.html (set by the
-// runner's :18889 static server based on the ?csp= query param). This is
-// tamper-proof unlike meta tags.
+// CSP is set by the separate-origin server as response headers, never guest-controlled meta tags.
 
 window.addEventListener("message", async (event) => {
   if (event.source === window.parent) {
-    // Validate that messages from parent come from the expected host origin.
-    // This prevents malicious pages from sending messages to this sandbox.
     if (event.origin !== EXPECTED_HOST_ORIGIN) {
       console.error(
         "[Sandbox] Rejecting message from unexpected origin:",
@@ -97,22 +67,19 @@ window.addEventListener("message", async (event) => {
       if (typeof sandbox === "string") {
         inner.setAttribute("sandbox", sandbox);
       }
-      // Set Permission Policy allow attribute if permissions are requested
       const allowAttribute = buildAllowAttribute(permissions);
       if (allowAttribute) {
         console.log("[Sandbox] Setting allow attribute:", allowAttribute);
         inner.setAttribute("allow", allowAttribute);
       }
       if (typeof html === "string") {
-        // Use document.write instead of srcdoc (which some heavy libraries,
-        // e.g. the CesiumJS Map, won't work with)
+        // Some app libraries do not work inside srcdoc documents.
         const doc = inner.contentDocument || inner.contentWindow?.document;
         if (doc) {
           doc.open();
           doc.write(html);
           doc.close();
         } else {
-          // Fallback to srcdoc if document is not accessible
           console.warn("[Sandbox] document.write not available, falling back to srcdoc");
           inner.srcdoc = html;
         }
@@ -132,14 +99,11 @@ window.addEventListener("message", async (event) => {
       );
       return;
     }
-    // Relay messages from inner frame to parent window.
-    // Use specific origin instead of "*" to prevent message interception.
+    // Never relay guest messages to a wildcard origin.
     window.parent.postMessage(event.data, EXPECTED_HOST_ORIGIN);
   }
 });
 
-// Notify the Host that the Sandbox is ready to receive view HTML.
-// Use specific origin instead of "*" to ensure only the expected host receives this.
 window.parent.postMessage({
   jsonrpc: "2.0",
   method: PROXY_READY_NOTIFICATION,
