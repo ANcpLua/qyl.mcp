@@ -6,6 +6,7 @@
     "allowImportingTsExtensions": false,
     "noEmit": false,
     "outDir": "./dist-test",
+    "rootDir": "./src",
     "declaration": false,
     "sourceMap": false,
     "types": ["node"]
