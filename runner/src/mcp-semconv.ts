@@ -71,6 +71,9 @@ export type McpTelemetryTransport =
     | "inproc"
     | "builtin";
 
+/** Propagation-only MCP metadata. Values are never emitted as attributes. */
+export type McpPropagationCarrier = Readonly<Record<string, string>>;
+
 interface McpNetworkInput {
     role: McpTelemetryRole;
     transport: McpTelemetryTransport;
@@ -103,6 +106,8 @@ export interface McpOperationInput extends McpProtocolInput {
     testCaseId?: string;
     startTimeMs: number;
     endTimeMs: number;
+    /** Remote propagation extracted from MCP params._meta; never emitted as attributes. */
+    remotePropagation?: McpPropagationCarrier;
 }
 
 export interface McpSessionInput extends McpProtocolInput {
@@ -151,7 +156,9 @@ export function describeMcpOperationSpan(
     addPeerAttributes(attributes, input, safe, true);
     addWorkbenchSpanAttributes(attributes, input, safe);
 
-    const target = input.toolName ?? input.promptName;
+    const target = input.method === "tools/call"
+        ? input.toolName
+        : input.method === "prompts/get" ? input.promptName : undefined;
     return {
         name: target ? `${method} ${safe(target)}` : method,
         kind: input.role === "client" ? SpanKind.CLIENT : SpanKind.SERVER,
@@ -170,7 +177,7 @@ export function describeMcpOperationMetric(
         [ATTR_MCP_METHOD_NAME]: requireText(input.method, "method", safe),
     };
     addOperationCommon(attributes, input, safe, false);
-    if (input.recordResourceUriOnMetric && input.resourceUri) {
+    if (input.recordResourceUriOnMetric && input.resourceUri && resourceMethodHasUri(input.method)) {
         attributes[ATTR_MCP_RESOURCE_URI] = bounded(redactor.redactUri(input.resourceUri));
     }
     addPeerAttributes(attributes, input, safe, false);
@@ -192,7 +199,8 @@ export function describeMcpSessionMetric(
     validateTiming(input.startTimeMs, input.endTimeMs);
     const safe = safeText(redactor);
     const attributes: Attributes = {};
-    addProtocolAndNetwork(attributes, input, safe);
+    // rpc.response.status_code is defined for MCP operations, not sessions.
+    addProtocolAndNetwork(attributes, input, safe, false);
     addPeerAttributes(attributes, input, safe, false);
     return {
         name: input.role === "client"
@@ -214,8 +222,12 @@ function addOperationCommon(
     if (input.method === "tools/call") {
         attributes[ATTR_GEN_AI_OPERATION_NAME] = GEN_AI_OPERATION_NAME_VALUE_EXECUTE_TOOL;
     }
-    if (input.toolName) attributes[ATTR_GEN_AI_TOOL_NAME] = safe(input.toolName);
-    if (input.promptName) attributes[ATTR_GEN_AI_PROMPT_NAME] = safe(input.promptName);
+    if (input.method === "tools/call" && input.toolName) {
+        attributes[ATTR_GEN_AI_TOOL_NAME] = safe(input.toolName);
+    }
+    if (input.method === "prompts/get" && input.promptName) {
+        attributes[ATTR_GEN_AI_PROMPT_NAME] = safe(input.promptName);
+    }
     // Arguments/results/prompt variables are deliberately not captured: those
     // registry attributes are opt-in and may contain credentials or user data.
     if (!span) return;
@@ -225,13 +237,14 @@ function addProtocolAndNetwork(
     attributes: Attributes,
     input: McpProtocolInput,
     safe: (value: string) => string,
+    includeRpcResponseStatusCode = true,
 ): void {
     if (input.errorType) attributes[ATTR_ERROR_TYPE] = safe(input.errorType);
     if (input.protocolVersion) attributes[ATTR_MCP_PROTOCOL_VERSION] = safe(input.protocolVersion);
     if (input.jsonRpcProtocolVersion && input.jsonRpcProtocolVersion !== JSONRPC_DEFAULT_VERSION) {
         attributes[ATTR_JSONRPC_PROTOCOL_VERSION] = safe(input.jsonRpcProtocolVersion);
     }
-    if (input.rpcResponseStatusCode) {
+    if (includeRpcResponseStatusCode && input.rpcResponseStatusCode) {
         attributes[ATTR_RPC_RESPONSE_STATUS_CODE] = safe(input.rpcResponseStatusCode);
     }
     const transport = networkTransport(input.transport);

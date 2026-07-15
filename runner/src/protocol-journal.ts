@@ -65,6 +65,7 @@ export interface ProtocolJournalOptions {
     initialSequence?: number;
     redactor?: SecretRedactor;
     now?: () => number;
+    onOperationStart?: (operation: StartedProtocolOperation) => ActiveProtocolOperation | undefined;
     onOperation?: (operation: CompletedProtocolOperation) => void;
 }
 
@@ -73,6 +74,14 @@ interface PendingRequest {
     method: string;
     correlation?: ProtocolExecutionCorrelation;
     target: ProtocolOperationTarget;
+    remotePropagation?: ProtocolPropagationCarrier;
+    activeOperation?: ActiveProtocolOperation;
+}
+
+interface RecordMessageOptions {
+    activeOperation?: ActiveProtocolOperation;
+    /** Transport failure that prevented an outbound response from being sent. */
+    responseSendErrorType?: string;
 }
 
 export interface ProtocolOperationTarget {
@@ -81,16 +90,34 @@ export interface ProtocolOperationTarget {
     resourceUri?: string;
 }
 
-export interface CompletedProtocolOperation extends ProtocolOperationTarget {
+export type ProtocolPropagationCarrier = Readonly<Record<string, string>>;
+
+export interface StartedProtocolOperation extends ProtocolOperationTarget {
     role: "client" | "server";
     direction: ProtocolDirection;
     method: string;
     requestId?: RequestId;
     correlation?: ProtocolExecutionCorrelation;
     startTimeMs: number;
+    /** Configured propagation fields extracted from inbound MCP params._meta. */
+    remotePropagation?: ProtocolPropagationCarrier;
+}
+
+export interface CompletedProtocolOperation extends StartedProtocolOperation {
     endTimeMs: number;
     errorType?: string;
     rpcResponseStatusCode?: string;
+    /** Negotiated version extracted from a successful initialize result. */
+    protocolVersion?: string;
+}
+
+export interface ActiveProtocolOperation {
+    readonly startTimeMs: number;
+    /** Configured fields to inject into the outbound MCP params._meta bag. */
+    readonly propagation?: ProtocolPropagationCarrier;
+    /** Run SDK dispatch with this operation as the execution-local context. */
+    run<T>(operation: () => T): T;
+    complete(operation: CompletedProtocolOperation): void;
 }
 
 /** Bounded, sanitized record of messages already validated by the MCP SDK. */
@@ -102,6 +129,9 @@ export class ProtocolJournal {
     private readonly maxPayloadCharacters: number;
     private readonly redactor: SecretRedactor;
     private readonly now: () => number;
+    private readonly onOperationStart?: (
+        operation: StartedProtocolOperation,
+    ) => ActiveProtocolOperation | undefined;
     private readonly onOperation?: (operation: CompletedProtocolOperation) => void;
     private nextSequence: number;
 
@@ -113,6 +143,7 @@ export class ProtocolJournal {
         );
         this.redactor = options.redactor ?? new SecretRedactor();
         this.now = options.now ?? Date.now;
+        this.onOperationStart = options.onOperationStart;
         this.onOperation = options.onOperation;
         this.nextSequence = positiveInteger(options.initialSequence ?? 1, "initialSequence");
     }
@@ -130,10 +161,48 @@ export class ProtocolJournal {
         return () => this.subscribers.delete(push);
     }
 
+    /** Start a request or notification before transport dispatch. */
+    startOperation(
+        direction: ProtocolDirection,
+        message: JSONRPCMessage,
+        correlation?: ProtocolExecutionCorrelation,
+    ): ActiveProtocolOperation | undefined {
+        if (!this.onOperationStart) return undefined;
+        const parsed = JSONRPCMessageSchema.safeParse(message);
+        if (!parsed.success
+            || (!isJSONRPCRequest(parsed.data) && !isJSONRPCNotification(parsed.data))) {
+            return undefined;
+        }
+        const started: StartedProtocolOperation = {
+            role: direction === "outbound" ? "client" : "server",
+            direction,
+            method: parsed.data.method,
+            ...(isJSONRPCRequest(parsed.data) ? { requestId: parsed.data.id } : {}),
+            ...(correlation === undefined ? {} : { correlation }),
+            startTimeMs: this.now(),
+            ...operationTarget(parsed.data.method, parsed.data.params),
+            ...(direction === "inbound" ? optionalRemotePropagation(parsed.data.params) : {}),
+        };
+        try {
+            const active = this.onOperationStart(structuredClone(started));
+            if (active === undefined) return undefined;
+            return {
+                startTimeMs: started.startTimeMs,
+                ...(active.propagation === undefined ? {} : { propagation: active.propagation }),
+                run: (operation) => active.run(operation),
+                complete: (operation) => active.complete(operation),
+            };
+        } catch (error) {
+            this.recordObserverError(error, correlation);
+            return undefined;
+        }
+    }
+
     recordMessage(
         direction: ProtocolDirection,
         message: JSONRPCMessage,
         correlation?: ProtocolExecutionCorrelation,
+        options: RecordMessageOptions = {},
     ): ProtocolMessageEntry | undefined {
         const parsed = JSONRPCMessageSchema.safeParse(message);
         if (!parsed.success) {
@@ -141,13 +210,15 @@ export class ProtocolJournal {
             return undefined;
         }
 
-        const timestampMs = this.now();
+        const activeOperation = options.activeOperation;
+        const timestampMs = activeOperation?.startTimeMs ?? this.now();
         let messageKind: ProtocolMessageKind;
         let method: string | undefined;
         let requestId: RequestId | undefined;
         let durationMs: number | undefined;
         let effectiveCorrelation = correlation;
         let completedOperation: CompletedProtocolOperation | undefined;
+        let completedOperationActive: ActiveProtocolOperation | undefined;
 
         if (isJSONRPCRequest(parsed.data)) {
             messageKind = "request";
@@ -158,24 +229,20 @@ export class ProtocolJournal {
                 method,
                 correlation,
                 target: operationTarget(parsed.data.method, parsed.data.params),
+                ...(direction === "inbound" ? optionalRemotePropagation(parsed.data.params) : {}),
+                ...(activeOperation === undefined
+                    ? {}
+                    : { activeOperation }),
             });
         } else if (isJSONRPCNotification(parsed.data)) {
             messageKind = "notification";
             method = parsed.data.method;
-            completedOperation = {
-                role: direction === "outbound" ? "client" : "server",
-                direction,
-                method,
-                ...(correlation === undefined ? {} : { correlation }),
-                startTimeMs: timestampMs,
-                endTimeMs: timestampMs,
-                ...operationTarget(parsed.data.method, parsed.data.params),
-            };
         } else if (isJSONRPCResultResponse(parsed.data)) {
             messageKind = "response";
             requestId = parsed.data.id;
             const matched = this.matchResponse(direction, requestId);
             if (matched) {
+                completedOperationActive = matched.activeOperation;
                 method = matched.method;
                 durationMs = Math.max(0, timestampMs - matched.timestampMs);
                 effectiveCorrelation = matched.correlation ?? correlation;
@@ -185,7 +252,12 @@ export class ProtocolJournal {
                     matched,
                     timestampMs,
                     effectiveCorrelation,
-                    resultIsToolError(parsed.data.result) ? "tool_error" : undefined,
+                    options.responseSendErrorType
+                        ?? (resultIsToolError(parsed.data.result) ? "tool_error" : undefined),
+                    undefined,
+                    matched.method === "initialize"
+                        ? resultProtocolVersion(parsed.data.result)
+                        : undefined,
                 );
             }
         } else if (isJSONRPCErrorResponse(parsed.data)) {
@@ -194,6 +266,7 @@ export class ProtocolJournal {
             if (requestId !== undefined) {
                 const matched = this.matchResponse(direction, requestId);
                 if (matched) {
+                    completedOperationActive = matched.activeOperation;
                     method = matched.method;
                     durationMs = Math.max(0, timestampMs - matched.timestampMs);
                     effectiveCorrelation = matched.correlation ?? correlation;
@@ -204,7 +277,7 @@ export class ProtocolJournal {
                         matched,
                         timestampMs,
                         effectiveCorrelation,
-                        statusCode,
+                        options.responseSendErrorType ?? statusCode,
                         statusCode,
                     );
                 }
@@ -226,8 +299,87 @@ export class ProtocolJournal {
         if (requestId !== undefined) entry.requestId = requestId;
         if (durationMs !== undefined) entry.durationMs = durationMs;
         this.append(entry);
-        if (completedOperation) this.notifyOperation(completedOperation);
+        if (completedOperation) this.notifyOperation(completedOperation, completedOperationActive);
         return entry;
+    }
+
+    /** Complete notification timing after transport send or local dispatch. */
+    completeNotification(
+        direction: ProtocolDirection,
+        message: JSONRPCMessage,
+        startTimeMs: number,
+        correlation?: ProtocolExecutionCorrelation,
+        errorType?: string,
+        activeOperation?: ActiveProtocolOperation,
+    ): void {
+        const parsed = JSONRPCMessageSchema.safeParse(message);
+        if (!parsed.success || !isJSONRPCNotification(parsed.data)) return;
+        const endTimeMs = this.now();
+        this.notifyOperation({
+            role: direction === "outbound" ? "client" : "server",
+            direction,
+            method: parsed.data.method,
+            ...(correlation === undefined ? {} : { correlation }),
+            startTimeMs,
+            endTimeMs: Math.max(startTimeMs, endTimeMs),
+            ...operationTarget(parsed.data.method, parsed.data.params),
+            ...(direction === "inbound" ? optionalRemotePropagation(parsed.data.params) : {}),
+            ...(errorType === undefined ? {} : { errorType }),
+        }, activeOperation);
+    }
+
+    /** Complete a request whose transport send failed before any response. */
+    completeRequestFailure(
+        direction: ProtocolDirection,
+        message: JSONRPCMessage,
+        correlation: ProtocolExecutionCorrelation | undefined,
+        errorType: string,
+    ): void {
+        const parsed = JSONRPCMessageSchema.safeParse(message);
+        if (!parsed.success || !isJSONRPCRequest(parsed.data)) return;
+        const key = pendingKey(direction, parsed.data.id);
+        const pending = this.pendingRequests.get(key);
+        this.pendingRequests.delete(key);
+        if (pending === undefined) return;
+        const effectiveCorrelation = pending.correlation ?? correlation;
+        this.notifyOperation({
+            role: direction === "outbound" ? "client" : "server",
+            direction,
+            method: pending.method,
+            requestId: parsed.data.id,
+            ...(effectiveCorrelation === undefined ? {} : { correlation: effectiveCorrelation }),
+            startTimeMs: pending.timestampMs,
+            endTimeMs: Math.max(pending.timestampMs, this.now()),
+            ...pending.target,
+            ...(direction === "inbound" && pending.remotePropagation !== undefined
+                ? { remotePropagation: pending.remotePropagation }
+                : {}),
+            errorType,
+        }, pending.activeOperation);
+    }
+
+    /** Finish requests that cannot receive a response after transport close. */
+    failPendingOperations(errorType: string): void {
+        const endTimeMs = this.now();
+        for (const [key, pending] of this.pendingRequests) {
+            const direction = key.startsWith("outbound:") ? "outbound" : "inbound";
+            const requestId = requestIdFromPendingKey(key);
+            this.pendingRequests.delete(key);
+            this.notifyOperation({
+                role: direction === "outbound" ? "client" : "server",
+                direction,
+                method: pending.method,
+                ...(requestId === undefined ? {} : { requestId }),
+                ...(pending.correlation === undefined ? {} : { correlation: pending.correlation }),
+                startTimeMs: pending.timestampMs,
+                endTimeMs: Math.max(pending.timestampMs, endTimeMs),
+                ...pending.target,
+                ...(direction === "inbound" && pending.remotePropagation !== undefined
+                    ? { remotePropagation: pending.remotePropagation }
+                    : {}),
+                errorType,
+            }, pending.activeOperation);
+        }
     }
 
     recordTransportError(
@@ -254,6 +406,7 @@ export class ProtocolJournal {
             kind: "transport_close",
         };
         this.append(entry);
+        this.failPendingOperations("connection_closed");
         return entry;
     }
 
@@ -296,19 +449,36 @@ export class ProtocolJournal {
         while (this.entries.length > this.maxEntries) this.entries.shift();
     }
 
-    private notifyOperation(operation: CompletedProtocolOperation): void {
+    private notifyOperation(
+        operation: CompletedProtocolOperation,
+        activeOperation?: ActiveProtocolOperation,
+    ): void {
+        if (activeOperation !== undefined) {
+            try {
+                activeOperation.complete(structuredClone(operation));
+            } catch (error) {
+                this.recordObserverError(error, operation.correlation);
+            }
+        }
         if (!this.onOperation) return;
         try {
             this.onOperation(structuredClone(operation));
         } catch (error) {
-            const timestampMs = this.now();
-            const message = error instanceof Error ? error.message : String(error);
-            this.store({
-                ...this.base(timestampMs, operation.correlation),
-                kind: "observer_error",
-                message: this.redactor.redactText(message),
-            });
+            this.recordObserverError(error, operation.correlation);
         }
+    }
+
+    private recordObserverError(
+        error: unknown,
+        correlation?: ProtocolExecutionCorrelation,
+    ): void {
+        const timestampMs = this.now();
+        const message = error instanceof Error ? error.message : String(error);
+        this.store({
+            ...this.base(timestampMs, correlation),
+            kind: "observer_error",
+            message: this.redactor.redactText(message),
+        });
     }
 
     private trackRequest(
@@ -316,11 +486,49 @@ export class ProtocolJournal {
         requestId: RequestId,
         request: PendingRequest,
     ): void {
-        this.pendingRequests.set(pendingKey(direction, requestId), request);
+        const key = pendingKey(direction, requestId);
+        const replaced = this.pendingRequests.get(key);
+        if (replaced !== undefined) {
+            this.notifyOperation({
+                role: direction === "outbound" ? "client" : "server",
+                direction,
+                method: replaced.method,
+                requestId,
+                ...(replaced.correlation === undefined ? {} : { correlation: replaced.correlation }),
+                startTimeMs: replaced.timestampMs,
+                endTimeMs: Math.max(replaced.timestampMs, this.now()),
+                ...replaced.target,
+                ...(direction === "inbound" && replaced.remotePropagation !== undefined
+                    ? { remotePropagation: replaced.remotePropagation }
+                    : {}),
+                errorType: "request_id_reused",
+            }, replaced.activeOperation);
+            this.pendingRequests.delete(key);
+        }
+        this.pendingRequests.set(key, request);
         while (this.pendingRequests.size > this.maxEntries) {
             const oldest = this.pendingRequests.keys().next().value as string | undefined;
             if (oldest === undefined) break;
+            const evicted = this.pendingRequests.get(oldest);
             this.pendingRequests.delete(oldest);
+            if (evicted !== undefined) {
+                const direction = oldest.startsWith("outbound:") ? "outbound" : "inbound";
+                const requestId = requestIdFromPendingKey(oldest);
+                this.notifyOperation({
+                    role: direction === "outbound" ? "client" : "server",
+                    direction,
+                    method: evicted.method,
+                    ...(requestId === undefined ? {} : { requestId }),
+                    ...(evicted.correlation === undefined ? {} : { correlation: evicted.correlation }),
+                    startTimeMs: evicted.timestampMs,
+                    endTimeMs: Math.max(evicted.timestampMs, this.now()),
+                    ...evicted.target,
+                    ...(direction === "inbound" && evicted.remotePropagation !== undefined
+                        ? { remotePropagation: evicted.remotePropagation }
+                        : {}),
+                    errorType: "pending_operation_evicted",
+                }, evicted.activeOperation);
+            }
         }
     }
 
@@ -347,6 +555,7 @@ export class ProtocolJournal {
 
 export interface JournaledTransportOptions {
     correlation?: () => ProtocolExecutionCorrelation | undefined;
+    propagation?: () => ProtocolPropagationCarrier | undefined;
 }
 
 /** Transparent decorator over an official MCP SDK Transport. */
@@ -374,11 +583,55 @@ export class JournaledTransport implements Transport {
 
     async start(): Promise<void> {
         this.inner.onmessage = (message, extra) => {
-            this.journal.recordMessage("inbound", message, this.options.correlation?.());
-            this.onmessage?.(message, extra);
+            const correlation = this.options.correlation?.();
+            const activeOperation = this.journal.startOperation("inbound", message, correlation);
+            const entry = this.journal.recordMessage(
+                "inbound",
+                message,
+                correlation,
+                activeOperation === undefined ? {} : { activeOperation },
+            );
+            if (!isJSONRPCNotification(message)) {
+                try {
+                    runActiveOperation(activeOperation, () => this.onmessage?.(message, extra));
+                } catch (error) {
+                    if (isJSONRPCRequest(message)) {
+                        this.journal.completeRequestFailure(
+                            "inbound",
+                            message,
+                            correlation,
+                            operationErrorType(error),
+                        );
+                    }
+                    throw error;
+                }
+                return;
+            }
+            try {
+                runActiveOperation(activeOperation, () => this.onmessage?.(message, extra));
+                this.journal.completeNotification(
+                    "inbound",
+                    message,
+                    entry?.timestampMs ?? Date.now(),
+                    correlation,
+                    undefined,
+                    activeOperation,
+                );
+            } catch (error) {
+                this.journal.completeNotification(
+                    "inbound",
+                    message,
+                    entry?.timestampMs ?? Date.now(),
+                    correlation,
+                    operationErrorType(error),
+                    activeOperation,
+                );
+                throw error;
+            }
         };
         this.inner.onerror = (error) => {
             this.journal.recordTransportError(error, this.options.correlation?.());
+            this.journal.failPendingOperations(operationErrorType(error));
             this.onerror?.(error);
         };
         this.inner.onclose = () => {
@@ -395,11 +648,68 @@ export class JournaledTransport implements Transport {
     }
 
     async send(message: JSONRPCMessage, options?: TransportSendOptions): Promise<void> {
-        this.journal.recordMessage("outbound", message, this.options.correlation?.());
+        const correlation = this.options.correlation?.();
+        const activeOperation = this.journal.startOperation("outbound", message, correlation);
+        const contextualMessage = injectPropagation(
+            message,
+            activeOperation?.propagation ?? this.options.propagation?.(),
+        );
+        const isResponse = isJSONRPCResultResponse(contextualMessage)
+            || isJSONRPCErrorResponse(contextualMessage);
+        // Requests must be tracked before the send so a fast response can match
+        // them. Responses are journaled only after the send settles so the server
+        // operation covers the actual response delivery attempt.
+        const entry = isResponse
+            ? undefined
+            : this.journal.recordMessage(
+                "outbound",
+                contextualMessage,
+                correlation,
+                activeOperation === undefined ? {} : { activeOperation },
+            );
         try {
-            await this.inner.send(message, options);
+            await this.inner.send(contextualMessage, options);
+            if (isResponse) {
+                this.journal.recordMessage("outbound", contextualMessage, correlation);
+            }
+            if (isJSONRPCNotification(contextualMessage)) {
+                this.journal.completeNotification(
+                    "outbound",
+                    contextualMessage,
+                    entry?.timestampMs ?? Date.now(),
+                    correlation,
+                    undefined,
+                    activeOperation,
+                );
+            }
         } catch (error) {
+            const errorType = operationErrorType(error);
+            if (isResponse) {
+                this.journal.recordMessage(
+                    "outbound",
+                    contextualMessage,
+                    correlation,
+                    { responseSendErrorType: errorType },
+                );
+            } else {
+                this.journal.completeRequestFailure(
+                    "outbound",
+                    contextualMessage,
+                    correlation,
+                    errorType,
+                );
+            }
             this.journal.recordTransportError(error, this.options.correlation?.());
+            if (isJSONRPCNotification(contextualMessage)) {
+                this.journal.completeNotification(
+                    "outbound",
+                    contextualMessage,
+                    entry?.timestampMs ?? Date.now(),
+                    correlation,
+                    errorType,
+                    activeOperation,
+                );
+            }
             throw error;
         }
     }
@@ -430,6 +740,20 @@ function pendingKey(direction: ProtocolDirection, requestId: RequestId): string 
     return `${direction}:${typeof requestId}:${String(requestId)}`;
 }
 
+function requestIdFromPendingKey(key: string): RequestId | undefined {
+    const first = key.indexOf(":");
+    const second = key.indexOf(":", first + 1);
+    if (first < 0 || second < 0) return undefined;
+    const type = key.slice(first + 1, second);
+    const value = key.slice(second + 1);
+    if (type === "string") return value;
+    if (type === "number") {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : undefined;
+    }
+    return undefined;
+}
+
 function opposite(direction: ProtocolDirection): ProtocolDirection {
     return direction === "outbound" ? "inbound" : "outbound";
 }
@@ -442,6 +766,7 @@ function completedFromResponse(
     correlation: ProtocolExecutionCorrelation | undefined,
     errorType?: string,
     rpcResponseStatusCode?: string,
+    protocolVersion?: string,
 ): CompletedProtocolOperation {
     const requestDirection = opposite(responseDirection);
     return {
@@ -453,9 +778,101 @@ function completedFromResponse(
         startTimeMs: matched.timestampMs,
         endTimeMs,
         ...matched.target,
+        ...(requestDirection === "inbound" && matched.remotePropagation !== undefined
+            ? { remotePropagation: matched.remotePropagation }
+            : {}),
         ...(errorType === undefined ? {} : { errorType }),
         ...(rpcResponseStatusCode === undefined ? {} : { rpcResponseStatusCode }),
+        ...(protocolVersion === undefined ? {} : { protocolVersion }),
     };
+}
+
+function optionalRemotePropagation(
+    params: unknown,
+): { remotePropagation: ProtocolPropagationCarrier } | Record<never, never> {
+    if (typeof params !== "object" || params === null || Array.isArray(params)) return {};
+    const meta = (params as Record<string, unknown>)._meta;
+    if (typeof meta !== "object" || meta === null || Array.isArray(meta)) return {};
+    const carrier = sanitizePropagationCarrier(meta as Record<string, unknown>);
+    return Object.keys(carrier).length === 0 ? {} : { remotePropagation: carrier };
+}
+
+function isValidTraceparent(value: string): boolean {
+    const match = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/u.exec(value);
+    return match !== null
+        && match[1] !== "00000000000000000000000000000000"
+        && match[2] !== "0000000000000000";
+}
+
+function operationErrorType(error: unknown): string {
+    return error instanceof Error && error.name !== "Error" && error.name.length > 0
+        ? error.name
+        : "transport_error";
+}
+
+function runActiveOperation<T>(
+    activeOperation: ActiveProtocolOperation | undefined,
+    operation: () => T,
+): T {
+    return activeOperation === undefined ? operation() : activeOperation.run(operation);
+}
+
+function injectPropagation(
+    message: JSONRPCMessage,
+    propagation: ProtocolPropagationCarrier | undefined,
+): JSONRPCMessage {
+    if (propagation === undefined
+        || (!isJSONRPCRequest(message) && !isJSONRPCNotification(message))) return message;
+    const carrier = sanitizePropagationCarrier(propagation);
+    if (Object.keys(carrier).length === 0) return message;
+    if (message.params !== undefined
+        && (typeof message.params !== "object"
+            || message.params === null
+            || Array.isArray(message.params))) {
+        return message;
+    }
+    const params = (message.params ?? {}) as Record<string, unknown>;
+    const existingMeta = typeof params._meta === "object"
+        && params._meta !== null
+        && !Array.isArray(params._meta)
+        ? params._meta as Record<string, unknown>
+        : {};
+    return {
+        ...message,
+        params: {
+            ...params,
+            _meta: {
+                ...existingMeta,
+                ...carrier,
+            },
+        },
+    };
+}
+
+function sanitizePropagationCarrier(
+    value: Readonly<Record<string, unknown>>,
+): Record<string, string> {
+    const carrier = Object.create(null) as Record<string, string>;
+    for (const [key, entry] of prioritizedPropagationEntries(value)) {
+        if (key.length === 0 || key.length > 256 || typeof entry !== "string" || entry.length > 8_192) {
+            continue;
+        }
+        if (key === "traceparent" && !isValidTraceparent(entry)) continue;
+        carrier[key] = entry;
+        if (Object.keys(carrier).length >= 32) break;
+    }
+    return carrier;
+}
+
+function prioritizedPropagationEntries(
+    value: Readonly<Record<string, unknown>>,
+): [string, unknown][] {
+    const entries = Object.entries(value);
+    const priority = new Set(["traceparent", "tracestate", "baggage"]);
+    return [
+        ...entries.filter(([key]) => priority.has(key)),
+        ...entries.filter(([key]) => !priority.has(key)),
+    ];
 }
 
 function operationTarget(method: string, params: unknown): ProtocolOperationTarget {
@@ -478,6 +895,12 @@ function operationTarget(method: string, params: unknown): ProtocolOperationTarg
 function resultIsToolError(result: unknown): boolean {
     return typeof result === "object" && result !== null && !Array.isArray(result)
         && (result as Record<string, unknown>).isError === true;
+}
+
+function resultProtocolVersion(result: unknown): string | undefined {
+    if (typeof result !== "object" || result === null || Array.isArray(result)) return undefined;
+    const value = (result as Record<string, unknown>).protocolVersion;
+    return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function positiveInteger(value: number, name: string): number {

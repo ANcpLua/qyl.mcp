@@ -126,6 +126,14 @@ test("connection manager initializes an in-process SDK client and discovers ever
     assert.equal(lifecycles.at(-1), "disconnected");
     assert(operations.some((operation) => operation.method === "initialize" && operation.role === "client"));
     assert(operations.some((operation) => operation.method === "initialize" && operation.role === "server"));
+    const initializeOperations = operations.filter((operation) => operation.method === "initialize");
+    const initializedOperations = operations.filter(
+        (operation) => operation.method === "notifications/initialized",
+    );
+    assert.equal(initializeOperations.length, 2);
+    assert.equal(initializedOperations.length, 2);
+    assert(initializeOperations.every((operation) => typeof operation.protocolVersion === "string"));
+    assert(initializedOperations.every((operation) => typeof operation.protocolVersion === "string"));
     assert(operations.some((operation) => operation.method === "tools/call"
         && operation.role === "client" && operation.toolName === "probe"));
     assert(operations.some((operation) => operation.method === "tools/call"

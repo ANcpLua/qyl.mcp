@@ -1194,6 +1194,7 @@ test("overlapping tool calls retain request-bound correlation through journals, 
             return undefined;
         };
         harness.workbench.telemetry.startOperation = (input) => ({
+            run: (operation) => operation(),
             end(completion) {
                 spanInputs.push(structuredClone({ ...input, ...completion }));
                 return undefined;

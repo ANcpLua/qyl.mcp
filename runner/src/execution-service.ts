@@ -30,7 +30,7 @@ import type { PersistedExecution } from "./workbench-repository.js";
 import { validateJsonSchemaIsolated } from "./json-schema-validator.js";
 import type { WorkbenchCorrelationRegistry } from "./observability-correlation.js";
 import {
-    runWithMcpTraceparent,
+    runWithMcpPropagation,
     type ActiveMcpOperation,
     type McpTelemetry,
 } from "./telemetry.js";
@@ -424,12 +424,18 @@ export class ExecutionService {
         const telemetryOperation = this.startTelemetry(record, startedMs);
 
         try {
-            const result = CallToolResultSchema.parse(await runWithMcpTraceparent(
-                telemetryOperation?.traceparent,
+            const result = CallToolResultSchema.parse(await runWithMcpPropagation(
+                telemetryOperation?.propagation,
                 () => this.correlationContext.run(
                     pending.correlation,
                     () => this.connections.getClient(record.serverId).callTool(
-                        { name: record.request.toolName, arguments: pending.arguments },
+                        {
+                            name: record.request.toolName,
+                            arguments: pending.arguments,
+                            ...(telemetryOperation?.propagation === undefined
+                                ? {}
+                                : { _meta: { ...telemetryOperation.propagation } }),
+                        },
                         CallToolResultSchema,
                         {
                             signal: pending.controller.signal,
@@ -555,10 +561,11 @@ export class ExecutionService {
             // Protocol evidence is best-effort for telemetry and cannot change the tool result.
         }
         try {
+            const effectiveErrorType = rpcResponseStatusCode ?? errorType;
             const span = operation.end({
                 endTimeMs: completedMs,
                 ...(requestId === undefined ? {} : { jsonRpcRequestId: requestId }),
-                ...(errorType === undefined ? {} : { errorType }),
+                ...(effectiveErrorType === undefined ? {} : { errorType: effectiveErrorType }),
                 ...(rpcResponseStatusCode === undefined ? {} : { rpcResponseStatusCode }),
             });
             if (span) {

@@ -37,11 +37,13 @@ import type { McpResource } from "./resources.js";
 import {
     ConnectionManager,
     ConnectionManagerError,
+    type ActiveConnectionProtocolOperation,
     type CompletedConnectionSession,
     type ConnectionDefinition,
     type ConnectionInitializationSnapshot,
     type ConnectionProtocolOperation,
     type ConnectionSnapshot,
+    type StartedConnectionProtocolOperation,
 } from "./connection-manager.js";
 import {
     ExecutionConflictError,
@@ -177,6 +179,7 @@ export class WorkbenchApi {
             redactor,
             onSecretsResolved: (_serverId, values) => this.repository.registerSecretValues(values),
             correlation: (serverId) => executions?.correlationFor(serverId),
+            onOperationStart: (operation) => this.startProtocolOperation(operation),
             onOperation: (operation) => this.recordProtocolOperation(operation),
             onSession: (session) => this.recordProtocolSession(session),
             now: () => this.now().getTime(),
@@ -203,47 +206,66 @@ export class WorkbenchApi {
     }
 
     private recordProtocolOperation(operation: ConnectionProtocolOperation): void {
-        // ExecutionService records the client tools/call after it can distinguish
-        // a successful JSON-RPC response from CallToolResult.isError. The paired
-        // in-process server operation and every other MCP method are journaled here.
+        const executionId = operation.correlation?.executionId;
+        if (executionId === undefined || operation.requestId === undefined) return;
+        this.correlations.linkMcpRequest({
+            executionId,
+            serverId: operation.connectionId,
+            requestId: operation.requestId,
+            method: operation.method,
+        });
+    }
+
+    private startProtocolOperation(
+        operation: StartedConnectionProtocolOperation,
+    ): ActiveConnectionProtocolOperation | undefined {
+        // ExecutionService owns the correlated client tools/call span because it
+        // also classifies CallToolResult.isError. The journal still injects its
+        // execution-local carrier and records the request/response evidence.
         if (operation.role === "client"
             && operation.method === "tools/call"
             && operation.correlation?.executionId !== undefined) {
-            return;
+            return undefined;
         }
-        const span = this.telemetry.recordOperation({
+        const active = this.telemetry.startOperation({
             role: operation.role,
             method: operation.method,
             transport: operation.transport,
             protocolVersion: operation.protocolVersion,
             mcpSessionId: operation.mcpSessionId,
             jsonRpcProtocolVersion: "2.0",
-            jsonRpcRequestId: operation.requestId,
             peerAddress: operation.peerAddress,
             peerPort: operation.peerPort,
             toolName: operation.toolName,
             promptName: operation.promptName,
             resourceUri: operation.resourceUri,
-            errorType: operation.errorType,
-            rpcResponseStatusCode: operation.rpcResponseStatusCode,
             serverId: operation.connectionId,
             executionId: operation.correlation?.executionId,
             evaluationRunId: operation.correlation?.evaluationRunId,
             testCaseId: operation.correlation?.testCaseId,
             startTimeMs: operation.startTimeMs,
-            endTimeMs: operation.endTimeMs,
+            ...(operation.remotePropagation === undefined
+                ? {}
+                : { remotePropagation: operation.remotePropagation }),
         });
-        const executionId = operation.correlation?.executionId;
-        if (executionId === undefined) return;
-        if (operation.requestId !== undefined) {
-            this.correlations.linkMcpRequest({
-                executionId,
-                serverId: operation.connectionId,
-                requestId: operation.requestId,
-                method: operation.method,
-            });
-        }
-        if (span) this.correlations.linkTelemetry(executionId, span.traceId, span.spanId);
+        return {
+            ...(active.propagation === undefined ? {} : { propagation: active.propagation }),
+            run: (dispatch) => active.run(dispatch),
+            complete: (completed) => {
+                const span = active.end({
+                    endTimeMs: completed.endTimeMs,
+                    protocolVersion: completed.protocolVersion,
+                    mcpSessionId: completed.mcpSessionId,
+                    errorType: completed.errorType,
+                    rpcResponseStatusCode: completed.rpcResponseStatusCode,
+                    jsonRpcRequestId: completed.requestId,
+                });
+                const executionId = completed.correlation?.executionId;
+                if (executionId !== undefined && span !== undefined) {
+                    this.correlations.linkTelemetry(executionId, span.traceId, span.spanId);
+                }
+            },
+        };
     }
 
     private recordProtocolSession(session: CompletedConnectionSession): void {

@@ -55,7 +55,11 @@ class FakeConnections implements ExecutionConnectionPort {
     constructor(
         private readonly tools: readonly Tool[],
         private readonly invoke: (
-            params: { name: string; arguments?: Record<string, unknown> },
+            params: {
+                name: string;
+                arguments?: Record<string, unknown>;
+                _meta?: Record<string, unknown>;
+            },
             options?: { signal?: AbortSignal; timeout?: number },
         ) => Promise<unknown>,
         private readonly journal?: ProtocolJournal,
@@ -77,7 +81,7 @@ class FakeConnections implements ExecutionConnectionPort {
 
     getClient(): Pick<Client, "callTool"> {
         return {
-            callTool: ((params: { name: string; arguments?: Record<string, unknown> }, _schema: unknown, options?: { signal?: AbortSignal; timeout?: number }) =>
+            callTool: ((params: { name: string; arguments?: Record<string, unknown>; _meta?: Record<string, unknown> }, _schema: unknown, options?: { signal?: AbortSignal; timeout?: number }) =>
                 this.invoke(params, options)) as Client["callTool"],
         };
     }
@@ -420,7 +424,7 @@ test("execution distinguishes tool errors and protocol timeouts", async () => {
     const protocolFailed = await waitForTerminal(protocolService, protocolAccepted.id);
     assert.equal(protocolFailed.status, "failed");
     assert.equal(protocolFailed.error?.category, "protocol");
-    assert.equal(telemetryInputs.at(-1)?.errorType, `mcp_${ErrorCode.InvalidParams}`);
+    assert.equal(telemetryInputs.at(-1)?.errorType, String(ErrorCode.InvalidParams));
     assert.equal(telemetryInputs.at(-1)?.rpcResponseStatusCode, String(ErrorCode.InvalidParams));
 });
 
@@ -432,10 +436,12 @@ test("execution activates a pre-call span and clears its traceparent after compl
         events.push(`start:${input.method}`);
         return {
             traceparent,
+            propagation: { traceparent },
             correlation: {
                 traceId: "11111111111111111111111111111111",
                 spanId: "2222222222222222",
             },
+            run: (operation) => operation(),
             end(completion) {
                 events.push(`end:${completion.errorType ?? "ok"}`);
                 return this.correlation;
@@ -443,8 +449,9 @@ test("execution activates a pre-call span and clears its traceparent after compl
         };
     };
     const service = new ExecutionService(
-        new FakeConnections([safeTool], async () => {
+        new FakeConnections([safeTool], async (params) => {
             events.push(`invoke:${currentMcpTraceparent() ?? "missing"}`);
+            assert.equal(params._meta?.traceparent, traceparent);
             return { content: [{ type: "text", text: "ok" }] };
         }),
         { telemetry },
@@ -593,6 +600,7 @@ function captureTelemetry(
     inputs: McpOperationInput[],
 ): (input: McpOperationStartInput) => ActiveMcpOperation {
     return (input) => ({
+        run: (operation) => operation(),
         end(completion) {
             inputs.push(structuredClone({ ...input, ...completion }));
             return undefined;

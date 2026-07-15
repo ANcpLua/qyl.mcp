@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { ConnectionManager, type ConnectionProtocolOperation } from "./connection-manager.js";
 import { startFixtureHttpServer, type FixtureHttpRequest } from "./fixture-http.js";
-import { runWithMcpTraceparent } from "./telemetry.js";
+import { runWithMcpPropagation, runWithMcpTraceparent } from "./telemetry.js";
 
 test("connection manager owns a real stdio MCP lifecycle and exhaustive discovery", { timeout: 15_000 }, async () => {
     const scriptPath = fileURLToPath(
@@ -43,6 +43,11 @@ test("connection manager owns a real stdio MCP lifecycle and exhaustive discover
         });
         assert.equal(result.isError, undefined);
         assert(operations.some((operation) => operation.method === "tools/call"));
+        for (const method of ["initialize", "notifications/initialized"]) {
+            const operation = operations.find((candidate) => candidate.method === method);
+            assert(operation, `missing ${method} operation`);
+            assert.equal(operation.mcpSessionId, undefined);
+        }
     } finally {
         if (manager.get("stdio-fixture").lifecycle !== "disconnected") {
             await manager.disconnect("stdio-fixture");
@@ -114,13 +119,23 @@ for (const transport of ["streamable-http", "sse"] as const) {
 
             const firstTraceparent = "00-11111111111111111111111111111111-aaaaaaaaaaaaaaaa-01";
             const secondTraceparent = "00-22222222222222222222222222222222-bbbbbbbbbbbbbbbb-00";
+            const firstCarrier = {
+                traceparent: firstTraceparent,
+                tracestate: "qyl=first",
+                baggage: "tenant=first",
+            };
+            const secondCarrier = {
+                traceparent: secondTraceparent,
+                tracestate: "qyl=second",
+                baggage: "tenant=second",
+            };
             const client = manager.getClient(transport);
             const [first, second] = await Promise.all([
-                runWithMcpTraceparent(firstTraceparent, () => client.callTool({
+                runWithMcpPropagation(firstCarrier, () => client.callTool({
                     name: "fixture.safe_lookup",
                     arguments: { query: `${transport}-first` },
                 })),
-                runWithMcpTraceparent(secondTraceparent, () => client.callTool({
+                runWithMcpPropagation(secondCarrier, () => client.callTool({
                     name: "fixture.safe_lookup",
                     arguments: { query: `${transport}-second` },
                 })),
@@ -130,19 +145,38 @@ for (const transport of ["streamable-http", "sse"] as const) {
             const propagated = new Map(
                 fixture.requests
                     .map(toolCallRequest)
-                    .filter((request): request is { query: string; traceparent?: string } => request !== undefined)
-                    .map((request) => [request.query, request.traceparent]),
+                    .filter((request): request is ToolCallRequest => request !== undefined)
+                    .map((request) => [request.query, request]),
             );
-            assert.equal(propagated.get(`${transport}-first`), firstTraceparent);
-            assert.equal(propagated.get(`${transport}-second`), secondTraceparent);
-            assert.equal(
-                fixture.requests.some((request) => toolCallRequest(request) === undefined
-                    && request.traceparent !== undefined),
-                false,
-            );
+            assert.deepEqual(propagated.get(`${transport}-first`), {
+                query: `${transport}-first`,
+                ...firstCarrier,
+            });
+            assert.deepEqual(propagated.get(`${transport}-second`), {
+                query: `${transport}-second`,
+                ...secondCarrier,
+            });
+            assert.equal(fixture.requests.some((request) => request.traceparent !== undefined), false);
             assert(operations.some((operation) => operation.method === "tools/call"
                 && operation.role === "client"));
             assert.equal(operations.some((operation) => operation.role === "server"), false);
+            if (transport === "streamable-http") {
+                const sessionId = connected.initialization?.sessionId;
+                assert.equal(typeof sessionId, "string");
+                assert(sessionId !== undefined);
+                assert(sessionId.length > 0);
+                for (const method of ["initialize", "notifications/initialized"]) {
+                    const operation = operations.find((candidate) => candidate.method === method);
+                    assert(operation, `missing ${method} operation`);
+                    assert.equal(operation.mcpSessionId, sessionId);
+                }
+            } else {
+                for (const method of ["initialize", "notifications/initialized"]) {
+                    const operation = operations.find((candidate) => candidate.method === method);
+                    assert(operation, `missing ${method} operation`);
+                    assert.equal(operation.mcpSessionId, undefined);
+                }
+            }
             assert.doesNotMatch(
                 JSON.stringify({ connected, journal: manager.getJournal(transport)?.snapshot() }),
                 new RegExp(secret, "u"),
@@ -156,17 +190,33 @@ for (const transport of ["streamable-http", "sse"] as const) {
     });
 }
 
-function toolCallRequest(
-    request: FixtureHttpRequest,
-): { query: string; traceparent?: string } | undefined {
+interface ToolCallRequest {
+    query: string;
+    traceparent?: string;
+    tracestate?: string;
+    baggage?: string;
+}
+
+function toolCallRequest(request: FixtureHttpRequest): ToolCallRequest | undefined {
     if (typeof request.body !== "object" || request.body === null || Array.isArray(request.body)) return undefined;
     const message = request.body as Record<string, unknown>;
     if (message.method !== "tools/call") return undefined;
     const params = message.params;
     if (typeof params !== "object" || params === null || Array.isArray(params)) return undefined;
-    const args = (params as Record<string, unknown>).arguments;
+    const parameters = params as Record<string, unknown>;
+    const args = parameters.arguments;
     if (typeof args !== "object" || args === null || Array.isArray(args)) return undefined;
     const query = (args as Record<string, unknown>).query;
     if (typeof query !== "string") return undefined;
-    return { query, ...(request.traceparent === undefined ? {} : { traceparent: request.traceparent }) };
+    const meta = typeof parameters._meta === "object"
+        && parameters._meta !== null
+        && !Array.isArray(parameters._meta)
+        ? parameters._meta as Record<string, unknown>
+        : {};
+    return {
+        query,
+        ...(typeof meta.traceparent === "string" ? { traceparent: meta.traceparent } : {}),
+        ...(typeof meta.tracestate === "string" ? { tracestate: meta.tracestate } : {}),
+        ...(typeof meta.baggage === "string" ? { baggage: meta.baggage } : {}),
+    };
 }

@@ -7,7 +7,7 @@ import {
 } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { FetchLike, Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type {
     Implementation,
     Prompt,
@@ -19,16 +19,19 @@ import type {
 import {
     JournaledTransport,
     ProtocolJournal,
+    type ActiveProtocolOperation,
     type CompletedProtocolOperation,
     type ProtocolExecutionCorrelation,
     type ProtocolJournalOptions,
+    type ProtocolPropagationCarrier,
+    type StartedProtocolOperation,
 } from "./protocol-journal.js";
 import {
     SecretRedactor,
     validateEnvironmentVariableName,
 } from "./secret-redactor.js";
 import { Constants } from "./constants.js";
-import { currentMcpTraceparent } from "./telemetry.js";
+import { currentMcpPropagation } from "./telemetry.js";
 import type { Readable } from "node:stream";
 
 const DEFAULT_CONNECT_TIMEOUT_MS = 60_000;
@@ -160,8 +163,14 @@ export interface ConnectionManagerOptions {
     connectTimeoutMs?: number;
     disconnectTimeoutMs?: number;
     maxDiscoveryPages?: number;
-    journal?: Omit<ProtocolJournalOptions, "redactor" | "onOperation" | "initialSequence">;
+    journal?: Omit<
+        ProtocolJournalOptions,
+        "redactor" | "onOperationStart" | "onOperation" | "initialSequence"
+    >;
     correlation?: (connectionId: string) => ProtocolExecutionCorrelation | undefined;
+    onOperationStart?: (
+        operation: StartedConnectionProtocolOperation,
+    ) => ActiveConnectionProtocolOperation | undefined;
     onOperation?: (operation: ConnectionProtocolOperation) => void;
     onSession?: (session: CompletedConnectionSession) => void;
     redactor?: SecretRedactor;
@@ -176,6 +185,21 @@ export interface ConnectionProtocolOperation extends CompletedProtocolOperation 
     mcpSessionId?: string;
     peerAddress?: string;
     peerPort?: number;
+}
+
+export interface StartedConnectionProtocolOperation extends StartedProtocolOperation {
+    connectionId: string;
+    transport: ConnectionTransportKind;
+    protocolVersion?: string;
+    mcpSessionId?: string;
+    peerAddress?: string;
+    peerPort?: number;
+}
+
+export interface ActiveConnectionProtocolOperation {
+    readonly propagation?: ProtocolPropagationCarrier;
+    run<T>(operation: () => T): T;
+    complete(operation: ConnectionProtocolOperation): void;
 }
 
 export interface CompletedConnectionSession {
@@ -221,6 +245,8 @@ interface ConnectionEntry {
     definition: ConnectionDefinition;
     lifecycle: ConnectionLifecycle;
     active?: ActiveConnection;
+    /** Transport being initialized, before it becomes the active connection. */
+    connectingTransport?: JournaledTransport;
     journal?: ProtocolJournal;
     serverJournal?: ProtocolJournal;
     initialization?: ConnectionInitializationSnapshot;
@@ -309,8 +335,14 @@ export class ConnectionManager {
     private readonly connectTimeoutMs: number;
     private readonly disconnectTimeoutMs: number;
     private readonly maxDiscoveryPages: number;
-    private readonly journalOptions: Omit<ProtocolJournalOptions, "redactor" | "onOperation" | "initialSequence">;
+    private readonly journalOptions: Omit<
+        ProtocolJournalOptions,
+        "redactor" | "onOperationStart" | "onOperation" | "initialSequence"
+    >;
     private readonly correlation?: (connectionId: string) => ProtocolExecutionCorrelation | undefined;
+    private readonly onOperationStart?: (
+        operation: StartedConnectionProtocolOperation,
+    ) => ActiveConnectionProtocolOperation | undefined;
     private readonly onOperation?: (operation: ConnectionProtocolOperation) => void;
     private readonly onSession?: (session: CompletedConnectionSession) => void;
     private readonly redactor: SecretRedactor;
@@ -334,6 +366,7 @@ export class ConnectionManager {
         );
         this.journalOptions = options.journal ?? {};
         this.correlation = options.correlation;
+        this.onOperationStart = options.onOperationStart;
         this.onOperation = options.onOperation;
         this.onSession = options.onSession;
         this.redactor = options.redactor ?? new SecretRedactor({ environment: this.environment });
@@ -470,6 +503,7 @@ export class ConnectionManager {
             initialSequence: (entry.journal?.highWaterMark() ?? 0) + 1,
             redactor,
             now: this.now,
+            onOperationStart: (operation) => this.startOperation(entry, operation),
             onOperation: (operation) => this.publishOperation(entry, operation),
         });
         const serverJournal = new ProtocolJournal({
@@ -477,6 +511,7 @@ export class ConnectionManager {
             initialSequence: (entry.serverJournal?.highWaterMark() ?? 0) + 1,
             redactor,
             now: this.now,
+            onOperationStart: (operation) => this.startOperation(entry, operation),
             onOperation: (operation) => this.publishOperation(entry, operation),
         });
         entry.redactor = redactor;
@@ -501,7 +536,9 @@ export class ConnectionManager {
             server = created.server;
             const transport = new JournaledTransport(created.transport, journal, {
                 correlation: () => this.correlation?.(connectionId),
+                propagation: currentMcpPropagation,
             });
+            entry.connectingTransport = transport;
             client = new Client(this.clientInfo);
             client.onclose = () => this.handleUnexpectedClose(entry, client!, journal);
             await withTimeout(
@@ -515,6 +552,7 @@ export class ConnectionManager {
             entry.sessionStartedAtMs = connectedAtMs;
             entry.sessionProtocolVersion = transport.protocolVersion;
             entry.sessionId = transport.sessionId;
+            entry.connectingTransport = undefined;
 
             const capabilities = client.getServerCapabilities() ?? {};
             const discovery = await this.discoverClient(
@@ -543,6 +581,7 @@ export class ConnectionManager {
             return this.snapshotOf(entry);
         } catch (error) {
             await this.cleanupFailedConnection(client, server, journal);
+            entry.connectingTransport = undefined;
             const message = redactor.redactText(errorMessage(error));
             entry.active = undefined;
             entry.lastError = message;
@@ -733,8 +772,8 @@ export class ConnectionManager {
                     env,
                     stderr: "pipe",
                 });
-                // Stdio has no W3C carrier. Keep it explicitly unpropagated, but
-                // drain the child pipe from the moment it is constructed so a
+                // MCP propagation travels in JSON-RPC params._meta for every
+                // transport. Drain the child pipe from the moment it is constructed so a
                 // verbose server cannot block before MCP initialization. Raw
                 // stderr is deliberately discarded rather than journaled or
                 // persisted because it may contain credentials.
@@ -750,7 +789,6 @@ export class ConnectionManager {
                     transport: new StreamableHTTPClientTransport(httpEndpoint(definition.endpoint), {
                         requestInit: { headers },
                         authProvider: definition.authProvider,
-                        fetch: fetchWithActiveMcpTraceparent,
                     }),
                 };
             }
@@ -761,7 +799,6 @@ export class ConnectionManager {
                     transport: new SSEClientTransport(httpEndpoint(definition.endpoint), {
                         requestInit: { headers },
                         authProvider: definition.authProvider,
-                        fetch: fetchWithActiveMcpTraceparent,
                     }),
                 };
             }
@@ -821,6 +858,7 @@ export class ConnectionManager {
             await withTimeout(
                 server.connect(new JournaledTransport(serverTransport, serverJournal, {
                     correlation: () => this.correlation?.(connectionId),
+                    propagation: currentMcpPropagation,
                 })),
                 remaining(deadline, this.now),
                 "In-process MCP server connection timed out.",
@@ -906,20 +944,60 @@ export class ConnectionManager {
         entry: ConnectionEntry,
         operation: CompletedProtocolOperation,
     ): void {
-        if (!this.onOperation) return;
+        const enriched = this.enrichOperation(entry, operation);
+        this.onOperation?.(enriched);
+    }
+
+    private startOperation(
+        entry: ConnectionEntry,
+        operation: StartedProtocolOperation,
+    ): ActiveProtocolOperation | undefined {
+        if (!this.onOperationStart) return undefined;
+        const active = this.onOperationStart(this.enrichOperation(entry, operation));
+        if (active === undefined) return undefined;
+        return {
+            startTimeMs: operation.startTimeMs,
+            ...(active.propagation === undefined ? {} : { propagation: active.propagation }),
+            run: (dispatch) => active.run(dispatch),
+            complete: (completed) => active.complete(this.enrichOperation(entry, completed)),
+        };
+    }
+
+    private enrichOperation(
+        entry: ConnectionEntry,
+        operation: CompletedProtocolOperation,
+    ): ConnectionProtocolOperation;
+    private enrichOperation(
+        entry: ConnectionEntry,
+        operation: StartedProtocolOperation,
+    ): StartedConnectionProtocolOperation;
+    private enrichOperation(
+        entry: ConnectionEntry,
+        operation: StartedProtocolOperation | CompletedProtocolOperation,
+    ): StartedConnectionProtocolOperation | ConnectionProtocolOperation {
         const peer = operation.role === "client" ? connectionPeer(entry.definition) : undefined;
-        const enriched: ConnectionProtocolOperation = {
+        const enriched: StartedConnectionProtocolOperation | ConnectionProtocolOperation = {
             ...operation,
             connectionId: entry.definition.id,
             transport: entry.definition.kind,
         };
-        const protocolVersion = entry.initialization?.protocolVersion ?? entry.sessionProtocolVersion;
-        const mcpSessionId = entry.initialization?.sessionId ?? entry.sessionId;
+        if ("protocolVersion" in operation
+            && operation.protocolVersion !== undefined
+            && entry.sessionProtocolVersion === undefined) {
+            entry.sessionProtocolVersion = operation.protocolVersion;
+        }
+        const protocolVersion = ("protocolVersion" in operation ? operation.protocolVersion : undefined)
+            ?? entry.initialization?.protocolVersion
+            ?? entry.sessionProtocolVersion
+            ?? entry.connectingTransport?.protocolVersion;
+        const mcpSessionId = entry.initialization?.sessionId
+            ?? entry.sessionId
+            ?? entry.connectingTransport?.sessionId;
         if (protocolVersion !== undefined) enriched.protocolVersion = protocolVersion;
         if (mcpSessionId !== undefined) enriched.mcpSessionId = mcpSessionId;
         if (peer?.address !== undefined) enriched.peerAddress = peer.address;
         if (peer?.port !== undefined) enriched.peerPort = peer.port;
-        this.onOperation(enriched);
+        return enriched;
     }
 
     private completeSession(
@@ -1019,42 +1097,6 @@ export class ConnectionManager {
             }
         }
     }
-}
-
-const fetchWithActiveMcpTraceparent: FetchLike = async (url, init) => {
-    const traceparent = currentMcpTraceparent();
-    if (traceparent === undefined
-        || !isValidTraceparent(traceparent)
-        || !isJsonRpcRequest(init?.body)) {
-        return fetch(url, init);
-    }
-    const headers = new Headers(init?.headers);
-    headers.set("traceparent", traceparent);
-    return fetch(url, { ...init, headers });
-};
-
-function isJsonRpcRequest(body: RequestInit["body"]): boolean {
-    if (typeof body !== "string") return false;
-    try {
-        const parsed = JSON.parse(body) as unknown;
-        const messages = Array.isArray(parsed) ? parsed : [parsed];
-        return messages.some((message) => {
-            if (typeof message !== "object" || message === null || Array.isArray(message)) return false;
-            const candidate = message as Record<string, unknown>;
-            return candidate.jsonrpc === "2.0"
-                && typeof candidate.method === "string"
-                && (typeof candidate.id === "string" || typeof candidate.id === "number");
-        });
-    } catch {
-        return false;
-    }
-}
-
-function isValidTraceparent(value: string): boolean {
-    const match = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/u.exec(value);
-    return match !== null
-        && match[1] !== "00000000000000000000000000000000"
-        && match[2] !== "0000000000000000";
 }
 
 function drainStdioStderr(
