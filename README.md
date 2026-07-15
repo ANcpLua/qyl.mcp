@@ -19,7 +19,8 @@ npm run build
 npm start
 ```
 
-Open <http://127.0.0.1:18888>. For live Qyl data, configure the collector before
+Open <http://127.0.0.1:18888>. Set `QYL_MCP_RUNNER_PORT` to use another local
+port. For live Qyl data, configure the collector before
 starting the runner:
 
 ```bash
@@ -77,15 +78,22 @@ refreshed without replacing the last useful snapshot on failure.
 
 For each tool, the inspector shows its complete input schema and annotations.
 The invocation composer keeps a generated form and raw JSON view synchronized,
-validates input before submission, applies a bounded timeout, and includes an
-idempotency key. Results preserve MCP text, image, audio, embedded-resource,
-resource-link, and structured-content shapes while blocking unsafe URLs and
-active content.
+validates input before submission in a deadline-bounded worker, applies a
+bounded execution timeout, and includes an idempotency key. JSON Schema and
+pattern assertions use the same isolated validation path; the browser never
+compiles a server-supplied regular expression. Results preserve MCP text,
+image, audio, embedded-resource, resource-link, and structured-content shapes
+while blocking unsafe URLs and active content.
 
 Each persisted execution exposes its request, result or typed error, lifecycle,
 duration, attempts, cancellation state, redacted JSON-RPC timeline, and Qyl
 observability evidence. Live protocol and execution streams use resumable event
 identifiers; cancellation aborts the in-flight SDK request.
+
+Server and workspace deletion is serialized against ordinary mutations.
+Deletion is rejected while relevant executions are active or evaluation
+evidence still references the server; terminal standalone execution records
+are removed with the server so durable state cannot outlive its owner.
 
 The tests workspace persists real tool invocations with status, exact, partial,
 JSON Schema, pattern, and latency assertions. Suites run with bounded
@@ -140,6 +148,13 @@ MCP events.
 - Recommended seconds histograms: `mcp.client.operation.duration`,
   `mcp.client.session.duration`, `mcp.server.operation.duration`, and
   `mcp.server.session.duration`.
+
+Operations start before SDK dispatch. Standard W3C trace context and baggage,
+plus fields from a host-configured propagator, travel in the unprefixed MCP
+`params._meta` bag on every supported transport. An inbound MCP server span uses
+that remote context as its parent (or starts as a root when none is valid) and
+links any independent ambient transport span. HTTP/SSE propagation remains a
+separate instrumentation concern and is never replaced by the MCP carrier.
 
 The 25 well-known `mcp.method.name` values are:
 
@@ -226,8 +241,11 @@ read surfaces.
   JavaScript OTLP metrics pipeline does not export exemplars, so correlated MCP
   metrics are explicitly marked partial and selected by a bounded execution
   time window plus semantic operation identity rather than an exact trace link.
-- Stdio has no standardized downstream trace-context propagation. Exact
-  correlation therefore covers the workbench MCP operation span, not arbitrary
-  internal spans created by the child server.
+- Downstream spans from an external or stdio server correlate only when that
+  server honors the MCP propagation metadata; qyl.mcp cannot retrofit
+  instrumentation into an uninstrumented peer.
+- The live connection journal is process-local. Execution, test, and evaluation
+  evidence is durable, but protocol traffic that is not attached to retained
+  execution evidence is not reconstructed after a runner restart.
 - Local conformance servers cover stdio, Streamable HTTP, and SSE. External
   remote services cannot be verified without their endpoints and credentials.
