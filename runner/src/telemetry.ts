@@ -191,6 +191,10 @@ export class McpTelemetry {
     private readonly histograms = new Map<string, Histogram>();
     private readonly redactor: SecretRedactor;
 
+    get operationTracingEnabled(): boolean {
+        return this.tracer !== undefined;
+    }
+
     constructor(
         env: Readonly<Record<string, string | undefined>> = process.env,
         redactor: SecretRedactor = new SecretRedactor({ environment: env }),

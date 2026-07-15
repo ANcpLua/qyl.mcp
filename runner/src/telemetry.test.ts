@@ -296,6 +296,7 @@ test("resource spans sanitize URIs and only attach them to URI-bearing methods",
 
 test("disabled self-telemetry remains a no-op for operations and sessions", async () => {
     const telemetry = new McpTelemetry({ QYL_MCP_TELEMETRY: "0" });
+    assert.equal(telemetry.operationTracingEnabled, false);
     assert.equal(telemetry.recordOperation({
         role: "client",
         method: "ping",
@@ -322,6 +323,7 @@ test("server operations parent from MCP metadata and link independent ambient tr
         new SecretRedactor(),
         { tracer: provider.getTracer("qyl.mcp/test") },
     );
+    assert.equal(telemetry.operationTracingEnabled, true);
     const ambientCarrier = {
         traceparent: "00-11111111111111111111111111111111-aaaaaaaaaaaaaaaa-01",
         tracestate: "qyl=ambient",

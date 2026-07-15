@@ -316,4 +316,18 @@ test("provider does not fabricate trace or log evidence without correlation ids"
     assert.deepEqual(result.traces, []);
     assert.deepEqual(result.logs, []);
     assert.deepEqual(result.metrics, []);
+
+    const disabledReason =
+        "Workbench MCP telemetry is disabled; QYL_MCP_TELEMETRY=0 prevents execution span identifiers from being created.";
+    const disabled = await provider.queryExecution({
+        correlation: { executionId: "execution-disabled", traceIds: [], spanIds: [] },
+        instrumentationUnavailableReason: disabledReason,
+        startedAt: "2026-07-15T00:00:00Z",
+        completedAt: "2026-07-15T00:00:01Z",
+    });
+    assert.equal(fetchCount, 0);
+    for (const availability of Object.values(disabled.signals)) {
+        assert.equal(availability.status, "unavailable");
+        assert.equal(availability.unavailableReason, disabledReason);
+    }
 });

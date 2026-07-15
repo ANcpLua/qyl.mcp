@@ -43,6 +43,7 @@ export type QylExecutionObservability = RunnerMcpExecutionTelemetryResponse;
 
 export interface QylObservabilityQuery {
     correlation: WorkbenchTelemetryCorrelation;
+    instrumentationUnavailableReason?: string;
     startedAt?: string;
     completedAt?: string;
     serviceName?: string;
@@ -148,6 +149,25 @@ export class QylObservabilityProvider {
         query: QylObservabilityQuery,
     ): Promise<QylExecutionObservability> {
         const correlation = normalizeCorrelation(query.correlation);
+        if (correlation.traceIds.length === 0 && query.instrumentationUnavailableReason !== undefined) {
+            const reason = boundedReason(this.redactor.redactText(query.instrumentationUnavailableReason));
+            const signal = () => unavailableAvailability(reason);
+            return {
+                signals: {
+                    traces: signal(),
+                    logs: signal(),
+                    metrics: signal(),
+                    exceptions: signal(),
+                    toolCallEvents: signal(),
+                },
+                correlation: RunnerMcpTelemetryCorrelationSchema.parse(correlation),
+                traces: [],
+                logs: [],
+                metrics: [],
+                queriedAt: this.now().toISOString(),
+                selfExportSuppressed: true,
+            };
+        }
         const [traces, logs, metrics] = await Promise.all([
             this.collectTraces(correlation.traceIds),
             this.collectLogs(correlation.traceIds),

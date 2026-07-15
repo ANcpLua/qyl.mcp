@@ -101,6 +101,8 @@ const ContractIdSchemas: Readonly<Record<string, z.ZodType<string>>> = {
     exportId: RunnerMcpEvaluationExportIdSchema,
 };
 const AUTO_CONNECT_CONCURRENCY = 4;
+const TELEMETRY_DISABLED_REASON =
+    "Workbench MCP telemetry is disabled; QYL_MCP_TELEMETRY=0 prevents execution span identifiers from being created.";
 
 const ProtocolSseEvent = requirePublishedSseEvent(
     qylOpenApi.paths["/runner/workspaces/{workspaceId}/servers/{serverId}/protocol/stream"]
@@ -690,6 +692,9 @@ export class WorkbenchApi {
             };
             response.json(await this.observability.queryExecution({
                 correlation,
+                ...(!this.telemetry.operationTracingEnabled && correlation.traceIds.length === 0
+                    ? { instrumentationUnavailableReason: TELEMETRY_DISABLED_REASON }
+                    : {}),
                 startedAt: execution.startedAt,
                 completedAt: execution.completedAt,
                 method: "tools/call",
@@ -1222,6 +1227,9 @@ export class WorkbenchApi {
             };
             responses.push(await this.observability.queryExecution({
                 correlation,
+                ...(!this.telemetry.operationTracingEnabled && correlation.traceIds.length === 0
+                    ? { instrumentationUnavailableReason: TELEMETRY_DISABLED_REASON }
+                    : {}),
                 startedAt: execution.startedAt,
                 completedAt: execution.completedAt,
                 method: "tools/call",
