@@ -56,7 +56,11 @@ import {
   shortId,
   summarizeMcpStats,
 } from "./summaries.js";
-import { registerTelemetryTools, toolError } from "./tools.js";
+import {
+  READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
+  registerTelemetryTools,
+  toolError,
+} from "./tools.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 
 // The vite-built single-file viewers live next to the compiled server code.
@@ -87,6 +91,7 @@ export function createServer(): McpServer {
         "look at traces.",
       inputSchema: DisplayTracesInputSchema,
       outputSchema: DisplayTracesOutputSchema,
+      annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
     async ({ trace_id, session_id, limit }: DisplayTracesInput): Promise<CallToolResult> => {
@@ -141,6 +146,7 @@ export function createServer(): McpServer {
         "or MCP monitoring.",
       inputSchema: DisplayMcpDashboardInputSchema,
       outputSchema: DisplayMcpDashboardOutputSchema,
+      annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: { ui: { resourceUri: DASHBOARD_RESOURCE_URI } },
     },
     async ({ hours }: DisplayMcpDashboardInput): Promise<CallToolResult> => {
@@ -167,6 +173,7 @@ export function createServer(): McpServer {
         "The model should NOT call this tool directly.",
       inputSchema: FetchTelemetryInputSchema,
       outputSchema: FetchTelemetryOutputSchema,
+      annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({

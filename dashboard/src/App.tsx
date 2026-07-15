@@ -123,12 +123,12 @@ export default function App() {
                 telemetryError={workbench.telemetryError}
                 busy={workbench.busy}
                 onUpdatePreference={workbench.updatePreference}
-                onServerAction={async (action) => { await workbench.serverAction(action); }}
-                onDeleteServer={async (serverId) => { await workbench.deleteServer(serverId); }}
-                onRefreshDiscovery={async () => { await workbench.refreshDiscovery(); }}
+                onServerAction={workbench.serverAction}
+                onDeleteServer={workbench.deleteServer}
+                onRefreshDiscovery={workbench.refreshDiscovery}
                 onStartExecution={workbench.startExecution}
-                onCancelExecution={async (executionId) => { await workbench.cancelExecution(executionId); }}
-                onLoadTelemetry={async (executionId) => { await workbench.loadTelemetry(executionId); }}
+                onCancelExecution={workbench.cancelExecution}
+                onLoadTelemetry={workbench.loadTelemetry}
               />
             ) : (
               <section className="empty-state panel-surface">

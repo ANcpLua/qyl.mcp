@@ -193,6 +193,14 @@ try {
     "real SDK discovery returns seven contract tools and server surfaces",
     discoveryResponse.ok && discovery.tools?.count === 7 && Array.isArray(discovery.prompts?.items),
   );
+  check(
+    "all qyl query tools publish complete read-only safety annotations",
+    discovery.tools?.items?.every((tool) =>
+      tool.annotations?.readOnlyHint === true
+      && tool.annotations?.destructiveHint === false
+      && tool.annotations?.idempotentHint === true
+      && tool.annotations?.openWorldHint === false),
+  );
 
   const executionUrl = `${baseUrl}/runner/workspaces/default/servers/${serverId}/executions`;
   const invocation = {
@@ -201,27 +209,13 @@ try {
     timeoutMs: 5_000,
     idempotencyKey: "smoke-list-traces-0001",
   };
-  const unconfirmedCall = await fetch(executionUrl, {
+  const call = await fetch(executionUrl, {
     method: "POST",
     headers: { "content-type": "application/json", cookie },
     body: JSON.stringify(invocation),
   });
-  check(
-    "tools without complete safety annotations require confirmation",
-    unconfirmedCall.status === 409,
-  );
-  const call = await fetch(executionUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json", cookie },
-    body: JSON.stringify({
-      ...invocation,
-      confirmation: {
-        acknowledged: true,
-        acknowledgement: "Approved for the local smoke invocation.",
-      },
-    }),
-  });
   const accepted = await call.json();
+  check("explicitly read-only tools run without synthesized confirmation", call.status === 202);
   if (call.status !== 202 || !accepted.execution?.id) {
     throw new Error(`workbench invocation was not accepted (${call.status}): ${JSON.stringify(accepted)}`);
   }

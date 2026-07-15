@@ -35,11 +35,13 @@ import type {
 } from "@ancplua/qyl-api-schema/types";
 
 const api = new WorkbenchApi();
+const ALWAYS_ACTIVE = () => true;
 
 export interface Notice {
   id: number;
   tone: "success" | "error" | "info";
   message: string;
+  key?: string;
 }
 
 export interface TestCaseDraft {
@@ -67,6 +69,21 @@ export interface ServerDraft {
 }
 
 let nextNoticeId = 1;
+const RUNNER_CONNECTION_NOTICE_KEY = "runner-connection";
+
+export function mergeNotice(current: Notice[], next: Notice): Notice[] {
+  if (next.key !== undefined) {
+    const existing = current.find((notice) => notice.key === next.key);
+    if (existing?.tone === next.tone && existing.message === next.message) return current;
+    return [...current.filter((notice) => notice.key !== next.key).slice(-3), next];
+  }
+  return [...current.slice(-3), next];
+}
+
+export function removeNoticeByKey(current: Notice[], key: string): Notice[] {
+  if (!current.some((notice) => notice.key === key)) return current;
+  return current.filter((notice) => notice.key !== key);
+}
 
 export function useWorkbench() {
   const [session, setSession] = useState<WorkbenchSession | null>(null);
@@ -94,16 +111,72 @@ export function useWorkbench() {
   const workspaceIdRef = useRef(workspaceId);
   const serverIdRef = useRef(serverId);
   const telemetryRequestRef = useRef(0);
+  const telemetryInFlightRef = useRef(new Map<string, Promise<void>>());
+  const sessionRecoveryRef = useRef<Promise<WorkbenchSession> | null>(null);
   workspaceIdRef.current = workspaceId;
   serverIdRef.current = serverId;
 
-  const notify = useCallback((tone: Notice["tone"], message: string) => {
-    setNotices((current) => [...current.slice(-3), { id: nextNoticeId++, tone, message }]);
+  const setWorkspaceId = useCallback((nextWorkspaceId: string) => {
+    workspaceIdRef.current = nextWorkspaceId;
+    setWorkspaceIdState(nextWorkspaceId);
+  }, []);
+
+  const setServerId = useCallback((nextServerId: string) => {
+    serverIdRef.current = nextServerId;
+    setServerIdState(nextServerId);
+  }, []);
+
+  const notify = useCallback((tone: Notice["tone"], message: string, key?: string) => {
+    const notice: Notice = { id: nextNoticeId++, tone, message, ...(key === undefined ? {} : { key }) };
+    setNotices((current) => mergeNotice(current, notice));
   }, []);
 
   const dismissNotice = useCallback((id: number) => {
     setNotices((current) => current.filter((notice) => notice.id !== id));
   }, []);
+
+  const clearConnectionNotice = useCallback(() => {
+    setNotices((current) => removeNoticeByKey(current, RUNNER_CONNECTION_NOTICE_KEY));
+  }, []);
+
+  const recoverSession = useCallback((): Promise<WorkbenchSession> => {
+    const active = sessionRecoveryRef.current;
+    if (active) return active;
+    const request = api.bootstrapSession().then((nextSession) => {
+      setSession(nextSession);
+      return nextSession;
+    });
+    let tracked: Promise<WorkbenchSession>;
+    tracked = request.finally(() => {
+      if (sessionRecoveryRef.current === tracked) sessionRecoveryRef.current = null;
+    });
+    sessionRecoveryRef.current = tracked;
+    return tracked;
+  }, []);
+
+  const reportBackgroundError = useCallback((error: unknown) => {
+    notify(
+      "error",
+      describeApiError(error),
+      error instanceof WorkbenchApiError && error.status === 0
+        ? RUNNER_CONNECTION_NOTICE_KEY
+        : undefined,
+    );
+  }, [notify]);
+
+  const handleBackgroundError = useCallback(async (error: unknown) => {
+    if (error instanceof WorkbenchApiError && error.status === 401) {
+      try {
+        await recoverSession();
+        clearConnectionNotice();
+        return;
+      } catch (recoveryError) {
+        reportBackgroundError(recoveryError);
+        return;
+      }
+    }
+    reportBackgroundError(error);
+  }, [recoverSession, clearConnectionNotice, reportBackgroundError]);
 
   const runBusy = useCallback(async <T,>(key: string, work: () => Promise<T>): Promise<T> => {
     setBusy((current) => new Set(current).add(key));
@@ -124,7 +197,10 @@ export function useWorkbench() {
     return next;
   }, []);
 
-  const refreshWorkspace = useCallback(async (targetWorkspaceId = workspaceIdRef.current) => {
+  const refreshWorkspace = useCallback(async (
+    targetWorkspaceId = workspaceIdRef.current,
+    isActive: () => boolean = ALWAYS_ACTIVE,
+  ) => {
     if (!targetWorkspaceId) return;
     const [nextPreferences, nextServers, nextTests, nextSuites, nextRuns] = await Promise.all([
       api.getPreferences(targetWorkspaceId),
@@ -133,6 +209,7 @@ export function useWorkbench() {
       api.listSuites(targetWorkspaceId),
       api.listEvaluationRuns(targetWorkspaceId),
     ]);
+    if (!isActive() || targetWorkspaceId !== workspaceIdRef.current) return;
     setPreferences(nextPreferences);
     setServers(nextServers);
     setTestCases(nextTests);
@@ -145,33 +222,51 @@ export function useWorkbench() {
       : nextServers.some((server) => server.id === preferredServer)
         ? preferredServer ?? ""
         : nextServers[0]?.id ?? "";
-    setServerIdState(nextServerId);
-  }, []);
+    setServerId(nextServerId);
+  }, [setServerId]);
 
-  const refreshSelectedServer = useCallback(async (targetWorkspaceId = workspaceIdRef.current, targetServerId = serverIdRef.current) => {
+  const refreshSelectedServer = useCallback(async (
+    targetWorkspaceId = workspaceIdRef.current,
+    targetServerId = serverIdRef.current,
+    isActive: () => boolean = ALWAYS_ACTIVE,
+  ) => {
     if (!targetWorkspaceId || !targetServerId) return;
     const [nextExecutions, nextEvents] = await Promise.all([
       api.listExecutions(targetWorkspaceId, targetServerId),
       api.protocolEvents(targetWorkspaceId, targetServerId),
     ]);
+    if (!isActive()
+      || targetWorkspaceId !== workspaceIdRef.current
+      || targetServerId !== serverIdRef.current) return;
     setExecutions(nextExecutions);
     setProtocolEvents(nextEvents);
   }, []);
 
-  const loadDiscovery = useCallback(async (refresh = false) => {
+  const loadDiscovery = useCallback(async (
+    refresh = false,
+    isActive: () => boolean = ALWAYS_ACTIVE,
+  ): Promise<boolean> => {
     const targetWorkspaceId = workspaceIdRef.current;
     const targetServerId = serverIdRef.current;
-    if (!targetWorkspaceId || !targetServerId) return;
+    if (!targetWorkspaceId || !targetServerId) return false;
     setDiscoveryError(null);
     try {
       const next = refresh
         ? await api.refreshDiscovery(targetWorkspaceId, targetServerId)
         : await api.discovery(targetWorkspaceId, targetServerId);
+      if (!isActive()
+        || targetWorkspaceId !== workspaceIdRef.current
+        || targetServerId !== serverIdRef.current) return false;
       setDiscovery(next);
+      return true;
     } catch (error) {
+      if (!isActive()
+        || targetWorkspaceId !== workspaceIdRef.current
+        || targetServerId !== serverIdRef.current) return false;
       setDiscovery(null);
       setDiscoveryError(describeApiError(error));
       if (refresh) throw error;
+      return false;
     }
   }, []);
 
@@ -210,7 +305,7 @@ export function useWorkbench() {
         const initialWorkspace = nextWorkspaces.some((workspace) => workspace.id === nextSession.activeWorkspaceId)
           ? nextSession.activeWorkspaceId ?? ""
           : nextWorkspaces[0]?.id ?? "";
-        setWorkspaceIdState(initialWorkspace);
+        setWorkspaceId(initialWorkspace);
         setPhase("ready");
       } catch (error) {
         if (!active) return;
@@ -221,39 +316,46 @@ export function useWorkbench() {
     return () => {
       active = false;
     };
-  }, [notify]);
+  }, [notify, setWorkspaceId]);
 
   useEffect(() => {
     if (!workspaceId) {
       setPreferences(null);
       setServers([]);
-      setServerIdState("");
+      setServerId("");
       setTestCases([]);
       setSuites([]);
       setEvaluationRuns([]);
       return;
     }
     let active = true;
-    void refreshWorkspace(workspaceId).catch((error) => {
-      if (active) notify("error", describeApiError(error));
-    });
-    const timer = window.setInterval(() => {
-      void Promise.all([
-        api.listServers(workspaceId),
-        api.listEvaluationRuns(workspaceId),
-      ]).then(([nextServers, nextRuns]) => {
-        if (!active) return;
-        setServers(nextServers);
-        setEvaluationRuns(nextRuns);
-      }, (error: unknown) => {
-        if (active) notify("error", describeApiError(error));
-      });
-    }, 4_000);
+    let timer: number | undefined;
+    const poll = async (initial: boolean) => {
+      try {
+        if (initial) {
+          await refreshWorkspace(workspaceId, () => active);
+        } else {
+          const [nextServers, nextRuns] = await Promise.all([
+            api.listServers(workspaceId),
+            api.listEvaluationRuns(workspaceId),
+          ]);
+          if (!active || workspaceId !== workspaceIdRef.current) return;
+          setServers(nextServers);
+          setEvaluationRuns(nextRuns);
+        }
+        if (active) clearConnectionNotice();
+      } catch (error) {
+        if (active) await handleBackgroundError(error);
+      } finally {
+        if (active) timer = window.setTimeout(() => void poll(false), 4_000);
+      }
+    };
+    void poll(true);
     return () => {
       active = false;
-      window.clearInterval(timer);
+      if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [workspaceId, refreshWorkspace, notify]);
+  }, [workspaceId, refreshWorkspace, clearConnectionNotice, handleBackgroundError, setServerId]);
 
   useEffect(() => {
     telemetryRequestRef.current += 1;
@@ -265,24 +367,35 @@ export function useWorkbench() {
     setTelemetryError(null);
     if (!workspaceId || !serverId) return;
     let active = true;
-    void Promise.all([refreshSelectedServer(workspaceId, serverId), loadDiscovery()]).catch((error) => {
-      if (active) notify("error", describeApiError(error));
-    });
-    const timer = window.setInterval(() => {
-      void refreshSelectedServer(workspaceId, serverId).catch((error) => {
-        if (active) notify("error", describeApiError(error));
-      });
-    }, 2_000);
+    let timer: number | undefined;
+    const poll = async (initial: boolean) => {
+      try {
+        if (initial) {
+          await Promise.all([
+            refreshSelectedServer(workspaceId, serverId, () => active),
+            loadDiscovery(false, () => active),
+          ]);
+        } else {
+          await refreshSelectedServer(workspaceId, serverId, () => active);
+        }
+        if (active) clearConnectionNotice();
+      } catch (error) {
+        if (active) await handleBackgroundError(error);
+      } finally {
+        if (active) timer = window.setTimeout(() => void poll(false), 2_000);
+      }
+    };
+    void poll(true);
     return () => {
       active = false;
-      window.clearInterval(timer);
+      if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [workspaceId, serverId, refreshSelectedServer, loadDiscovery, notify]);
+  }, [workspaceId, serverId, refreshSelectedServer, loadDiscovery, clearConnectionNotice, handleBackgroundError]);
 
   const selectWorkspace = useCallback((nextWorkspaceId: string) => {
-    setWorkspaceIdState(nextWorkspaceId);
-    setServerIdState("");
-  }, []);
+    setWorkspaceId(nextWorkspaceId);
+    setServerId("");
+  }, [setWorkspaceId, setServerId]);
 
   const updatePreference = useCallback(async (patch: WorkspacePreferencesUpdateRequest) => {
     if (!workspaceIdRef.current) return;
@@ -295,22 +408,22 @@ export function useWorkbench() {
   }, [notify]);
 
   const selectServer = useCallback((nextServerId: string) => {
-    setServerIdState(nextServerId);
+    setServerId(nextServerId);
     void updatePreference({
       selectedServerId: nextServerId ? nextServerId as ServerId : undefined,
     });
-  }, [updatePreference]);
+  }, [updatePreference, setServerId]);
 
   const createWorkspace = useCallback((name: string, description?: string) => runBusy("create-workspace", async () => {
     const created = await api.createWorkspace({ name, description: description || undefined });
     await refreshWorkspaceList();
-    setWorkspaceIdState(created.id);
+    setWorkspaceId(created.id);
     notify("success", `Workspace “${created.name}” created.`);
     return created;
   }).catch((error) => {
     notify("error", describeApiError(error));
     throw error;
-  }), [runBusy, refreshWorkspaceList, notify]);
+  }), [runBusy, refreshWorkspaceList, notify, setWorkspaceId]);
 
   const updateWorkspace = useCallback((targetWorkspaceId: string, name: string, description?: string) => runBusy(`update-workspace:${targetWorkspaceId}`, async () => {
     const request: WorkspaceUpdateRequest = { name, description: description ?? "" };
@@ -327,13 +440,13 @@ export function useWorkbench() {
     if (!workspaceIdRef.current) throw new Error("Select a workspace first.");
     const created = await api.createServer(workspaceIdRef.current, draft);
     await refreshWorkspace(workspaceIdRef.current);
-    setServerIdState(created.id);
+    setServerId(created.id);
     notify("success", `Server “${created.name}” saved${draft.autoConnect ? " and connection started" : ""}.`);
     return created;
   }).catch((error) => {
     notify("error", describeApiError(error));
     throw error;
-  }), [runBusy, refreshWorkspace, notify]);
+  }), [runBusy, refreshWorkspace, notify, setServerId]);
 
   const updateServer = useCallback((targetServerId: string, draft: ServerDraft) => runBusy(`update-server:${targetServerId}`, async () => {
     if (!workspaceIdRef.current) throw new Error("Select a workspace first.");
@@ -371,8 +484,7 @@ export function useWorkbench() {
   }).catch((error) => notify("error", describeApiError(error))), [runBusy, notify]);
 
   const refreshDiscovery = useCallback(() => runBusy("discovery", async () => {
-    await loadDiscovery(true);
-    notify("success", "Discovery refreshed from the connected server.");
+    if (await loadDiscovery(true)) notify("success", "Discovery refreshed from the connected server.");
   }).catch((error) => notify("error", describeApiError(error))), [runBusy, loadDiscovery, notify]);
 
   const startExecution = useCallback((request: ExecutionRequest) => runBusy("execute", async () => {
@@ -393,22 +505,40 @@ export function useWorkbench() {
     notify("info", `Cancellation requested for ${execution.id.slice(0, 8)}.`);
   }).catch((error) => notify("error", describeApiError(error))), [runBusy, notify]);
 
-  const loadTelemetry = useCallback((executionId: string) => runBusy(`telemetry:${executionId}`, async () => {
+  const loadTelemetry = useCallback((executionId: string): Promise<void> => {
     const targetWorkspaceId = workspaceIdRef.current;
     const targetServerId = serverIdRef.current;
-    if (!targetWorkspaceId || !targetServerId) return;
-    const requestId = ++telemetryRequestRef.current;
-    setTelemetryError(null);
-    setTelemetry(null);
-    try {
-      const next = await api.executionTelemetry(targetWorkspaceId, targetServerId, executionId);
-      if (requestId === telemetryRequestRef.current && targetWorkspaceId === workspaceIdRef.current && targetServerId === serverIdRef.current) {
-        setTelemetry(next);
+    if (!targetWorkspaceId || !targetServerId) return Promise.resolve();
+    const inFlightKey = JSON.stringify([targetWorkspaceId, targetServerId, executionId]);
+    const active = telemetryInFlightRef.current.get(inFlightKey);
+    if (active) return active;
+
+    const request = runBusy(`telemetry:${executionId}`, async () => {
+      const requestId = ++telemetryRequestRef.current;
+      setTelemetryError(null);
+      setTelemetry(null);
+      try {
+        const next = await api.executionTelemetry(targetWorkspaceId, targetServerId, executionId);
+        if (requestId === telemetryRequestRef.current && targetWorkspaceId === workspaceIdRef.current && targetServerId === serverIdRef.current) {
+          setTelemetry(next);
+        }
+      } catch (error) {
+        if (requestId === telemetryRequestRef.current
+          && targetWorkspaceId === workspaceIdRef.current
+          && targetServerId === serverIdRef.current) {
+          setTelemetryError(describeApiError(error));
+        }
       }
-    } catch (error) {
-      if (requestId === telemetryRequestRef.current) setTelemetryError(describeApiError(error));
-    }
-  }), [runBusy]);
+    });
+    let tracked: Promise<void>;
+    tracked = request.finally(() => {
+      if (telemetryInFlightRef.current.get(inFlightKey) === tracked) {
+        telemetryInFlightRef.current.delete(inFlightKey);
+      }
+    });
+    telemetryInFlightRef.current.set(inFlightKey, tracked);
+    return tracked;
+  }, [runBusy]);
 
   const createTestCase = useCallback((draft: TestCaseDraft) => runBusy("create-test", async () => {
     if (!workspaceIdRef.current) throw new Error("Select a workspace first.");

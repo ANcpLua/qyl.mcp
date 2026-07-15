@@ -11,7 +11,10 @@ import type {
   SearchLogsOutput,
 } from "@ancplua/qyl-api-schema/types";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type {
+  CallToolResult,
+  ToolAnnotations,
+} from "@modelcontextprotocol/sdk/types.js";
 import {
   GetTraceInputSchema,
   GetTraceOutputSchema,
@@ -34,6 +37,17 @@ import {
   redactTelemetryText,
   telemetryToolResult,
 } from "./telemetry-redaction.js";
+
+/**
+ * The qyl telemetry tools only query the configured collector. They neither
+ * mutate it nor reach an unbounded set of external entities.
+ */
+export const READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+} as const satisfies ToolAnnotations;
 
 /** Uniform failure result: clear text + isError, never a thrown exception. */
 export function toolError(err: unknown): CallToolResult {
@@ -58,6 +72,7 @@ export function registerTelemetryTools(server: McpServer): void {
         "Use display_traces instead when the user wants to LOOK at traces in the explorer UI.",
       inputSchema: ListTracesInputSchema,
       outputSchema: ListTracesOutputSchema,
+      annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
     async (args: ListTracesInput): Promise<CallToolResult> => {
       try {
@@ -83,6 +98,7 @@ export function registerTelemetryTools(server: McpServer): void {
         "wants to SEE the trace waterfall.",
       inputSchema: GetTraceInputSchema,
       outputSchema: GetTraceOutputSchema,
+      annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
     async (args: GetTraceInput): Promise<CallToolResult> => {
       try {
@@ -105,6 +121,7 @@ export function registerTelemetryTools(server: McpServer): void {
         "session's traces in the explorer UI.",
       inputSchema: ListSessionsInputSchema,
       outputSchema: ListSessionsOutputSchema,
+      annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
     async (args: ListSessionsInput): Promise<CallToolResult> => {
       try {
@@ -127,6 +144,7 @@ export function registerTelemetryTools(server: McpServer): void {
         "body substring query.",
       inputSchema: SearchLogsInputSchema,
       outputSchema: SearchLogsOutputSchema,
+      annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
     async (args: SearchLogsInput): Promise<CallToolResult> => {
       try {

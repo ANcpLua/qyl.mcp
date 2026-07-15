@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CallToolResultSchema,
   ToolSchema,
@@ -284,6 +284,8 @@ export function InspectorWorkspace({
   const [executionTab, setExecutionTab] = useState<ExecutionTab>("result");
   const [pendingConnectionAction, setPendingConnectionAction] = useState<"connect" | "reconnect" | null>(null);
   const [connectionReviewed, setConnectionReviewed] = useState(false);
+  const loadTelemetryRef = useRef(onLoadTelemetry);
+  loadTelemetryRef.current = onLoadTelemetry;
 
   const tools = useMemo(
     () => (discovery?.tools.items ?? []).map(toolFrom).filter((tool): tool is ToolItem => tool !== null),
@@ -316,8 +318,10 @@ export function InspectorWorkspace({
   }, [executions, selectedExecutionId]);
 
   useEffect(() => {
-    if (selectedExecution) void onLoadTelemetry(selectedExecution.id);
-  }, [selectedExecution?.id, onLoadTelemetry]);
+    if (executionTab === "observability" && selectedExecution) {
+      void loadTelemetryRef.current(selectedExecution.id);
+    }
+  }, [executionTab, selectedExecution?.id]);
 
   useEffect(() => {
     setIdempotencyKey(crypto.randomUUID());
