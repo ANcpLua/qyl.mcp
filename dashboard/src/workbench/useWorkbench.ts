@@ -85,6 +85,37 @@ export function removeNoticeByKey(current: Notice[], key: string): Notice[] {
   return current.filter((notice) => notice.key !== key);
 }
 
+export class LatestKeyedRequestRegistry<T> {
+  private currentKey: string | null = null;
+  private readonly inFlight = new Map<string, Promise<T>>();
+
+  request(key: string, start: () => Promise<T>): Promise<T> {
+    this.currentKey = key;
+    const active = this.inFlight.get(key);
+    if (active) return active;
+
+    const request = start();
+    this.inFlight.set(key, request);
+    void request.then(
+      () => this.release(key, request),
+      () => this.release(key, request),
+    );
+    return request;
+  }
+
+  invalidate(): void {
+    this.currentKey = null;
+  }
+
+  isCurrent(key: string): boolean {
+    return this.currentKey === key;
+  }
+
+  private release(key: string, request: Promise<T>): void {
+    if (this.inFlight.get(key) === request) this.inFlight.delete(key);
+  }
+}
+
 export function useWorkbench() {
   const [session, setSession] = useState<WorkbenchSession | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -110,8 +141,7 @@ export function useWorkbench() {
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const workspaceIdRef = useRef(workspaceId);
   const serverIdRef = useRef(serverId);
-  const telemetryRequestRef = useRef(0);
-  const telemetryInFlightRef = useRef(new Map<string, Promise<void>>());
+  const telemetryRequestsRef = useRef(new LatestKeyedRequestRegistry<ExecutionTelemetry>());
   const sessionRecoveryRef = useRef<Promise<WorkbenchSession> | null>(null);
   workspaceIdRef.current = workspaceId;
   serverIdRef.current = serverId;
@@ -343,9 +373,9 @@ export function useWorkbench() {
           setServers(nextServers);
           setEvaluationRuns(nextRuns);
         }
-        if (active) clearConnectionNotice();
+        if (active && workspaceId === workspaceIdRef.current) clearConnectionNotice();
       } catch (error) {
-        if (active) await handleBackgroundError(error);
+        if (active && workspaceId === workspaceIdRef.current) await handleBackgroundError(error);
       } finally {
         if (active) timer = window.setTimeout(() => void poll(false), 4_000);
       }
@@ -358,7 +388,7 @@ export function useWorkbench() {
   }, [workspaceId, refreshWorkspace, clearConnectionNotice, handleBackgroundError, setServerId]);
 
   useEffect(() => {
-    telemetryRequestRef.current += 1;
+    telemetryRequestsRef.current.invalidate();
     setDiscovery(null);
     setDiscoveryError(null);
     setExecutions([]);
@@ -378,9 +408,13 @@ export function useWorkbench() {
         } else {
           await refreshSelectedServer(workspaceId, serverId, () => active);
         }
-        if (active) clearConnectionNotice();
+        if (active
+          && workspaceId === workspaceIdRef.current
+          && serverId === serverIdRef.current) clearConnectionNotice();
       } catch (error) {
-        if (active) await handleBackgroundError(error);
+        if (active
+          && workspaceId === workspaceIdRef.current
+          && serverId === serverIdRef.current) await handleBackgroundError(error);
       } finally {
         if (active) timer = window.setTimeout(() => void poll(false), 2_000);
       }
@@ -398,12 +432,13 @@ export function useWorkbench() {
   }, [setWorkspaceId, setServerId]);
 
   const updatePreference = useCallback(async (patch: WorkspacePreferencesUpdateRequest) => {
-    if (!workspaceIdRef.current) return;
+    const targetWorkspaceId = workspaceIdRef.current;
+    if (!targetWorkspaceId) return;
     try {
-      const next = await api.updatePreferences(workspaceIdRef.current, patch);
-      setPreferences(next);
+      const next = await api.updatePreferences(targetWorkspaceId, patch);
+      if (targetWorkspaceId === workspaceIdRef.current) setPreferences(next);
     } catch (error) {
-      notify("error", describeApiError(error));
+      if (targetWorkspaceId === workspaceIdRef.current) notify("error", describeApiError(error));
     }
   }, [notify]);
 
@@ -509,35 +544,29 @@ export function useWorkbench() {
     const targetWorkspaceId = workspaceIdRef.current;
     const targetServerId = serverIdRef.current;
     if (!targetWorkspaceId || !targetServerId) return Promise.resolve();
-    const inFlightKey = JSON.stringify([targetWorkspaceId, targetServerId, executionId]);
-    const active = telemetryInFlightRef.current.get(inFlightKey);
-    if (active) return active;
-
-    const request = runBusy(`telemetry:${executionId}`, async () => {
-      const requestId = ++telemetryRequestRef.current;
-      setTelemetryError(null);
-      setTelemetry(null);
-      try {
-        const next = await api.executionTelemetry(targetWorkspaceId, targetServerId, executionId);
-        if (requestId === telemetryRequestRef.current && targetWorkspaceId === workspaceIdRef.current && targetServerId === serverIdRef.current) {
-          setTelemetry(next);
-        }
-      } catch (error) {
-        if (requestId === telemetryRequestRef.current
+    const requestKey = JSON.stringify([targetWorkspaceId, targetServerId, executionId]);
+    const registry = telemetryRequestsRef.current;
+    setTelemetryError(null);
+    setTelemetry(null);
+    const request = registry.request(
+      requestKey,
+      () => runBusy(
+        `telemetry:${executionId}`,
+        () => api.executionTelemetry(targetWorkspaceId, targetServerId, executionId),
+      ),
+    );
+    return request.then(
+      (next) => {
+        if (registry.isCurrent(requestKey)
           && targetWorkspaceId === workspaceIdRef.current
-          && targetServerId === serverIdRef.current) {
-          setTelemetryError(describeApiError(error));
-        }
-      }
-    });
-    let tracked: Promise<void>;
-    tracked = request.finally(() => {
-      if (telemetryInFlightRef.current.get(inFlightKey) === tracked) {
-        telemetryInFlightRef.current.delete(inFlightKey);
-      }
-    });
-    telemetryInFlightRef.current.set(inFlightKey, tracked);
-    return tracked;
+          && targetServerId === serverIdRef.current) setTelemetry(next);
+      },
+      (error: unknown) => {
+        if (registry.isCurrent(requestKey)
+          && targetWorkspaceId === workspaceIdRef.current
+          && targetServerId === serverIdRef.current) setTelemetryError(describeApiError(error));
+      },
+    );
   }, [runBusy]);
 
   const createTestCase = useCallback((draft: TestCaseDraft) => runBusy("create-test", async () => {

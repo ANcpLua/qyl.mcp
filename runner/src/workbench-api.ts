@@ -102,7 +102,7 @@ const ContractIdSchemas: Readonly<Record<string, z.ZodType<string>>> = {
 };
 const AUTO_CONNECT_CONCURRENCY = 4;
 const TELEMETRY_DISABLED_REASON =
-    "Workbench MCP telemetry is disabled; QYL_MCP_TELEMETRY=0 prevents execution span identifiers from being created.";
+    "Workbench MCP telemetry is currently disabled (QYL_MCP_TELEMETRY=0), and this execution has no persisted span identifiers.";
 
 const ProtocolSseEvent = requirePublishedSseEvent(
     qylOpenApi.paths["/runner/workspaces/{workspaceId}/servers/{serverId}/protocol/stream"]

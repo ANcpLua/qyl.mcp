@@ -226,6 +226,23 @@ try {
     call.status === 202 && callResult.status === "succeeded" && callResult.result?.structuredContent?.traces?.length === 1,
   );
 
+  const telemetryResponse = await fetch(`${baseUrl}${executionPath}/telemetry`, {
+    headers: { cookie },
+  });
+  const telemetry = await telemetryResponse.json();
+  const signalAvailability = Object.values(telemetry.signals ?? {});
+  check(
+    "disabled MCP telemetry is explicit and does not fabricate evidence",
+    telemetryResponse.ok
+      && signalAvailability.length === 5
+      && signalAvailability.every((signal) =>
+        signal.status === "unavailable"
+        && signal.unavailableReason?.includes("QYL_MCP_TELEMETRY=0"))
+      && telemetry.correlation?.traceIds?.length === 0
+      && telemetry.correlation?.spanIds?.length === 0
+      && telemetry.selfExportSuppressed === true,
+  );
+
   const invalid = await fetch(`${baseUrl}/runner/workspaces/default/servers/${serverId}/executions`, {
     method: "POST",
     headers: { "content-type": "application/json", cookie },

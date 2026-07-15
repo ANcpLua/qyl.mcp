@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  LatestKeyedRequestRegistry,
   mergeNotice,
   removeNoticeByKey,
   type Notice,
@@ -39,4 +40,28 @@ test("ordinary notices retain the existing four-item bound", () => {
     notices = mergeNotice(notices, { id, tone: "info", message: `notice-${id}` });
   }
   assert.deepEqual(notices.map((notice) => notice.id), [3, 4, 5, 6]);
+});
+
+test("latest keyed requests preserve the current A selection across an A-B-A race", async () => {
+  let resolveA!: (value: string) => void;
+  let resolveB!: (value: string) => void;
+  const pendingA = new Promise<string>((resolve) => { resolveA = resolve; });
+  const pendingB = new Promise<string>((resolve) => { resolveB = resolve; });
+  const registry = new LatestKeyedRequestRegistry<string>();
+
+  const firstA = registry.request("A", () => pendingA);
+  const requestB = registry.request("B", () => pendingB);
+  const currentA = registry.request("A", () => Promise.resolve("unexpected duplicate"));
+
+  assert.equal(currentA, firstA);
+  assert.equal(registry.isCurrent("A"), true);
+  resolveB("B");
+  assert.equal(await requestB, "B");
+  assert.equal(registry.isCurrent("B"), false);
+  assert.equal(registry.isCurrent("A"), true);
+
+  resolveA("A");
+  assert.equal(await currentA, "A");
+  registry.invalidate();
+  assert.equal(registry.isCurrent("A"), false);
 });
