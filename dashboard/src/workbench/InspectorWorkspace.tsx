@@ -60,6 +60,11 @@ type ToolItem = Omit<Tool, "inputSchema"> & {
   annotations?: ToolAnnotations;
 };
 
+interface ToolInputState {
+  toolName: string;
+  snapshot: SynchronizedSchemaInputSnapshot;
+}
+
 const ERROR_COPY: Readonly<Record<ErrorCategory, { title: string; guidance: string }>> = {
   authentication: { title: "Authentication failed", guidance: "Verify the server-side environment reference and expected authentication scheme." },
   transport: { title: "Transport failed", guidance: "Inspect the endpoint, process state, TLS, and chronological transport events." },
@@ -269,7 +274,7 @@ export function InspectorWorkspace({
   const [query, setQuery] = useState("");
   const [selectedItemIndex, setSelectedItemIndex] = useState(0);
   const [selectedToolName, setSelectedToolName] = useState("");
-  const [input, setInput] = useState<SynchronizedSchemaInputSnapshot | null>(null);
+  const [toolInput, setToolInput] = useState<ToolInputState | null>(null);
   const [timeoutMs, setTimeoutMs] = useState(30_000);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [confirmationOpen, setConfirmationOpen] = useState(false);
@@ -315,7 +320,6 @@ export function InspectorWorkspace({
   }, [selectedExecution?.id, onLoadTelemetry]);
 
   useEffect(() => {
-    setInput(null);
     setIdempotencyKey(crypto.randomUUID());
     setConfirmationOpen(false);
     setConfirmationChecked(false);
@@ -323,8 +327,10 @@ export function InspectorWorkspace({
   }, [selectedToolName]);
 
   const handleInputChange = useCallback((snapshot: SynchronizedSchemaInputSnapshot) => {
-    setInput(snapshot);
-  }, []);
+    setToolInput({ toolName: selectedToolName, snapshot });
+  }, [selectedToolName]);
+
+  const input = toolInput?.toolName === selectedToolName ? toolInput.snapshot : null;
 
   const requestPreview: ExecutionRequest | null = selectedTool && input ? {
     toolName: selectedTool.name,

@@ -1,6 +1,7 @@
 import { Worker } from "node:worker_threads";
 
-const JSON_SCHEMA_DEADLINE_MS = 500;
+const JSON_SCHEMA_PATTERN_DEADLINE_MS = 500;
+const JSON_SCHEMA_GENERAL_DEADLINE_MS = 2_000;
 const MAX_SCHEMA_CHARACTERS = 1_000_000;
 const MAX_VALUE_CHARACTERS = 2_000_000;
 
@@ -35,6 +36,9 @@ export function validateJsonSchemaIsolated(
     if (valueSize === undefined || valueSize > MAX_VALUE_CHARACTERS) {
         return Promise.resolve({ kind: "too_large", subject: "value" });
     }
+    const deadlineMs = containsPatternKeyword(schema)
+        ? JSON_SCHEMA_PATTERN_DEADLINE_MS
+        : JSON_SCHEMA_GENERAL_DEADLINE_MS;
 
     return new Promise((resolveResult) => {
         let worker: Worker;
@@ -61,7 +65,7 @@ export function validateJsonSchemaIsolated(
             void worker.terminate();
             resolveResult(result);
         };
-        const deadline = setTimeout(() => finish({ kind: "timeout" }), JSON_SCHEMA_DEADLINE_MS);
+        const deadline = setTimeout(() => finish({ kind: "timeout" }), deadlineMs);
 
         worker.once("message", (message: unknown) => {
             finish(isWorkerResult(message) ? message : { kind: "worker_error" });
@@ -69,6 +73,20 @@ export function validateJsonSchemaIsolated(
         worker.once("error", () => finish({ kind: "worker_error" }));
         worker.once("exit", () => finish({ kind: "worker_error" }));
     });
+}
+
+function containsPatternKeyword(value: unknown): boolean {
+    if (typeof value !== "object" || value === null) return false;
+    const stack: unknown[] = [value];
+    const seen = new WeakSet<object>();
+    while (stack.length > 0) {
+        const current = stack.pop();
+        if (typeof current !== "object" || current === null || seen.has(current)) continue;
+        seen.add(current);
+        if (!Array.isArray(current) && Object.hasOwn(current, "pattern")) return true;
+        stack.push(...(Array.isArray(current) ? current : Object.values(current)));
+    }
+    return false;
 }
 
 function serializedLength(value: unknown): number | undefined {
