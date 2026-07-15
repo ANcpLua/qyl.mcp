@@ -200,10 +200,8 @@ export async function collectorGet(
         response.status,
       );
     }
-    const detail = problem.detail ?? problem.title;
     throw new CollectorError(
-      `collector request failed (${response.status} ${response.statusText}) for ${pathname}` +
-        (detail ? `: ${detail}` : ""),
+      `collector request failed (${response.status} ${response.statusText}) for ${pathname}`,
       false,
       response.status,
     );

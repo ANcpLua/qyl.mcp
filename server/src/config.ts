@@ -20,7 +20,22 @@ if (typeof apiKeyHeader !== "string" || apiKeyHeader.length === 0) {
 }
 
 export function collectorUrl(): string {
-  return process.env.QYL_COLLECTOR_URL ?? "http://127.0.0.1:5100";
+  const configured = process.env.QYL_COLLECTOR_URL ?? "http://127.0.0.1:5100";
+  let url: URL;
+  try {
+    url = new URL(configured);
+  } catch {
+    throw new Error("QYL_COLLECTOR_URL must be an absolute HTTP(S) URL");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("QYL_COLLECTOR_URL must use HTTP or HTTPS");
+  }
+  if (url.username || url.password || url.search || url.hash) {
+    throw new Error(
+      "QYL_COLLECTOR_URL must be credential-free and cannot contain a query or fragment",
+    );
+  }
+  return url.toString();
 }
 
 /** Optional collector credential, sent under the generated OpenAPI header. */

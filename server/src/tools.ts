@@ -29,16 +29,21 @@ import {
   summarizeTrace,
   summarizeTraceTable,
 } from "./summaries.js";
+import { CollectorError } from "./collector.js";
+import {
+  redactTelemetryText,
+  telemetryToolResult,
+} from "./telemetry-redaction.js";
 
 /** Uniform failure result: clear text + isError, never a thrown exception. */
 export function toolError(err: unknown): CallToolResult {
-  const message = err instanceof Error ? err.message : String(err);
-  return { content: [{ type: "text", text: message }], isError: true };
-}
-
-/** The MCP envelope uses a string-keyed record; generated DTOs remain the value owner. */
-function asStructuredContent<T extends object>(value: T): Record<string, unknown> {
-  return value as unknown as Record<string, unknown>;
+  const message = err instanceof CollectorError
+    ? err.message
+    : "Telemetry request failed.";
+  return {
+    content: [{ type: "text", text: redactTelemetryText(message) }],
+    isError: true,
+  };
 }
 
 /** Register the four model-visible read tools against published contract schemas. */
@@ -61,10 +66,7 @@ export function registerTelemetryTools(server: McpServer): void {
           traces: traces.map(({ spans: _spans, ...summary }) => summary),
           mode,
         };
-        return {
-          content: [{ type: "text", text: summarizeTraceTable(traces, mode) }],
-          structuredContent: asStructuredContent(output),
-        };
+        return telemetryToolResult(summarizeTraceTable(traces, mode), output);
       } catch (err) {
         return toolError(err);
       }
@@ -86,10 +88,7 @@ export function registerTelemetryTools(server: McpServer): void {
       try {
         const { trace, mode } = await fetchTrace(args.trace_id);
         const output: GetTraceOutput = { trace, mode };
-        return {
-          content: [{ type: "text", text: summarizeTrace(trace, mode) }],
-          structuredContent: asStructuredContent(output),
-        };
+        return telemetryToolResult(summarizeTrace(trace, mode), output);
       } catch (err) {
         return toolError(err);
       }
@@ -111,10 +110,7 @@ export function registerTelemetryTools(server: McpServer): void {
       try {
         const { sessions, mode } = await fetchSessions(args.limit ?? 20, args.active_only);
         const output: ListSessionsOutput = { sessions, mode };
-        return {
-          content: [{ type: "text", text: summarizeSessions(sessions, mode) }],
-          structuredContent: asStructuredContent(output),
-        };
+        return telemetryToolResult(summarizeSessions(sessions, mode), output);
       } catch (err) {
         return toolError(err);
       }
@@ -142,10 +138,7 @@ export function registerTelemetryTools(server: McpServer): void {
           limit: args.limit ?? 50,
         });
         const output: SearchLogsOutput = { logs, mode };
-        return {
-          content: [{ type: "text", text: summarizeLogs(logs, mode) }],
-          structuredContent: asStructuredContent(output),
-        };
+        return telemetryToolResult(summarizeLogs(logs, mode), output);
       } catch (err) {
         return toolError(err);
       }
