@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import contractJsonSchema from "@ancplua/qyl-api-schema/json-schema" with { type: "json" };
+import * as ContractSchemas from "./contract-validation.js";
 import {
   DisplayMcpDashboardInputSchema,
   DisplayMcpDashboardOutputSchema,
@@ -13,9 +15,18 @@ import {
   ListSessionsOutputSchema,
   ListTracesInputSchema,
   ListTracesOutputSchema,
+  RunnerMcpEvaluationExportRequestSchema,
+  RunnerMcpEvaluationRunRequestSchema,
+  RunnerMcpExecutionRequestSchema,
+  RunnerMcpServerCreateRequestSchema,
+  RunnerMcpTestAssertionSchema,
+  RunnerMcpTestCaseCreateRequestSchema,
+  RunnerMcpWorkspaceCreateRequestSchema,
   SearchLogsInputSchema,
   SearchLogsOutputSchema,
   SpanSchema,
+  TraceSchema,
+  TracesListResponseSchema,
 } from "./contract-validation.js";
 import {
   parseCollectorLog,
@@ -25,6 +36,20 @@ import {
 } from "./collector.js";
 import { getDemo } from "./demo.js";
 import { fetchMcpStats } from "./data.js";
+
+test("every published Runner.Mcp definition has a runtime validator", () => {
+  const exportedSchemas = ContractSchemas as Record<string, unknown>;
+  const missing = Object.keys(contractJsonSchema.$defs)
+    .filter((name) => name.startsWith("Runner.Mcp."))
+    .map((name) => `${name.slice("Runner.Mcp.".length)}Schema`)
+    .filter((name) => exportedSchemas[name] === undefined);
+
+  assert.deepEqual(missing, []);
+  assert.equal(
+    Object.keys(contractJsonSchema.$defs).filter((name) => name.startsWith("Runner.Mcp.")).length,
+    103,
+  );
+});
 
 test("published schemas own defaults, bounds, and required inputs for all seven tools", () => {
   assert.deepEqual(DisplayTracesInputSchema.parse({}), { limit: 20 });
@@ -98,16 +123,114 @@ test("TypeSpec record dictionaries retain their value contract at runtime", () =
     {
       key: "nested",
       value: {
-        message: "Grüße",
-        retryable: true,
-        attempts: 2,
+        type: "kvlist",
+        values: {
+          message: "Grüße",
+          retryable: true,
+          attempts: { type: "int", value: "2" },
+        },
       },
     },
   ];
 
   assert(SpanSchema.safeParse(span).success);
-  span.attributes[0].value = { unsupported: null } as never;
+  span.attributes![0]!.value = { unsupported: null } as never;
   assert(!SpanSchema.safeParse(span).success);
+});
+
+test("published workbench request schemas own strictness, defaults, and opaque SDK payloads", () => {
+  assert.deepEqual(RunnerMcpWorkspaceCreateRequestSchema.parse({ name: "Local lab" }), {
+    name: "Local lab",
+  });
+  assert(!RunnerMcpWorkspaceCreateRequestSchema.safeParse({ name: "Local lab", public: true }).success);
+
+  assert.deepEqual(
+    RunnerMcpServerCreateRequestSchema.parse({
+      name: "Fixture",
+      configuration: { transport: "stdio", command: "node" },
+    }),
+    {
+      name: "Fixture",
+      configuration: { transport: "stdio", command: "node" },
+      autoConnect: false,
+    },
+  );
+  assert(
+    !RunnerMcpServerCreateRequestSchema.safeParse({
+      name: "Fixture",
+      configuration: { transport: "stdio", command: "node", token: "plaintext-secret" },
+    }).success,
+  );
+
+  assert.deepEqual(
+    RunnerMcpExecutionRequestSchema.parse({
+      toolName: "fixture.echo",
+      arguments: { nested: [true, 2, "three"] },
+      idempotencyKey: "execution-1",
+    }),
+    {
+      toolName: "fixture.echo",
+      arguments: { nested: [true, 2, "three"] },
+      timeoutMs: 30_000,
+      idempotencyKey: "execution-1",
+    },
+  );
+});
+
+test("published workbench assertion, evaluation, and export unions reject local variants", () => {
+  assert(
+    RunnerMcpTestAssertionSchema.safeParse({
+      id: "status-1",
+      kind: "status",
+      expected: ["succeeded"],
+    }).success,
+  );
+  assert(
+    !RunnerMcpTestAssertionSchema.safeParse({
+      id: "semantic-1",
+      kind: "semantic",
+      expected: "similar",
+    }).success,
+  );
+  assert(
+    !RunnerMcpTestAssertionSchema.safeParse({
+      id: "legacy-1",
+      type: "exact",
+      pointer: "/answer",
+      expected: 42,
+    }).success,
+  );
+
+  const testCase = RunnerMcpTestCaseCreateRequestSchema.parse({
+    serverId: "server-1",
+    name: "Echo succeeds",
+    toolName: "fixture.echo",
+    assertions: [{ id: "status-1", kind: "status", expected: ["succeeded"] }],
+  });
+  assert.equal(testCase.timeoutMs, 30_000);
+
+  assert.deepEqual(
+    RunnerMcpEvaluationRunRequestSchema.parse({ idempotencyKey: "evaluation-1" }),
+    { idempotencyKey: "evaluation-1", concurrency: 1, failFast: false },
+  );
+  assert.deepEqual(
+    RunnerMcpEvaluationExportRequestSchema.parse({
+      format: "json",
+      idempotencyKey: "export-1",
+    }),
+    {
+      format: "json",
+      includeProtocolEvents: true,
+      includeTelemetry: true,
+      idempotencyKey: "export-1",
+    },
+  );
+  assert(
+    !RunnerMcpEvaluationExportRequestSchema.safeParse({
+      format: "csv",
+      idempotencyKey: "export-1",
+    }).success,
+  );
 });
 
 test("collector boundary normalizes RFC 3339 offsets and rejects alternate wire encodings", () => {
@@ -115,9 +238,11 @@ test("collector boundary normalizes RFC 3339 offsets and rejects alternate wire 
   const sourceTrace = structuredClone(demo.traces[0]);
   sourceTrace.start_time = sourceTrace.start_time.replace("Z", "+00:00");
   sourceTrace.end_time = sourceTrace.end_time.replace("Z", "+00:00");
+  assert(TraceSchema.safeParse(sourceTrace).success);
   const page = parseCollectorPage(
     { items: [sourceTrace], has_more: false },
     "/api/v1/traces",
+    TracesListResponseSchema,
     parseCollectorTrace,
   );
   assert.equal(page.items[0].start_time.endsWith("Z"), true);
@@ -125,12 +250,31 @@ test("collector boundary normalizes RFC 3339 offsets and rejects alternate wire 
   assert.equal(page.hasMore, false);
 
   assert.throws(
-    () => parseCollectorPage([sourceTrace], "/api/v1/traces", parseCollectorTrace),
-    /expected an object/,
+    () => parseCollectorPage(
+      [sourceTrace],
+      "/api/v1/traces",
+      TracesListResponseSchema,
+      parseCollectorTrace,
+    ),
+    /expected an object/u,
   );
   assert.throws(
-    () => parseCollectorPage({ items: [] }, "/api/v1/traces", parseCollectorTrace),
-    /has_more:boolean/,
+    () => parseCollectorPage(
+      { items: [] },
+      "/api/v1/traces",
+      TracesListResponseSchema,
+      parseCollectorTrace,
+    ),
+    /has_more/u,
+  );
+  assert.throws(
+    () => parseCollectorPage(
+      { items: [], has_more: false, invented: true },
+      "/api/v1/traces",
+      TracesListResponseSchema,
+      parseCollectorTrace,
+    ),
+    /Unrecognized key/u,
   );
 
   const session = structuredClone(demo.sessions[0]);

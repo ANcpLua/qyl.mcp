@@ -1,9 +1,8 @@
-import type { RunnerMcpResourceContent } from "@ancplua/qyl-api-schema/types";
-
-/** Decode the exact text-or-blob union emitted by the Qyl product contract. */
-export function decodeMcpAppHtml(content: RunnerMcpResourceContent): string {
-  if ("text" in content) return content.text;
-
-  const bytes = Uint8Array.from(atob(content.blob), character => character.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
+/**
+ * MCP App HTML used to be decoded and executed through a nested iframe here.
+ * The workbench intentionally rejects that production path: returned content
+ * is rendered by fixed, non-interpreting React components instead.
+ */
+export function decodeMcpAppHtml(): never {
+  throw new Error("Executable MCP App HTML is disabled in qyl.mcp.");
 }

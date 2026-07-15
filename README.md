@@ -1,10 +1,17 @@
 # qyl.mcp
 
-qyl.mcp is Qyl's local Model Context Protocol host and telemetry explorer. It
-runs MCP servers, exposes their resource state through a loopback dashboard, and
-provides trace, log, session, and MCP-traffic tools backed by a Qyl collector.
+qyl.mcp is a local MCP developer workbench for connecting to real servers,
+inspecting their negotiated protocol surface, invoking tools safely, and
+retaining execution and evaluation evidence. It also includes Qyl telemetry
+tools and MCP Apps for exploring a live Qyl collector.
 
-## Run
+The browser, runner API, and managed MCP processes run with the local user's
+permissions. The runner binds only to loopback; it is not an Internet-facing
+multi-user service.
+
+## Quick start
+
+Node.js 22.12 or newer is required.
 
 ```bash
 npm ci
@@ -12,54 +19,215 @@ npm run build
 npm start
 ```
 
-The dashboard is served at <http://127.0.0.1:18888>. Live telemetry requires a
-collector at `QYL_COLLECTOR_URL` (default `http://127.0.0.1:5100`). For local
-development, start the collector with read access enabled:
+Open <http://127.0.0.1:18888>. For live Qyl data, configure the collector before
+starting the runner:
 
 ```bash
-QYL_OTLP_AUTH_MODE=Unsecured dotnet run --project ../qyl/services/qyl.collector
+export QYL_COLLECTOR_URL=http://127.0.0.1:5100
+export QYL_API_KEY='your-collector-key' # omit for an unsecured local collector
+npm start
 ```
 
-For a collector running in API-key mode, set `QYL_API_KEY`; qyl.mcp sends it
-under the header owned by the generated Qyl OpenAPI contract.
+The dashboard bootstraps an opaque `HttpOnly`, `SameSite=Strict` loopback
+session. Session tokens are hashed in memory, never returned in API payloads,
+and do not survive a runner restart. Host and browser-origin checks protect the
+loopback API from DNS rebinding and cross-origin requests.
 
-The standalone MCP server can also be wired directly to a chat client over
-stdio:
+Workbench state defaults to `~/.qyl/mcp-workbench.json`; override it with
+`QYL_MCP_STATE_PATH`. Workspaces, server definitions, preferences, executions,
+protocol evidence, tests, suites, evaluation runs, and exports are written by
+atomic replacement with mode `0600`; an app-created parent directory uses mode
+`0700`, while an explicitly supplied existing parent is left unchanged. Active work
+interrupted by a restart is restored as explicit failure evidence.
+
+## Connect an MCP server
+
+Choose **Add server** in the sidebar. User-created connections support all
+three client transports below; runner-registered built-ins and in-process
+servers are visible but cannot be created from the browser.
+
+| Transport | Configuration |
+| --- | --- |
+| Streamable HTTP | Credential-free HTTP(S) endpoint plus header references such as `Authorization=MCP_TOKEN|bearer` |
+| SSE | Legacy SSE endpoint plus the same environment-backed header references |
+| stdio | Command, one argument per line, optional working directory, and environment mappings such as `SERVER_TOKEN=MCP_SERVER_TOKEN` |
+
+Set referenced values in the runner environment before startup:
 
 ```bash
-node server/dist/main.js --stdio
+export MCP_TOKEN='remote-service-token'
+export MCP_SERVER_TOKEN='child-process-token'
+npm start
 ```
 
-Collector failures are returned as errors. Generated demo telemetry is never an
-automatic fallback; enable it deliberately when demonstrating the UI offline:
+Only environment-variable names are sent by the browser or persisted. Values
+are resolved in the runner at connection time and registered with the shared
+redactor. Remote endpoints cannot embed credentials, query values, or fragments;
+persistent `Cookie` headers are rejected. Stdio credentials cannot be placed in
+command arguments. Starting or reconnecting a stdio server requires review of
+the exact executable, arguments, working directory, and environment references
+because it launches code with the current user's permissions.
+
+## Workbench workflow
+
+After initialization, the workbench retains the negotiated protocol version,
+server identity, capabilities, instructions, and session information. Discovery
+collects paginated tools, resources, resource templates, and prompts; it can be
+refreshed without replacing the last useful snapshot on failure.
+
+For each tool, the inspector shows its complete input schema and annotations.
+The invocation composer keeps a generated form and raw JSON view synchronized,
+validates input before submission, applies a bounded timeout, and includes an
+idempotency key. Results preserve MCP text, image, audio, embedded-resource,
+resource-link, and structured-content shapes while blocking unsafe URLs and
+active content.
+
+Each persisted execution exposes its request, result or typed error, lifecycle,
+duration, attempts, cancellation state, redacted JSON-RPC timeline, and Qyl
+observability evidence. Live protocol and execution streams use resumable event
+identifiers; cancellation aborts the in-flight SDK request.
+
+The tests workspace persists real tool invocations with status, exact, partial,
+JSON Schema, pattern, and latency assertions. Suites run with bounded
+concurrency and optional fail-fast behavior. Completed runs can be compared
+within the same suite and exported as contract-validated JSON or a Markdown
+report with artifact size and SHA-256 evidence.
+
+### Safety model
+
+MCP tool annotations are treated as hints. Only a tool explicitly marked
+read-only, non-destructive, and closed-world can run without confirmation.
+Missing, contradictory, mutating, destructive, or open-world hints require the
+user to review and approve the exact call. Test and suite runs retain their
+run-level approval; the runner never synthesizes confirmation. Arguments,
+results, protocol payloads, persisted evidence, diagnostics, and telemetry pass
+through credential and URI redaction.
+
+## Qyl observability and MCP telemetry
+
+The built-in `qyl-telemetry` server reads real traces, logs, sessions, and
+metrics from `QYL_COLLECTOR_URL`. `QYL_API_KEY`, when present, is sent using the
+header defined by the generated Qyl API contract. Every correlated read runs
+under async self-export suppression, so inspecting Qyl evidence does not create
+recursive MCP telemetry.
+
+| Variable | Purpose |
+| --- | --- |
+| `QYL_COLLECTOR_URL` | Qyl read API base URL; default `http://127.0.0.1:5100`. Also used as the OTLP base when set. |
+| `QYL_API_KEY` | Collector read and OTLP credential. |
+| `QYL_OTLP_ENDPOINT` | Optional OTLP base URL for workbench self-telemetry. |
+| `QYL_MCP_TELEMETRY=0` | Disable workbench MCP spans and duration metrics. Telemetry is enabled otherwise. |
+| `QYL_MCP_STATE_PATH` | Override the durable workbench JSON path. |
+
+Signal-specific `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` and
+`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` take precedence. Otherwise the base order
+is `QYL_OTLP_ENDPOINT`, `QYL_COLLECTOR_URL`,
+`OTEL_EXPORTER_OTLP_ENDPOINT`, then `http://127.0.0.1:4318`.
+
+### Pinned MCP semantic surface
+
+The implementation targets OpenTelemetry semantic conventions v1.43.0 and the
+separately pinned GenAI registry `gen-ai-dev/1.42.0-dev` at commit `c321d7e…`.
+All ten MCP-native conventions are development/incubating; the pin defines no
+MCP events.
+
+- Operation attributes: required `mcp.method.name`, recommended
+  `mcp.protocol.version`, conditional/opt-in `mcp.resource.uri`, and recommended
+  operation-span `mcp.session.id`.
+- Spans: `mcp.client` (`CLIENT`) and `mcp.server` (`SERVER`), named
+  `{mcp.method.name} {target}` where the target is normally
+  `gen_ai.tool.name` or `gen_ai.prompt.name` and is omitted when unavailable.
+- Recommended seconds histograms: `mcp.client.operation.duration`,
+  `mcp.client.session.duration`, `mcp.server.operation.duration`, and
+  `mcp.server.session.duration`.
+
+The 25 well-known `mcp.method.name` values are:
+
+- Lifecycle/control: `initialize`, `notifications/initialized`, `ping`,
+  `notifications/cancelled`, `notifications/progress`
+- Resources: `resources/list`, `resources/templates/list`, `resources/read`,
+  `resources/subscribe`, `resources/unsubscribe`,
+  `notifications/resources/list_changed`, `notifications/resources/updated`
+- Prompts: `prompts/list`, `prompts/get`,
+  `notifications/prompts/list_changed`
+- Tools: `tools/list`, `tools/call`, `notifications/tools/list_changed`
+- Roots: `roots/list`, `notifications/roots/list_changed`
+- Logging: `logging/setLevel`, `notifications/message`
+- Sampling: `sampling/createMessage`
+- Completion: `completion/complete`
+- Elicitation: `elicitation/create`
+
+Signal-valid descriptors may also use `client.address`, `client.port`,
+`error.type`, `gen_ai.operation.name`, `gen_ai.prompt.name`,
+`gen_ai.prompt.variable.*`, `gen_ai.tool.call.arguments`,
+`gen_ai.tool.call.result`, `gen_ai.tool.name`, `jsonrpc.protocol.version`,
+`jsonrpc.request.id`, `network.protocol.name`, `network.protocol.version`,
+`network.transport`, `rpc.response.status_code`, `server.address`, and
+`server.port`. qyl.mcp deliberately does not record the opt-in prompt-variable,
+tool-argument, or tool-result attributes because they may contain credentials
+or user content. Workbench execution, evaluation, test-case, and server IDs are
+added only to spans as `qyl.mcp.*` correlation attributes.
+
+## Explicit demo mode
+
+Collector errors remain errors; live mode never falls back to generated data.
+For an offline demonstration, enable demo mode deliberately:
 
 ```bash
 QYL_DEMO=1 npm start
 ```
 
-Demo results carry `mode: "demo"` so clients can label them accurately.
+Demo tool results carry `mode: "demo"` so consumers can label them. The
+workbench itself still uses real local persistence and MCP execution paths.
 
-## MCP surface
+## Standalone Qyl MCP server
 
-The model-visible tools are `display_traces`, `display_mcp_dashboard`,
-`list_traces`, `get_trace`, `list_sessions`, and `search_logs`.
-`fetch_telemetry` is app-only and supports the bundled viewers.
-
-Qyl request, response, event, and error models are owned by
-[`qyl-api-schema`](https://github.com/ANcpLua/qyl-api-schema). Standard MCP
-envelopes come from the official MCP SDK; OTLP comes from official OpenTelemetry
-types.
-
-## Verify
+The installable server can be connected directly to a chat client over stdio:
 
 ```bash
+node server/dist/main.js --stdio
+```
+
+Without `--stdio`, it serves stateless Streamable HTTP on
+`http://127.0.0.1:3001/mcp` by default; set `PORT` to change the port. It uses
+the same `QYL_COLLECTOR_URL`, `QYL_API_KEY`, and `QYL_DEMO` configuration. The
+model-visible tools are
+`display_traces`, `display_mcp_dashboard`, `list_traces`, `get_trace`,
+`list_sessions`, and `search_logs`; `fetch_telemetry` is reserved for the
+bundled MCP Apps.
+
+Qyl request, response, event, and error models come from
+[`qyl-api-schema`](https://github.com/ANcpLua/qyl-api-schema). MCP envelopes come
+from the official MCP SDK, and OTLP payloads come from the official
+OpenTelemetry SDK.
+
+## Verification
+
+Run the repository-native checks from the root:
+
+```bash
+npm ci
 npm run build
 npm test
 npm run smoke
 npm run smoke:otlp
 ```
 
-The local smoke test uses explicit demo mode. `smoke:otlp` starts a real,
-API-key-protected Qyl collector, proves its official OTLP/protobuf receiver
-parses and persists the runner's SDK export without user-content leakage, and
-validates all seven tool results against the published Qyl schemas.
+`smoke` exercises explicit demo behavior. `smoke:otlp` requires the sibling Qyl
+collector checkout (or `QYL_COLLECTOR_PROJECT` pointing to its project), starts
+an API-key-protected collector, and exercises its official OTLP/protobuf and Qyl
+read surfaces.
+
+## Current limitations
+
+- Evaluation usage and cost are displayed only when the execution evidence
+  records them; qyl.mcp does not synthesize or estimate missing values.
+- Workbench MCP spans retain exact trace/span correlation. The installed
+  JavaScript OTLP metrics pipeline does not export exemplars, so correlated MCP
+  metrics are explicitly marked partial and selected by a bounded execution
+  time window plus semantic operation identity rather than an exact trace link.
+- Stdio has no standardized downstream trace-context propagation. Exact
+  correlation therefore covers the workbench MCP operation span, not arbitrary
+  internal spans created by the child server.
+- Local conformance servers cover stdio, Streamable HTTP, and SSE. External
+  remote services cannot be verified without their endpoints and credentials.

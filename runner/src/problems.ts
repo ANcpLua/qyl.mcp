@@ -5,6 +5,7 @@ import type {
     InternalServerError,
     NotFoundError,
     ProblemDetails,
+    UnauthorizedError,
     ValidationError,
 } from "@ancplua/qyl-api-schema/types";
 import type { Response } from "express";
@@ -14,6 +15,7 @@ import {
     ForbiddenErrorSchema,
     InternalServerErrorSchema,
     NotFoundErrorSchema,
+    UnauthorizedErrorSchema,
     ValidationErrorSchema,
 } from "qyl-mcp-server/contract-validation";
 
@@ -29,6 +31,17 @@ export function sendForbidden(response: Response, detail: string): void {
         detail,
     };
     sendProblem(response, ForbiddenErrorSchema.parse(body));
+}
+
+export function sendUnauthorized(response: Response): void {
+    const body: UnauthorizedError = {
+        type: "about:blank",
+        title: "Unauthorized",
+        status: 401,
+        detail: "A valid local runner session cookie is required.",
+    };
+    response.setHeader("WWW-Authenticate", "Cookie");
+    sendProblem(response, UnauthorizedErrorSchema.parse(body));
 }
 
 export function sendNotFound(response: Response, resourceType: string, resourceId: string): void {

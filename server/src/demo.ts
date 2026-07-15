@@ -43,6 +43,10 @@ function hexId(seed: number, length: number): string {
 let demoAnchorMs = 0;
 const minutesAgoMs = (minutes: number) => demoAnchorMs - minutes * 60_000;
 const toNano = (absoluteMs: number) => Math.round(absoluteMs * 1e6);
+const intAttribute = (value: number): AttributeValue => ({
+  type: "int",
+  value: String(value),
+});
 
 /** Per-service OTel resources shared by demo spans and logs. */
 const DEMO_RESOURCES: Record<string, Resource> = {
@@ -137,7 +141,7 @@ function buildDemoTrace(
   };
 }
 
-export interface DemoData {
+interface DemoData {
   traces: QylTrace[]; // newest first
   logs: QylLogRecord[]; // oldest first
   sessions: QylSession[];
@@ -170,7 +174,7 @@ function buildDemoData(): DemoData {
       attrs: {
         "http.request.method": "POST",
         "url.path": "/v1/agent/run",
-        "http.response.status_code": 200,
+        "http.response.status_code": intAttribute(200),
       },
     },
     {
@@ -193,8 +197,8 @@ function buildDemoData(): DemoData {
         "gen_ai.system": "anthropic",
         "gen_ai.request.model": "claude-sonnet-5",
         "gen_ai.response.model": "claude-sonnet-5",
-        "gen_ai.usage.input_tokens": 1874,
-        "gen_ai.usage.output_tokens": 412,
+        "gen_ai.usage.input_tokens": intAttribute(1874),
+        "gen_ai.usage.output_tokens": intAttribute(412),
       },
     },
     {
@@ -230,8 +234,8 @@ function buildDemoData(): DemoData {
         "gen_ai.system": "anthropic",
         "gen_ai.request.model": "claude-sonnet-5",
         "gen_ai.response.model": "claude-sonnet-5",
-        "gen_ai.usage.input_tokens": 2412,
-        "gen_ai.usage.output_tokens": 655,
+        "gen_ai.usage.input_tokens": intAttribute(2412),
+        "gen_ai.usage.output_tokens": intAttribute(655),
       },
     },
   ]);
@@ -249,7 +253,7 @@ function buildDemoData(): DemoData {
       attrs: {
         "http.request.method": "POST",
         "url.path": "/v1/agent/summarize",
-        "http.response.status_code": 200,
+        "http.response.status_code": intAttribute(200),
       },
     },
     {
@@ -263,8 +267,8 @@ function buildDemoData(): DemoData {
         "gen_ai.system": "anthropic",
         "gen_ai.request.model": "claude-haiku-4-5",
         "gen_ai.response.model": "claude-haiku-4-5-20251001",
-        "gen_ai.usage.input_tokens": 932,
-        "gen_ai.usage.output_tokens": 208,
+        "gen_ai.usage.input_tokens": intAttribute(932),
+        "gen_ai.usage.output_tokens": intAttribute(208),
       },
     },
     {
@@ -277,7 +281,7 @@ function buildDemoData(): DemoData {
       attrs: {
         "http.request.method": "GET",
         "url.full": `${collectorUrl()}/api/v1/traces?limit=20`,
-        "http.response.status_code": 200,
+        "http.response.status_code": intAttribute(200),
       },
     },
     {
@@ -290,7 +294,7 @@ function buildDemoData(): DemoData {
       attrs: {
         "http.request.method": "GET",
         "url.path": "/api/v1/traces",
-        "http.response.status_code": 200,
+        "http.response.status_code": intAttribute(200),
       },
     },
     {
@@ -321,7 +325,7 @@ function buildDemoData(): DemoData {
       attrs: {
         "http.request.method": "POST",
         "url.path": "/checkout",
-        "http.response.status_code": 500,
+        "http.response.status_code": intAttribute(500),
       },
     },
     {
@@ -331,7 +335,7 @@ function buildDemoData(): DemoData {
       service: "checkout-api",
       start: 5,
       end: 35,
-      attrs: { "qyl.cart.items": 3 },
+      attrs: { "qyl.cart.items": intAttribute(3) },
     },
     {
       parent: 0,
@@ -397,7 +401,7 @@ function buildDemoData(): DemoData {
       attrs: {
         "http.request.method": "GET",
         "http.route": "/orders/{orderId}",
-        "http.response.status_code": 200,
+        "http.response.status_code": intAttribute(200),
       },
     },
     {
@@ -448,7 +452,7 @@ function buildDemoData(): DemoData {
       attrs: {
         "http.request.method": "POST",
         "http.route": "/orders/{orderId}/ship",
-        "http.response.status_code": 202,
+        "http.response.status_code": intAttribute(202),
       },
     },
     {
@@ -526,7 +530,10 @@ function buildDemoData(): DemoData {
       service: "agent-worker",
       start: 80,
       end: 2050,
-      attrs: { "url.path": "/datasets/eval/shard-3", "http.request.resend_count": 1 },
+      attrs: {
+        "url.path": "/datasets/eval/shard-3",
+        "http.request.resend_count": intAttribute(1),
+      },
     },
     {
       parent: 4,
@@ -569,7 +576,7 @@ function buildDemoData(): DemoData {
       attrs: {
         "http.request.method": "POST",
         "url.path": "/v1/traces",
-        "http.response.status_code": 200,
+        "http.response.status_code": intAttribute(200),
       },
     },
     {
@@ -579,7 +586,7 @@ function buildDemoData(): DemoData {
       service: "qyl-collector",
       start: 2,
       end: 9,
-      attrs: { "qyl.otlp.spans": 142 },
+      attrs: { "qyl.otlp.spans": intAttribute(142) },
     },
     {
       parent: 0,
@@ -607,7 +614,7 @@ function buildDemoData(): DemoData {
       attrs: {
         "http.request.method": "POST",
         "url.path": "/v1/agent/chat",
-        "http.response.status_code": 200,
+        "http.response.status_code": intAttribute(200),
       },
     },
     {
@@ -621,8 +628,8 @@ function buildDemoData(): DemoData {
         "gen_ai.system": "anthropic",
         "gen_ai.request.model": "claude-sonnet-5",
         "gen_ai.response.model": "claude-sonnet-5",
-        "gen_ai.usage.input_tokens": 154,
-        "gen_ai.usage.output_tokens": 89,
+        "gen_ai.usage.input_tokens": intAttribute(154),
+        "gen_ai.usage.output_tokens": intAttribute(89),
       },
     },
   ]);
@@ -676,7 +683,7 @@ function buildDemoData(): DemoData {
     log(otlpIngest, 1, 1, 5, "DEBUG", "parsed OTLP batch: 142 spans, 3 resources"),
     log(otlpIngest, 2, 2, 1, "TRACE", "duckdb appender flushed 142 rows into spans"),
     // orderShipped (13 min)
-    log(orderShipped, 1, 2, 9, "INFO", "published order.shipped for order ord_8842 to order.events", { "messaging.kafka.offset": 91204 }),
+    log(orderShipped, 1, 2, 9, "INFO", "published order.shipped for order ord_8842 to order.events", { "messaging.kafka.offset": intAttribute(91204) }),
     log(orderShipped, 2, 3, 9, "INFO", "consumed order.shipped for order ord_8842"),
     log(orderShipped, 3, 5, 5, "DEBUG", "notification email queued for user user-77"),
     // orderLookup (11 min)
@@ -773,7 +780,6 @@ function buildDemoData(): DemoData {
         total_output_tokens: 1364,
         models_used: ["claude-sonnet-5", "claude-haiku-4-5"],
         providers_used: ["anthropic"],
-        estimated_cost_usd: 0.0421,
       },
     ),
     makeSession(

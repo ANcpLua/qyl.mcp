@@ -57,6 +57,7 @@ import {
   summarizeMcpStats,
 } from "./summaries.js";
 import { registerTelemetryTools, toolError } from "./tools.js";
+import { telemetryToolResult } from "./telemetry-redaction.js";
 
 // The vite-built single-file viewers live next to the compiled server code.
 const DIST_DIR = import.meta.dirname;
@@ -65,10 +66,6 @@ const DIST_DIR = import.meta.dirname;
 // server is created per request and per-instance caches would be useless.
 let cachedAppHtml: string | undefined;
 let cachedDashboardHtml: string | undefined;
-
-function asStructuredContent<T extends object>(value: T): Record<string, unknown> {
-  return value as unknown as Record<string, unknown>;
-}
 
 /** Creates a server with the direct telemetry tools and both UI resources. */
 export function createServer(): McpServer {
@@ -124,10 +121,7 @@ export function createServer(): McpServer {
           mode: result.mode,
         };
 
-        return {
-          content: [{ type: "text", text }],
-          structuredContent: asStructuredContent(output),
-        };
+        return telemetryToolResult(text, output);
       } catch (err) {
         return toolError(err);
       }
@@ -154,10 +148,7 @@ export function createServer(): McpServer {
         const window = hours ?? 24;
         const stats = await fetchMcpStats(window);
         const output: DisplayMcpDashboardOutput = { stats };
-        return {
-          content: [{ type: "text", text: summarizeMcpStats(stats, window) }],
-          structuredContent: asStructuredContent(output),
-        };
+        return telemetryToolResult(summarizeMcpStats(stats, window), output);
       } catch (err) {
         return toolError(err);
       }
@@ -191,15 +182,10 @@ export function createServer(): McpServer {
         if (view === "mcp_stats") {
           const stats = await fetchMcpStats(hours ?? 24);
           const output: FetchTelemetryOutput = { stats, mode: stats.mode };
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Fetched MCP stats: ${stats.totals.requests} requests over ${hours ?? 24}h (${stats.mode} mode).`,
-              },
-            ],
-            structuredContent: asStructuredContent(output),
-          };
+          return telemetryToolResult(
+            `Fetched MCP stats: ${stats.totals.requests} requests over ${hours ?? 24}h (${stats.mode} mode).`,
+            output,
+          );
         }
 
         if (view === "trace") {
@@ -208,15 +194,10 @@ export function createServer(): McpServer {
           }
           const { trace, mode } = await fetchTrace(trace_id);
           const output: FetchTelemetryOutput = { trace, mode };
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Fetched trace ${shortId(trace.trace_id)} (${trace.span_count} spans, ${mode} mode).`,
-              },
-            ],
-            structuredContent: asStructuredContent(output),
-          };
+          return telemetryToolResult(
+            `Fetched trace ${shortId(trace.trace_id)} (${trace.span_count} spans, ${mode} mode).`,
+            output,
+          );
         }
 
         if (view === "logs") {
@@ -228,28 +209,18 @@ export function createServer(): McpServer {
             limit: limit ?? 50,
           });
           const output: FetchTelemetryOutput = { logs, mode };
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Fetched ${logs.length} logs (${mode} mode).`,
-              },
-            ],
-            structuredContent: asStructuredContent(output),
-          };
+          return telemetryToolResult(
+            `Fetched ${logs.length} logs (${mode} mode).`,
+            output,
+          );
         }
 
         const { traces, mode } = await fetchTraces(limit ?? 20);
         const output: FetchTelemetryOutput = { traces, mode };
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Fetched ${traces.length} traces (${mode} mode).`,
-            },
-          ],
-          structuredContent: asStructuredContent(output),
-        };
+        return telemetryToolResult(
+          `Fetched ${traces.length} traces (${mode} mode).`,
+          output,
+        );
       } catch (err) {
         return toolError(err);
       }

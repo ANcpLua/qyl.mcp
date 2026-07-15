@@ -102,33 +102,31 @@ interface ParsedCollectorPage<T> {
 }
 
 /**
- * Validate the generated CursorPage wire invariant and every item. The
- * published JSON Schema does not emit generic page definitions, so this
- * internal parser checks their generated TypeScript shape without inventing a
- * second API DTO.
+ * Normalize endpoint items, then validate the complete operation-specific
+ * response body. The supplied schema must be an Operations.*.Response.200
+ * definition from the generated contract.
  */
-export function parseCollectorPage<T>(
+export function parseCollectorPage<T, TPage extends { items: T[]; has_more: boolean }>(
   value: unknown,
   context: string,
+  pageSchema: z.ZodType<TPage>,
   parseItem: (item: unknown, context: string) => T,
 ): ParsedCollectorPage<T> {
-  const page = asRecord(value, context);
-  if (!Array.isArray(page.items) || typeof page.has_more !== "boolean") {
-    throw new CollectorError(
-      `collector contract mismatch for ${context}: expected items[] and has_more:boolean`,
-    );
+  try {
+    const source = asRecord(value, context);
+    const sourceItems = z.array(z.unknown()).safeParse(source.items);
+    if (!sourceItems.success) throw contractMismatch(`${context}.items`, sourceItems.error);
+    const page = pageSchema.parse({
+      ...source,
+      items: sourceItems.data.map((item, index) =>
+        parseItem(item, `${context}.items[${index}]`)),
+    });
+    return { items: page.items, hasMore: page.has_more };
+  } catch (error) {
+    if (error instanceof CollectorError) throw error;
+    if (error instanceof z.ZodError) throw contractMismatch(context, error);
+    throw error;
   }
-  for (const cursor of ["next_cursor", "prev_cursor"] as const) {
-    if (page[cursor] !== undefined && typeof page[cursor] !== "string") {
-      throw new CollectorError(
-        `collector contract mismatch for ${context}.${cursor}: expected a string`,
-      );
-    }
-  }
-  return {
-    items: page.items.map((item, index) => parseItem(item, `${context}.items[${index}]`)),
-    hasMore: page.has_more,
-  };
 }
 
 function normalizeProblemDetails(value: unknown): unknown {

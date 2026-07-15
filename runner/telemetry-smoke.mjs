@@ -31,6 +31,17 @@ const collectorProject = resolve(
     join(here, "..", "..", "qyl", "services", "qyl.collector", "qyl.collector.csproj"),
 );
 const mcpServerMain = resolve(here, "..", "server", "dist", "main.js");
+const runnerMain = resolve(here, "dist", "main.js");
+const collectorExecutable = resolve(
+  dirname(collectorProject),
+  "..",
+  "..",
+  "artifacts",
+  "bin",
+  "qyl.collector",
+  "release",
+  "qyl.collector",
+);
 if (!existsSync(collectorProject)) {
   throw new Error(
     `Qyl collector project not found at ${collectorProject}; set QYL_COLLECTOR_PROJECT`,
@@ -99,11 +110,15 @@ Object.assign(childEnv, {
 });
 
 const collector = spawn(
-  "dotnet",
-  ["run", "--no-launch-profile", "--project", collectorProject],
+  existsSync(collectorExecutable) ? collectorExecutable : "dotnet",
+  existsSync(collectorExecutable)
+    ? []
+    : ["run", "--no-launch-profile", "--project", collectorProject],
   { cwd: dirname(collectorProject), env: childEnv, stdio: ["ignore", "pipe", "pipe"] },
 );
 let collectorOutput = "";
+let runner;
+let runnerOutput = "";
 for (const stream of [collector.stdout, collector.stderr]) {
   stream.setEncoding("utf8");
   stream.on("data", (chunk) => {
@@ -132,24 +147,43 @@ try {
 
   const telemetry = new McpTelemetry({
     ...process.env,
-    QYL_OTLP_ENDPOINT: baseUrl,
+    QYL_COLLECTOR_URL: baseUrl,
     QYL_MCP_TELEMETRY: "1",
     QYL_API_KEY: collectorApiKey,
   });
   const endTimeMs = Date.now();
-  telemetry.recordCall({
+  telemetry.recordOperation({
+    role: "client",
     method: "tools/call",
-    serverName: "qyl-otlp-smoke",
+    serverId: "qyl-otlp-smoke",
     toolName: marker,
     resourceUri: `https://user:${secret}@example.invalid/resource?token=${secret}#${secret}`,
     transport: "http",
     startTimeMs: endTimeMs - 25,
     endTimeMs,
-    failed: false,
     // Runtime extras emulate a JavaScript caller attempting to pass content.
     arguments: { prompt: secret },
     result: { content: secret },
     error: secret,
+  });
+  telemetry.recordOperation({
+    role: "server",
+    method: "ping",
+    transport: "http",
+    startTimeMs: endTimeMs - 15,
+    endTimeMs,
+  });
+  telemetry.recordSession({
+    role: "client",
+    transport: "http",
+    startTimeMs: endTimeMs - 1_000,
+    endTimeMs,
+  });
+  telemetry.recordSession({
+    role: "server",
+    transport: "http",
+    startTimeMs: endTimeMs - 1_000,
+    endTimeMs,
   });
   await telemetry.close();
 
@@ -168,6 +202,141 @@ try {
   }
   console.log("ok official OTLP/protobuf receiver parsed and persisted the SDK export");
   console.log("ok user content and URI secrets were not exported");
+
+  const expectedMetrics = new Set([
+    "mcp.client.operation.duration",
+    "mcp.client.session.duration",
+    "mcp.server.operation.duration",
+    "mcp.server.session.duration",
+  ]);
+  const persistedMetrics = await waitUntil(async () => {
+    const response = await fetch(`${baseUrl}/api/v1/metrics?limit=1000`, {
+      headers: { [apiKeyHeader]: collectorApiKey },
+    });
+    if (!response.ok) throw new Error(`metric query returned ${response.status}`);
+    const body = await response.json();
+    const names = new Set((body.items ?? []).map((item) => item?.name));
+    return [...expectedMetrics].every((name) => names.has(name)) ? body : undefined;
+  }, 15_000, "all four MCP duration histograms to be queryable");
+  console.log("ok all four pinned MCP duration histograms were persisted");
+  const persistedMetricJson = JSON.stringify(persistedMetrics);
+  if (!persistedMetricJson.includes(marker) || !persistedMetricJson.includes("mcp.method.name")) {
+    throw new Error("client operation histogram did not retain its pinned semantic identity");
+  }
+  console.log("ok MCP operation histogram retained its pinned semantic identity");
+
+  if (!existsSync(runnerMain)) {
+    throw new Error(`qyl MCP runner build not found at ${runnerMain}; run npm run build`);
+  }
+  const runnerEnv = {
+    ...process.env,
+    QYL_COLLECTOR_URL: baseUrl,
+    QYL_DEMO: "0",
+    QYL_MCP_TELEMETRY: "1",
+    QYL_MCP_STATE_PATH: join(temp, "workbench-state.json"),
+    QYL_API_KEY: collectorApiKey,
+  };
+  delete runnerEnv.QYL_OTLP_ENDPOINT;
+  for (const key of Object.keys(runnerEnv)) {
+    if (key.startsWith("OTEL_EXPORTER_OTLP")) delete runnerEnv[key];
+  }
+  runner = spawn(process.execPath, [runnerMain], {
+    cwd: resolve(here, ".."),
+    env: runnerEnv,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  for (const stream of [runner.stdout, runner.stderr]) {
+    stream.setEncoding("utf8");
+    stream.on("data", (chunk) => {
+      runnerOutput = `${runnerOutput}${chunk}`.slice(-40_000);
+    });
+  }
+  await Promise.race([
+    waitUntil(async () => {
+      const response = await fetch("http://127.0.0.1:18888/runner/session");
+      return response.status === 401;
+    }, 30_000, "the qyl.mcp runner"),
+    once(runner, "exit").then(([code, signal]) => {
+      throw new Error(`runner exited ${code ?? signal}\n${runnerOutput}`);
+    }),
+  ]);
+  const bootstrap = await fetch("http://127.0.0.1:18888/runner/session", { method: "POST" });
+  if (!bootstrap.ok) throw new Error(`runner session bootstrap returned ${bootstrap.status}`);
+  const cookie = bootstrap.headers.get("set-cookie")?.split(";", 1)[0];
+  if (!cookie) throw new Error("runner session bootstrap returned no cookie");
+  const runnerHeaders = { cookie, "content-type": "application/json" };
+  const serversResponse = await fetch(
+    "http://127.0.0.1:18888/runner/workspaces/default/servers",
+    { headers: runnerHeaders },
+  );
+  if (!serversResponse.ok) throw new Error(`runner server list returned ${serversResponse.status}`);
+  const servers = await serversResponse.json();
+  const workbenchServer = servers.servers?.find((item) => item?.name === "qyl-telemetry");
+  if (!workbenchServer?.id || workbenchServer.connection?.status !== "connected") {
+    throw new Error("runner did not auto-connect its in-process qyl-telemetry server");
+  }
+  const accepted = await fetch(
+    `http://127.0.0.1:18888/runner/workspaces/default/servers/${workbenchServer.id}/executions`,
+    {
+      method: "POST",
+      headers: runnerHeaders,
+      body: JSON.stringify({
+        toolName: "list_traces",
+        arguments: { limit: 100 },
+        timeoutMs: 10_000,
+        idempotencyKey: `otlp-runner-${randomUUID()}`,
+        confirmation: {
+          acknowledged: true,
+          acknowledgement: "Run the read-only live collector trace query for OTLP verification.",
+        },
+      }),
+    },
+  );
+  if (accepted.status !== 202) {
+    throw new Error(`runner tool execution returned ${accepted.status}: ${await accepted.text()}`);
+  }
+  const executionId = (await accepted.json()).execution?.id;
+  if (!executionId) throw new Error("runner tool execution returned no execution id");
+  await waitUntil(async () => {
+    const response = await fetch(
+      `http://127.0.0.1:18888/runner/workspaces/default/servers/${workbenchServer.id}/executions/${executionId}`,
+      { headers: runnerHeaders },
+    );
+    if (!response.ok) throw new Error(`runner execution query returned ${response.status}`);
+    const execution = await response.json();
+    if (["failed", "cancelled", "timed_out"].includes(execution.status)) {
+      throw new Error(`runner execution ended as ${execution.status}: ${JSON.stringify(execution.error)}`);
+    }
+    return execution.status === "succeeded";
+  }, 15_000, "the real workbench tool execution");
+
+  const correlated = await waitUntil(async () => {
+    const response = await fetch(
+      `http://127.0.0.1:18888/runner/workspaces/default/servers/${workbenchServer.id}/executions/${executionId}/telemetry`,
+      { headers: runnerHeaders },
+    );
+    if (!response.ok) throw new Error(`runner telemetry query returned ${response.status}`);
+    const body = await response.json();
+    if (body.traces?.length > 0
+        && body.metrics?.length > 0
+        && body.signals?.metrics?.status === "partial") return body;
+    throw new Error(JSON.stringify({
+      traceCount: body.traces?.length ?? 0,
+      logCount: body.logs?.length ?? 0,
+      metricCount: body.metrics?.length ?? 0,
+      signals: body.signals,
+      correlation: body.correlation,
+    }));
+  }, 20_000, "workbench traces and explicitly approximate MCP metrics");
+  if (correlated.selfExportSuppressed !== true) {
+    throw new Error("workbench telemetry read did not report self-export suppression");
+  }
+  if (!correlated.signals.metrics.unavailableReason?.includes("does not export exemplars")) {
+    throw new Error("workbench telemetry did not label time-window metric evidence as approximate");
+  }
+  console.log("ok real runner returned exact trace evidence and labelled semantic/time-window metric evidence as partial");
+  await stop(runner);
+  runner = undefined;
 
   if (!existsSync(mcpServerMain)) {
     throw new Error(`qyl MCP server build not found at ${mcpServerMain}; run npm run build`);
@@ -230,8 +399,10 @@ try {
   }
 } catch (error) {
   if (collectorOutput) console.error(collectorOutput);
+  if (runnerOutput) console.error(runnerOutput);
   throw error;
 } finally {
+  if (runner) await stop(runner);
   await stop(collector);
   await rm(temp, { recursive: true, force: true });
 }

@@ -1,0 +1,175 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+    evaluateAssertions,
+    isPartialMatch,
+    readJsonPointer,
+} from "./assertions.js";
+import type { RunnerMcpTestAssertion } from "@ancplua/qyl-api-schema/types";
+
+test("JSON Pointer selects escaped object keys and bounded array indices", () => {
+    const value = { "a/b": { "~key": ["zero", { ok: true }] } };
+    assert.deepEqual(readJsonPointer(value, "/a~1b/~0key/1"), {
+        found: true,
+        value: { ok: true },
+    });
+    assert.equal(readJsonPointer(value, "/a~2b").found, false);
+    assert.equal(readJsonPointer(value, "/a~1b/~0key/3").found, false);
+    assert.equal(readJsonPointer(value, "a").error, "A JSON Pointer must be empty or begin with '/'.");
+});
+
+test("partial matching recursively checks object subsets and array prefixes", () => {
+    assert.equal(
+        isPartialMatch(
+            { status: "ok", nested: { count: 3, extra: true }, rows: [{ id: 1 }, { id: 2 }] },
+            { nested: { count: 3 }, rows: [{ id: 1 }] },
+        ),
+        true,
+    );
+    assert.equal(isPartialMatch({ nested: { count: 2 } }, { nested: { count: 3 } }), false);
+});
+
+test("assertion engine differentiates status, exact, partial, schema, pattern, and latency", async () => {
+    const assertions: RunnerMcpTestAssertion[] = [
+        { id: "status", kind: "status", expected: ["succeeded", "failed"] },
+        { id: "exact", kind: "exact", path: "/structured/answer", expected: 42 },
+        { id: "partial", kind: "partial", path: "/structured", expected: { ok: true } },
+        {
+            id: "schema",
+            kind: "schema",
+            path: "/structured",
+            schema: {
+                type: "object",
+                required: ["answer"],
+                properties: { answer: { type: "integer", minimum: 40 } },
+            },
+        },
+        { id: "pattern", kind: "pattern", path: "/text", pattern: "hello\\s+world", flags: "iu" },
+        { id: "latency", kind: "latency", maxDurationMs: 250 },
+    ];
+
+    const results = await evaluateAssertions(assertions, {
+        status: "succeeded",
+        outcome: "succeeded",
+        durationMs: 125.4,
+        result: { text: "Hello world", structured: { ok: true, answer: 42 } },
+    });
+
+    assert.equal(results.length, assertions.length);
+    assert.equal(results.every((entry) => entry.status === "passed"), true);
+});
+
+test("invalid and unsafe pattern assertions fail without throwing", async () => {
+    const [duplicateFlags, unsupportedFlags, invalidPattern, nonString] = await evaluateAssertions(
+        [
+            { id: "duplicate", kind: "pattern", path: "/value", pattern: "a", flags: "ii" },
+            { id: "unsupported", kind: "pattern", path: "/value", pattern: "a", flags: "g" },
+            { id: "invalid", kind: "pattern", path: "/value", pattern: "[", flags: "u" },
+            { id: "number", kind: "pattern", path: "/number", pattern: "1" },
+        ],
+        { status: "succeeded", outcome: "succeeded", durationMs: 1, result: { value: "a", number: 1 } },
+    );
+
+    assert(duplicateFlags && unsupportedFlags && invalidPattern && nonString);
+    assert.match(duplicateFlags.message ?? "", /duplicates/u);
+    assert.match(unsupportedFlags.message ?? "", /only i, m, s, and u/u);
+    assert.match(invalidPattern.message ?? "", /Invalid regular expression/u);
+    assert.match(nonString.message ?? "", /require a string/u);
+    assert.equal([duplicateFlags, unsupportedFlags, invalidPattern, nonString].every((entry) => entry.status === "failed"), true);
+});
+
+test("missing values and invalid schemas are evidence-backed failures", async () => {
+    const results = await evaluateAssertions(
+        [
+            { id: "missing", kind: "exact", path: "/missing", expected: true },
+            { id: "schema", kind: "schema", schema: { type: "not-a-json-schema-type" } },
+            { id: "latency", kind: "latency", maxDurationMs: -1 },
+        ],
+        { status: "succeeded", outcome: "succeeded", durationMs: 2, result: { present: true } },
+    );
+
+    assert(results[0] && results[1] && results[2]);
+    assert.equal(results.every((entry) => entry.status === "failed"), true);
+    assert.match(results[0].message ?? "", /was not found/u);
+    assert.match(results[1].message ?? "", /Invalid JSON Schema/u);
+    assert.match(results[2].message ?? "", /non-negative/u);
+});
+
+test("status assertions retain multiple accepted generated statuses and match every failed category", async () => {
+    const assertion: RunnerMcpTestAssertion = {
+        id: "terminal",
+        kind: "status",
+        expected: ["failed", "timed_out"],
+    };
+
+    for (const outcome of [
+        "tool_error",
+        "schema_error",
+        "protocol_error",
+        "transport_error",
+        "authentication_error",
+        "internal_error",
+    ] as const) {
+        const assertionResult: Awaited<ReturnType<typeof evaluateAssertions>>[number] = (await evaluateAssertions([assertion], {
+            status: "failed",
+            outcome,
+            durationMs: 1,
+        }))[0];
+        assert.equal(assertionResult.status, "passed", outcome);
+        assert.equal(assertionResult.actual, "failed");
+    }
+});
+
+test("catastrophic patterns hit a hard deadline without blocking the event loop", { timeout: 2_000 }, async () => {
+    let heartbeatObserved = false;
+    const heartbeat = setTimeout(() => {
+        heartbeatObserved = true;
+    }, 10);
+    const startedAt = performance.now();
+
+    const [assertionResult] = await evaluateAssertions(
+        [{ id: "redos", kind: "pattern", path: "/value", pattern: "(a+)+$", flags: "u" }],
+        {
+            status: "succeeded",
+            outcome: "succeeded",
+            durationMs: 1,
+            result: { value: `${"a".repeat(50_000)}!` },
+        },
+    );
+
+    clearTimeout(heartbeat);
+    assert(assertionResult);
+    assert.equal(heartbeatObserved, true, "the main event loop remained responsive");
+    assert.equal(assertionResult.status, "failed");
+    assert.match(assertionResult.message ?? "", /safety deadline/u);
+    assert(performance.now() - startedAt < 1_000, "the isolated worker respected its deadline");
+});
+
+test("catastrophic JSON Schema patterns are isolated from the runner event loop", { timeout: 2_000 }, async () => {
+    let heartbeatObserved = false;
+    const heartbeat = setTimeout(() => {
+        heartbeatObserved = true;
+    }, 10);
+    const startedAt = performance.now();
+
+    const [assertionResult] = await evaluateAssertions(
+        [{
+            id: "schema-redos",
+            kind: "schema",
+            schema: { type: "string", pattern: "(a+)+$" },
+        }],
+        {
+            status: "succeeded",
+            outcome: "succeeded",
+            durationMs: 1,
+            result: `${"a".repeat(50_000)}!`,
+        },
+    );
+
+    clearTimeout(heartbeat);
+    assert(assertionResult);
+    assert.equal(heartbeatObserved, true, "the main event loop remained responsive");
+    assert.equal(assertionResult.status, "failed");
+    assert.match(assertionResult.message ?? "", /safety deadline/u);
+    assert(performance.now() - startedAt < 1_500, "the schema worker respected its deadline");
+});

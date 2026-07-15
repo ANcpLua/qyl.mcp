@@ -10,8 +10,6 @@ export const RunnerAllowedOrigins = [
     "http://localhost:5173",
 ] as const;
 
-export const SandboxAllowedOrigins = RunnerAllowedOrigins;
-
 function hostnameFromAuthority(authority: string): string | undefined {
     try {
         return new URL(`http://${authority}`).hostname;

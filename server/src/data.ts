@@ -15,6 +15,13 @@ import {
 import { getDemo, getDemoMcpSpans } from "./demo.js";
 import { logBodyText } from "./log-body.js";
 import { aggregateMcpStats, pickBucketMs } from "./stats.js";
+import { redactTelemetry } from "./telemetry-redaction.js";
+import {
+  LogsListResponseSchema,
+  SessionsListResponseSchema,
+  SessionTracesListResponseSchema,
+  TracesListResponseSchema,
+} from "./contract-validation.js";
 import type { SessionId, TraceId } from "@ancplua/qyl-api-schema/types";
 import type {
   McpDashboardStats,
@@ -27,13 +34,18 @@ import type {
 export async function fetchTraces(limit: number): Promise<{ traces: QylTrace[]; mode: Mode }> {
   const mode = await resolveMode();
   if (mode === "demo") {
-    return { traces: getDemo().traces.slice(0, limit), mode };
+    return redactTelemetry({ traces: getDemo().traces.slice(0, limit), mode });
   }
   const body = await collectorGet("/api/v1/traces", { limit });
-  return {
-    traces: parseCollectorPage(body, "/api/v1/traces", parseCollectorTrace).items,
+  return redactTelemetry({
+    traces: parseCollectorPage(
+      body,
+      "/api/v1/traces",
+      TracesListResponseSchema,
+      parseCollectorTrace,
+    ).items,
     mode,
-  };
+  });
 }
 
 export async function fetchTrace(traceId: string): Promise<{ trace: QylTrace; mode: Mode }> {
@@ -41,14 +53,14 @@ export async function fetchTrace(traceId: string): Promise<{ trace: QylTrace; mo
   if (mode === "demo") {
     const trace = getDemo().traces.find((t) => t.trace_id === traceId);
     if (!trace) throw new CollectorError(`trace not found: ${traceId}`);
-    return { trace, mode };
+    return redactTelemetry({ trace, mode });
   }
   try {
     const trace = parseCollectorTrace(
       await collectorGet(`/api/v1/traces/${encodeURIComponent(traceId)}`),
       `/api/v1/traces/${traceId}`,
     );
-    return { trace, mode };
+    return redactTelemetry({ trace, mode });
   } catch (err) {
     if (err instanceof CollectorError && err.status === 404) {
       throw new CollectorError(`trace not found: ${traceId}`);
@@ -65,21 +77,22 @@ export async function fetchSessionTraces(
   if (mode === "demo") {
     const traces = getDemo().sessionTraces[sessionId];
     if (!traces) throw new CollectorError(`session not found: ${sessionId}`);
-    return { traces: traces.slice(0, limit), mode };
+    return redactTelemetry({ traces: traces.slice(0, limit), mode });
   }
   try {
     const body = await collectorGet(
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/traces`,
       { limit },
     );
-    return {
+    return redactTelemetry({
       traces: parseCollectorPage(
         body,
         `/api/v1/sessions/${sessionId}/traces`,
+        SessionTracesListResponseSchema,
         parseCollectorTrace,
       ).items,
       mode,
-    };
+    });
   } catch (err) {
     if (err instanceof CollectorError && err.status === 404) {
       throw new CollectorError(`session not found: ${sessionId}`);
@@ -97,19 +110,24 @@ export async function fetchSessions(
     const sessions = (
       activeOnly ? getDemo().sessions.filter((s) => s.state === "active") : getDemo().sessions
     ).slice(0, limit);
-    return { sessions, mode };
+    return redactTelemetry({ sessions, mode });
   }
   const body = await collectorGet("/api/v1/sessions", {
     limit,
     isActive: activeOnly ? true : undefined,
   });
-  return {
-    sessions: parseCollectorPage(body, "/api/v1/sessions", parseCollectorSession).items,
+  return redactTelemetry({
+    sessions: parseCollectorPage(
+      body,
+      "/api/v1/sessions",
+      SessionsListResponseSchema,
+      parseCollectorSession,
+    ).items,
     mode,
-  };
+  });
 }
 
-export interface LogFilters {
+interface LogFilters {
   trace_id?: string;
   service_name?: string;
   severity_min?: number;
@@ -137,7 +155,7 @@ export async function fetchLogs(
       const needle = filters.query.toLowerCase();
       logs = logs.filter((l) => logBodyText(l.body).toLowerCase().includes(needle));
     }
-    return { logs: logs.slice(0, filters.limit), mode };
+    return redactTelemetry({ logs: logs.slice(0, filters.limit), mode });
   }
   const body = await collectorGet("/api/v1/logs", {
     traceId: filters.trace_id,
@@ -146,10 +164,15 @@ export async function fetchLogs(
     query: filters.query,
     limit: filters.limit,
   });
-  return {
-    logs: parseCollectorPage(body, "/api/v1/logs", parseCollectorLog).items,
+  return redactTelemetry({
+    logs: parseCollectorPage(
+      body,
+      "/api/v1/logs",
+      LogsListResponseSchema,
+      parseCollectorLog,
+    ).items,
     mode,
-  };
+  });
 }
 
 /** Shared by display_traces and fetch_telemetry (view "traces"). */
@@ -176,15 +199,25 @@ export async function fetchMcpStats(hours: number): Promise<McpDashboardStats> {
   const bucketMs = pickBucketMs(windowEnd - windowStart);
 
   if (mode === "demo") {
-    const stats = aggregateMcpStats(getDemoMcpSpans(), windowStart, windowEnd, bucketMs);
-    return { ...stats, truncated: false, mode };
+    const stats = aggregateMcpStats(
+      redactTelemetry(getDemoMcpSpans()),
+      windowStart,
+      windowEnd,
+      bucketMs,
+    );
+    return redactTelemetry({ ...stats, truncated: false, mode });
   }
 
   const body = await collectorGet("/api/v1/traces", { limit: 1000 });
-  const page = parseCollectorPage(body, "/api/v1/traces", parseCollectorTrace);
-  const traces = page.items;
+  const page = parseCollectorPage(
+    body,
+    "/api/v1/traces",
+    TracesListResponseSchema,
+    parseCollectorTrace,
+  );
+  const traces = redactTelemetry(page.items);
   const spans = traces.flatMap((t) => t.spans);
   const stats = aggregateMcpStats(spans, windowStart, windowEnd, bucketMs);
   const truncated = traces.length >= 1000 || page.hasMore;
-  return { ...stats, truncated, mode };
+  return redactTelemetry({ ...stats, truncated, mode });
 }

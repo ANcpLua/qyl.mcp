@@ -18,7 +18,6 @@ export const Constants = {
 
     Ports: {
         RunnerApi: 18888,
-        Sandbox: 18889,
     },
 
     Network: {

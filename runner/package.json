@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Local MCP server host with orchestration, runner API, passthrough, and in-process qyl telemetry tools",
+  "description": "Local MCP server host with orchestration, an authenticated workbench API, and in-process qyl telemetry tools",
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "npm run clean && tsc",
@@ -13,12 +13,14 @@
     "smoke:otlp": "node telemetry-smoke.mjs"
   },
   "dependencies": {
-    "@ancplua/qyl-api-schema": "0.5.10",
+    "@ancplua/qyl-api-schema": "1.0.2",
     "@modelcontextprotocol/ext-apps": "^1.7.4",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-metrics-otlp-proto": "^0.220.0",
     "@opentelemetry/exporter-trace-otlp-proto": "^0.220.0",
     "@opentelemetry/resources": "^2.9.0",
+    "@opentelemetry/sdk-metrics": "^2.9.0",
     "@opentelemetry/sdk-trace-base": "^2.9.0",
     "@opentelemetry/sdk-trace-node": "^2.9.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",

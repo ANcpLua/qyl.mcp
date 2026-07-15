@@ -1,38 +1,42 @@
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
-import type { RequestHandler } from "express";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
-/**
- * Browser access is not needed for the standalone MCP transport. Keep local
- * same-origin probes possible, while rejecting arbitrary browser origins.
- * Requests without Origin remain valid for native MCP clients.
- */
-export function loopbackOriginGuard(port: number): RequestHandler {
-  const allowedOrigins = new Set([
+function loopbackHosts(port: number): string[] {
+  return [
+    "127.0.0.1",
+    "localhost",
+    "[::1]",
+    `127.0.0.1:${port}`,
+    `localhost:${port}`,
+    `[::1]:${port}`,
+  ];
+}
+
+function loopbackOrigins(port: number): string[] {
+  return [
     `http://127.0.0.1:${port}`,
     `http://localhost:${port}`,
     `http://[::1]:${port}`,
-  ]);
-
-  return (request, response, next) => {
-    const origin = request.headers.origin;
-    if (origin !== undefined && !allowedOrigins.has(origin)) {
-      response.status(403).json({
-        jsonrpc: "2.0",
-        error: { code: -32000, message: "Invalid Origin" },
-        id: null,
-      });
-      return;
-    }
-    next();
-  };
+  ];
 }
 
 /**
- * Official MCP Express ownership supplies loopback Host validation. The
- * additional Origin guard closes browser-origin access without wildcard CORS.
+ * Official MCP Express ownership supplies loopback Host validation before a
+ * request reaches the protocol transport.
  */
-export function createLoopbackMcpApp(port: number) {
-  const app = createMcpExpressApp();
-  app.use(loopbackOriginGuard(port));
-  return app;
+export function createLoopbackMcpApp() {
+  return createMcpExpressApp({ host: "127.0.0.1" });
+}
+
+/**
+ * The official Streamable HTTP transport owns the MCP error envelope emitted
+ * for a rejected Host or Origin. Native clients without Origin remain valid.
+ */
+export function createLoopbackMcpTransport(port: number): StreamableHTTPServerTransport {
+  return new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableDnsRebindingProtection: true,
+    allowedHosts: loopbackHosts(port),
+    allowedOrigins: loopbackOrigins(port),
+  });
 }

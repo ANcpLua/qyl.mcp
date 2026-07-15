@@ -103,10 +103,7 @@ export function summarizeSessions(sessions: QylSession[], mode: Mode): string {
         : "—";
     const genai = session.genai_usage
       ? `${session.genai_usage.request_count} req, ` +
-        `${session.genai_usage.total_input_tokens}/${session.genai_usage.total_output_tokens} tok` +
-        (session.genai_usage.estimated_cost_usd !== undefined
-          ? `, ~$${session.genai_usage.estimated_cost_usd.toFixed(4)}`
-          : "")
+        `${session.genai_usage.total_input_tokens}/${session.genai_usage.total_output_tokens} tok`
       : "—";
     lines.push(
       `| ${session["session.id"]} | ${session.state} | ${session.trace_count} | ` +

@@ -52,7 +52,7 @@ test("orchestrator publishes contract states and reports action acceptance hones
 
     const ready = await waitForLifecycle(orchestrator.registry, "fixture", "ready");
     assert.equal(ready.kind, "inproc");
-    assert.deepEqual(ready.serverInfo, { name: "runner-fixture", version: "1.0.0" });
+    assert.deepEqual(ready.serverIdentity, { name: "runner-fixture", version: "1.0.0" });
     assert.equal(ready.toolCount, 1);
     assert.equal(ready.restarts, 0);
     assert(!("endpoint" in ready));
@@ -64,7 +64,7 @@ test("orchestrator publishes contract states and reports action acceptance hones
     assert.equal(orchestrator.stop("fixture"), "conflict");
 
     const stopped = await waitForLifecycle(orchestrator.registry, "fixture", "stopped");
-    assert(!("serverInfo" in stopped));
+    assert(!("serverIdentity" in stopped));
     assert(!("toolCount" in stopped));
     assert.equal(orchestrator.stop("fixture"), "conflict");
 

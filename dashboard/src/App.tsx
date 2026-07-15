@@ -1,433 +1,171 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { McpUiToolMetaSchema, getToolUiResourceUri } from "@modelcontextprotocol/ext-apps/app-bridge";
-import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js";
-import { useResources } from "./useResources";
-import { useLogs } from "./useLogs";
-import { useTools } from "./useTools";
-import { AppFrame } from "./app-frame";
-import { callResourceTool, runnerAction } from "./bridge";
-import type { ResourceLifecycle } from "./types";
+import { useEffect, useState } from "react";
+import { EvaluationsWorkspace } from "./workbench/EvaluationsWorkspace.js";
+import { InspectorWorkspace } from "./workbench/InspectorWorkspace.js";
+import { TestsWorkspace } from "./workbench/TestsWorkspace.js";
+import { WorkbenchSidebar } from "./workbench/WorkbenchSidebar.js";
+import { useWorkbench } from "./workbench/useWorkbench.js";
 
-const DOT: Record<ResourceLifecycle, string> = {
-  pending: "#6b7280",
-  starting: "#d97706",
-  ready: "#16a34a",
-  stopping: "#d97706",
-  stopped: "#6b7280",
-  failed: "#dc2626",
-};
+type ActivePanel = "inspect" | "tests" | "evaluations";
 
-/**
- * Check if a tool is visible to the model (not app-only).
- * Tools with `_meta.ui.visibility: ["app"]` are not shown in the tools panel.
- */
-function isToolVisibleToModel(tool: Tool): boolean {
-  const result = McpUiToolMetaSchema.safeParse(tool._meta?.ui);
-  if (!result.success) return true; // default: visible to model
-  const visibility = result.data.visibility;
-  if (!visibility) return true; // default: visible to model
-  return visibility.includes("model");
+function isActivePanel(value: string | undefined): value is ActivePanel {
+  return value === "inspect" || value === "tests" || value === "evaluations";
 }
-
-/** Compare tools: UI-enabled first, then alphabetically by name. */
-function compareTools(a: Tool, b: Tool): number {
-  const aHasUi = !!getToolUiResourceUri(a);
-  const bHasUi = !!getToolUiResourceUri(b);
-  if (aHasUi && !bHasUi) return -1;
-  if (!aHasUi && bHasUi) return 1;
-  return a.name.localeCompare(b.name);
-}
-
-/**
- * Extract default values from a tool's JSON Schema inputSchema.
- * Returns a formatted JSON string with defaults, or "{}" if none found.
- */
-function getToolDefaults(tool: Tool | undefined): string {
-  if (!tool?.inputSchema?.properties) return "{}";
-
-  const defaults: Record<string, unknown> = {};
-  for (const [key, prop] of Object.entries(tool.inputSchema.properties)) {
-    if (prop && typeof prop === "object" && "default" in prop) {
-      defaults[key] = prop.default;
-    }
-  }
-
-  return Object.keys(defaults).length > 0
-    ? JSON.stringify(defaults, null, 2)
-    : "{}";
-}
-
-interface ToolCallEntry {
-  id: number;
-  resource: string;
-  tool: Tool;
-  input: Record<string, unknown>;
-  resultPromise: Promise<CallToolResult>;
-  appResourceUri?: string;
-}
-
-let nextToolCallId = 0;
 
 export default function App() {
-  const { resources, connection } = useResources();
-  const [selected, setSelected] = useState<string | null>(null);
-  const [errors, setErrors] = useState<string[]>([]);
-  const [toolCalls, setToolCalls] = useState<ToolCallEntry[]>([]);
-  const [destroyingIds, setDestroyingIds] = useState<Set<number>>(new Set());
+  const workbench = useWorkbench();
+  const [activePanel, setActivePanel] = useState<ActivePanel>("inspect");
 
-  const logs = useLogs(selected);
-  const selectedState = resources.find((r) => r.name === selected);
-  const selectedReady = selectedState?.lifecycle === "ready";
-  const { tools, loading: toolsLoading, error: toolsError } = useTools(selected, selectedReady);
-
-  const pushError = useCallback((message: string) => {
-    setErrors((prev) => (prev.includes(message) ? prev : [...prev, message]));
-  }, []);
-
-  const doAction = (name: string, action: "restart" | "stop") => {
-    runnerAction(name, action).catch((err: unknown) => {
-      pushError(err instanceof Error ? err.message : String(err));
-    });
-  };
-
-  const callTool = (resource: string, tool: Tool, input: Record<string, unknown>) => {
-    let appResourceUri: string | undefined;
-    try {
-      appResourceUri = getToolUiResourceUri(tool);
-    } catch (err) {
-      pushError(err instanceof Error ? err.message : String(err));
+  useEffect(() => {
+    if (isActivePanel(workbench.preferences?.activePanel)) {
+      setActivePanel(workbench.preferences.activePanel);
     }
-    const resultPromise = callResourceTool(resource, tool.name, input);
-    // Both ResultView and AppFrame attach rejection handlers after mount; this
-    // no-op handler keeps an early rejection from firing unhandledrejection.
-    resultPromise.catch(() => {});
-    setToolCalls((prev) => [
-      ...prev,
-      { id: nextToolCallId++, resource, tool, input, resultPromise, appResourceUri },
-    ]);
-  };
+  }, [workbench.preferences?.activePanel]);
 
-  const requestClose = (id: number, isApp: boolean) => {
-    if (!isApp) {
-      setToolCalls((prev) => prev.filter((c) => c.id !== id));
-      return;
-    }
-    setDestroyingIds((prev) => new Set(prev).add(id));
-  };
+  function selectPanel(panel: ActivePanel) {
+    setActivePanel(panel);
+    void workbench.updatePreference({ activePanel: panel });
+  }
 
-  const completeClose = useCallback((id: number) => {
-    setDestroyingIds((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-    setToolCalls((prev) => prev.filter((c) => c.id !== id));
-  }, []);
+  if (workbench.phase === "loading") {
+    return (
+      <main className="boot-screen">
+        <div className="brand-mark">qyl<span>.mcp</span></div>
+        <div className="boot-progress"><span /></div>
+        <p>Opening the local, workspace-isolated MCP workbench…</p>
+      </main>
+    );
+  }
 
   return (
-    <main className="app">
-      <header className="header">
-        <h1>
-          qyl<span className="accent">.mcp</span>
-        </h1>
-        <span className={`conn conn-${connection}`}>● {connection}</span>
-      </header>
-
-      {errors.length > 0 && (
-        <div className="banner" role="alert">
-          <div className="banner-body">
-            {errors.map((e) => (
-              <div key={e}>{e}</div>
-            ))}
+    <div className={`application${workbench.preferences?.compactMode ? " compact-mode" : ""}`}>
+      <header className="app-header">
+        <div className="brand-block">
+          <div className="brand-mark">qyl<span>.mcp</span></div>
+          <span className="product-label">developer workbench</span>
+        </div>
+        <nav className="primary-nav" aria-label="Workbench areas">
+          <button type="button" aria-current={activePanel === "inspect" ? "page" : undefined} onClick={() => selectPanel("inspect")}>Explorer</button>
+          <button type="button" aria-current={activePanel === "tests" ? "page" : undefined} onClick={() => selectPanel("tests")}>Tests</button>
+          <button type="button" aria-current={activePanel === "evaluations" ? "page" : undefined} onClick={() => selectPanel("evaluations")}>Evaluations</button>
+        </nav>
+        <div className="header-context">
+          <div className="session-principal">
+            <span className="status-dot tone-positive" />
+            <span><strong>{workbench.session?.principal.displayName ?? workbench.session?.principal.id ?? "local user"}</strong><small>loopback session</small></span>
           </div>
-          <button className="banner-close" onClick={() => setErrors([])}>
-            ✕
+          <button
+            type="button"
+            className="compact-toggle"
+            disabled={workbench.phase !== "ready" || workbench.busy.has("refresh-all")}
+            title={workbench.lastRefreshedAt ? `Last refreshed ${new Date(workbench.lastRefreshedAt).toLocaleString()}` : "Reload persisted workspace state"}
+            onClick={() => void workbench.refreshAll()}
+          >
+            {workbench.busy.has("refresh-all") ? "Refreshing…" : "Refresh"}
+          </button>
+          <button
+            type="button"
+            className="compact-toggle"
+            aria-pressed={workbench.preferences?.compactMode ?? false}
+            disabled={!workbench.workspaceId}
+            onClick={() => void workbench.updatePreference({ compactMode: !(workbench.preferences?.compactMode ?? false) })}
+          >
+            Density
           </button>
         </div>
-      )}
+      </header>
 
-      {resources.length === 0 ? (
-        <p className="empty">
-          {connection === "open"
-            ? "Waiting for resources…"
-            : "Runner unreachable — waiting to reconnect…"}
-        </p>
-      ) : (
-        <table className="grid">
-          <thead>
-            <tr>
-              <th>Resource</th>
-              <th>Kind</th>
-              <th>Status</th>
-              <th>Server</th>
-              <th>Tools</th>
-              <th>Restarts</th>
-              <th>Endpoint</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {resources.map((r) => (
-              <tr
-                key={r.name}
-                className={r.name === selected ? "row selected" : "row"}
-                onClick={() => setSelected(r.name === selected ? null : r.name)}
-              >
-                <td className="name">{r.name}</td>
-                <td>{r.kind ?? "—"}</td>
-                <td>
-                  <span
-                    className="badge"
-                    style={{ borderColor: DOT[r.lifecycle], color: DOT[r.lifecycle] }}
-                  >
-                    <span className="dot" style={{ background: DOT[r.lifecycle] }} />
-                    {r.lifecycle}
-                  </span>
-                  {r.lastError ? (
-                    <span className="err" title={r.lastError}>
-                      {" — "}
-                      {r.lastError}
-                    </span>
-                  ) : null}
-                </td>
-                <td>{r.serverInfo ? `${r.serverInfo.name}@${r.serverInfo.version}` : "—"}</td>
-                <td>{r.toolCount ?? "—"}</td>
-                <td>{r.restarts ?? 0}</td>
-                <td>{r.endpoint ? <code>{r.endpoint}</code> : "—"}</td>
-                <td className="actions">
-                  <button
-                    className="action"
-                    disabled={!["ready", "failed", "stopped"].includes(r.lifecycle)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      doAction(r.name, "restart");
-                    }}
-                  >
-                    restart
-                  </button>
-                  <button
-                    className="action"
-                    disabled={["stopping", "stopped"].includes(r.lifecycle)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      doAction(r.name, "stop");
-                    }}
-                  >
-                    stop
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      {selected ? (
-        selectedReady ? (
-          <ToolsPanel
-            key={selected}
-            resource={selected}
-            tools={tools}
-            loading={toolsLoading}
-            error={toolsError}
-            onCall={(tool, input) => callTool(selected, tool, input)}
-          />
-        ) : (
-          <p className="hint">
-            Tools are available once <strong>{selected}</strong> is ready.
-          </p>
-        )
-      ) : (
-        resources.length > 0 && <p className="hint">Click a resource to see its tools and logs.</p>
-      )}
-
-      {toolCalls.map((entry) => (
-        <ToolCallPanel
-          key={entry.id}
-          entry={entry}
-          isDestroying={destroyingIds.has(entry.id)}
-          onRequestClose={() => requestClose(entry.id, !!entry.appResourceUri)}
-          onCloseComplete={() => completeClose(entry.id)}
-          onError={pushError}
-        />
-      ))}
-
-      {selected ? (
-        <section className="logs">
-          <div className="logs-head">
-            <span>
-              logs · <strong>{selected}</strong>
-            </span>
-            <button className="logs-close" onClick={() => setSelected(null)}>
-              ✕
-            </button>
+      <div className="notice-stack" aria-live="polite">
+        {workbench.notices.map((notice) => (
+          <div key={notice.id} className={`notice notice-${notice.tone}`} role={notice.tone === "error" ? "alert" : "status"}>
+            <span>{notice.message}</span>
+            <button type="button" aria-label="Dismiss notification" onClick={() => workbench.dismissNotice(notice.id)}>×</button>
           </div>
-          <div className="logs-body">
-            {logs.length === 0
-              ? "— no output yet —"
-              : logs.map((l, i) => (
-                  <div key={i} className={l.stream === "err" ? "logline err-line" : "logline"}>
-                    {l.line}
-                  </div>
-                ))}
-          </div>
-        </section>
-      ) : null}
-    </main>
-  );
-}
-
-interface ToolsPanelProps {
-  resource: string;
-  tools: Tool[];
-  loading: boolean;
-  error: string | null;
-  onCall: (tool: Tool, input: Record<string, unknown>) => void;
-}
-
-function ToolsPanel({ resource, tools, loading, error, onCall }: ToolsPanelProps) {
-  const visibleTools = useMemo(
-    () => tools.filter(isToolVisibleToModel).sort(compareTools),
-    [tools],
-  );
-  const [selectedTool, setSelectedTool] = useState("");
-  const [argsJson, setArgsJson] = useState("{}");
-
-  useEffect(() => {
-    if (visibleTools.some((t) => t.name === selectedTool)) return;
-    const first = visibleTools[0];
-    setSelectedTool(first?.name ?? "");
-    setArgsJson(getToolDefaults(first));
-  }, [visibleTools, selectedTool]);
-
-  const isValidJson = useMemo(() => {
-    try {
-      JSON.parse(argsJson);
-      return true;
-    } catch {
-      return false;
-    }
-  }, [argsJson]);
-
-  const tool = visibleTools.find((t) => t.name === selectedTool);
-
-  return (
-    <section className="tools">
-      <div className="tools-head">
-        tools · <strong>{resource}</strong>
+        ))}
       </div>
-      {error ? (
-        <p className="err tools-status">Failed to load tools: {error}</p>
-      ) : loading ? (
-        <p className="hint tools-status">Loading tools…</p>
-      ) : visibleTools.length === 0 ? (
-        <p className="hint tools-status">No model-visible tools.</p>
-      ) : (
-        <form
-          className="tools-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (tool && isValidJson) onCall(tool, JSON.parse(argsJson) as Record<string, unknown>);
-          }}
-        >
-          <label>
-            Tool
-            <select
-              value={selectedTool}
-              onChange={(e) => {
-                setSelectedTool(e.target.value);
-                setArgsJson(getToolDefaults(visibleTools.find((t) => t.name === e.target.value)));
-              }}
-            >
-              {visibleTools.map((t) => (
-                <option key={t.name} value={t.name}>
-                  {t.name}
-                  {getToolUiResourceUri(t) ? " ⧉" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          {tool?.description ? <p className="hint tool-desc">{tool.description}</p> : null}
-          <label>
-            Arguments (JSON)
-            <textarea
-              aria-invalid={!isValidJson}
-              value={argsJson}
-              onChange={(e) => setArgsJson(e.target.value)}
-              rows={6}
-              spellCheck={false}
+
+      <div className="application-shell">
+        <WorkbenchSidebar
+          workspaces={workbench.workspaces}
+          workspaceId={workbench.workspaceId}
+          servers={workbench.servers}
+          serverId={workbench.serverId}
+          busy={workbench.busy}
+          onSelectWorkspace={workbench.selectWorkspace}
+          onCreateWorkspace={workbench.createWorkspace}
+          onUpdateWorkspace={workbench.updateWorkspace}
+          onSelectServer={workbench.selectServer}
+          onCreateServer={workbench.createServer}
+          onUpdateServer={workbench.updateServer}
+        />
+
+        <main className="workspace-content">
+          {workbench.phase === "failed" ? (
+            <section className="empty-state panel-surface critical-state">
+              <strong>The local runner is unavailable</strong>
+              <span>Session bootstrap failed. Start qyl.mcp on the loopback interface, then reload this page.</span>
+              <button type="button" className="primary-button" onClick={() => window.location.reload()}>Reload</button>
+            </section>
+          ) : !workbench.workspaceId ? (
+            <section className="empty-state panel-surface">
+              <strong>Create a workspace to begin</strong>
+              <span>Server configurations, tests, evaluation evidence, and UI preferences stay isolated inside it.</span>
+            </section>
+          ) : activePanel === "inspect" ? (
+            workbench.selectedServer ? (
+              <InspectorWorkspace
+                server={workbench.selectedServer}
+                preferences={workbench.preferences}
+                discovery={workbench.discovery}
+                discoveryError={workbench.discoveryError}
+                executions={workbench.executions}
+                protocolEvents={workbench.protocolEvents}
+                telemetry={workbench.telemetry}
+                telemetryError={workbench.telemetryError}
+                busy={workbench.busy}
+                onUpdatePreference={workbench.updatePreference}
+                onServerAction={async (action) => { await workbench.serverAction(action); }}
+                onDeleteServer={async (serverId) => { await workbench.deleteServer(serverId); }}
+                onRefreshDiscovery={async () => { await workbench.refreshDiscovery(); }}
+                onStartExecution={workbench.startExecution}
+                onCancelExecution={async (executionId) => { await workbench.cancelExecution(executionId); }}
+                onLoadTelemetry={async (executionId) => { await workbench.loadTelemetry(executionId); }}
+              />
+            ) : (
+              <section className="empty-state panel-surface">
+                <strong>Add an MCP server</strong>
+                <span>Add Streamable HTTP, SSE, or local stdio. Runner-registered internal servers appear automatically; credentials remain server-side environment references.</span>
+              </section>
+            )
+          ) : activePanel === "tests" ? (
+            <TestsWorkspace
+              servers={workbench.servers}
+              executions={workbench.executions}
+              testCases={workbench.testCases}
+              suites={workbench.suites}
+              busy={workbench.busy}
+              onCreateTestCase={workbench.createTestCase}
+              onUpdateTestCase={workbench.updateTestCase}
+              onDeleteTestCase={async (testCaseId) => { await workbench.deleteTestCase(testCaseId); }}
+              onRunTestCase={async (testCaseId, confirmation) => { await workbench.runTestCase(testCaseId, confirmation); }}
+              onCreateSuite={workbench.createSuite}
+              onUpdateSuite={workbench.updateSuite}
+              onDeleteSuite={async (suiteId) => { await workbench.deleteSuite(suiteId); }}
+              onRunSuite={async (suiteId, confirmation) => { await workbench.runSuite(suiteId, confirmation); }}
             />
-          </label>
-          <button type="submit" disabled={!tool || !isValidJson}>
-            Call
-          </button>
-        </form>
-      )}
-    </section>
-  );
-}
-
-interface ToolCallPanelProps {
-  entry: ToolCallEntry;
-  isDestroying: boolean;
-  onRequestClose: () => void;
-  onCloseComplete: () => void;
-  onError: (message: string) => void;
-}
-
-function ToolCallPanel({ entry, isDestroying, onRequestClose, onCloseComplete, onError }: ToolCallPanelProps) {
-  return (
-    <section
-      className="tool-call"
-      style={isDestroying ? { opacity: 0.5, pointerEvents: "none" } : undefined}
-    >
-      <div className="tool-call-head">
-        <span>
-          {entry.resource}:<strong>{entry.tool.name}</strong>
-        </span>
-        {!isDestroying && (
-          <button className="logs-close" onClick={onRequestClose} title="Close">
-            ✕
-          </button>
-        )}
+          ) : (
+            <EvaluationsWorkspace
+              runs={workbench.evaluationRuns}
+              comparison={workbench.comparison}
+              activeExport={workbench.activeExport}
+              exportArtifact={workbench.exportArtifact}
+              busy={workbench.busy}
+              onCompare={async (baseline, candidate) => { await workbench.compareRuns(baseline, candidate); }}
+              onExport={async (runId, format) => { await workbench.requestExport(runId, format); }}
+              onRefreshExport={async () => { await workbench.refreshExport(); }}
+            />
+          )}
+        </main>
       </div>
-      {entry.appResourceUri ? (
-        <AppFrame
-          resource={entry.resource}
-          resourceUri={entry.appResourceUri}
-          input={entry.input}
-          resultPromise={entry.resultPromise}
-          isDestroying={isDestroying}
-          onTeardownComplete={onCloseComplete}
-          onError={onError}
-        />
-      ) : (
-        <ResultView resultPromise={entry.resultPromise} />
-      )}
-    </section>
+    </div>
   );
-}
-
-function ResultView({ resultPromise }: { resultPromise: Promise<CallToolResult> }) {
-  const [text, setText] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    resultPromise.then(
-      (result) => {
-        if (!cancelled) setText(JSON.stringify(result, null, 2));
-      },
-      (err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [resultPromise]);
-
-  if (error) return <pre className="result err">{error}</pre>;
-  if (text === null) return <p className="hint tools-status">calling…</p>;
-  return <pre className="result">{text}</pre>;
 }

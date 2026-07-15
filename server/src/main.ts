@@ -10,10 +10,66 @@
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import { ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import type { Request, Response } from "express";
+import type { Server as HttpServer } from "node:http";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { createServer } from "./server.js";
-import { createLoopbackMcpApp } from "./http-security.js";
+import { createLoopbackMcpApp, createLoopbackMcpTransport } from "./http-security.js";
+import { mcpErrorResponse, mcpRequestId } from "./mcp-errors.js";
+
+interface CleanupFailure {
+  resource: "server" | "transport";
+  errorType: string;
+}
+
+export function sanitizedErrorType(error: unknown): string {
+  if (!(error instanceof Error)) return "UnknownError";
+  return /^[A-Za-z][A-Za-z0-9]*$/.test(error.name) ? error.name : "Error";
+}
+
+/**
+ * McpServer owns its connected transport. A direct transport close is only a
+ * fallback when the server-owned close fails, avoiding duplicate close races.
+ */
+export async function closeMcpRequestResources(
+  server: Pick<McpServer, "close">,
+  transport: Pick<Transport, "close">,
+): Promise<CleanupFailure[]> {
+  try {
+    await server.close();
+    return [];
+  } catch (error) {
+    const failures: CleanupFailure[] = [
+      { resource: "server", errorType: sanitizedErrorType(error) },
+    ];
+    try {
+      await transport.close();
+    } catch (fallbackError) {
+      failures.push({
+        resource: "transport",
+        errorType: sanitizedErrorType(fallbackError),
+      });
+    }
+    return failures;
+  }
+}
+
+function logCleanupFailures(failures: readonly CleanupFailure[]): void {
+  for (const failure of failures) {
+    console.error(
+      `Standalone MCP ${failure.resource} cleanup failed (${failure.errorType}); secret details omitted`,
+    );
+  }
+}
+
+export function closeHttpListener(server: HttpServer): Promise<void> {
+  return new Promise((resolveClose, rejectClose) => {
+    server.close((error) => (error ? rejectClose(error) : resolveClose()));
+  });
+}
 
 /**
  * Starts an MCP server with Streamable HTTP transport in stateless mode.
@@ -25,30 +81,33 @@ export async function startStreamableHTTPServer(
 ): Promise<void> {
   const port = parseInt(process.env.PORT ?? "3001", 10);
 
-  const app = createLoopbackMcpApp(port);
+  const app = createLoopbackMcpApp();
 
   app.all("/mcp", async (req: Request, res: Response) => {
     const server = createServer();
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-    });
+    const transport = createLoopbackMcpTransport(port);
 
-    res.on("close", () => {
-      transport.close().catch(() => {});
-      server.close().catch(() => {});
+    res.once("close", () => {
+      void closeMcpRequestResources(server, transport).then(logCleanupFailures);
     });
 
     try {
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
     } catch (error) {
-      console.error("MCP error:", error);
+      console.error(
+        `Standalone MCP request failed (${sanitizedErrorType(error)}); secret details omitted`,
+      );
       if (!res.headersSent) {
-        res.status(500).json({
-          jsonrpc: "2.0",
-          error: { code: -32603, message: "Internal server error" },
-          id: null,
-        });
+        res
+          .status(500)
+          .json(
+            mcpErrorResponse(
+              ErrorCode.InternalError,
+              "Internal server error",
+              mcpRequestId(req.body),
+            ),
+          );
       }
     }
   });
@@ -60,13 +119,21 @@ export async function startStreamableHTTPServer(
   });
   console.log(`MCP server listening on http://127.0.0.1:${port}/mcp`);
 
+  let shuttingDown = false;
   const shutdown = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     console.log("\nShutting down...");
-    httpServer.close(() => process.exit(0));
+    void closeHttpListener(httpServer).catch((error: unknown) => {
+      console.error(
+        `Standalone MCP HTTP listener cleanup failed (${sanitizedErrorType(error)}); secret details omitted`,
+      );
+      process.exitCode = 1;
+    });
   };
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
 }
 
 /**
@@ -77,7 +144,18 @@ export async function startStreamableHTTPServer(
 export async function startStdioServer(
   createServer: () => McpServer,
 ): Promise<void> {
-  await createServer().connect(new StdioServerTransport());
+  const server = createServer();
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+
+  let shuttingDown = false;
+  const shutdown = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    void closeMcpRequestResources(server, transport).then(logCleanupFailures);
+  };
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
 }
 
 async function main() {
@@ -88,7 +166,12 @@ async function main() {
   }
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+const entryPoint = process.argv[1];
+if (entryPoint !== undefined && pathToFileURL(resolve(entryPoint)).href === import.meta.url) {
+  void main().catch((error: unknown) => {
+    console.error(
+      `Standalone MCP startup failed (${sanitizedErrorType(error)}); secret details omitted`,
+    );
+    process.exitCode = 1;
+  });
+}

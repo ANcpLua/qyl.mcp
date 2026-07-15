@@ -19,6 +19,10 @@
     "./contract-validation": {
       "types": "./dist/contract-validation.d.ts",
       "default": "./dist/contract-validation.js"
+    },
+    "./secret-redactor": {
+      "types": "./dist/secret-redactor.d.ts",
+      "default": "./dist/secret-redactor.js"
     }
   },
   "bin": {
@@ -35,7 +39,7 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "@ancplua/qyl-api-schema": "0.5.10",
+    "@ancplua/qyl-api-schema": "1.0.2",
     "@modelcontextprotocol/ext-apps": "^1.7.4",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "express": "^5.2.1",

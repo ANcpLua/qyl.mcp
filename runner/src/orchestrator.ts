@@ -1,11 +1,11 @@
 // A stdio resource's "spawn" is the SDK's StdioClientTransport spawning the child itself: the
 // runner owns the child's stdio, so the ONE Client opened over that transport is both the health
-// probe and the proxy backend. stdout is the JSON-RPC channel and never goes to the log store;
+// probe and the invocation client. stdout is the JSON-RPC channel and never goes to the log store;
 // stderr is piped into it line by line.
 //
 // An inproc resource has no process at all: the resource's serverFactory builds an MCP server
 // inside the runner and the same ONE Client connects to it over an in-memory linked transport
-// pair — identical health/ping/passthrough semantics, zero IPC.
+// pair — identical health, discovery, and invocation semantics, zero IPC.
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -342,8 +342,8 @@ export class Orchestrator {
     }
 
     // No process and no socket — build the server via the resource's factory and connect the
-    // usual ONE Client to it over an in-memory linked transport pair. Health/ping/passthrough
-    // semantics stay identical to the other kinds.
+    // usual ONE Client to it over an in-memory linked transport pair. Health, discovery, and
+    // invocation semantics stay identical to the other kinds.
     private async connectInProc(
         managed: Managed,
         deadline: number,
@@ -458,7 +458,7 @@ export class Orchestrator {
         if (managed.allocatedPort !== undefined) state.allocatedPort = managed.allocatedPort;
         if (managed.endpoint !== undefined) state.endpoint = managed.endpoint;
         if (lastError !== undefined) state.lastError = lastError;
-        if (managed.serverInfo !== undefined) state.serverInfo = managed.serverInfo;
+        if (managed.serverInfo !== undefined) state.serverIdentity = managed.serverInfo;
         if (managed.toolCount !== undefined) state.toolCount = managed.toolCount;
         this.registry.publish(state);
     }
