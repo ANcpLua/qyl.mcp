@@ -1,11 +1,12 @@
 import type { RequestHandler } from "express";
+import { Constants } from "./constants.js";
 import { sendForbidden } from "./problems.js";
 
 const LoopbackHostnames = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 export const RunnerAllowedOrigins = [
-    "http://127.0.0.1:18888",
-    "http://localhost:18888",
+    `http://127.0.0.1:${Constants.Ports.RunnerApi}`,
+    `http://localhost:${Constants.Ports.RunnerApi}`,
     "http://127.0.0.1:5173",
     "http://localhost:5173",
 ] as const;

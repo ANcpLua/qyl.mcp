@@ -92,6 +92,11 @@ async function stop(child) {
 
 const port = await freePort();
 const baseUrl = `http://127.0.0.1:${port}`;
+let runnerPort;
+do {
+  runnerPort = await freePort();
+} while (runnerPort === port);
+const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
 const temp = await mkdtemp(join(tmpdir(), "qyl-mcp-otlp-"));
 const collectorApiKey = `qyl-smoke-${randomUUID()}`;
 const childEnv = { ...process.env };
@@ -233,6 +238,7 @@ try {
     QYL_COLLECTOR_URL: baseUrl,
     QYL_DEMO: "0",
     QYL_MCP_TELEMETRY: "1",
+    QYL_MCP_RUNNER_PORT: String(runnerPort),
     QYL_MCP_STATE_PATH: join(temp, "workbench-state.json"),
     QYL_API_KEY: collectorApiKey,
   };
@@ -253,20 +259,20 @@ try {
   }
   await Promise.race([
     waitUntil(async () => {
-      const response = await fetch("http://127.0.0.1:18888/runner/session");
+      const response = await fetch(`${runnerBaseUrl}/runner/session`);
       return response.status === 401;
     }, 30_000, "the qyl.mcp runner"),
     once(runner, "exit").then(([code, signal]) => {
       throw new Error(`runner exited ${code ?? signal}\n${runnerOutput}`);
     }),
   ]);
-  const bootstrap = await fetch("http://127.0.0.1:18888/runner/session", { method: "POST" });
+  const bootstrap = await fetch(`${runnerBaseUrl}/runner/session`, { method: "POST" });
   if (!bootstrap.ok) throw new Error(`runner session bootstrap returned ${bootstrap.status}`);
   const cookie = bootstrap.headers.get("set-cookie")?.split(";", 1)[0];
   if (!cookie) throw new Error("runner session bootstrap returned no cookie");
   const runnerHeaders = { cookie, "content-type": "application/json" };
   const serversResponse = await fetch(
-    "http://127.0.0.1:18888/runner/workspaces/default/servers",
+    `${runnerBaseUrl}/runner/workspaces/default/servers`,
     { headers: runnerHeaders },
   );
   if (!serversResponse.ok) throw new Error(`runner server list returned ${serversResponse.status}`);
@@ -276,7 +282,7 @@ try {
     throw new Error("runner did not auto-connect its in-process qyl-telemetry server");
   }
   const accepted = await fetch(
-    `http://127.0.0.1:18888/runner/workspaces/default/servers/${workbenchServer.id}/executions`,
+    `${runnerBaseUrl}/runner/workspaces/default/servers/${workbenchServer.id}/executions`,
     {
       method: "POST",
       headers: runnerHeaders,
@@ -299,7 +305,7 @@ try {
   if (!executionId) throw new Error("runner tool execution returned no execution id");
   await waitUntil(async () => {
     const response = await fetch(
-      `http://127.0.0.1:18888/runner/workspaces/default/servers/${workbenchServer.id}/executions/${executionId}`,
+      `${runnerBaseUrl}/runner/workspaces/default/servers/${workbenchServer.id}/executions/${executionId}`,
       { headers: runnerHeaders },
     );
     if (!response.ok) throw new Error(`runner execution query returned ${response.status}`);
@@ -312,7 +318,7 @@ try {
 
   const correlated = await waitUntil(async () => {
     const response = await fetch(
-      `http://127.0.0.1:18888/runner/workspaces/default/servers/${workbenchServer.id}/executions/${executionId}/telemetry`,
+      `${runnerBaseUrl}/runner/workspaces/default/servers/${workbenchServer.id}/executions/${executionId}/telemetry`,
       { headers: runnerHeaders },
     );
     if (!response.ok) throw new Error(`runner telemetry query returned ${response.status}`);

@@ -9,6 +9,19 @@ if (typeof packageMetadata.version !== "string" || packageMetadata.version.lengt
     throw new Error("runner package metadata has no version");
 }
 const productVersion = packageMetadata.version;
+const defaultRunnerApiPort = 18888;
+
+function configuredRunnerApiPort(value: string | undefined): number {
+    if (value === undefined) return defaultRunnerApiPort;
+    if (!/^\d+$/u.test(value)) {
+        throw new Error("QYL_MCP_RUNNER_PORT must be an integer between 1 and 65535");
+    }
+    const port = Number(value);
+    if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
+        throw new Error("QYL_MCP_RUNNER_PORT must be an integer between 1 and 65535");
+    }
+    return port;
+}
 
 export const Constants = {
     Product: {
@@ -17,7 +30,7 @@ export const Constants = {
     },
 
     Ports: {
-        RunnerApi: 18888,
+        RunnerApi: configuredRunnerApiPort(process.env.QYL_MCP_RUNNER_PORT),
     },
 
     Network: {
