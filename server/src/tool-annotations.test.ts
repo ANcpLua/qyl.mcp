@@ -18,6 +18,7 @@ test("all qyl telemetry tools publish explicit read-only safety annotations", as
     assert.deepEqual(
       tools.map((tool) => tool.name).sort(),
       [
+        "ci_log",
         "display_mcp_dashboard",
         "display_traces",
         "fetch_telemetry",

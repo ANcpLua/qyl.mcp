@@ -61,6 +61,7 @@ import {
   registerTelemetryTools,
   toolError,
 } from "./tools.js";
+import { registerCiTools } from "./ci.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 
 // The vite-built single-file viewers live next to the compiled server code.
@@ -162,6 +163,7 @@ export function createServer(): McpServer {
   );
 
   registerTelemetryTools(server);
+  registerCiTools(server);
 
   registerAppTool(
     server,
