@@ -295,3 +295,23 @@ read surfaces.
   execution evidence is not reconstructed after a runner restart.
 - Local conformance servers cover stdio, Streamable HTTP, and SSE. External
   remote services cannot be verified without their endpoints and credentials.
+
+```mermaid
+flowchart TD
+  A["MCP tool execution"] --> B["Durable execution evidence"]
+  B --> C{"Usage or cost recorded?"}
+  C -- "yes" --> D["Display recorded value"]
+  C -- "no" --> E["Unavailable; no estimate"]
+  B --> F["Workbench MCP span"]
+  F --> G["Exact trace/span correlation"]
+  F --> H["OTLP metric"]
+  H --> I["Partial: bounded time window + semantic operation"]
+  B --> J["External or stdio peer"]
+  J --> K{"Honors MCP propagation metadata?"}
+  K -- "yes" --> L["Downstream span correlates"]
+  K -- "no" --> M["qyl.mcp cannot retrofit instrumentation"]
+  A --> N["Live process-local connection journal"]
+  N --> O["Unattached traffic is not reconstructed after restart"]
+  P["Local conformance servers"] --> Q["stdio / Streamable HTTP / SSE"]
+  R["External remote service"] --> S["Requires endpoint and credentials"]
+```
