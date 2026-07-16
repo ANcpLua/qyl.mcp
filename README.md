@@ -218,6 +218,10 @@ The workbench runner remains available with `npm run start:runner`.
 
 ### Hosted standalone server
 
+The reference deployment serves `https://mcp.qyl.info/mcp` from Railway with
+`/healthz` as its platform healthcheck; pushes to `main` deploy automatically
+after CI passes.
+
 Hosting is opt-in. Set `MCP_BIND_HOST=0.0.0.0` and configure a public URL; the
 server then requires a static Bearer token from `MCP_AUTH_TOKEN` before it will
 start. The token is intended for a controlled first deployment. OAuth 2.1 with
