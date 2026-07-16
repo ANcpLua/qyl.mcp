@@ -1,0 +1,8 @@
+[build]
+builder = "RAILPACK"
+buildCommand = "npm run build --workspace server"
+
+[deploy]
+startCommand = "node server/dist/main.js"
+healthcheckPath = "/healthz"
+healthcheckTimeout = 30

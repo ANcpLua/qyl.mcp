@@ -17,7 +17,14 @@ import type { Server as HttpServer } from "node:http";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createServer } from "./server.js";
-import { createLoopbackMcpApp, createLoopbackMcpTransport } from "./http-security.js";
+import {
+  createMcpApp,
+  createMcpTransport,
+  isLoopbackBindHost,
+  loopbackOrigins,
+  readMcpAuthToken,
+  requireMcpAuthentication,
+} from "./http-security.js";
 import { mcpErrorResponse, mcpRequestId } from "./mcp-errors.js";
 
 interface CleanupFailure {
@@ -71,6 +78,91 @@ export function closeHttpListener(server: HttpServer): Promise<void> {
   });
 }
 
+export interface StreamableHTTPServerConfig {
+  port: number;
+  bindHost: string;
+  publicUrl?: URL;
+  allowedHosts?: string[];
+  allowedOrigins: string[];
+  authToken?: string;
+  hosted: boolean;
+}
+
+function commaSeparated(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function unique(values: readonly string[]): string[] {
+  return [...new Set(values)];
+}
+
+function configuredPublicUrl(environment: NodeJS.ProcessEnv): URL | undefined {
+  const configured = environment.MCP_PUBLIC_URL?.trim();
+  if (!configured) return undefined;
+
+  let publicUrl: URL;
+  try {
+    publicUrl = new URL(configured);
+  } catch {
+    throw new Error("MCP_PUBLIC_URL must be an absolute URL");
+  }
+
+  if (publicUrl.protocol !== "http:" && publicUrl.protocol !== "https:") {
+    throw new Error("MCP_PUBLIC_URL must use HTTP or HTTPS");
+  }
+  return publicUrl;
+}
+
+/**
+ * Reads the standalone HTTP configuration without exposing secret values in
+ * errors or logs. The default remains loopback-only; a non-loopback bind or a
+ * public URL is an explicit hosted mode and requires authentication.
+ */
+export function readStreamableHTTPConfig(
+  environment: NodeJS.ProcessEnv = process.env,
+): StreamableHTTPServerConfig {
+  const port = Number.parseInt(environment.PORT ?? "3001", 10);
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error("PORT must be an integer from 1 through 65535");
+  }
+
+  const bindHost = environment.MCP_BIND_HOST?.trim() || "127.0.0.1";
+  const publicUrl = configuredPublicUrl(environment);
+  const additionalHosts = commaSeparated(environment.MCP_ALLOWED_HOSTS);
+  const additionalOrigins = commaSeparated(environment.MCP_ALLOWED_ORIGINS);
+  const allowedHosts = publicUrl
+    ? unique([publicUrl.hostname, ...additionalHosts])
+    : undefined;
+  const allowedOrigins = publicUrl
+    ? unique([publicUrl.origin, ...additionalOrigins])
+    : loopbackOrigins(port);
+  const authToken = readMcpAuthToken(environment);
+  const hosted = publicUrl !== undefined || !isLoopbackBindHost(bindHost);
+
+  if (hosted && authToken === undefined) {
+    throw new Error(
+      "MCP_AUTH_TOKEN must be configured when MCP_BIND_HOST is non-loopback or MCP_PUBLIC_URL is set",
+    );
+  }
+
+  return {
+    port,
+    bindHost,
+    ...(publicUrl === undefined ? {} : { publicUrl }),
+    ...(allowedHosts === undefined ? {} : { allowedHosts }),
+    allowedOrigins,
+    ...(authToken === undefined ? {} : { authToken }),
+    hosted,
+  };
+}
+
+function urlHost(host: string): string {
+  return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+}
+
 /**
  * Starts an MCP server with Streamable HTTP transport in stateless mode.
  *
@@ -79,13 +171,20 @@ export function closeHttpListener(server: HttpServer): Promise<void> {
 export async function startStreamableHTTPServer(
   createServer: () => McpServer,
 ): Promise<void> {
-  const port = parseInt(process.env.PORT ?? "3001", 10);
+  const config = readStreamableHTTPConfig();
 
-  const app = createLoopbackMcpApp();
+  const app = createMcpApp({
+    bindHost: config.bindHost,
+    allowedHosts: config.allowedHosts,
+  });
 
-  app.all("/mcp", async (req: Request, res: Response) => {
+  app.get("/healthz", (_request, response) => {
+    response.status(200).json({ status: "ok" });
+  });
+
+  app.all("/mcp", requireMcpAuthentication(config.authToken), async (req: Request, res: Response) => {
     const server = createServer();
-    const transport = createLoopbackMcpTransport(port);
+    const transport = createMcpTransport(config.allowedOrigins);
 
     res.once("close", () => {
       void closeMcpRequestResources(server, transport).then(logCleanupFailures);
@@ -112,12 +211,15 @@ export async function startStreamableHTTPServer(
     }
   });
 
-  const httpServer = app.listen(port, "127.0.0.1");
+  const httpServer = app.listen(config.port, config.bindHost);
   await new Promise<void>((resolve, reject) => {
     httpServer.once("listening", resolve);
     httpServer.once("error", reject);
   });
-  console.log(`MCP server listening on http://127.0.0.1:${port}/mcp`);
+  const endpoint = config.publicUrl
+    ? new URL("/mcp", config.publicUrl).href
+    : `http://${urlHost(config.bindHost)}:${config.port}/mcp`;
+  console.log(`MCP server listening on ${endpoint}`);
 
   let shuttingDown = false;
   const shutdown = () => {

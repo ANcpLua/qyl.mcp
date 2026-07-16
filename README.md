@@ -16,7 +16,7 @@ Node.js 22.12 or newer is required.
 ```bash
 npm ci
 npm run build
-npm start
+npm run start:runner
 ```
 
 Open <http://127.0.0.1:18888>. Set `QYL_MCP_RUNNER_PORT` to use another local
@@ -26,7 +26,7 @@ starting the runner:
 ```bash
 export QYL_COLLECTOR_URL=http://127.0.0.1:5100
 export QYL_API_KEY='your-collector-key' # omit for an unsecured local collector
-npm start
+npm run start:runner
 ```
 
 The dashboard bootstraps an opaque `HttpOnly`, `SameSite=Strict` loopback
@@ -58,7 +58,7 @@ Set referenced values in the runner environment before startup:
 ```bash
 export MCP_TOKEN='remote-service-token'
 export MCP_SERVER_TOKEN='child-process-token'
-npm start
+npm run start:runner
 ```
 
 Only environment-variable names are sent by the browser or persisted. Values
@@ -189,7 +189,7 @@ Collector errors remain errors; live mode never falls back to generated data.
 For an offline demonstration, enable demo mode deliberately:
 
 ```bash
-QYL_DEMO=1 npm start
+QYL_DEMO=1 npm run start:runner
 ```
 
 Demo tool results carry `mode: "demo"` so consumers can label them. The
@@ -203,13 +203,59 @@ The installable server can be connected directly to a chat client over stdio:
 node server/dist/main.js --stdio
 ```
 
-Without `--stdio`, it serves stateless Streamable HTTP on
-`http://127.0.0.1:3001/mcp` by default; set `PORT` to change the port. It uses
-the same `QYL_COLLECTOR_URL`, `QYL_API_KEY`, and `QYL_DEMO` configuration. The
-model-visible tools are
+After `npm run build`, `npm start` launches this standalone HTTP server. Without
+`--stdio`, it serves stateless Streamable HTTP on
+`http://127.0.0.1:3001/mcp` by default; set `PORT` to change the port. The
+local default binds only to loopback and accepts local or absent browser
+origins. It uses the same `QYL_COLLECTOR_URL`, `QYL_API_KEY`, and `QYL_DEMO`
+configuration. `QYL_API_KEY` is only an outgoing collector credential; it does
+not authenticate incoming MCP clients. The model-visible tools are
 `display_traces`, `display_mcp_dashboard`, `list_traces`, `get_trace`,
 `list_sessions`, and `search_logs`; `fetch_telemetry` is reserved for the
 bundled MCP Apps.
+
+The workbench runner remains available with `npm run start:runner`.
+
+### Hosted standalone server
+
+Hosting is opt-in. Set `MCP_BIND_HOST=0.0.0.0` and configure a public URL; the
+server then requires a static Bearer token from `MCP_AUTH_TOKEN` before it will
+start. The token is intended for a controlled first deployment. OAuth 2.1 with
+Protected Resource Metadata and scopes is the production target for a general
+remote MCP service.
+
+```bash
+NODE_ENV=production \
+MCP_BIND_HOST=0.0.0.0 \
+MCP_PUBLIC_URL=https://mcp.qyl.info \
+MCP_ALLOWED_HOSTS=mcp.qyl.info,<service>.up.railway.app,healthcheck.railway.app \
+MCP_ALLOWED_ORIGINS=https://mcp.qyl.info,https://<service>.up.railway.app \
+MCP_AUTH_TOKEN='<long-random-secret>' \
+QYL_COLLECTOR_URL=http://qyl-collector.railway.internal:5100 \
+QYL_API_KEY='<collector-api-key>' \
+npm start
+```
+
+`MCP_PUBLIC_URL` adds its hostname and origin to the SDK's Host and Origin
+allowlists. Additional comma-separated values support Railway's generated
+domain and healthcheck host. Native clients without an Origin header remain
+valid, but every hosted request still needs `Authorization: Bearer ...`.
+
+The repository includes `railway.toml`. In Railway, use `/` as the root
+directory, or equivalent settings:
+
+```text
+Build:  npm run build --workspace server
+Start:  node server/dist/main.js
+Health: /healthz
+```
+
+Do not set `PORT` manually; Railway injects it. The standalone server reads it
+and binds to the configured `MCP_BIND_HOST`. The stateless server needs no
+volume and can later be scaled horizontally. Keep one replica initially while
+authentication, rate limits, and collector load are being tested. Railway's
+15-minute streaming request limit still applies to unusually long synchronous
+MCP operations; those should eventually use polling or resumable jobs.
 
 Qyl request, response, event, and error models come from
 [`qyl-api-schema`](https://github.com/ANcpLua/qyl-api-schema). MCP envelopes come

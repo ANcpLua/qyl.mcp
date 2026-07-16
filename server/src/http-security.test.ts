@@ -6,11 +6,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   createLoopbackMcpApp,
   createLoopbackMcpTransport,
+  requireMcpAuthentication,
 } from "./http-security.js";
 
 interface TestResponse {
   status: number;
   body: string;
+  headers: Record<string, string | string[] | undefined>;
 }
 
 async function listen(): Promise<{ server: Server; port: number }> {
@@ -57,7 +59,11 @@ function postMcp(port: number, origin?: string): Promise<TestResponse> {
         response.setEncoding("utf8");
         let body = "";
         response.on("data", (chunk) => (body += chunk));
-        response.on("end", () => resolve({ status: response.statusCode ?? 0, body }));
+        response.on("end", () => resolve({
+          status: response.statusCode ?? 0,
+          body,
+          headers: response.headers,
+        }));
       },
     );
     outgoing.on("error", reject);
@@ -69,13 +75,14 @@ function get(
   port: number,
   headers: Readonly<Record<string, string>> = {},
   setHost = true,
+  path = "/probe",
 ): Promise<TestResponse> {
   return new Promise((resolve, reject) => {
     const outgoing = request(
       {
         hostname: "127.0.0.1",
         port,
-        path: "/probe",
+        path,
         method: "GET",
         headers,
         setHost,
@@ -84,12 +91,31 @@ function get(
         response.setEncoding("utf8");
         let body = "";
         response.on("data", (chunk) => (body += chunk));
-        response.on("end", () => resolve({ status: response.statusCode ?? 0, body }));
+        response.on("end", () => resolve({
+          status: response.statusCode ?? 0,
+          body,
+          headers: response.headers,
+        }));
       },
     );
     outgoing.on("error", reject);
     outgoing.end();
   });
+}
+
+async function listenProtected(): Promise<{ server: Server; port: number }> {
+  const app = createLoopbackMcpApp();
+  app.get(
+    "/protected",
+    requireMcpAuthentication("test-static-token"),
+    (_request, response) => response.status(204).end(),
+  );
+  const server = createServer(app);
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert(address && typeof address === "object");
+  return { server, port: address.port };
 }
 
 test("standalone MCP app accepts loopback Host and local or absent Origin", async (context) => {
@@ -131,4 +157,22 @@ test("standalone MCP app rejects untrusted browser origins", async (context) => 
     assert.match(envelope.error.message, /^Invalid Origin header:/);
     assert.equal(envelope.id, null);
   }
+});
+
+test("static Bearer authentication rejects missing and invalid credentials", async (context) => {
+  const { server, port } = await listenProtected();
+  context.after(() => server.close());
+
+  const missing = await get(port, {}, true, "/protected");
+  assert.equal(missing.status, 401);
+  assert.equal(missing.headers["www-authenticate"], 'Bearer realm="qyl-mcp"');
+
+  assert.equal(
+    (await get(port, { authorization: "Bearer wrong-token" }, true, "/protected")).status,
+    401,
+  );
+  assert.equal(
+    (await get(port, { authorization: "bearer test-static-token" }, true, "/protected")).status,
+    204,
+  );
 });

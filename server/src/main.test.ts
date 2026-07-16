@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   closeMcpRequestResources,
+  readStreamableHTTPConfig,
   sanitizedErrorType,
 } from "./main.js";
 
@@ -32,4 +33,51 @@ test("sanitized errors expose only a safe error class", () => {
   unusual.name = "Bad Name: secret";
   assert.equal(sanitizedErrorType(unusual), "Error");
   assert.equal(sanitizedErrorType("bearer secret"), "UnknownError");
+});
+
+test("standalone HTTP configuration keeps the loopback default", () => {
+  const config = readStreamableHTTPConfig({});
+
+  assert.equal(config.port, 3001);
+  assert.equal(config.bindHost, "127.0.0.1");
+  assert.equal(config.hosted, false);
+  assert.equal(config.authToken, undefined);
+  assert.deepEqual(config.allowedOrigins, [
+    "http://127.0.0.1:3001",
+    "http://localhost:3001",
+    "http://[::1]:3001",
+  ]);
+});
+
+test("hosted HTTP configuration composes public and additional allowlists", () => {
+  const config = readStreamableHTTPConfig({
+    PORT: "8080",
+    MCP_BIND_HOST: "0.0.0.0",
+    MCP_PUBLIC_URL: "https://mcp.qyl.info",
+    MCP_ALLOWED_HOSTS: "railway.example, healthcheck.railway.app",
+    MCP_ALLOWED_ORIGINS: "https://railway.example",
+    MCP_AUTH_TOKEN: "hosted-static-token",
+  });
+
+  assert.equal(config.port, 8080);
+  assert.equal(config.bindHost, "0.0.0.0");
+  assert.equal(config.publicUrl?.origin, "https://mcp.qyl.info");
+  assert.deepEqual(config.allowedHosts, [
+    "mcp.qyl.info",
+    "railway.example",
+    "healthcheck.railway.app",
+  ]);
+  assert.deepEqual(config.allowedOrigins, [
+    "https://mcp.qyl.info",
+    "https://railway.example",
+  ]);
+  assert.equal(config.authToken, "hosted-static-token");
+  assert.equal(config.hosted, true);
+});
+
+test("hosted HTTP configuration fails closed without an incoming auth token", () => {
+  assert.throws(
+    () => readStreamableHTTPConfig({ MCP_BIND_HOST: "0.0.0.0" }),
+    /MCP_AUTH_TOKEN must be configured/u,
+  );
 });
