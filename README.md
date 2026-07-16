@@ -218,7 +218,7 @@ The workbench runner remains available with `npm run start:runner`.
 
 ### Hosted standalone server
 
-The reference deployment serves `https://mcp.qyl.info/mcp` from Railway with
+The reference deployment serves `https://mcp.qyl.at/mcp` from Railway with
 `/healthz` as its platform healthcheck; pushes to `main` deploy automatically
 after CI passes.
 
@@ -231,9 +231,9 @@ remote MCP service.
 ```bash
 NODE_ENV=production \
 MCP_BIND_HOST=0.0.0.0 \
-MCP_PUBLIC_URL=https://mcp.qyl.info \
-MCP_ALLOWED_HOSTS=mcp.qyl.info,<service>.up.railway.app,healthcheck.railway.app \
-MCP_ALLOWED_ORIGINS=https://mcp.qyl.info,https://<service>.up.railway.app \
+MCP_PUBLIC_URL=https://mcp.qyl.at \
+MCP_ALLOWED_HOSTS=mcp.qyl.at,<service>.up.railway.app,healthcheck.railway.app \
+MCP_ALLOWED_ORIGINS=https://mcp.qyl.at,https://<service>.up.railway.app \
 MCP_AUTH_TOKEN='<long-random-secret>' \
 QYL_COLLECTOR_URL=http://qyl-collector.railway.internal:5100 \
 QYL_API_KEY='<collector-api-key>' \

@@ -53,7 +53,7 @@ test("hosted HTTP configuration composes public and additional allowlists", () =
   const config = readStreamableHTTPConfig({
     PORT: "8080",
     MCP_BIND_HOST: "0.0.0.0",
-    MCP_PUBLIC_URL: "https://mcp.qyl.info",
+    MCP_PUBLIC_URL: "https://mcp.qyl.at",
     MCP_ALLOWED_HOSTS: "railway.example, healthcheck.railway.app",
     MCP_ALLOWED_ORIGINS: "https://railway.example",
     MCP_AUTH_TOKEN: "hosted-static-token",
@@ -61,14 +61,14 @@ test("hosted HTTP configuration composes public and additional allowlists", () =
 
   assert.equal(config.port, 8080);
   assert.equal(config.bindHost, "0.0.0.0");
-  assert.equal(config.publicUrl?.origin, "https://mcp.qyl.info");
+  assert.equal(config.publicUrl?.origin, "https://mcp.qyl.at");
   assert.deepEqual(config.allowedHosts, [
-    "mcp.qyl.info",
+    "mcp.qyl.at",
     "railway.example",
     "healthcheck.railway.app",
   ]);
   assert.deepEqual(config.allowedOrigins, [
-    "https://mcp.qyl.info",
+    "https://mcp.qyl.at",
     "https://railway.example",
   ]);
   assert.equal(config.authToken, "hosted-static-token");
