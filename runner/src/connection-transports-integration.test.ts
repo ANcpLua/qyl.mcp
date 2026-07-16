@@ -28,7 +28,6 @@ test("connection manager owns a real stdio MCP lifecycle and exhaustive discover
             [
                 "fixture.safe_lookup",
                 "fixture.rich_result",
-                "fixture.evidence",
                 "fixture.delete_record",
                 "fixture.delayed",
                 "fixture.tool_error",
@@ -113,7 +112,7 @@ for (const transport of ["streamable-http", "sse"] as const) {
         try {
             const connected = await manager.connect(transport);
             assert.equal(connected.lifecycle, "connected");
-            assert.equal(connected.initialization?.discovery.tools.length, 6);
+            assert.equal(connected.initialization?.discovery.tools.length, 5);
             assert.equal(connected.initialization?.discovery.resources.length, 3);
             assert.equal(connected.initialization?.discovery.resourceTemplates.length, 3);
             assert.equal(connected.initialization?.discovery.prompts.length, 3);
