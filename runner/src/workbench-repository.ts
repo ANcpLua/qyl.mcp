@@ -209,6 +209,36 @@ const SuiteSchema: z.ZodType<PersistedSuite> = z.object({
     updatedAt: IsoDateSchema,
 }).strict();
 
+const EvaluationSummarySchema = z.object({
+    total: z.number().int().nonnegative(),
+    passed: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+    errors: z.number().int().nonnegative(),
+    skipped: z.number().int().nonnegative(),
+    successRate: z.number().finite().min(0).max(1),
+    reliability: z.number().finite().min(0).max(1),
+    averageLatencyMs: z.number().finite().nonnegative().optional(),
+    p50LatencyMs: z.number().finite().nonnegative().optional(),
+    p95LatencyMs: z.number().finite().nonnegative().optional(),
+    p99LatencyMs: z.number().finite().nonnegative().optional(),
+    tokenUsage: z.object({
+        inputTokens: z.number().int().nonnegative().optional(),
+        outputTokens: z.number().int().nonnegative().optional(),
+        totalTokens: z.number().int().nonnegative().optional(),
+        estimated: z.boolean(),
+    }).strict().optional(),
+    cost: z.object({
+        amountUsd: z.number().finite().nonnegative(),
+        estimated: z.boolean(),
+        source: z.string().min(1).max(256).optional(),
+    }).strict().optional(),
+    // Accept but deliberately discard fields written by older versions. They
+    // represented estimates rather than execution evidence.
+    inputTokens: z.number().finite().nonnegative().optional(),
+    outputTokens: z.number().finite().nonnegative().optional(),
+    estimatedCostUsd: z.number().finite().nonnegative().optional(),
+}).strict().transform(({ inputTokens: _inputTokens, outputTokens: _outputTokens, estimatedCostUsd: _estimatedCostUsd, ...summary }) => summary);
+
 const EvaluationRunSchema: z.ZodType<EvaluationRun> = z.object({
     id: IdentifierSchema,
     workspaceId: IdentifierSchema,
@@ -220,22 +250,7 @@ const EvaluationRunSchema: z.ZodType<EvaluationRun> = z.object({
     startedAt: IsoDateSchema,
     completedAt: IsoDateSchema.optional(),
     results: z.array(z.unknown()),
-    summary: z.object({
-        total: z.number().int().nonnegative(),
-        passed: z.number().int().nonnegative(),
-        failed: z.number().int().nonnegative(),
-        errors: z.number().int().nonnegative(),
-        skipped: z.number().int().nonnegative(),
-        successRate: z.number().finite().min(0).max(1),
-        reliability: z.number().finite().min(0).max(1),
-        averageLatencyMs: z.number().finite().nonnegative().optional(),
-        p50LatencyMs: z.number().finite().nonnegative().optional(),
-        p95LatencyMs: z.number().finite().nonnegative().optional(),
-        p99LatencyMs: z.number().finite().nonnegative().optional(),
-        inputTokens: z.number().finite().nonnegative().optional(),
-        outputTokens: z.number().finite().nonnegative().optional(),
-        estimatedCostUsd: z.number().finite().nonnegative().optional(),
-    }).strict(),
+    summary: EvaluationSummarySchema,
     idempotencyKey: z.string().min(8).max(256).optional(),
     idempotencyFingerprint: z.string().regex(/^[0-9a-f]{64}$/u).optional(),
     confirmation: RunnerMcpExecutionConfirmationEvidenceSchema.optional(),

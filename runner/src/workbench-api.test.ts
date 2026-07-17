@@ -68,6 +68,7 @@ test("workbench API authenticates, scopes, discovers, validates, and invokes ide
             [
                 "fixture.safe_lookup",
                 "fixture.rich_result",
+                "fixture.evidence",
                 "fixture.delete_record",
                 "fixture.delayed",
                 "fixture.tool_error",
@@ -101,6 +102,8 @@ test("workbench API authenticates, scopes, discovers, validates, and invokes ide
         assert.equal(completed.effect, "read_only");
         assert.equal(record(record(completed.result).structuredContent).query, "Alpha");
         assert(!("safety" in completed));
+        assert(!("tokenUsage" in completed));
+        assert(!("cost" in completed));
 
         const conflictingReplay = await postJson(
             harness,
@@ -151,6 +154,99 @@ test("workbench API authenticates, scopes, discovers, validates, and invokes ide
         assert.equal(crossWorkspace.response.status, 404);
     } finally {
         await harness.close();
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test("exposes only provider-reported usage and cost in execution and evaluation evidence", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "qyl-workbench-usage-evidence-"));
+    const harness = await startHarness(join(directory, "state.json"));
+    try {
+        const serverId = await fixtureServerId(harness);
+        const accepted = await postJson(
+            harness,
+            `/runner/workspaces/default/servers/${serverId}/executions`,
+            {
+                toolName: "fixture.evidence",
+                arguments: { query: "explicit" },
+                timeoutMs: 5_000,
+                idempotencyKey: "evidence-execution-0001",
+            },
+        );
+        const executionId = String(record(accepted.body.execution).id);
+        const execution = await waitForExecution(harness, serverId, executionId);
+        assert.deepEqual(execution.tokenUsage, {
+            inputTokens: 12,
+            outputTokens: 5,
+            totalTokens: 17,
+            estimated: false,
+        });
+        assert.deepEqual(execution.cost, {
+            amountUsd: 0.000123,
+            estimated: false,
+            source: "fixture",
+        });
+
+        const testCase = await postJson(harness, "/runner/workspaces/default/test-cases", {
+            serverId,
+            name: "Explicit evidence",
+            toolName: "fixture.evidence",
+            arguments: { query: "evaluation" },
+            timeoutMs: 5_000,
+            assertions: [{ id: "status", kind: "status", expected: ["succeeded"] }],
+        });
+        const testCaseId = String(testCase.body.id);
+        const suite = await postJson(harness, "/runner/workspaces/default/suites", {
+            name: "Evidence suite",
+            testCaseIds: [testCaseId],
+        });
+        const runAccepted = await postJson(
+            harness,
+            `/runner/workspaces/default/suites/${String(suite.body.id)}/run`,
+            { idempotencyKey: "evidence-evaluation-0001" },
+        );
+        const runId = String(record(runAccepted.body.run).id);
+        const run = await waitForEvaluation(harness, runId);
+        assert.deepEqual(record(run.summary).tokenUsage, {
+            inputTokens: 12,
+            outputTokens: 5,
+            totalTokens: 17,
+            estimated: false,
+        });
+        assert.deepEqual(record(run.summary).cost, {
+            amountUsd: 0.000123,
+            estimated: false,
+            source: "fixture",
+        });
+    } finally {
+        await harness.close();
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test("does not reconstruct unattached live protocol traffic after a runner restart", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "qyl-workbench-journal-restart-"));
+    const filePath = join(directory, "state.json");
+    const first = await startHarness(filePath);
+    let serverId = "";
+    try {
+        serverId = await fixtureServerId(first);
+        await first.workbench.connections.getClient(serverId).callTool({
+            name: "fixture.safe_lookup",
+            arguments: { query: "unattached-live-traffic" },
+        });
+        const live = await getJson(first, `/runner/workspaces/default/servers/${serverId}/protocol`);
+        assert.match(JSON.stringify(live.body), /unattached-live-traffic/u);
+    } finally {
+        await first.close();
+    }
+
+    const reopened = await startHarness(filePath);
+    try {
+        const restored = await getJson(reopened, `/runner/workspaces/default/servers/${serverId}/protocol`);
+        assert.doesNotMatch(JSON.stringify(restored.body), /unattached-live-traffic/u);
+    } finally {
+        await reopened.close();
         await rm(directory, { recursive: true, force: true });
     }
 });

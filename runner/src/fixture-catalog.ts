@@ -17,6 +17,25 @@ export const SAFE_LOOKUP_OUTPUT = z.object({
   matches: z.array(z.string()),
 });
 
+export const EVIDENCE_INPUT = z.object({
+  query: z.string().min(1).max(200),
+});
+
+export const EVIDENCE_OUTPUT = z.object({
+  query: z.string(),
+  usage: z.object({
+    inputTokens: z.number().int().nonnegative(),
+    outputTokens: z.number().int().nonnegative(),
+    totalTokens: z.number().int().nonnegative(),
+    estimated: z.boolean(),
+  }),
+  cost: z.object({
+    amountUsd: z.number().nonnegative(),
+    estimated: z.boolean(),
+    source: z.string(),
+  }),
+});
+
 export const RICH_RESULT_INPUT = z.object({
   reportId: z.string().min(1).max(80).default("example"),
 });
@@ -74,6 +93,19 @@ export const FIXTURE_TOOLS = [
     description: "Returns structured data, an image, a resource link, and untrusted markup as inert data.",
     inputSchema: objectJsonSchema(RICH_RESULT_INPUT),
     outputSchema: objectJsonSchema(RICH_RESULT_OUTPUT),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: "fixture.evidence",
+    title: "Explicit usage and cost evidence",
+    description: "Returns observed usage and cost metadata without requiring qyl.mcp to estimate it.",
+    inputSchema: objectJsonSchema(EVIDENCE_INPUT),
+    outputSchema: objectJsonSchema(EVIDENCE_OUTPUT),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,

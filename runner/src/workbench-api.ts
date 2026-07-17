@@ -1171,6 +1171,12 @@ export class WorkbenchApi {
             durationMs: completed.durationMs ?? 0,
             ...(completed.result === undefined ? {} : { result: completed.result }),
             ...(completed.error === undefined ? {} : { errorKind: completed.error.category, errorMessage: completed.error.message }),
+            ...(completed.tokenUsage === undefined && completed.cost === undefined ? {} : {
+                usage: {
+                    ...(completed.tokenUsage === undefined ? {} : { tokenUsage: completed.tokenUsage }),
+                    ...(completed.cost === undefined ? {} : { cost: completed.cost }),
+                },
+            }),
             ...(telemetryCorrelation?.traceIds[0] === undefined
                 ? {}
                 : { traceId: telemetryCorrelation.traceIds[0] }),
@@ -1791,6 +1797,8 @@ function executionResponse(record: ExecutionRecord): QylContracts.RunnerMcpExecu
         ...(record.cancelledAt === undefined ? {} : { cancelledAt: record.cancelledAt }),
         ...(record.result === undefined ? {} : { result: record.result }),
         ...(record.error === undefined ? {} : { error: record.error }),
+        ...(record.tokenUsage === undefined ? {} : { tokenUsage: record.tokenUsage }),
+        ...(record.cost === undefined ? {} : { cost: record.cost }),
     });
 }
 
@@ -1957,15 +1965,8 @@ function evaluationSummary(run: EvaluationRun): QylContracts.RunnerMcpEvaluation
         ...(summary.p50LatencyMs === undefined ? {} : { p50DurationMs: summary.p50LatencyMs }),
         ...(summary.p95LatencyMs === undefined ? {} : { p95DurationMs: summary.p95LatencyMs }),
         ...(summary.p99LatencyMs === undefined ? {} : { p99DurationMs: summary.p99LatencyMs }),
-        ...(summary.inputTokens === undefined && summary.outputTokens === undefined ? {} : {
-            tokenUsage: {
-                ...(summary.inputTokens === undefined ? {} : { inputTokens: summary.inputTokens }),
-                ...(summary.outputTokens === undefined ? {} : { outputTokens: summary.outputTokens }),
-                totalTokens: (summary.inputTokens ?? 0) + (summary.outputTokens ?? 0),
-                estimated: true,
-            },
-        }),
-        ...(summary.estimatedCostUsd === undefined ? {} : { cost: { amountUsd: summary.estimatedCostUsd, estimated: true } }),
+        ...(summary.tokenUsage === undefined ? {} : { tokenUsage: summary.tokenUsage }),
+        ...(summary.cost === undefined ? {} : { cost: summary.cost }),
     });
 }
 

@@ -77,7 +77,10 @@ test("evaluation runner uses real invocation evidence and preserves suite order"
                 completedAt: "2026-07-15T00:00:00.100Z",
                 durationMs: request.correlation.testCaseId === "fail" ? 200 : 100,
                 result: { answer: 42 },
-                usage: { inputTokens: 4, outputTokens: 2 },
+                usage: {
+                    tokenUsage: { inputTokens: 4, outputTokens: 2, totalTokens: 6, estimated: false },
+                    cost: { amountUsd: 0.0001, estimated: false, source: "fixture" },
+                },
                 traceId: "a".repeat(32),
                 spanId: "b".repeat(16),
             };
@@ -108,8 +111,8 @@ test("evaluation runner uses real invocation evidence and preserves suite order"
         p50LatencyMs: 100,
         p95LatencyMs: 200,
         p99LatencyMs: 200,
-        inputTokens: 16,
-        outputTokens: 8,
+        tokenUsage: { inputTokens: 16, outputTokens: 8, totalTokens: 24, estimated: false },
+        cost: { amountUsd: 0.0004, estimated: false, source: "fixture" },
     });
 });
 
@@ -212,7 +215,7 @@ test("exports include evidence and explicitly mark unavailable cost", () => {
     assert.match(exportEvaluationJson(run), /"executionId": "execution"/u);
     const report = exportEvaluationReport(run);
     assert.match(report, /# Core tools evaluation/u);
-    assert.match(report, /Estimated cost: unavailable/u);
+    assert.match(report, /Cost: unavailable/u);
     assert.match(report, /`execution`/u);
 });
 

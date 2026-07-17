@@ -95,7 +95,7 @@ test("authenticated workbench API discovers and invokes real stdio and SSE serve
             );
             assert.equal(discovery.response.status, 200);
             assert.equal(record(discovery.body.tools).items instanceof Array, true);
-            assert.equal((record(discovery.body.tools).items as unknown[]).length, 5);
+            assert.equal((record(discovery.body.tools).items as unknown[]).length, 6);
             assert.equal((record(discovery.body.resources).items as unknown[]).length, 3);
             assert.equal((record(discovery.body.resourceTemplates).items as unknown[]).length, 3);
             assert.equal((record(discovery.body.prompts).items as unknown[]).length, 3);

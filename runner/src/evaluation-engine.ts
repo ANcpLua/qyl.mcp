@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type {
     RunnerMcpAssertionResult,
+    RunnerMcpExecutionCost,
     RunnerMcpError,
     RunnerMcpEvaluationResultStatus,
     RunnerMcpEvaluationRunStatus,
     RunnerMcpExecutionConfirmationEvidence,
     RunnerMcpExecutionStatus,
+    RunnerMcpExecutionTokenUsage,
     RunnerMcpTestAssertion,
 } from "@ancplua/qyl-api-schema/types";
 import {
@@ -51,9 +53,8 @@ export interface EvaluationInvocationRequest {
 }
 
 export interface InvocationUsage {
-    inputTokens?: number;
-    outputTokens?: number;
-    estimatedCostUsd?: number;
+    tokenUsage?: RunnerMcpExecutionTokenUsage;
+    cost?: RunnerMcpExecutionCost;
 }
 
 export interface EvaluationInvocationEvidence {
@@ -103,9 +104,8 @@ export interface EvaluationSummary {
     p50LatencyMs?: number;
     p95LatencyMs?: number;
     p99LatencyMs?: number;
-    inputTokens?: number;
-    outputTokens?: number;
-    estimatedCostUsd?: number;
+    tokenUsage?: RunnerMcpExecutionTokenUsage;
+    cost?: RunnerMcpExecutionCost;
 }
 
 export interface EvaluationRun {
@@ -369,8 +369,6 @@ export function summarizeEvaluation(results: readonly EvaluationCaseResult[]): E
     const latencies = results
         .flatMap((result) => (result.durationMs === undefined ? [] : [result.durationMs]))
         .sort((a, b) => a - b);
-    const usage = results.flatMap((result) => (result.usage === undefined ? [] : [result.usage]));
-
     return {
         total: results.length,
         passed,
@@ -387,25 +385,50 @@ export function summarizeEvaluation(results: readonly EvaluationCaseResult[]): E
                   p95LatencyMs: percentile(latencies, 0.95),
                   p99LatencyMs: percentile(latencies, 0.99),
               }),
-        ...sumUsage(usage),
+        ...sumUsage(results),
     };
 }
 
-function sumUsage(usages: readonly InvocationUsage[]): InvocationUsage {
-    const sum = (select: (usage: InvocationUsage) => number | undefined): number | undefined => {
-        const values = usages.flatMap((usage) => {
-            const value = select(usage);
-            return value === undefined ? [] : [value];
-        });
-        return values.length === 0 ? undefined : values.reduce((total, value) => total + value, 0);
+function sumUsage(results: readonly EvaluationCaseResult[]): InvocationUsage {
+    const invoked = results.filter((result) => result.executionId !== undefined);
+    const tokenEvidence = invoked.length > 0
+        && invoked.every((result) => result.usage?.tokenUsage !== undefined)
+        ? invoked.map((result) => result.usage!.tokenUsage!)
+        : [];
+    const costEvidence = invoked.length > 0
+        && invoked.every((result) => result.usage?.cost !== undefined)
+        ? invoked.map((result) => result.usage!.cost!)
+        : [];
+    const tokenUsage = tokenEvidence.length === 0 ? undefined : sumTokenUsage(tokenEvidence);
+    const cost = costEvidence.length === 0 ? undefined : sumCosts(costEvidence);
+    return {
+        ...(tokenUsage === undefined ? {} : { tokenUsage }),
+        ...(cost === undefined ? {} : { cost }),
+    };
+}
+
+function sumTokenUsage(usages: readonly RunnerMcpExecutionTokenUsage[]): RunnerMcpExecutionTokenUsage {
+    const sum = (select: (usage: RunnerMcpExecutionTokenUsage) => number | undefined): number | undefined => {
+        if (!usages.every((usage) => select(usage) !== undefined)) return undefined;
+        return usages.reduce((total, usage) => total + select(usage)!, 0);
     };
     const inputTokens = sum((usage) => usage.inputTokens);
     const outputTokens = sum((usage) => usage.outputTokens);
-    const estimatedCostUsd = sum((usage) => usage.estimatedCostUsd);
+    const totalTokens = sum((usage) => usage.totalTokens);
     return {
         ...(inputTokens === undefined ? {} : { inputTokens }),
         ...(outputTokens === undefined ? {} : { outputTokens }),
-        ...(estimatedCostUsd === undefined ? {} : { estimatedCostUsd }),
+        ...(totalTokens === undefined ? {} : { totalTokens }),
+        estimated: usages.some((usage) => usage.estimated),
+    };
+}
+
+function sumCosts(costs: readonly RunnerMcpExecutionCost[]): RunnerMcpExecutionCost {
+    const sources = new Set(costs.flatMap((cost) => cost.source === undefined ? [] : [cost.source]));
+    return {
+        amountUsd: costs.reduce((total, cost) => total + cost.amountUsd, 0),
+        estimated: costs.some((cost) => cost.estimated),
+        ...(sources.size === 1 ? { source: [...sources][0] } : {}),
     };
 }
 
@@ -497,7 +520,7 @@ export function exportEvaluationReport(run: EvaluationRun): string {
         `- P95 latency: ${summary.p95LatencyMs === undefined ? "unavailable" : `${round(summary.p95LatencyMs)} ms`}`,
         `- P99 latency: ${summary.p99LatencyMs === undefined ? "unavailable" : `${round(summary.p99LatencyMs)} ms`}`,
         `- Token usage: ${formatTokens(summary)}`,
-        `- Estimated cost: ${summary.estimatedCostUsd === undefined ? "unavailable" : `$${summary.estimatedCostUsd.toFixed(6)}`}`,
+        `- Cost: ${summary.cost === undefined ? "unavailable" : `$${summary.cost.amountUsd.toFixed(6)}${summary.cost.estimated ? " (estimated)" : ""}`}`,
         "",
         "## Test cases",
         "",
@@ -517,8 +540,11 @@ function formatPercent(value: number): string {
 }
 
 function formatTokens(summary: EvaluationSummary): string {
-    if (summary.inputTokens === undefined && summary.outputTokens === undefined) return "unavailable";
-    return `${summary.inputTokens ?? 0} input / ${summary.outputTokens ?? 0} output`;
+    if (summary.tokenUsage === undefined) return "unavailable";
+    const input = summary.tokenUsage.inputTokens === undefined ? "—" : String(summary.tokenUsage.inputTokens);
+    const output = summary.tokenUsage.outputTokens === undefined ? "—" : String(summary.tokenUsage.outputTokens);
+    const total = summary.tokenUsage.totalTokens === undefined ? "" : ` / ${summary.tokenUsage.totalTokens} total`;
+    return `${input} input / ${output} output${total}${summary.tokenUsage.estimated ? " (estimated)" : ""}`;
 }
 
 function round(value: number): number {

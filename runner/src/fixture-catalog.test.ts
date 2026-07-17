@@ -19,7 +19,7 @@ test("fixture pagination uses opaque, surface-bound cursors", () => {
   const second = paginateFixture("tools", FIXTURE_TOOLS, first.nextCursor, 2);
   assert.deepEqual(
     second.items.map((tool) => tool.name),
-    ["fixture.delete_record", "fixture.delayed"],
+    ["fixture.evidence", "fixture.delete_record"],
   );
 
   assert.throws(

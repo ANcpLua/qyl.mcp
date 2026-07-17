@@ -1,12 +1,14 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import type {
+    RunnerMcpExecutionCost,
     RunnerMcpError,
     RunnerMcpErrorCategory,
     RunnerMcpExecutionConfirmationEvidence,
     RunnerMcpExecutionConfirmationRequest,
     RunnerMcpExecutionEffect,
     RunnerMcpExecutionStatus,
+    RunnerMcpExecutionTokenUsage,
 } from "@ancplua/qyl-api-schema/types";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import {
@@ -29,6 +31,7 @@ import { classifyToolSafety, type ToolSafetyDecision } from "./tool-safety.js";
 import type { PersistedExecution } from "./workbench-repository.js";
 import { validateJsonSchemaIsolated } from "./json-schema-validator.js";
 import type { WorkbenchCorrelationRegistry } from "./observability-correlation.js";
+import { extractExecutionEvidence } from "./execution-evidence.js";
 import {
     runWithMcpPropagation,
     type ActiveMcpOperation,
@@ -82,6 +85,8 @@ export interface ExecutionRecord {
     cancelledAt?: string;
     result?: unknown;
     error?: ExecutionError;
+    tokenUsage?: RunnerMcpExecutionTokenUsage;
+    cost?: RunnerMcpExecutionCost;
     correlation: ProtocolExecutionCorrelation;
 }
 
@@ -446,6 +451,9 @@ export class ExecutionService {
                 ),
             ));
             const completedMs = this.now();
+            const evidence = extractExecutionEvidence(result);
+            if (evidence.tokenUsage !== undefined) record.tokenUsage = evidence.tokenUsage;
+            if (evidence.cost !== undefined) record.cost = evidence.cost;
             // Abort is advisory at the transport boundary. A server may still
             // resolve the request, so the synchronous cancellation flag is the
             // lifecycle linearization point and must win over that late result.

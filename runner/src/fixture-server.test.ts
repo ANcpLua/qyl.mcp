@@ -36,6 +36,7 @@ test("official SDK fixture paginates discovery and exercises tool and content be
     assert.deepEqual(toolNames, [
       "fixture.safe_lookup",
       "fixture.rich_result",
+      "fixture.evidence",
       "fixture.delete_record",
       "fixture.delayed",
       "fixture.tool_error",
@@ -44,8 +45,8 @@ test("official SDK fixture paginates discovery and exercises tool and content be
     const firstToolPage = await client.listTools();
     assert.equal(firstToolPage.tools[0]?.annotations?.readOnlyHint, true);
     const destructivePage = await client.listTools({ cursor: firstToolPage.nextCursor });
-    assert.equal(destructivePage.tools[0]?.name, "fixture.delete_record");
-    assert.equal(destructivePage.tools[0]?.annotations?.destructiveHint, true);
+    assert.equal(destructivePage.tools[1]?.name, "fixture.delete_record");
+    assert.equal(destructivePage.tools[1]?.annotations?.destructiveHint, true);
 
     const lookup = await client.callTool({
       name: "fixture.safe_lookup",

@@ -14,6 +14,8 @@ import {
   DELAYED_OUTPUT,
   DELETE_RECORD_INPUT,
   DELETE_RECORD_OUTPUT,
+  EVIDENCE_INPUT,
+  EVIDENCE_OUTPUT,
   FIXTURE_PROMPTS,
   FIXTURE_RESOURCES,
   FIXTURE_RESOURCE_TEMPLATES,
@@ -153,6 +155,39 @@ export function createFixtureMcpServer(): FixtureMcpServer {
         reportId,
         status: "ready" as const,
         itemCount: 4,
+      },
+    }),
+  );
+
+  server.registerTool(
+    "fixture.evidence",
+    {
+      title: "Explicit usage and cost evidence",
+      description: "Returns observed usage and cost metadata without requiring qyl.mcp to estimate it.",
+      inputSchema: EVIDENCE_INPUT,
+      outputSchema: EVIDENCE_OUTPUT,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ query }) => ({
+      content: [{ type: "text", text: `Evidence for ${query}` }],
+      structuredContent: {
+        query,
+        usage: {
+          inputTokens: 12,
+          outputTokens: 5,
+          totalTokens: 17,
+          estimated: false,
+        },
+        cost: {
+          amountUsd: 0.000123,
+          estimated: false,
+          source: "fixture",
+        },
       },
     }),
   );
