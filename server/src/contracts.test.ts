@@ -51,7 +51,7 @@ test("every published Runner.Mcp definition has a runtime validator", () => {
   );
 });
 
-test("published schemas own defaults, bounds, and required inputs for all seven tools", () => {
+test("published schemas own defaults, bounds, and required inputs for all seven contract tools", () => {
   assert.deepEqual(DisplayTracesInputSchema.parse({}), { limit: 20 });
   assert(!DisplayTracesInputSchema.safeParse({ limit: 0 }).success);
   assert(!DisplayTracesInputSchema.safeParse({ limit: 101 }).success);

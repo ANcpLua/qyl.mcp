@@ -16,6 +16,7 @@ import type {
     ServerCapabilities,
     Tool,
 } from "@modelcontextprotocol/sdk/types.js";
+import { hasNativeExecutionTelemetry } from "qyl-mcp-server";
 import {
     JournaledTransport,
     ProtocolJournal,
@@ -185,6 +186,7 @@ export interface ConnectionProtocolOperation extends CompletedProtocolOperation 
     mcpSessionId?: string;
     peerAddress?: string;
     peerPort?: number;
+    nativeExecutionTelemetry?: boolean;
 }
 
 export interface StartedConnectionProtocolOperation extends StartedProtocolOperation {
@@ -194,6 +196,7 @@ export interface StartedConnectionProtocolOperation extends StartedProtocolOpera
     mcpSessionId?: string;
     peerAddress?: string;
     peerPort?: number;
+    nativeExecutionTelemetry?: boolean;
 }
 
 export interface ActiveConnectionProtocolOperation {
@@ -997,6 +1000,9 @@ export class ConnectionManager {
         if (mcpSessionId !== undefined) enriched.mcpSessionId = mcpSessionId;
         if (peer?.address !== undefined) enriched.peerAddress = peer.address;
         if (peer?.port !== undefined) enriched.peerPort = peer.port;
+        if (operation.role === "server" && hasNativeExecutionTelemetry(entry.active?.server)) {
+            enriched.nativeExecutionTelemetry = true;
+        }
         return enriched;
     }
 

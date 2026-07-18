@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { request } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -33,6 +33,7 @@ const child = spawn(process.execPath, ["dist/main.js"], {
     QYL_MCP_TELEMETRY: "0",
     QYL_MCP_RUNNER_PORT: String(runnerPort),
     QYL_MCP_STATE_PATH: join(temp, "workbench.json"),
+    QYL_MCP_NATIVE_STATE_PATH: join(temp, "native-executions.json"),
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -145,7 +146,7 @@ try {
   check("runner publishes lowercase lifecycle", ready.lifecycle === "ready");
   check("absent endpoint is omitted", !("endpoint" in ready));
   check("absent allocatedPort is omitted", !("allocatedPort" in ready));
-  check("MCP handshake facts are present", ready.serverIdentity?.name === "qyl.mcp" && ready.toolCount === 7);
+  check("MCP handshake facts are present", ready.serverIdentity?.name === "qyl.mcp" && ready.toolCount === 8);
 
   const dashboard = await fetch(`${baseUrl}/`);
   const dashboardHtml = await dashboard.text();
@@ -190,8 +191,8 @@ try {
   );
   const discovery = await discoveryResponse.json();
   check(
-    "real SDK discovery returns seven contract tools and server surfaces",
-    discoveryResponse.ok && discovery.tools?.count === 7 && Array.isArray(discovery.prompts?.items),
+    "real SDK discovery returns eight tools and server surfaces",
+    discoveryResponse.ok && discovery.tools?.count === 8 && Array.isArray(discovery.prompts?.items),
   );
   check(
     "all qyl query tools publish complete read-only safety annotations",
@@ -224,6 +225,19 @@ try {
   check(
     "schema-aware workbench invocation retains real execution evidence",
     call.status === 202 && callResult.status === "succeeded" && callResult.result?.structuredContent?.traces?.length === 1,
+  );
+  const nativeState = JSON.parse(
+    await readFile(join(temp, "native-executions.json"), "utf8"),
+  );
+  const nativeCall = nativeState.executions?.find(
+    (execution) => execution.request?.toolName === "list_traces",
+  );
+  check(
+    "in-process tools/call recording is native and automatic",
+    nativeCall?.status === "succeeded" &&
+      nativeCall.durationMs >= 0 &&
+      nativeCall.protocolEvents?.length === 2 &&
+      nativeCall.result?.structuredContent?.traces?.length === 1,
   );
 
   const telemetryResponse = await fetch(`${baseUrl}${executionPath}/telemetry`, {

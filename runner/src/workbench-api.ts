@@ -67,6 +67,7 @@ import { RunnerSessionManager, type RunnerSessionIdentity } from "./session-mana
 import { WorkbenchCorrelationRegistry } from "./observability-correlation.js";
 import { QylObservabilityProvider } from "./qyl-observability.js";
 import { McpTelemetry } from "./telemetry.js";
+import { MAX_PERSISTED_RESULT_CHARACTERS } from "qyl-mcp-server/execution-result";
 import { SecretRedactor } from "./secret-redactor.js";
 import { LegacyResourceAdapter, type LegacyResourceBinding } from "./legacy-resource-adapter.js";
 import { LogStore } from "./log-store.js";
@@ -160,7 +161,7 @@ export class WorkbenchApi {
         );
         const redactor = options.redactor ?? new SecretRedactor({
             environment,
-            maxStringLength: 1_000_000,
+            maxStringLength: MAX_PERSISTED_RESULT_CHARACTERS + 1,
         });
         this.redactor = redactor;
         this.repository = options.repository ?? new WorkbenchRepository({
@@ -221,6 +222,11 @@ export class WorkbenchApi {
     private startProtocolOperation(
         operation: StartedConnectionProtocolOperation,
     ): ActiveConnectionProtocolOperation | undefined {
+        if (operation.role === "server"
+            && operation.method === "tools/call"
+            && operation.nativeExecutionTelemetry === true) {
+            return undefined;
+        }
         // ExecutionService owns the correlated client tools/call span because it
         // also classifies CallToolResult.isError. The journal still injects its
         // execution-local carrier and records the request/response evidence.

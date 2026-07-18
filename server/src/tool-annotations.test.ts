@@ -6,7 +6,7 @@ import { createServer } from "./server.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS } from "./tools.js";
 
 test("all qyl telemetry tools publish explicit read-only safety annotations", async () => {
-  const server = createServer();
+  const server = createServer({ nativeExecution: false });
   const client = new Client({ name: "tool-annotations-test", version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 

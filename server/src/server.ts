@@ -63,6 +63,17 @@ import {
 } from "./tools.js";
 import { registerCiTools } from "./ci.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
+import type { McpTelemetryTransport } from "./mcp-semconv.js";
+import {
+  defaultNativeExecutionRuntime,
+  installNativeExecutionRecording,
+  type NativeExecutionRuntime,
+} from "./native-execution.js";
+
+export {
+  closeDefaultNativeExecutionRuntime,
+  hasNativeExecutionTelemetry,
+} from "./native-execution.js";
 
 // The vite-built single-file viewers live next to the compiled server code.
 const DIST_DIR = import.meta.dirname;
@@ -72,12 +83,26 @@ const DIST_DIR = import.meta.dirname;
 let cachedAppHtml: string | undefined;
 let cachedDashboardHtml: string | undefined;
 
-/** Creates a server with the direct telemetry tools and both UI resources. */
-export function createServer(): McpServer {
+export interface CreateServerOptions {
+  /** Transport identity recorded on native server spans and durable evidence. */
+  transport?: McpTelemetryTransport;
+  /** Test/embedding override. Native evidence is automatic unless explicitly disabled. */
+  nativeExecution?: NativeExecutionRuntime | false;
+}
+
+/** Creates a server with automatic native execution evidence for every tool. */
+export function createServer(options: CreateServerOptions = {}): McpServer {
   const server = new McpServer({
     name: "qyl.mcp",
     version: packageMetadata.version,
   });
+  if (options.nativeExecution !== false) {
+    installNativeExecutionRecording(
+      server,
+      options.nativeExecution ?? defaultNativeExecutionRuntime(),
+      options.transport ?? "builtin",
+    );
+  }
 
   registerAppTool(
     server,

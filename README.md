@@ -90,6 +90,19 @@ duration, attempts, cancellation state, redacted JSON-RPC timeline, and Qyl
 observability evidence. Live protocol and execution streams use resumable event
 identifiers; cancellation aborts the in-flight SDK request.
 
+The qyl.mcp server also records inbound `tools/call` requests natively, including
+when it is connected directly over stdio or hosted Streamable HTTP rather than
+invoked through the workbench. The SDK-validated result, lifecycle, duration,
+redacted JSON-RPC request/result timeline, and trace/span correlation are
+written atomically to `~/.qyl/mcp-native-executions.json`; set
+`QYL_MCP_NATIVE_STATE_PATH` to choose another file. The newest 1,000 executions
+are retained. Results below two million serialized characters are preserved in
+full after credential redaction; larger durable results are replaced by an
+explicit truncation result. Timeline payloads and request metadata are bounded
+separately so they do not duplicate large results. Token usage and cost are
+retained only when a tool reports explicit structured evidence—qyl.mcp never
+derives them from prose, latency, or payload size.
+
 Server and workspace deletion is serialized against ordinary mutations.
 Deletion is rejected while relevant executions are active or evaluation
 evidence still references the server; terminal standalone execution records
@@ -124,8 +137,9 @@ recursive MCP telemetry.
 | `QYL_COLLECTOR_URL` | Qyl read API base URL; default `http://127.0.0.1:5100`. Also used as the OTLP base when set. |
 | `QYL_API_KEY` | Collector read and OTLP credential. |
 | `QYL_OTLP_ENDPOINT` | Optional OTLP base URL for workbench self-telemetry. |
-| `QYL_MCP_TELEMETRY=0` | Disable workbench MCP spans and duration metrics. Telemetry is enabled otherwise. |
+| `QYL_MCP_TELEMETRY=0` | Disable native-server and workbench MCP spans and duration metrics. Telemetry is enabled otherwise. |
 | `QYL_MCP_STATE_PATH` | Override the durable workbench JSON path. |
+| `QYL_MCP_NATIVE_STATE_PATH` | Override the durable native-server execution evidence path. |
 
 Signal-specific `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` and
 `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` take precedence. Otherwise the base order

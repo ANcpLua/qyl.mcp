@@ -11,6 +11,9 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { existsSync } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 let failures = 0;
 function check(name, condition, detail = "") {
@@ -26,24 +29,33 @@ async function callTool(client, name, args) {
   return client.callTool({ name, arguments: args });
 }
 
+const temp = await mkdtemp(join(tmpdir(), "qyl-mcp-server-smoke-"));
+const nativeStatePath = join(temp, "native-executions.json");
 const transport = new StdioClientTransport({
   command: "node",
   args: ["dist/main.js", "--stdio"],
-  env: { ...process.env, QYL_DEMO: "1" },
+  env: {
+    ...process.env,
+    QYL_DEMO: "1",
+    QYL_MCP_TELEMETRY: "0",
+    QYL_MCP_NATIVE_STATE_PATH: nativeStatePath,
+  },
 });
 const client = new Client({ name: "qyl-smoke", version: "1.0.0" });
-await client.connect(transport);
+try {
+  await client.connect(transport);
 
 // --- 1. Direct tools/list ----------------------------------------------------
 console.log("tools/list");
 const { tools } = await client.listTools();
 const names = tools.map((t) => t.name).sort();
 check(
-  "exactly the seven supported tools",
-  names.length === 7 &&
+  "exactly the eight supported tools",
+  names.length === 8 &&
     JSON.stringify(names) ===
       JSON.stringify(
         [
+          "ci_log",
           "display_mcp_dashboard",
           "display_traces",
           "fetch_telemetry",
@@ -77,6 +89,9 @@ check(
     "ui://qyl-explorer/mcp-dashboard.html",
   JSON.stringify(displayDashboard?._meta),
 );
+
+const ciLog = await callTool(client, "ci_log", {});
+check("ci_log returns native demo evidence", !ciLog.isError && Array.isArray(ciLog.structuredContent?.runs));
 
 // --- 2. Direct read tools + handler error contract ---------------------------
 console.log("list_traces / get_trace error");
@@ -312,7 +327,26 @@ if (existsSync(new URL("./dist/mcp-dashboard.html", import.meta.url))) {
   console.log("  SKIPPED  dist/mcp-dashboard.html not built yet");
 }
 
-await client.close();
+const nativeState = JSON.parse(await readFile(nativeStatePath, "utf8"));
+check(
+  "native tool execution evidence is automatic and terminal",
+  nativeState.version === 1 &&
+    nativeState.executions.length >= 9 &&
+    nativeState.executions.every((execution) =>
+      execution.status !== "running" &&
+      execution.durationMs >= 0 &&
+      execution.protocolEvents?.length === 2 &&
+      execution.telemetryCorrelation?.executionId === execution.id),
+);
+check(
+  "prose-only tool results leave usage and cost unavailable",
+  nativeState.executions.every((execution) =>
+    execution.tokenUsage === undefined && execution.cost === undefined),
+);
+} finally {
+  await client.close().catch(() => undefined);
+  await rm(temp, { recursive: true, force: true });
+}
 
 // --- 10. Mode selection is explicit; live failures do not become demo data ---
 console.log("explicit live/demo mode selection");

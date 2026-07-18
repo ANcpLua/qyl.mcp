@@ -23,6 +23,30 @@
     "./secret-redactor": {
       "types": "./dist/secret-redactor.d.ts",
       "default": "./dist/secret-redactor.js"
+    },
+    "./atomic-json-store": {
+      "types": "./dist/atomic-json-store.d.ts",
+      "default": "./dist/atomic-json-store.js"
+    },
+    "./execution-evidence": {
+      "types": "./dist/execution-evidence.d.ts",
+      "default": "./dist/execution-evidence.js"
+    },
+    "./execution-result": {
+      "types": "./dist/execution-result.d.ts",
+      "default": "./dist/execution-result.js"
+    },
+    "./mcp-semconv": {
+      "types": "./dist/mcp-semconv.d.ts",
+      "default": "./dist/mcp-semconv.js"
+    },
+    "./observability-suppression": {
+      "types": "./dist/observability-suppression.d.ts",
+      "default": "./dist/observability-suppression.js"
+    },
+    "./telemetry": {
+      "types": "./dist/telemetry.d.ts",
+      "default": "./dist/telemetry.js"
     }
   },
   "bin": {
@@ -42,6 +66,15 @@
     "@ancplua/qyl-api-schema": "1.0.2",
     "@modelcontextprotocol/ext-apps": "^1.7.4",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/core": "^2.9.0",
+    "@opentelemetry/exporter-metrics-otlp-proto": "^0.220.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.220.0",
+    "@opentelemetry/resources": "^2.9.0",
+    "@opentelemetry/sdk-metrics": "^2.9.0",
+    "@opentelemetry/sdk-trace-base": "^2.9.0",
+    "@opentelemetry/sdk-trace-node": "^2.9.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
     "express": "^5.2.1",
     "zod": "^4.4.3"
   },

@@ -240,6 +240,7 @@ try {
     QYL_MCP_TELEMETRY: "1",
     QYL_MCP_RUNNER_PORT: String(runnerPort),
     QYL_MCP_STATE_PATH: join(temp, "workbench-state.json"),
+    QYL_MCP_NATIVE_STATE_PATH: join(temp, "runner-native-executions.json"),
     QYL_API_KEY: collectorApiKey,
   };
   delete runnerEnv.QYL_OTLP_ENDPOINT;
@@ -323,13 +324,27 @@ try {
     );
     if (!response.ok) throw new Error(`runner telemetry query returned ${response.status}`);
     const body = await response.json();
+    const spans = (body.traces ?? []).flatMap((trace) => trace.spans ?? []);
+    const clientSpan = spans.find((span) =>
+      span.kind === 3 && span.name === "tools/call list_traces"
+    );
+    const hasServerChild = spans.some((span) =>
+      span.kind === 2 &&
+      span.name === "tools/call list_traces" &&
+      span.parent_span_id === clientSpan?.span_id
+    );
+    const metricNames = new Set((body.metrics ?? []).map((metric) => metric.name));
     if (body.traces?.length > 0
-        && body.metrics?.length > 0
+        && clientSpan
+        && hasServerChild
+        && metricNames.has("mcp.client.operation.duration")
         && body.signals?.metrics?.status === "partial") return body;
     throw new Error(JSON.stringify({
       traceCount: body.traces?.length ?? 0,
+      spans: spans.map((span) => ({ name: span.name, kind: span.kind })),
       logCount: body.logs?.length ?? 0,
       metricCount: body.metrics?.length ?? 0,
+      metricNames: [...metricNames],
       signals: body.signals,
       correlation: body.correlation,
     }));
@@ -340,7 +355,53 @@ try {
   if (!correlated.signals.metrics.unavailableReason?.includes("does not export exemplars")) {
     throw new Error("workbench telemetry did not label time-window metric evidence as approximate");
   }
+  const correlatedSpans = correlated.traces.flatMap((trace) => trace.spans ?? []);
+  const clientToolSpan = correlatedSpans.find((span) =>
+    span.kind === 3 && span.name === "tools/call list_traces"
+  );
+  const serverToolSpans = correlatedSpans.filter((span) =>
+    span.kind === 2 &&
+    span.name === "tools/call list_traces" &&
+    span.parent_span_id === clientToolSpan?.span_id
+  );
+  const serverToolSpan = serverToolSpans[0];
+  if (!clientToolSpan || serverToolSpans.length !== 1) {
+    throw new Error(`native qyl.mcp server span was not parented to the runner client span: ${JSON.stringify(
+      correlatedSpans.map((span) => ({
+        name: span.name,
+        kind: span.kind,
+        span_id: span.span_id,
+        parent_span_id: span.parent_span_id,
+        attributes: span.attributes,
+      })),
+    )}`);
+  }
+  const toolSpanAttributes = JSON.stringify([
+    clientToolSpan.attributes,
+    serverToolSpan.attributes,
+  ]);
+  if (toolSpanAttributes.includes(marker) || toolSpanAttributes.includes(secret)) {
+    throw new Error("native MCP spans captured tool arguments or result content");
+  }
+  const nativeServerMetric = await waitUntil(async () => {
+    const response = await fetch(`${baseUrl}/api/v1/metrics?limit=1000`, {
+      headers: { [apiKeyHeader]: collectorApiKey },
+    });
+    if (!response.ok) throw new Error(`metric query returned ${response.status}`);
+    const body = await response.json();
+    return (body.items ?? []).find((metric) =>
+      metric.name === "mcp.server.operation.duration" &&
+      metric.attributes?.some((attribute) =>
+        attribute?.key === "gen_ai.tool.name" && attribute.value === "list_traces"
+      )
+    );
+  }, 15_000, "the native server operation duration metric");
+  if (JSON.stringify(nativeServerMetric.attributes).includes(marker) ||
+      JSON.stringify(nativeServerMetric.attributes).includes(secret)) {
+    throw new Error("native MCP duration metric captured tool arguments or result content");
+  }
   console.log("ok real runner returned exact trace evidence and labelled semantic/time-window metric evidence as partial");
+  console.log("ok native server span and duration metric were correlated without tool payload content");
   await stop(runner);
   runner = undefined;
 
@@ -355,6 +416,7 @@ try {
       QYL_COLLECTOR_URL: baseUrl,
       QYL_DEMO: "0",
       QYL_API_KEY: collectorApiKey,
+      QYL_MCP_NATIVE_STATE_PATH: join(temp, "stdio-native-executions.json"),
     },
     stderr: "pipe",
   });
@@ -387,6 +449,7 @@ try {
     }
 
     const remainingCalls = [
+      ["ci_log", {}],
       ["display_traces", { trace_id: matched.trace_id }],
       ["display_mcp_dashboard", { hours: 1 }],
       ["list_sessions", { limit: 100 }],
@@ -399,7 +462,7 @@ try {
         throw new Error(`${name} returned isError: ${JSON.stringify(result.content)}`);
       }
     }
-    console.log("ok generated API-key auth and Qyl schemas validate all seven tools against the live collector");
+    console.log("ok generated API-key auth and Qyl schemas validate all eight tools against the live collector");
   } finally {
     await client.close().catch(() => {});
   }

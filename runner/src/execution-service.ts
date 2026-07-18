@@ -33,6 +33,10 @@ import { validateJsonSchemaIsolated } from "./json-schema-validator.js";
 import type { WorkbenchCorrelationRegistry } from "./observability-correlation.js";
 import { extractExecutionEvidence } from "./execution-evidence.js";
 import {
+    MAX_PERSISTED_RESULT_CHARACTERS,
+    sanitizePersistedToolResult,
+} from "qyl-mcp-server/execution-result";
+import {
     runWithMcpPropagation,
     type ActiveMcpOperation,
     type McpTelemetry,
@@ -40,7 +44,6 @@ import {
 
 const MIN_TIMEOUT_MS = 1;
 const MAX_TIMEOUT_MS = 60 * 60 * 1_000;
-const MAX_RESULT_CHARACTERS = 2_000_000;
 const MAX_STREAM_EVENTS = 10_000;
 
 export type ExecutionStatus = RunnerMcpExecutionStatus;
@@ -190,7 +193,7 @@ export class ExecutionService {
         this.persistence = options.persistence;
         this.redactor = options.redactor ?? new SecretRedactor({
             environment: process.env,
-            maxStringLength: 1_000_000,
+            maxStringLength: MAX_PERSISTED_RESULT_CHARACTERS + 1,
         });
         this.now = options.now ?? Date.now;
         this.id = options.id ?? randomUUID;
@@ -468,7 +471,7 @@ export class ExecutionService {
                 record.error = cancellationError(completedMs);
                 delete record.result;
             } else if (result.isError === true) {
-                record.result = sanitizeResult(result, this.redactor);
+                record.result = sanitizePersistedToolResult(result, this.redactor);
                 record.status = "failed";
                 record.error = {
                     category: "tool_error",
@@ -478,7 +481,7 @@ export class ExecutionService {
                     retryable: false,
                 };
             } else {
-                record.result = sanitizeResult(result, this.redactor);
+                record.result = sanitizePersistedToolResult(result, this.redactor);
                 record.status = "succeeded";
             }
             finish(record, startedMs, completedMs);
@@ -966,20 +969,6 @@ function cancellationError(now: number): ExecutionError {
         message: "Execution was cancelled.",
         occurredAt: timestamp(now),
         retryable: false,
-    };
-}
-
-function sanitizeResult(result: unknown, redactor: SecretRedactor): unknown {
-    const sanitized = redactor.redact(result);
-    const serialized = JSON.stringify(sanitized);
-    if (serialized.length <= MAX_RESULT_CHARACTERS) return sanitized;
-    return {
-        content: [{
-            type: "text",
-            text: `[Tool output omitted: sanitized result exceeded ${MAX_RESULT_CHARACTERS} characters.]`,
-        }],
-        isError: true,
-        _meta: { qylOutputTruncated: true },
     };
 }
 

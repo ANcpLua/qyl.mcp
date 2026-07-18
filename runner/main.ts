@@ -11,11 +11,18 @@
 // environment: QYL_COLLECTOR_URL (default http://127.0.0.1:5100) for live
 // mode, or QYL_DEMO=1 to select generated demo telemetry explicitly.
 
-import { createServer } from "qyl-mcp-server";
+import {
+  closeDefaultNativeExecutionRuntime,
+  createServer,
+} from "qyl-mcp-server";
 import { McpAppBuilder } from "./src/app-builder.js";
 
 const app = McpAppBuilder.create();
 
-app.addInProcessServer("qyl-telemetry", createServer);
+app.addInProcessServer("qyl-telemetry", () => createServer({ transport: "inproc" }));
 
-await app.build().run();
+try {
+  await app.build().run();
+} finally {
+  await closeDefaultNativeExecutionRuntime();
+}

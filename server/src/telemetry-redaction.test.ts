@@ -75,7 +75,7 @@ test("telemetry tools redact secrets before model text and structured content", 
   process.env.QYL_API_KEY = EnvironmentSecret;
   delete process.env.QYL_DEMO;
 
-  const mcpServer = createServer();
+  const mcpServer = createServer({ nativeExecution: false });
   const client = new Client({ name: "redaction-test", version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 

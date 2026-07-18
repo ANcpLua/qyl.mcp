@@ -26,6 +26,7 @@ import {
   requireMcpAuthentication,
 } from "./http-security.js";
 import { mcpErrorResponse, mcpRequestId } from "./mcp-errors.js";
+import { closeDefaultNativeExecutionRuntime } from "./native-execution.js";
 
 interface CleanupFailure {
   resource: "server" | "transport";
@@ -226,12 +227,14 @@ export async function startStreamableHTTPServer(
     if (shuttingDown) return;
     shuttingDown = true;
     console.log("\nShutting down...");
-    void closeHttpListener(httpServer).catch((error: unknown) => {
-      console.error(
-        `Standalone MCP HTTP listener cleanup failed (${sanitizedErrorType(error)}); secret details omitted`,
-      );
-      process.exitCode = 1;
-    });
+    void closeHttpListener(httpServer)
+      .then(closeDefaultNativeExecutionRuntime)
+      .catch((error: unknown) => {
+        console.error(
+          `Standalone MCP HTTP shutdown cleanup failed (${sanitizedErrorType(error)}); secret details omitted`,
+        );
+        process.exitCode = 1;
+      });
   };
 
   process.once("SIGINT", shutdown);
@@ -254,7 +257,9 @@ export async function startStdioServer(
   const shutdown = () => {
     if (shuttingDown) return;
     shuttingDown = true;
-    void closeMcpRequestResources(server, transport).then(logCleanupFailures);
+    void closeMcpRequestResources(server, transport)
+      .then(logCleanupFailures)
+      .finally(closeDefaultNativeExecutionRuntime);
   };
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
@@ -262,9 +267,9 @@ export async function startStdioServer(
 
 async function main() {
   if (process.argv.includes("--stdio")) {
-    await startStdioServer(createServer);
+    await startStdioServer(() => createServer({ transport: "stdio" }));
   } else {
-    await startStreamableHTTPServer(createServer);
+    await startStreamableHTTPServer(() => createServer({ transport: "streamable_http" }));
   }
 }
 
