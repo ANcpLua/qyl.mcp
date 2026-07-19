@@ -1,7 +1,7 @@
 {
   "name": "qyl.mcp",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "qyl MCP host, telemetry tools, MCP Apps viewers, and local resource dashboard",
   "workspaces": [
@@ -23,6 +23,9 @@
   },
   "devDependencies": {
     "@types/node": "24.13.3",
+    "qyl-mcp-dashboard": "^0.1.1",
+    "qyl-mcp-runner": "^0.1.1",
+    "qyl-mcp-server": "^0.1.1",
     "vite": "8.1.4"
   }
 }

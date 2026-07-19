@@ -1,7 +1,7 @@
 {
   "name": "qyl-mcp-runner",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Local MCP server host with orchestration, an authenticated workbench API, and in-process qyl telemetry tools",
   "scripts": {
@@ -26,6 +26,7 @@
   "devDependencies": {
     "@types/express": "5.0.6",
     "@types/node": "24.13.3",
+    "qyl-mcp-server": "^0.1.1",
     "typescript": "7.0.2"
   },
   "engines": {
