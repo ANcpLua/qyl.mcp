@@ -25,9 +25,10 @@
   },
   "devDependencies": {
     "@types/express": "5.0.6",
-    "@types/node": "24.13.3",
+    "@types/node": "26.1.1",
     "qyl-mcp-server": "^0.1.1",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "vite": "8.1.5"
   },
   "engines": {
     "node": ">=22.12.0"

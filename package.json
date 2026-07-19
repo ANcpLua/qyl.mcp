@@ -22,10 +22,10 @@
     "node": ">=22.12.0"
   },
   "devDependencies": {
-    "@types/node": "24.13.3",
+    "@types/node": "26.1.1",
     "qyl-mcp-dashboard": "^0.1.1",
     "qyl-mcp-runner": "^0.1.1",
     "qyl-mcp-server": "^0.1.1",
-    "vite": "8.1.4"
+    "vite": "8.1.5"
   }
 }
