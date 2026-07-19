@@ -232,7 +232,8 @@ The workbench runner remains available with `npm run start:runner`.
 
 ### Hosted standalone server
 
-The reference deployment serves `https://mcp.qyl.at/mcp` from Railway with
+The reference deployment serves `https://mcp.qyl.at/` from Railway with
+`/mcp` retained as a compatibility alias (the host prefix is the namespace) and
 `/healthz` as its platform healthcheck; pushes to `main` deploy automatically
 after CI passes.
 

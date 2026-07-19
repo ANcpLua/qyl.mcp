@@ -184,7 +184,7 @@ export async function startStreamableHTTPServer(
     response.status(200).json({ status: "ok" });
   });
 
-  app.all("/mcp", requireMcpAuthentication(config.authToken), async (req: Request, res: Response) => {
+  const handleMcpRequest = async (req: Request, res: Response) => {
     const server = createServer();
     const transport = createMcpTransport(config.allowedOrigins);
 
@@ -211,7 +211,12 @@ export async function startStreamableHTTPServer(
           );
       }
     }
-  });
+  };
+
+  // The host is the namespace (mcp.<domain>), so the root is the canonical MCP endpoint.
+  // "/mcp" stays as a compatibility alias: published READMEs and configured connectors use it.
+  app.all("/", requireMcpAuthentication(config.authToken), handleMcpRequest);
+  app.all("/mcp", requireMcpAuthentication(config.authToken), handleMcpRequest);
 
   const httpServer = app.listen(config.port, config.bindHost);
   await new Promise<void>((resolve, reject) => {
@@ -219,9 +224,9 @@ export async function startStreamableHTTPServer(
     httpServer.once("error", reject);
   });
   const endpoint = config.publicUrl
-    ? new URL("/mcp", config.publicUrl).href
-    : `http://${urlHost(config.bindHost)}:${config.port}/mcp`;
-  console.log(`MCP server listening on ${endpoint}`);
+    ? new URL("/", config.publicUrl).href
+    : `http://${urlHost(config.bindHost)}:${config.port}/`;
+  console.log(`MCP server listening on ${endpoint} (alias: /mcp)`);
 
   let shuttingDown = false;
   const shutdown = () => {
