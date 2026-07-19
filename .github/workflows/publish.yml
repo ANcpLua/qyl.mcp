@@ -1,0 +1,199 @@
+name: Publish (npmjs.org)
+
+# qyl-mcp-server -> registry.npmjs.org via npm trusted publishing (OIDC + provenance) — no stored
+# secrets, no hand-bumped versions. The git tag is the single source of version truth: "Resolve
+# release version" stamps the server workspace from it, so committed files carry no authoritative
+# version. Mirrors the qyl-api-schema release workflow, minus its NuGet leg and GitHub Packages
+# scope routing (this package is unscoped and installs everything from npmjs).
+#
+# Restartable: an existing immutable version must carry this checkout's commit, in which case the
+# publish is skipped and the run resumes at the index/consumer gate.
+#
+# Bootstrap note: the first-ever version was published locally (trusted publishing cannot create a
+# brand-new package). The npmjs trusted-publisher policy for this workflow is: repository
+# ANcpLua/qyl.mcp, workflow publish.yml, environment release.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version to publish, e.g. 0.1.1 or v0.1.1 (required for manual runs; release events derive it from the tag).'
+        required: true
+      tag:
+        description: 'npm dist-tag. Leave blank to auto-pick (latest for stable releases, next for prereleases).'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  id-token: write # OIDC for npm trusted publishing + provenance
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: release # must match the npmjs trusted-publisher policy Environment
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing to npmjs needs npm >= 11.5.1; Node 24 bundles an older npm.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Verify the server package is not private
+        run: |
+          if [ "$(node -p "require('./server/package.json').private || false")" = "true" ]; then
+            echo "::error::server/package.json has \"private\": true — refusing to publish."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve npm dist-tag
+        shell: bash
+        env:
+          DISPATCH_TAG: ${{ inputs.tag }}
+          IS_PRERELEASE: ${{ github.event.release.prerelease }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$DISPATCH_TAG" ]; then
+            dist_tag="$DISPATCH_TAG"
+          elif [ "$IS_PRERELEASE" = "true" ]; then
+            dist_tag="next"
+          else
+            dist_tag="latest"
+          fi
+          if ! [[ "$dist_tag" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::Invalid npm dist-tag: $dist_tag (must match ^[A-Za-z0-9._-]+$)"
+            exit 1
+          fi
+          echo "NPM_DIST_TAG=$dist_tag" >> "$GITHUB_ENV"
+          echo "Resolved dist-tag: $dist_tag"
+
+      # The git tag is the single source of version truth: stamp the server workspace so npm
+      # publishes exactly that version. Strict SemVer without build metadata (npm rejects it).
+      - name: Resolve release version (from tag)
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "release" ]; then
+            ver="${RELEASE_TAG#v}"
+          else
+            ver="${DISPATCH_VERSION#v}"
+          fi
+          if [ -z "$ver" ]; then
+            echo "::error::No version to publish — a release needs a tag, a manual run needs the 'version' input."
+            exit 1
+          fi
+          if ! [[ "$ver" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?$ ]]; then
+            echo "::error::Version '$ver' is not strict MAJOR.MINOR.PATCH[-prerelease] with no build metadata."
+            exit 1
+          fi
+          npm version "$ver" --no-git-tag-version --allow-same-version --workspace server
+          echo "RELEASE_VERSION=$ver" >> "$GITHUB_ENV"
+          echo "Release version: $ver (stamped from the git tag)"
+
+      - name: Validate any existing immutable version
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_commit="$(git rev-parse HEAD)"
+          npm_metadata="$(mktemp)"
+          npm_status="$(curl --silent --show-error --location --retry 5 --retry-all-errors \
+            --output "${npm_metadata}" --write-out '%{http_code}' \
+            "https://registry.npmjs.org/qyl-mcp-server/${RELEASE_VERSION}")"
+          case "${npm_status}" in
+            200)
+              npm_commit="$(jq -r '.gitHead // empty' "${npm_metadata}")"
+              if [[ "${npm_commit}" != "${release_commit}" ]]; then
+                echo "::error::npm ${RELEASE_VERSION} exists from ${npm_commit:-unknown}, not ${release_commit}"
+                exit 1
+              fi
+              echo "NPM_ALREADY_PUBLISHED=true" >> "${GITHUB_ENV}"
+              ;;
+            404)
+              echo "NPM_ALREADY_PUBLISHED=false" >> "${GITHUB_ENV}"
+              ;;
+            *)
+              echo "::error::npm registry returned HTTP ${npm_status}"
+              exit 1
+              ;;
+          esac
+
+      # The repository gates: build every workspace, run every workspace test, and the server's
+      # explicit-demo smoke. The OTLP smoke needs the live sibling collector and stays local.
+      - name: Build and test
+        run: |
+          npm run build
+          npm test
+          npm run smoke --workspace server
+
+      - name: Publish npm to npmjs.org (OIDC + provenance)
+        run: |
+          if [ "$NPM_ALREADY_PUBLISHED" = "true" ]; then
+            echo "qyl-mcp-server@$RELEASE_VERSION is already indexed from this commit; resuming after publish."
+          else
+            npm publish --workspace server --access public --provenance --tag "$NPM_DIST_TAG"
+          fi
+
+      # Publish -> index -> restore-verify: poll the index, then drive the published package's
+      # stdio MCP handshake from a clean npx consumer outside the repository.
+      - name: Wait for the index and smoke a clean npx consumer
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              "https://registry.npmjs.org/qyl-mcp-server/${RELEASE_VERSION}")"
+            [ "$status" = "200" ] && break
+            sleep 10
+          done
+          [ "$status" = "200" ] || { echo "::error::npm index never served ${RELEASE_VERSION}"; exit 1; }
+          cd "$(mktemp -d)"
+          node - "$RELEASE_VERSION" <<'EOF'
+          const { spawn } = require("node:child_process");
+          const version = process.argv[2];
+          const child = spawn("npx", ["--yes", `qyl-mcp-server@${version}`, "--stdio"], {
+            stdio: ["pipe", "pipe", "inherit"],
+          });
+          const timer = setTimeout(() => {
+            console.error("no initialize response within 120s");
+            child.kill("SIGKILL");
+            process.exit(1);
+          }, 120_000);
+          let buffer = "";
+          child.stdout.on("data", (chunk) => {
+            buffer += chunk;
+            for (const line of buffer.split("\n")) {
+              if (!line.trim()) continue;
+              let message;
+              try { message = JSON.parse(line); } catch { continue; }
+              if (message.id === 1 && message.result?.serverInfo?.name === "qyl.mcp") {
+                console.log(`initialize ok: ${message.result.serverInfo.name} ${message.result.serverInfo.version}`);
+                clearTimeout(timer);
+                child.kill("SIGTERM");
+                process.exit(0);
+              }
+            }
+          });
+          child.stdin.write(JSON.stringify({
+            jsonrpc: "2.0", id: 1, method: "initialize",
+            params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "publish-smoke", version: "0.0.0" } },
+          }) + "\n");
+          EOF
