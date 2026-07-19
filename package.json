@@ -26,6 +26,6 @@
     "qyl-mcp-dashboard": "^0.1.1",
     "qyl-mcp-runner": "^0.1.1",
     "qyl-mcp-server": "^0.1.1",
-    "vite": "8.1.4"
+    "vite": "8.1.5"
   }
 }
