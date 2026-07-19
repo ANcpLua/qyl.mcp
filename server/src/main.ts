@@ -13,6 +13,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import type { Request, Response } from "express";
+import { realpathSync } from "node:fs";
 import type { Server as HttpServer } from "node:http";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -273,8 +274,22 @@ async function main() {
   }
 }
 
+function toRealEntryHref(entryPoint: string): string {
+  const resolved = resolve(entryPoint);
+  try {
+    return pathToFileURL(realpathSync(resolved)).href;
+  } catch {
+    // A vanished or unreadable entry path cannot be this module; fall back to the lexical path.
+    return pathToFileURL(resolved).href;
+  }
+}
+
+// npm bin shims invoke this file through a node_modules/.bin symlink, so the entry point must be
+// realpath'd before comparing against import.meta.url (which the loader already resolved) — plain
+// resolve() keeps the symlink path, the comparison fails, and main() silently never runs.
 const entryPoint = process.argv[1];
-if (entryPoint !== undefined && pathToFileURL(resolve(entryPoint)).href === import.meta.url) {
+const entryHref = entryPoint === undefined ? undefined : toRealEntryHref(entryPoint);
+if (entryHref === import.meta.url) {
   void main().catch((error: unknown) => {
     console.error(
       `Standalone MCP startup failed (${sanitizedErrorType(error)}); secret details omitted`,
