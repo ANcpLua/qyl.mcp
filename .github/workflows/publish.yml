@@ -152,21 +152,19 @@ jobs:
             npm publish --workspace server --access public --provenance --tag "$NPM_DIST_TAG"
           fi
 
-      # Publish -> index -> restore-verify: poll the index, then drive the published package's
-      # stdio MCP handshake from a clean npx consumer outside the repository.
+      # Publish -> index -> restore-verify: drive the published package's stdio MCP handshake from
+      # a clean npx consumer outside the repository. The registry is eventually consistent — the
+      # version endpoint can serve 200 while the packument npx resolves against still lacks the
+      # version (observed on the 0.1.1 release: ETARGET seconds after publish) — so the retry loop
+      # wraps the npx handshake itself, and a child exit fails the attempt fast instead of
+      # burning the whole timeout.
       - name: Wait for the index and smoke a clean npx consumer
         shell: bash
         run: |
           set -euo pipefail
-          for i in $(seq 1 30); do
-            status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
-              "https://registry.npmjs.org/qyl-mcp-server/${RELEASE_VERSION}")"
-            [ "$status" = "200" ] && break
-            sleep 10
-          done
-          [ "$status" = "200" ] || { echo "::error::npm index never served ${RELEASE_VERSION}"; exit 1; }
           cd "$(mktemp -d)"
-          node - "$RELEASE_VERSION" <<'EOF'
+          for attempt in $(seq 1 20); do
+            if node - "$RELEASE_VERSION" <<'EOF'
           const { spawn } = require("node:child_process");
           const version = process.argv[2];
           const child = spawn("npx", ["--yes", `qyl-mcp-server@${version}`, "--stdio"], {
@@ -177,6 +175,11 @@ jobs:
             child.kill("SIGKILL");
             process.exit(1);
           }, 120_000);
+          child.on("exit", (code, signal) => {
+            console.error(`npx exited before answering (code=${code} signal=${signal})`);
+            clearTimeout(timer);
+            process.exit(1);
+          });
           let buffer = "";
           child.stdout.on("data", (chunk) => {
             buffer += chunk;
@@ -187,6 +190,7 @@ jobs:
               if (message.id === 1 && message.result?.serverInfo?.name === "qyl.mcp") {
                 console.log(`initialize ok: ${message.result.serverInfo.name} ${message.result.serverInfo.version}`);
                 clearTimeout(timer);
+                child.removeAllListeners("exit");
                 child.kill("SIGTERM");
                 process.exit(0);
               }
@@ -197,3 +201,12 @@ jobs:
             params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "publish-smoke", version: "0.0.0" } },
           }) + "\n");
           EOF
+            then
+              echo "npx consumer smoke passed on attempt ${attempt}"
+              exit 0
+            fi
+            echo "attempt ${attempt} failed; registry may still be propagating — retrying in 30s"
+            sleep 30
+          done
+          echo "::error::npx consumer smoke never passed for ${RELEASE_VERSION}"
+          exit 1
