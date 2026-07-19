@@ -28,6 +28,9 @@ import {
 } from "./http-security.js";
 import { mcpErrorResponse, mcpRequestId } from "./mcp-errors.js";
 import { closeDefaultNativeExecutionRuntime } from "./native-execution.js";
+import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
+import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
+import { AnonymousOAuthProvider } from "./oauth.js";
 
 interface CleanupFailure {
   resource: "server" | "transport";
@@ -215,8 +218,31 @@ export async function startStreamableHTTPServer(
 
   // The host is the namespace (mcp.<domain>), so the root is the canonical MCP endpoint.
   // "/mcp" stays as a compatibility alias: published READMEs and configured connectors use it.
-  app.all("/", requireMcpAuthentication(config.authToken), handleMcpRequest);
-  app.all("/mcp", requireMcpAuthentication(config.authToken), handleMcpRequest);
+  //
+  // Hosted deployments speak OAuth 2.1 (SDK-owned wire protocol, anonymous auto-approve
+  // policy) so stock MCP clients connect via discovery without an account; the operator's
+  // static bearer token keeps working. Loopback keeps the legacy static-token/no-auth modes.
+  if (config.publicUrl !== undefined && config.authToken !== undefined) {
+    const oauthProvider = new AnonymousOAuthProvider(config.authToken, config.authToken);
+    app.use(
+      mcpAuthRouter({
+        provider: oauthProvider,
+        issuerUrl: config.publicUrl,
+        resourceName: "qyl telemetry MCP server",
+        scopesSupported: ["qyl"],
+      }),
+    );
+    const requireOAuthBearer = requireBearerAuth({
+      verifier: oauthProvider,
+      resourceMetadataUrl: new URL("/.well-known/oauth-protected-resource", config.publicUrl)
+        .href,
+    });
+    app.all("/", requireOAuthBearer, handleMcpRequest);
+    app.all("/mcp", requireOAuthBearer, handleMcpRequest);
+  } else {
+    app.all("/", requireMcpAuthentication(config.authToken), handleMcpRequest);
+    app.all("/mcp", requireMcpAuthentication(config.authToken), handleMcpRequest);
+  }
 
   const httpServer = app.listen(config.port, config.bindHost);
   await new Promise<void>((resolve, reject) => {
