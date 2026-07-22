@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
 import { test } from "node:test";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResultSchema } from "@modelcontextprotocol/core";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { UNTRUSTED_HTML } from "./fixture-catalog.js";
 import { createFixtureMcpServer } from "./fixture-server.js";
 
@@ -17,7 +16,7 @@ async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<voi
   }
 }
 
-test("official SDK fixture paginates discovery and exercises tool and content behavior", { timeout: 10_000 }, async () => {
+test("official SDK fixture aggregates discovery and exercises tool and content behavior", { timeout: 10_000 }, async () => {
   const fixture = createFixtureMcpServer();
   const client = new Client({ name: "fixture-test-client", version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -25,13 +24,8 @@ test("official SDK fixture paginates discovery and exercises tool and content be
   await client.connect(clientTransport);
 
   try {
-    const toolNames: string[] = [];
-    let toolCursor: string | undefined;
-    do {
-      const result = await client.listTools(toolCursor === undefined ? undefined : { cursor: toolCursor });
-      toolNames.push(...result.tools.map((tool) => tool.name));
-      toolCursor = result.nextCursor;
-    } while (toolCursor !== undefined);
+    const tools = await client.listTools();
+    const toolNames = tools.tools.map((tool) => tool.name);
 
     assert.deepEqual(toolNames, [
       "fixture.safe_lookup",
@@ -42,11 +36,9 @@ test("official SDK fixture paginates discovery and exercises tool and content be
       "fixture.tool_error",
     ]);
 
-    const firstToolPage = await client.listTools();
-    assert.equal(firstToolPage.tools[0]?.annotations?.readOnlyHint, true);
-    const destructivePage = await client.listTools({ cursor: firstToolPage.nextCursor });
-    assert.equal(destructivePage.tools[1]?.name, "fixture.delete_record");
-    assert.equal(destructivePage.tools[1]?.annotations?.destructiveHint, true);
+    assert.equal(tools.tools[0]?.annotations?.readOnlyHint, true);
+    const destructive = tools.tools.find((tool) => tool.name === "fixture.delete_record");
+    assert.equal(destructive?.annotations?.destructiveHint, true);
 
     const lookup = await client.callTool({
       name: "fixture.safe_lookup",
@@ -96,35 +88,14 @@ test("official SDK fixture paginates discovery and exercises tool and content be
     assert.equal(acceptedDeleteResult.isError, undefined);
     assert.deepEqual(fixture.state.deletedRecordIds, ["alpha"]);
 
-    const resourceNames: string[] = [];
-    let resourceCursor: string | undefined;
-    do {
-      const result = await client.listResources(
-        resourceCursor === undefined ? undefined : { cursor: resourceCursor },
-      );
-      resourceNames.push(...result.resources.map((resource) => resource.name));
-      resourceCursor = result.nextCursor;
-    } while (resourceCursor !== undefined);
+    const resourceNames = (await client.listResources()).resources.map((resource) => resource.name);
     assert.deepEqual(resourceNames, ["fixture-summary", "untrusted-html", "fixture-blob"]);
 
-    const templateNames: string[] = [];
-    let templateCursor: string | undefined;
-    do {
-      const result = await client.listResourceTemplates(
-        templateCursor === undefined ? undefined : { cursor: templateCursor },
-      );
-      templateNames.push(...result.resourceTemplates.map((template) => template.name));
-      templateCursor = result.nextCursor;
-    } while (templateCursor !== undefined);
+    const templateNames = (await client.listResourceTemplates()).resourceTemplates
+      .map((template) => template.name);
     assert.deepEqual(templateNames, ["fixture-item", "fixture-report", "fixture-log"]);
 
-    const promptNames: string[] = [];
-    let promptCursor: string | undefined;
-    do {
-      const result = await client.listPrompts(promptCursor === undefined ? undefined : { cursor: promptCursor });
-      promptNames.push(...result.prompts.map((prompt) => prompt.name));
-      promptCursor = result.nextCursor;
-    } while (promptCursor !== undefined);
+    const promptNames = (await client.listPrompts()).prompts.map((prompt) => prompt.name);
     assert.deepEqual(promptNames, ["fixture.safe_summary", "fixture.review_record", "fixture.rich_context"]);
 
     const untrustedResource = await client.readResource({ uri: "fixture://catalog/untrusted-html" });
@@ -152,7 +123,6 @@ test("official SDK fixture paginates discovery and exercises tool and content be
         name: "fixture.delayed",
         arguments: { delayMs: 2_000 },
       },
-      undefined,
       { signal: controller.signal },
     );
     const rejectedCall = assert.rejects(delayedCall);

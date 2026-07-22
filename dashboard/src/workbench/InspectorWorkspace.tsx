@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  CallToolResultSchema,
-  ToolSchema,
-  type Tool,
-  type ToolAnnotations,
-} from "@modelcontextprotocol/sdk/types.js";
+import type { Tool, ToolAnnotations } from "@modelcontextprotocol/server";
+import { CallToolResultSchema, ToolSchema } from "@modelcontextprotocol/core";
 import type {
   RunnerMcpDiscoveryCollection as DiscoveryCollection,
   RunnerMcpDiscoverySnapshot as DiscoverySnapshot,
@@ -112,10 +108,8 @@ function toolFrom(value: unknown, _index: number): ToolItem | null {
 function configurationDetail(server: McpServer): string {
   const configuration = server.configuration;
   switch (configuration.transport) {
-    case "streamable_http":
-    case "sse": return configuration.endpoint;
+    case "streamable_http": return configuration.endpoint;
     case "stdio": return [configuration.command, ...(configuration.arguments ?? [])].join(" ");
-    case "inproc": return configuration.implementation;
     case "builtin": return configuration.name;
   }
 }
@@ -245,7 +239,6 @@ export function TelemetryPanel({ telemetry, error, loading, onRefresh }: { telem
           </div>
           <details><summary>Traces ({telemetry.traces.length})</summary><JsonCodeView value={telemetry.traces} label="Correlated traces" onCopy={copyText} /></details>
           <details><summary>Logs ({telemetry.logs.length})</summary><JsonCodeView value={telemetry.logs} label="Correlated logs" onCopy={copyText} /></details>
-          <details><summary>Metrics ({telemetry.metrics.length})</summary><JsonCodeView value={telemetry.metrics} label="Correlated metrics" onCopy={copyText} /></details>
         </>
       ) : !error ? <p className="empty-note">Telemetry availability is being queried; no signal is assumed available.</p> : null}
     </section>

@@ -21,7 +21,7 @@ import type { ExecutionRecord } from "./execution-service.js";
 import { AtomicJsonStore } from "./atomic-json-store.js";
 import { SecretRedactor } from "./secret-redactor.js";
 
-const STATE_VERSION = 2 as const;
+const STATE_VERSION = 3 as const;
 const DEFAULT_WORKSPACE_NAME = "Local workbench";
 
 const IdentifierSchema = z.string().min(1).max(128);
@@ -58,17 +58,8 @@ export const PersistedConnectionDefinitionSchema = z.discriminatedUnion("kind", 
         headers: z.array(HeaderReferenceSchema).max(128).default([]),
     }).strict(),
     z.object({
-        kind: z.literal("sse"),
-        endpoint: z.string().url().max(8_192),
-        headers: z.array(HeaderReferenceSchema).max(128).default([]),
-    }).strict(),
-    z.object({
         kind: z.literal("builtin"),
         builtin: z.string().min(1).max(256),
-    }).strict(),
-    z.object({
-        kind: z.literal("inproc"),
-        implementation: z.string().min(1).max(256),
     }).strict(),
 ]);
 
@@ -232,12 +223,7 @@ const EvaluationSummarySchema = z.object({
         estimated: z.boolean(),
         source: z.string().min(1).max(256).optional(),
     }).strict().optional(),
-    // Accept but deliberately discard fields written by older versions. They
-    // represented estimates rather than execution evidence.
-    inputTokens: z.number().finite().nonnegative().optional(),
-    outputTokens: z.number().finite().nonnegative().optional(),
-    estimatedCostUsd: z.number().finite().nonnegative().optional(),
-}).strict().transform(({ inputTokens: _inputTokens, outputTokens: _outputTokens, estimatedCostUsd: _estimatedCostUsd, ...summary }) => summary);
+}).strict();
 
 const EvaluationRunSchema: z.ZodType<EvaluationRun> = z.object({
     id: IdentifierSchema,
@@ -280,6 +266,11 @@ const ExecutionSchema: z.ZodType<PersistedExecution> = z.object({
     }).strict().optional(),
 }).strict();
 
+const StoredExecutionSchema = ExecutionSchema.refine(
+    (execution) => execution.streamEventId !== undefined,
+    { path: ["streamEventId"], message: "Required" },
+);
+
 const PersistedEvaluationExportSchema: z.ZodType<PersistedEvaluationExport> = z.object({
     id: IdentifierSchema,
     workspaceId: IdentifierSchema,
@@ -305,8 +296,8 @@ const StateSchema: z.ZodType<WorkbenchState> = z.object({
     testCases: z.array(TestCaseSchema),
     suites: z.array(SuiteSchema),
     evaluationRuns: z.array(EvaluationRunSchema),
-    evaluationExports: z.array(PersistedEvaluationExportSchema).default([]),
-    executions: z.array(ExecutionSchema),
+    evaluationExports: z.array(PersistedEvaluationExportSchema),
+    executions: z.array(StoredExecutionSchema),
     preferences: z.record(z.string(), PreferencesSchema),
 }).strict();
 
@@ -371,15 +362,7 @@ export class WorkbenchRepository {
                 this.registerConnectionSecrets(server.configuration);
             }
         }
-        // Re-prepare loaded state after resolving current connection references,
-        // so legacy evidence containing a now-known secret is scrubbed on open. Assign
-        // old execution rows durable stream cursors in the same atomic rewrite.
-        await this.store.transact((draft) => {
-            let nextStreamEventId = executionStreamHighWater(draft.executions) + 1;
-            for (const execution of draft.executions) {
-                if (execution.streamEventId === undefined) execution.streamEventId = nextStreamEventId++;
-            }
-        });
+        await this.store.transact(() => undefined);
     }
 
     registerSecretValues(values: readonly string[]): void {
@@ -773,7 +756,7 @@ export class WorkbenchRepository {
     private registerConnectionSecrets(configuration: PersistedConnectionDefinition): void {
         const names = configuration.kind === "stdio"
             ? configuration.environment.map((reference) => reference.secret.environmentVariable)
-            : configuration.kind === "streamable_http" || configuration.kind === "sse"
+            : configuration.kind === "streamable_http"
               ? configuration.headers.map((reference) => reference.secret.environmentVariable)
               : [];
         this.redactor.registerSecretValues(names.flatMap((name) => {
@@ -959,9 +942,6 @@ function redactConnection(
     if (configuration.kind === "builtin") {
         return { ...configuration, builtin: redactor.redactText(configuration.builtin) };
     }
-    if (configuration.kind === "inproc") {
-        return { ...configuration, implementation: redactor.redactText(configuration.implementation) };
-    }
     if (configuration.kind === "stdio") {
         return {
             ...configuration,
@@ -981,7 +961,7 @@ function redactConnection(
 }
 
 function validateConnection(configuration: PersistedConnectionDefinition): void {
-    if (configuration.kind === "streamable_http" || configuration.kind === "sse") {
+    if (configuration.kind === "streamable_http") {
         const endpoint = new URL(configuration.endpoint);
         if (endpoint.protocol !== "http:" && endpoint.protocol !== "https:") {
             throw new Error("Remote MCP endpoints must use HTTP or HTTPS.");

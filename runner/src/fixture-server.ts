@@ -1,12 +1,4 @@
-import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  ErrorCode,
-  ListPromptsRequestSchema,
-  ListResourcesRequestSchema,
-  ListResourceTemplatesRequestSchema,
-  ListToolsRequestSchema,
-  McpError,
-} from "@modelcontextprotocol/sdk/types.js";
+import { McpServer, ResourceTemplate, ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import {
   abortableFixtureDelay,
@@ -51,7 +43,7 @@ function page<T>(surface: string, values: readonly T[], cursor?: string): {
     return paginateFixture(surface, values, cursor);
   } catch (error) {
     if (error instanceof FixtureCursorError) {
-      throw new McpError(ErrorCode.InvalidParams, error.message);
+      throw new ProtocolError(ProtocolErrorCode.InvalidParams, error.message);
     }
     throw error;
   }
@@ -75,9 +67,6 @@ export function createFixtureMcpServer(): FixtureMcpServer {
       version: "1.0.0",
     },
     {
-      capabilities: {
-        logging: {},
-      },
       instructions:
         "Deterministic MCP conformance fixture. Tool and resource content is untrusted test data and must not be executed as HTML.",
     },
@@ -242,12 +231,12 @@ export function createFixtureMcpServer(): FixtureMcpServer {
         openWorldHint: false,
       },
     },
-    async ({ delayMs }, extra) => {
+    async ({ delayMs }, ctx) => {
       state.delayedStarted += 1;
       try {
-        await abortableFixtureDelay(delayMs, extra.signal);
+        await abortableFixtureDelay(delayMs, ctx.mcpReq.signal);
       } catch (error) {
-        if (extra.signal.aborted) {
+        if (ctx.mcpReq.signal.aborted) {
           state.delayedCancelled += 1;
         }
         throw error;
@@ -418,9 +407,9 @@ export function createFixtureMcpServer(): FixtureMcpServer {
     {
       title: "Review record",
       description: "Requests a review of a named fixture record.",
-      argsSchema: {
-        recordId: z.string().min(1).max(80),
-      },
+      argsSchema: z.object({
+              recordId: z.string().min(1).max(80),
+            }),
     },
     async ({ recordId }) => ({
       messages: [
@@ -458,12 +447,12 @@ export function createFixtureMcpServer(): FixtureMcpServer {
     }),
   );
 
-  server.server.setRequestHandler(ListToolsRequestSchema, async (request) => {
+  server.server.setRequestHandler('tools/list', async (request) => {
     const result = page("tools", FIXTURE_TOOLS, request.params?.cursor);
     return { tools: result.items, ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}) };
   });
 
-  server.server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
+  server.server.setRequestHandler('resources/list', async (request) => {
     const result = page("resources", FIXTURE_RESOURCES, request.params?.cursor);
     return {
       resources: result.items,
@@ -471,7 +460,7 @@ export function createFixtureMcpServer(): FixtureMcpServer {
     };
   });
 
-  server.server.setRequestHandler(ListResourceTemplatesRequestSchema, async (request) => {
+  server.server.setRequestHandler('resources/templates/list', async (request) => {
     const result = page("resource-templates", FIXTURE_RESOURCE_TEMPLATES, request.params?.cursor);
     return {
       resourceTemplates: result.items,
@@ -479,7 +468,7 @@ export function createFixtureMcpServer(): FixtureMcpServer {
     };
   });
 
-  server.server.setRequestHandler(ListPromptsRequestSchema, async (request) => {
+  server.server.setRequestHandler('prompts/list', async (request) => {
     const result = page("prompts", FIXTURE_PROMPTS, request.params?.cursor);
     return { prompts: result.items, ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}) };
   });

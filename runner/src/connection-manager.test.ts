@@ -1,13 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-    McpServer,
-    ResourceTemplate,
-} from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
 import {
     ConnectionManager,
     ConnectionManagerError,
-    collectCursorPages,
     resolveEnvironmentHeaders,
     type CompletedConnectionSession,
     type ConnectionProtocolOperation,
@@ -173,32 +169,6 @@ test("connection manager supports builtin registration and reconnects with a fre
     await manager.disconnect("builtin-connection");
 });
 
-test("cursor collection exhausts pages and rejects repeated or unbounded cursors", async () => {
-    const observed: Array<string | undefined> = [];
-    const values = await collectCursorPages(async (cursor) => {
-        observed.push(cursor);
-        return cursor === undefined
-            ? { items: [1, 2], nextCursor: "page-2" }
-            : { items: [3] };
-    });
-    assert.deepEqual(values, [1, 2, 3]);
-    assert.deepEqual(observed, [undefined, "page-2"]);
-
-    await assert.rejects(
-        collectCursorPages(async () => ({ items: [], nextCursor: "same" })),
-        /repeated cursor/u,
-    );
-
-    let next = 0;
-    await assert.rejects(
-        collectCursorPages(
-            async () => ({ items: [], nextCursor: `page-${next++}` }),
-            { maxPages: 2 },
-        ),
-        /2-page safety limit/u,
-    );
-});
-
 test("remote headers resolve only environment references and endpoint credentials are rejected", () => {
     const resolved = resolveEnvironmentHeaders(
         [
@@ -247,8 +217,8 @@ test("remote headers resolve only environment references and endpoint credential
     assert.throws(
         () => manager.register({
             id: "query",
-            kind: "sse",
-            endpoint: "https://example.test/sse?api_key=secret",
+            kind: "streamable-http",
+            endpoint: "https://example.test/mcp?api_key=secret",
         }),
         /query parameters/u,
     );

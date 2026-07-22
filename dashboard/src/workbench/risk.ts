@@ -1,4 +1,4 @@
-import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
+import type { ToolAnnotations } from "@modelcontextprotocol/server";
 
 export type ToolRiskCategory = "read-only" | "mutating" | "destructive" | "open-world" | "unknown";
 

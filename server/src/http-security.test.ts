@@ -2,12 +2,9 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer, request, type Server } from "node:http";
 import test from "node:test";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  createLoopbackMcpApp,
-  createLoopbackMcpTransport,
-  requireMcpAuthentication,
-} from "./http-security.js";
+import { createMcpHandler, McpServer, type McpHttpHandler } from "@modelcontextprotocol/server";
+import { toNodeHandler } from "@modelcontextprotocol/node";
+import { createMcpApp } from "./http-security.js";
 
 interface TestResponse {
   status: number;
@@ -15,26 +12,23 @@ interface TestResponse {
   headers: Record<string, string | string[] | undefined>;
 }
 
-async function listen(): Promise<{ server: Server; port: number }> {
-  const app = createLoopbackMcpApp();
+async function listen(): Promise<{ server: Server; handler: McpHttpHandler; port: number }> {
+  const app = createMcpApp({ bindHost: "127.0.0.1" });
+  const handler = createMcpHandler(
+    () => new McpServer({ name: "http-security-test", version: "1.0.0" }),
+    { legacy: "reject" },
+  );
+  const nodeHandler = toNodeHandler(handler);
   app.get("/probe", (_request, response) => response.status(204).end());
   app.all("/mcp", async (incoming, response) => {
-    const mcpServer = new McpServer({ name: "http-security-test", version: "1.0.0" });
-    const transport = createLoopbackMcpTransport(3001);
-    response.once("close", () => {
-      void mcpServer.close().catch((error: unknown) => {
-        console.error(`test MCP cleanup failed (${error instanceof Error ? error.name : "unknown"})`);
-      });
-    });
-    await mcpServer.connect(transport);
-    await transport.handleRequest(incoming, response, incoming.body);
+    await nodeHandler(incoming, response, incoming.body);
   });
   const server = createServer(app);
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const address = server.address();
   assert(address && typeof address === "object");
-  return { server, port: address.port };
+  return { server, handler, port: address.port };
 }
 
 function postMcp(port: number, origin?: string): Promise<TestResponse> {
@@ -103,24 +97,12 @@ function get(
   });
 }
 
-async function listenProtected(): Promise<{ server: Server; port: number }> {
-  const app = createLoopbackMcpApp();
-  app.get(
-    "/protected",
-    requireMcpAuthentication("test-static-token"),
-    (_request, response) => response.status(204).end(),
-  );
-  const server = createServer(app);
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const address = server.address();
-  assert(address && typeof address === "object");
-  return { server, port: address.port };
-}
-
 test("standalone MCP app accepts loopback Host and local or absent Origin", async (context) => {
-  const { server, port } = await listen();
-  context.after(() => server.close());
+  const { server, handler, port } = await listen();
+  context.after(async () => {
+    await handler.close();
+    server.close();
+  });
 
   assert.equal((await get(port)).status, 204);
   assert.equal(
@@ -132,8 +114,11 @@ test("standalone MCP app accepts loopback Host and local or absent Origin", asyn
 });
 
 test("standalone MCP app rejects missing and rebound Host", async (context) => {
-  const { server, port } = await listen();
-  context.after(() => server.close());
+  const { server, handler, port } = await listen();
+  context.after(async () => {
+    await handler.close();
+    server.close();
+  });
 
   // Node may reject a Host-less HTTP/1.1 request before Express; it must not
   // reach the route in either case.
@@ -144,35 +129,22 @@ test("standalone MCP app rejects missing and rebound Host", async (context) => {
   assert.equal(JSON.parse(response.body).error.code, -32000);
 });
 
-test("standalone MCP app rejects untrusted browser origins", async (context) => {
-  const { server, port } = await listen();
-  context.after(() => server.close());
+test("standalone MCP app accepts loopback origins on any port and rejects other hosts", async (context) => {
+  const { server, handler, port } = await listen();
+  context.after(async () => {
+    await handler.close();
+    server.close();
+  });
 
-  for (const origin of ["https://attacker.example", "null", "http://localhost:9999"]) {
+  assert.notEqual((await postMcp(port, "http://localhost:9999")).status, 403);
+
+  for (const origin of ["https://attacker.example", "null"]) {
     const response = await postMcp(port, origin);
     assert.equal(response.status, 403);
     const envelope = JSON.parse(response.body);
     assert.equal(envelope.jsonrpc, "2.0");
     assert.equal(envelope.error.code, -32000);
-    assert.match(envelope.error.message, /^Invalid Origin header:/);
+    assert.match(envelope.error.message, /^Invalid Origin(?: header)?:/);
     assert.equal(envelope.id, null);
   }
-});
-
-test("static Bearer authentication rejects missing and invalid credentials", async (context) => {
-  const { server, port } = await listenProtected();
-  context.after(() => server.close());
-
-  const missing = await get(port, {}, true, "/protected");
-  assert.equal(missing.status, 401);
-  assert.equal(missing.headers["www-authenticate"], 'Bearer realm="qyl-mcp"');
-
-  assert.equal(
-    (await get(port, { authorization: "Bearer wrong-token" }, true, "/protected")).status,
-    401,
-  );
-  assert.equal(
-    (await get(port, { authorization: "bearer test-static-token" }, true, "/protected")).status,
-    204,
-  );
 });

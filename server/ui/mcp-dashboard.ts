@@ -13,7 +13,7 @@ import type {
   McpNameRequestCount as McpNameCount,
   McpToolStats as McpToolRow,
 } from "@ancplua/qyl-api-schema/types";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import packageMetadata from "../package.json";
 import {
   DisplayMcpDashboardOutputSchema,

@@ -114,8 +114,6 @@ export interface McpOperationCompletion {
 export interface ActiveMcpOperation {
     readonly correlation?: McpSpanCorrelation;
     readonly propagation?: McpPropagationCarrier;
-    /** Compatibility view of the standard W3C field in `propagation`. */
-    readonly traceparent?: string;
     run<T>(operation: () => T): T;
     end(completion: McpOperationCompletion): McpSpanCorrelation | undefined;
 }
@@ -142,26 +140,10 @@ export function runWithMcpPropagation<T>(
     return activeMcpContext.run(extracted, () => context.with(extracted, operation));
 }
 
-/** Compatibility wrapper for callers that only have a W3C traceparent. */
-export function runWithMcpTraceparent<T>(
-    traceparent: string | undefined,
-    operation: () => T,
-): T {
-    return runWithMcpPropagation(
-        traceparent === undefined ? undefined : { traceparent },
-        operation,
-    );
-}
-
 /** Current execution-local propagation carrier, if an MCP operation exists. */
 export function currentMcpPropagation(): McpPropagationCarrier | undefined {
     const active = activeMcpContext.getStore();
     return active === null || active === undefined ? undefined : injectPropagation(active);
-}
-
-/** Current execution-local W3C trace parent, if a client operation span exists. */
-export function currentMcpTraceparent(): string | undefined {
-    return currentMcpPropagation()?.traceparent;
 }
 
 export function signalEndpoint(
@@ -313,13 +295,11 @@ export class McpTelemetry {
         const carrier = operationContext === undefined
             ? undefined
             : injectPropagation(operationContext);
-        const traceparent = carrier?.traceparent;
         let ended = false;
 
         return {
             ...(correlation === undefined ? {} : { correlation }),
             ...(carrier === undefined ? {} : { propagation: carrier }),
-            ...(traceparent === undefined ? {} : { traceparent }),
             run: (operation) => operationContext === undefined
                 ? operation()
                 : activeMcpContext.run(

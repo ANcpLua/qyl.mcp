@@ -33,7 +33,6 @@ import {
     RunnerMcpWorkbenchSessionSchema,
     publishedContractSchema,
 } from "qyl-mcp-server/contract-validation";
-import type { McpResource } from "./resources.js";
 import {
     ConnectionManager,
     ConnectionManagerError,
@@ -43,6 +42,7 @@ import {
     type ConnectionInitializationSnapshot,
     type ConnectionProtocolOperation,
     type ConnectionSnapshot,
+    type InProcessMcpServerFactory,
     type StartedConnectionProtocolOperation,
 } from "./connection-manager.js";
 import {
@@ -69,8 +69,6 @@ import { QylObservabilityProvider } from "./qyl-observability.js";
 import { McpTelemetry } from "./telemetry.js";
 import { MAX_PERSISTED_RESULT_CHARACTERS } from "qyl-mcp-server/execution-result";
 import { SecretRedactor } from "./secret-redactor.js";
-import { LegacyResourceAdapter, type LegacyResourceBinding } from "./legacy-resource-adapter.js";
-import { LogStore } from "./log-store.js";
 import {
     RepositoryConflictError,
     RepositoryNotFoundError,
@@ -122,7 +120,11 @@ export interface WorkbenchApiOptions {
     observability?: QylObservabilityProvider;
     environment?: Readonly<Record<string, string | undefined>>;
     redactor?: SecretRedactor;
-    logStore?: LogStore;
+}
+
+export interface BuiltinMcpServer {
+    name: string;
+    serverFactory: InProcessMcpServerFactory;
 }
 
 interface DetachedServer {
@@ -140,10 +142,9 @@ export class WorkbenchApi {
     readonly correlations: WorkbenchCorrelationRegistry;
     readonly telemetry: McpTelemetry;
     readonly observability: QylObservabilityProvider;
-    readonly legacyResources: LegacyResourceAdapter;
-
     private readonly now: () => Date;
     private readonly redactor: SecretRedactor;
+    private readonly builtinServerIds = new Set<string>();
     private readonly changedAt = new Map<string, string>();
     private readonly evaluationIdempotency = new Map<string, string>();
     private readonly workspaceMutations = new WorkspaceReadWriteLock();
@@ -151,14 +152,11 @@ export class WorkbenchApi {
     private autoConnectPromise: Promise<void> | undefined;
 
     constructor(
-        private readonly resources: readonly McpResource[],
+        private readonly builtins: readonly BuiltinMcpServer[],
         options: WorkbenchApiOptions = {},
     ) {
         this.now = options.now ?? (() => new Date());
-        const environment = managedResourceEnvironment(
-            resources,
-            options.environment ?? process.env,
-        );
+        const environment = options.environment ?? process.env;
         const redactor = options.redactor ?? new SecretRedactor({
             environment,
             maxStringLength: MAX_PERSISTED_RESULT_CHARACTERS + 1,
@@ -187,12 +185,6 @@ export class WorkbenchApi {
             onSession: (session) => this.recordProtocolSession(session),
             now: () => this.now().getTime(),
         });
-        this.legacyResources = new LegacyResourceAdapter(
-            resources,
-            this.connections,
-            options.logStore ?? new LogStore(),
-            this.now,
-        );
         this.executions = executions = new ExecutionService(this.connections, {
             persistence: this.repository,
             redactor,
@@ -293,47 +285,49 @@ export class WorkbenchApi {
     async initialize(): Promise<void> {
         await this.repository.initialize();
         await this.repository.reconcileInterruptedWork();
-        for (const resource of this.resources) {
-            if (resource.kind === "inproc") this.connections.registerBuiltin(resource.name, resource.serverFactory);
+        for (const builtin of this.builtins) {
+            this.connections.registerBuiltin(builtin.name, builtin.serverFactory);
         }
         const workspaces = await this.repository.listWorkspaces();
         const defaultWorkspace = workspaces.find((workspace) => workspace.id === "default") ?? workspaces[0];
         if (!defaultWorkspace) throw new Error("The workbench has no local workspace.");
 
         const existing = await this.repository.listServers(defaultWorkspace.id);
-        const managedBindings: LegacyResourceBinding[] = [];
-        for (const resource of this.resources) {
-            const configuration = resourceToPersistedConfiguration(resource);
-            const matches = existing.filter((server) => server.name === resource.name);
+        for (const builtin of this.builtins) {
+            const configuration: PersistedConnectionDefinition = {
+                kind: "builtin",
+                builtin: builtin.name,
+            };
+            const matches = existing.filter((server) => server.name === builtin.name);
             if (matches.length > 1) {
                 throw new RepositoryConflictError(
-                    `Managed MCP resource '${resource.name}' matches multiple persisted servers in the default workspace.`,
+                    `Built-in MCP server '${builtin.name}' matches multiple persisted servers in the default workspace.`,
                 );
             }
             const persisted = matches[0];
             if (persisted !== undefined) {
-                if (!samePersistedConfiguration(persisted.configuration, configuration)) {
+                if (persisted.configuration.kind !== "builtin"
+                    || persisted.configuration.builtin !== builtin.name) {
                     throw new RepositoryConflictError(
-                        `Managed MCP resource '${resource.name}' conflicts with a persisted server that has different configuration.`,
+                        `Built-in MCP server '${builtin.name}' conflicts with a persisted server that has different configuration.`,
                     );
                 }
                 if (!persisted.autoConnect) {
                     throw new RepositoryConflictError(
-                        `Managed MCP resource '${resource.name}' conflicts with a persisted server that has automatic connection disabled.`,
+                        `Built-in MCP server '${builtin.name}' conflicts with a persisted server that has automatic connection disabled.`,
                     );
                 }
-                managedBindings.push({ resource, server: persisted });
+                this.builtinServerIds.add(persisted.id);
                 continue;
             }
             const server = await this.repository.createServer(defaultWorkspace.id, {
-                name: resource.name,
+                name: builtin.name,
                 configuration,
                 autoConnect: true,
             });
             existing.push(server);
-            managedBindings.push({ resource, server });
+            this.builtinServerIds.add(server.id);
         }
-        this.legacyResources.bind(managedBindings);
 
         for (const workspace of await this.repository.listWorkspaces()) {
             for (const server of await this.repository.listServers(workspace.id)) {
@@ -356,9 +350,7 @@ export class WorkbenchApi {
     private async runAutoConnect(signal: AbortSignal): Promise<void> {
         const servers = (await Promise.all((await this.repository.listWorkspaces()).map(
             (workspace) => this.repository.listServers(workspace.id),
-        ))).flat().filter((server) =>
-            server.autoConnect && !this.legacyResources.isManagedServer(server.workspaceId, server.id));
-        const managed = this.legacyResources.startAutoConnect(signal);
+        ))).flat().filter((server) => server.autoConnect);
         let next = 0;
         const worker = async (): Promise<void> => {
             while (!signal.aborted) {
@@ -378,13 +370,10 @@ export class WorkbenchApi {
                 }
             }
         };
-        await Promise.all([
-            managed,
-            ...Array.from(
-                { length: Math.min(AUTO_CONNECT_CONCURRENCY, servers.length) },
-                worker,
-            ),
-        ]);
+        await Promise.all(Array.from(
+            { length: Math.min(AUTO_CONNECT_CONCURRENCY, servers.length) },
+            worker,
+        ));
     }
 
     async close(): Promise<void> {
@@ -406,7 +395,6 @@ export class WorkbenchApi {
                 );
             }
         }));
-        this.legacyResources.dispose();
         await this.telemetry.close();
     }
 
@@ -458,12 +446,12 @@ export class WorkbenchApi {
         }));
         app.delete("/runner/workspaces/:workspaceId", this.route(async (request, response) => {
             const workspaceId = param(request, "workspaceId");
-            if (this.legacyResources.workspaceHasManagedServers(workspaceId)) {
+            const servers = await this.repository.listServers(workspaceId);
+            if (servers.some((server) => this.builtinServerIds.has(server.id))) {
                 throw new RepositoryConflictError(
-                    "A workspace containing managed bootstrap MCP servers cannot be deleted.",
+                    "A workspace containing built-in MCP servers cannot be deleted.",
                 );
             }
-            const servers = await this.repository.listServers(workspaceId);
             await this.repository.ensureWorkspaceDeletable(workspaceId);
             for (const server of servers) {
                 this.executions.ensureServerForgettable(workspaceId, server.id);
@@ -527,7 +515,7 @@ export class WorkbenchApi {
         app.patch(`${base}/:serverId`, this.route(async (request, response) => {
             const workspaceId = param(request, "workspaceId");
             const serverId = param(request, "serverId");
-            this.requireMutableServer(workspaceId, serverId);
+            this.requireMutableServer(serverId);
             const previous = await this.repository.getServer(workspaceId, serverId);
             const body = parseBody<QylContracts.RunnerMcpServerUpdateRequest>(request);
             requireNonEmptyPatch(body);
@@ -562,7 +550,7 @@ export class WorkbenchApi {
         app.delete(`${base}/:serverId`, this.route(async (request, response) => {
             const workspaceId = param(request, "workspaceId");
             const serverId = param(request, "serverId");
-            this.requireMutableServer(workspaceId, serverId);
+            this.requireMutableServer(serverId);
             const server = await this.repository.getServer(workspaceId, serverId);
             await this.repository.ensureServerDeletable(workspaceId, serverId);
             this.executions.ensureServerForgettable(workspaceId, serverId);
@@ -701,10 +689,6 @@ export class WorkbenchApi {
                 ...(!this.telemetry.operationTracingEnabled && correlation.traceIds.length === 0
                     ? { instrumentationUnavailableReason: TELEMETRY_DISABLED_REASON }
                     : {}),
-                startedAt: execution.startedAt,
-                completedAt: execution.completedAt,
-                method: "tools/call",
-                toolName: execution.request.toolName,
             }));
         }));
     }
@@ -1092,10 +1076,10 @@ export class WorkbenchApi {
         return this.repository.getServer(param(request, "workspaceId"), param(request, "serverId"));
     }
 
-    private requireMutableServer(workspaceId: string, serverId: string): void {
-        if (!this.legacyResources.isManagedServer(workspaceId, serverId)) return;
+    private requireMutableServer(serverId: string): void {
+        if (!this.builtinServerIds.has(serverId)) return;
         throw new RepositoryConflictError(
-            "Managed bootstrap MCP servers are defined by the runner builder and cannot be edited or deleted through the workbench.",
+            "Built-in MCP servers cannot be edited or deleted through the workbench.",
         );
     }
 
@@ -1242,10 +1226,6 @@ export class WorkbenchApi {
                 ...(!this.telemetry.operationTracingEnabled && correlation.traceIds.length === 0
                     ? { instrumentationUnavailableReason: TELEMETRY_DISABLED_REASON }
                     : {}),
-                startedAt: execution.startedAt,
-                completedAt: execution.completedAt,
-                method: "tools/call",
-                toolName: execution.request.toolName,
             }));
         }
         return responses;
@@ -1499,7 +1479,6 @@ function toPersistedConfiguration(configuration: ExternalServerConfiguration): P
                 })),
             };
         case "streamable_http":
-        case "sse":
             return {
                 kind: configuration.transport,
                 endpoint: configuration.endpoint,
@@ -1511,8 +1490,6 @@ function toPersistedConfiguration(configuration: ExternalServerConfiguration): P
             };
         case "builtin":
             return { kind: "builtin", builtin: configuration.name };
-        case "inproc":
-            return { kind: "inproc", implementation: configuration.implementation };
     }
 }
 
@@ -1527,7 +1504,6 @@ function externalConfiguration(configuration: PersistedConnectionDefinition): Qy
                 environment: configuration.environment.map((reference) => ({ name: reference.variable, secret: reference.secret })),
             });
         case "streamable_http":
-        case "sse":
             return RunnerMcpServerConfigurationSchema.parse({
                 transport: configuration.kind,
                 endpoint: configuration.endpoint,
@@ -1539,8 +1515,6 @@ function externalConfiguration(configuration: PersistedConnectionDefinition): Qy
             });
         case "builtin":
             return RunnerMcpServerConfigurationSchema.parse({ transport: "builtin", name: configuration.builtin });
-        case "inproc":
-            return RunnerMcpServerConfigurationSchema.parse({ transport: "inproc", implementation: configuration.implementation });
     }
 }
 
@@ -1560,10 +1534,9 @@ function toConnectionDefinition(server: ServerRecord): ConnectionDefinition {
                 })),
             };
         case "streamable_http":
-        case "sse":
             return {
                 id: server.id,
-                kind: configuration.kind === "streamable_http" ? "streamable-http" : "sse",
+                kind: "streamable-http",
                 endpoint: configuration.endpoint,
                 headers: configuration.headers.map((reference) => ({
                     header: reference.header,
@@ -1573,92 +1546,6 @@ function toConnectionDefinition(server: ServerRecord): ConnectionDefinition {
             };
         case "builtin":
             return { id: server.id, kind: "builtin", builtin: configuration.builtin };
-        case "inproc":
-            return { id: server.id, kind: "builtin", builtin: configuration.implementation };
-    }
-}
-
-function resourceToPersistedConfiguration(resource: McpResource): PersistedConnectionDefinition {
-    if (resource.kind === "inproc") return { kind: "inproc", implementation: resource.name };
-    if (resource.kind === "http") return { kind: "streamable_http", endpoint: resource.endpoint, headers: [] };
-    const environment = Object.keys(resource.launch.env).map((variable) => ({
-        variable,
-        secret: {
-            source: "environment" as const,
-            environmentVariable: managedResourceEnvironmentVariable(resource.name, variable),
-        },
-    }));
-    return {
-        kind: "stdio",
-        command: resource.launch.command,
-        args: [...resource.launch.args],
-        ...(resource.launch.cwd === undefined ? {} : { cwd: resource.launch.cwd }),
-        environment,
-    };
-}
-
-function managedResourceEnvironment(
-    resources: readonly McpResource[],
-    base: Readonly<Record<string, string | undefined>>,
-): Readonly<Record<string, string | undefined>> {
-    const environment: Record<string, string | undefined> = { ...base };
-    for (const resource of resources) {
-        if (resource.kind !== "stdio") continue;
-        for (const [variable, value] of Object.entries(resource.launch.env)) {
-            const reference = managedResourceEnvironmentVariable(resource.name, variable);
-            const existing = environment[reference];
-            if (existing !== undefined && existing !== value) {
-                throw new Error(
-                    `Managed MCP resource environment reference collision for '${resource.name}'.`,
-                );
-            }
-            environment[reference] = value;
-        }
-    }
-    return environment;
-}
-
-function managedResourceEnvironmentVariable(resourceName: string, variable: string): string {
-    const digest = createHash("sha256")
-        .update(resourceName)
-        .update("\0")
-        .update(variable)
-        .digest("hex")
-        .slice(0, 24)
-        .toUpperCase();
-    return `QYL_MCP_MANAGED_${digest}`;
-}
-
-function samePersistedConfiguration(
-    left: PersistedConnectionDefinition,
-    right: PersistedConnectionDefinition,
-): boolean {
-    return JSON.stringify(normalizePersistedConfiguration(left))
-        === JSON.stringify(normalizePersistedConfiguration(right));
-}
-
-function normalizePersistedConfiguration(
-    configuration: PersistedConnectionDefinition,
-): PersistedConnectionDefinition {
-    switch (configuration.kind) {
-        case "stdio":
-            return {
-                ...configuration,
-                environment: [...configuration.environment].sort((left, right) =>
-                    left.variable.localeCompare(right.variable)
-                    || left.secret.environmentVariable.localeCompare(right.secret.environmentVariable)),
-            };
-        case "streamable_http":
-        case "sse":
-            return {
-                ...configuration,
-                headers: [...configuration.headers].sort((left, right) =>
-                    left.header.localeCompare(right.header)
-                    || left.secret.environmentVariable.localeCompare(right.secret.environmentVariable)),
-            };
-        case "builtin":
-        case "inproc":
-            return configuration;
     }
 }
 

@@ -33,19 +33,17 @@ interface WorkbenchSidebarProps {
 }
 
 type Transport = ServerConfiguration["transport"];
-type UserConfigurableTransport = Extract<Transport, "streamable_http" | "sse" | "stdio">;
+type UserConfigurableTransport = Extract<Transport, "streamable_http" | "stdio">;
 type UserConfigurableConfiguration = Extract<ServerConfiguration, { transport: UserConfigurableTransport }>;
 type UserConfigurableServer = McpServer & { configuration: UserConfigurableConfiguration };
 
 export const SERVER_TRANSPORT_OPTIONS: ReadonlyArray<{ value: UserConfigurableTransport; label: string }> = [
   { value: "streamable_http", label: "Streamable HTTP" },
-  { value: "sse", label: "SSE" },
   { value: "stdio", label: "Local stdio" },
 ];
 
 export function isUserConfigurableServer(server: McpServer): server is UserConfigurableServer {
   return server.configuration.transport === "streamable_http"
-    || server.configuration.transport === "sse"
     || server.configuration.transport === "stdio";
 }
 
@@ -110,7 +108,7 @@ function formatEnvironment(configuration: Extract<ServerConfiguration, { transpo
     .join("\n");
 }
 
-function formatHeaders(configuration: Extract<ServerConfiguration, { transport: "streamable_http" | "sse" }>): string {
+function formatHeaders(configuration: Extract<ServerConfiguration, { transport: "streamable_http" }>): string {
   return (configuration.headers ?? [])
     .map((reference) => `${reference.name}=${reference.secret.environmentVariable}${reference.scheme ? `|${reference.scheme}` : ""}`)
     .join("\n");
@@ -119,9 +117,7 @@ function formatHeaders(configuration: Extract<ServerConfiguration, { transport: 
 function transportLabel(configuration: ServerConfiguration): string {
   switch (configuration.transport) {
     case "streamable_http": return "HTTP";
-    case "sse": return "SSE";
     case "stdio": return "STDIO";
-    case "inproc": return "INPROC";
     case "builtin": return "BUILTIN";
   }
 }
@@ -170,7 +166,7 @@ export function WorkbenchSidebar({
   const canSubmitServer = useMemo(() => {
     if (!name.trim()) return false;
     if (localProcessStartsOnSave && !connectionReviewed) return false;
-    if (transport === "streamable_http" || transport === "sse") return endpoint.trim().length > 0;
+    if (transport === "streamable_http") return endpoint.trim().length > 0;
     return command.trim().length > 0;
   }, [name, transport, endpoint, command, localProcessStartsOnSave, connectionReviewed]);
 
@@ -225,8 +221,8 @@ export function WorkbenchSidebar({
     setName(selectedServer.name);
     setDescription(selectedServer.description ?? "");
     setTransport(configuration.transport);
-    setEndpoint(configuration.transport === "streamable_http" || configuration.transport === "sse" ? configuration.endpoint : "");
-    setHeadersText(configuration.transport === "streamable_http" || configuration.transport === "sse" ? formatHeaders(configuration) : "");
+    setEndpoint(configuration.transport === "streamable_http" ? configuration.endpoint : "");
+    setHeadersText(configuration.transport === "streamable_http" ? formatHeaders(configuration) : "");
     setCommand(configuration.transport === "stdio" ? configuration.command : "");
     setArgumentsText(configuration.transport === "stdio" ? (configuration.arguments ?? []).join("\n") : "");
     setWorkingDirectory(configuration.transport === "stdio" ? configuration.workingDirectory ?? "" : "");
@@ -247,7 +243,6 @@ export function WorkbenchSidebar({
           environment: parseEnvironment(environmentText),
         };
       case "streamable_http":
-      case "sse":
         return { transport, endpoint: normalizeRemoteEndpoint(endpoint), headers: parseHeaders(headersText) };
     }
   }
@@ -373,7 +368,7 @@ export function WorkbenchSidebar({
               </select>
             </label>
             <p className="form-help">Runner-registered in-process and built-in servers are displayed when available, but cannot be created or edited from the browser.</p>
-            {transport === "streamable_http" || transport === "sse" ? (
+            {transport === "streamable_http" ? (
               <>
                 <label>Endpoint<input type="url" placeholder="https://mcp.example.test/mcp" value={endpoint} onChange={(event) => setEndpoint(event.target.value)} required /></label>
                 <label>Header secret references<textarea rows={3} placeholder={"Authorization=MCP_TOKEN|bearer\nX-Api-Key=MCP_API_KEY"} value={headersText} onChange={(event) => setHeadersText(event.target.value)} /></label>

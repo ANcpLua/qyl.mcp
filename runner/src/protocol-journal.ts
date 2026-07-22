@@ -1,14 +1,6 @@
-import type { Transport, TransportSendOptions } from "@modelcontextprotocol/sdk/shared/transport.js";
-import {
-    JSONRPCMessageSchema,
-    isJSONRPCErrorResponse,
-    isJSONRPCNotification,
-    isJSONRPCRequest,
-    isJSONRPCResultResponse,
-    type JSONRPCMessage,
-    type MessageExtraInfo,
-    type RequestId,
-} from "@modelcontextprotocol/sdk/types.js";
+import { JSONRPCMessageSchema } from "@modelcontextprotocol/core";
+import { isJSONRPCErrorResponse, isJSONRPCNotification, isJSONRPCRequest, isJSONRPCResultResponse } from "@modelcontextprotocol/server";
+import type { Transport, TransportSendOptions, JSONRPCMessage, MessageExtraInfo, RequestId } from "@modelcontextprotocol/server";
 import { SecretRedactor } from "./secret-redactor.js";
 
 export type ProtocolDirection = "outbound" | "inbound";
@@ -579,6 +571,10 @@ export class JournaledTransport implements Transport {
 
     get protocolVersion(): string | undefined {
         return this.protocolVersionValue;
+    }
+
+    get hasPerRequestStream(): boolean | undefined {
+        return this.inner.hasPerRequestStream;
     }
 
     async start(): Promise<void> {

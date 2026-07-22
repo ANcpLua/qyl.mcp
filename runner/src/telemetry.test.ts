@@ -41,12 +41,10 @@ import {
     MCP_DURATION_EXPLICIT_BUCKET_BOUNDARIES,
     WorkbenchTelemetryAttributes,
     currentMcpPropagation,
-    currentMcpTraceparent,
     describeMcpOperationMetric,
     describeMcpOperationSpan,
     describeMcpSessionMetric,
     runWithMcpPropagation,
-    runWithMcpTraceparent,
     signalEndpoint,
 } from "./telemetry.js";
 import { SecretRedactor } from "./secret-redactor.js";
@@ -149,7 +147,7 @@ test("server prompt span uses server peer attributes and omits JSON-RPC 2.0", ()
         role: "server",
         method: "prompts/get",
         promptName: "release-notes",
-        transport: "sse",
+        transport: "streamable_http",
         jsonRpcProtocolVersion: "2.0",
         peerAddress: "192.0.2.7",
         peerPort: 51999,
@@ -414,17 +412,22 @@ test("a live pre-call operation exposes its non-global W3C trace context until c
             startTimeMs: 1_000,
         });
         assert(operation.correlation);
+        const traceparent = operation.propagation?.traceparent;
+        assert(traceparent);
         assert.match(
-            operation.traceparent ?? "",
+            traceparent,
             /^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/u,
         );
-        const [, traceId, spanId] = (operation.traceparent ?? "").split("-");
+        const [, traceId, spanId] = traceparent.split("-");
         assert.equal(traceId, operation.correlation.traceId);
         assert.equal(spanId, operation.correlation.spanId);
-        assert.equal(currentMcpTraceparent(), undefined);
+        assert.equal(currentMcpPropagation(), undefined);
         assert.equal(
-            runWithMcpTraceparent(operation.traceparent, currentMcpTraceparent),
-            operation.traceparent,
+            runWithMcpPropagation(
+                operation.propagation,
+                () => currentMcpPropagation()?.traceparent,
+            ),
+            traceparent,
         );
         const serverOperation = telemetry.startOperation({
             role: "server",

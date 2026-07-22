@@ -14,9 +14,7 @@
  * OTel contract data, not a new wire contract. If it graduates, it moves to
  * qyl-api-schema first.
  */
-
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { fetchSessions, fetchSessionTraces } from "./data.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";

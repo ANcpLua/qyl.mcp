@@ -1,4 +1,4 @@
-import type { ImageContent } from "@modelcontextprotocol/sdk/types.js";
+import type { ImageContent } from "@modelcontextprotocol/server";
 
 export const SAFE_IMAGE_MIME_TYPES = [
   "image/png",

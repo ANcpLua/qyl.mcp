@@ -11,21 +11,18 @@ import {
 } from "qyl-mcp-server/contract-validation";
 import { createFixtureMcpServer } from "./fixture-server.js";
 import type { QylObservabilityProvider, QylObservabilityQuery } from "./qyl-observability.js";
-import type { McpResource } from "./resources.js";
 import type { ProtocolMessageEntry } from "./protocol-journal.js";
 import { SecretRedactor } from "./secret-redactor.js";
 import {
     McpTelemetry,
     type McpOperationInput,
 } from "./telemetry.js";
-import { WorkbenchApi } from "./workbench-api.js";
+import { WorkbenchApi, type BuiltinMcpServer } from "./workbench-api.js";
 import { WorkbenchRepository } from "./workbench-repository.js";
 
-const fixtureResource: McpResource = {
+const fixtureResource: BuiltinMcpServer = {
     name: "conformance-fixture",
-    kind: "inproc",
     serverFactory: () => createFixtureMcpServer().server,
-    waitForNames: [],
 };
 
 test("workbench API authenticates, scopes, discovers, validates, and invokes idempotently", async () => {
@@ -1446,14 +1443,12 @@ async function startHarness(
                     signals: {
                         traces: unavailable,
                         logs: unavailable,
-                        metrics: unavailable,
                         exceptions: unavailable,
                         toolCallEvents: unavailable,
                     },
                     correlation: query.correlation,
                     traces: [],
                     logs: [],
-                    metrics: [],
                     queriedAt: new Date().toISOString(),
                     selfExportSuppressed: true as const,
                 };

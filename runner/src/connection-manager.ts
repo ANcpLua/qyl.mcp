@@ -1,21 +1,19 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import {
-    getDefaultEnvironment,
-    StdioClientTransport,
-} from "@modelcontextprotocol/sdk/client/stdio.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+    Client,
+    InMemoryTransport,
+    StreamableHTTPClientTransport,
+} from "@modelcontextprotocol/client";
 import type {
     Implementation,
+    OAuthClientProvider,
     Prompt,
     Resource,
-    ResourceTemplate,
+    ResourceTemplateType,
     ServerCapabilities,
     Tool,
-} from "@modelcontextprotocol/sdk/types.js";
+    Transport,
+} from "@modelcontextprotocol/client";
 import { hasNativeExecutionTelemetry } from "qyl-mcp-server";
 import {
     JournaledTransport,
@@ -39,11 +37,11 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 60_000;
 const DEFAULT_DISCONNECT_TIMEOUT_MS = 5_000;
 const DEFAULT_MAX_DISCOVERY_PAGES = 100;
 const DEFAULT_MAX_OBSERVER_ERRORS = 100;
+const MODERN_PROTOCOL_REVISION = "2026-07-28";
 
 export type ConnectionTransportKind =
     | "stdio"
     | "streamable-http"
-    | "sse"
     | "inproc"
     | "builtin";
 
@@ -90,10 +88,6 @@ export interface StreamableHttpConnectionDefinition extends RemoteConnectionDefi
     kind: "streamable-http";
 }
 
-export interface SseConnectionDefinition extends RemoteConnectionDefinitionBase {
-    kind: "sse";
-}
-
 export interface InProcessMcpServer {
     connect(transport: Transport): Promise<void>;
     close(): Promise<void>;
@@ -114,14 +108,13 @@ export interface BuiltinConnectionDefinition extends ConnectionDefinitionBase {
 export type ConnectionDefinition =
     | StdioConnectionDefinition
     | StreamableHttpConnectionDefinition
-    | SseConnectionDefinition
     | InProcessConnectionDefinition
     | BuiltinConnectionDefinition;
 
 export interface DiscoverySnapshot {
     tools: readonly Tool[];
     resources: readonly Resource[];
-    resourceTemplates: readonly ResourceTemplate[];
+    resourceTemplates: readonly ResourceTemplateType[];
     prompts: readonly Prompt[];
 }
 
@@ -263,41 +256,6 @@ interface ConnectionEntry {
 interface CreatedTransport {
     transport: Transport;
     server?: InProcessMcpServer;
-}
-
-export interface CursorPage<T> {
-    items: readonly T[];
-    nextCursor?: string;
-}
-
-export interface CollectCursorPagesOptions {
-    maxPages?: number;
-    signal?: AbortSignal;
-}
-
-/** Collect every cursor page while bounding loops and hostile server cursors. */
-export async function collectCursorPages<T>(
-    fetchPage: (cursor?: string) => Promise<CursorPage<T>>,
-    options: CollectCursorPagesOptions = {},
-): Promise<T[]> {
-    const maxPages = positiveInteger(options.maxPages ?? DEFAULT_MAX_DISCOVERY_PAGES, "maxPages");
-    const seenCursors = new Set<string>();
-    const items: T[] = [];
-    let cursor: string | undefined;
-
-    for (let pageNumber = 0; pageNumber < maxPages; pageNumber++) {
-        throwIfAborted(options.signal);
-        const page = await fetchPage(cursor);
-        items.push(...page.items);
-        if (page.nextCursor === undefined) return items;
-        if (page.nextCursor.length === 0 || seenCursors.has(page.nextCursor)) {
-            throw new Error("MCP discovery returned an empty or repeated cursor.");
-        }
-        seenCursors.add(page.nextCursor);
-        cursor = page.nextCursor;
-    }
-
-    throw new Error(`MCP discovery exceeded the ${maxPages}-page safety limit.`);
 }
 
 /** Resolve HTTP header values exclusively from server-side environment keys. */
@@ -542,7 +500,14 @@ export class ConnectionManager {
                 propagation: currentMcpPropagation,
             });
             entry.connectingTransport = transport;
-            client = new Client(this.clientInfo);
+            client = new Client(this.clientInfo, {
+                listMaxPages: this.maxDiscoveryPages,
+                versionNegotiation: {
+                    mode: entry.definition.kind === "inproc" || entry.definition.kind === "builtin"
+                        ? "legacy"
+                        : { pin: MODERN_PROTOCOL_REVISION },
+                },
+            });
             client.onclose = () => this.handleUnexpectedClose(entry, client!, journal);
             await withTimeout(
                 client.connect(transport, requestOptions(deadline, this.now, options.signal)),
@@ -553,7 +518,9 @@ export class ConnectionManager {
 
             const connectedAtMs = this.now();
             entry.sessionStartedAtMs = connectedAtMs;
-            entry.sessionProtocolVersion = transport.protocolVersion;
+            const negotiatedProtocolVersion = client.getNegotiatedProtocolVersion()
+                ?? transport.protocolVersion;
+            entry.sessionProtocolVersion = negotiatedProtocolVersion;
             entry.sessionId = transport.sessionId;
             entry.connectingTransport = undefined;
 
@@ -573,8 +540,8 @@ export class ConnectionManager {
             const instructions = client.getInstructions();
             if (serverInfo !== undefined) initialization.serverInfo = serverInfo;
             if (instructions !== undefined) initialization.instructions = instructions;
-            if (transport.protocolVersion !== undefined) {
-                initialization.protocolVersion = transport.protocolVersion;
+            if (negotiatedProtocolVersion !== undefined) {
+                initialization.protocolVersion = negotiatedProtocolVersion;
             }
             if (transport.sessionId !== undefined) initialization.sessionId = transport.sessionId;
 
@@ -700,57 +667,21 @@ export class ConnectionManager {
         deadline: number,
         signal?: AbortSignal,
     ): Promise<DiscoverySnapshot> {
-        const tools = capabilities.tools
-            ? await collectCursorPages(
-                async (cursor) => {
-                    const page = await client.listTools(
-                        cursor === undefined ? undefined : { cursor },
-                        requestOptions(deadline, this.now, signal),
-                    );
-                    return { items: page.tools, nextCursor: page.nextCursor };
-                },
-                { maxPages: this.maxDiscoveryPages, signal },
-            )
-            : [];
-
-        const resources = capabilities.resources
-            ? await collectCursorPages(
-                async (cursor) => {
-                    const page = await client.listResources(
-                        cursor === undefined ? undefined : { cursor },
-                        requestOptions(deadline, this.now, signal),
-                    );
-                    return { items: page.resources, nextCursor: page.nextCursor };
-                },
-                { maxPages: this.maxDiscoveryPages, signal },
-            )
-            : [];
-
-        const resourceTemplates = capabilities.resources
-            ? await collectCursorPages(
-                async (cursor) => {
-                    const page = await client.listResourceTemplates(
-                        cursor === undefined ? undefined : { cursor },
-                        requestOptions(deadline, this.now, signal),
-                    );
-                    return { items: page.resourceTemplates, nextCursor: page.nextCursor };
-                },
-                { maxPages: this.maxDiscoveryPages, signal },
-            )
-            : [];
-
-        const prompts = capabilities.prompts
-            ? await collectCursorPages(
-                async (cursor) => {
-                    const page = await client.listPrompts(
-                        cursor === undefined ? undefined : { cursor },
-                        requestOptions(deadline, this.now, signal),
-                    );
-                    return { items: page.prompts, nextCursor: page.nextCursor };
-                },
-                { maxPages: this.maxDiscoveryPages, signal },
-            )
-            : [];
+        const options = requestOptions(deadline, this.now, signal);
+        const [tools, resources, resourceTemplates, prompts] = await Promise.all([
+            capabilities.tools
+                ? client.listTools(undefined, options).then((page) => page.tools)
+                : Promise.resolve<Tool[]>([]),
+            capabilities.resources
+                ? client.listResources(undefined, options).then((page) => page.resources)
+                : Promise.resolve<Resource[]>([]),
+            capabilities.resources
+                ? client.listResourceTemplates(undefined, options).then((page) => page.resourceTemplates)
+                : Promise.resolve<ResourceTemplateType[]>([]),
+            capabilities.prompts
+                ? client.listPrompts(undefined, options).then((page) => page.prompts)
+                : Promise.resolve<Prompt[]>([]),
+        ]);
 
         return { tools, resources, resourceTemplates, prompts };
     }
@@ -790,16 +721,6 @@ export class ConnectionManager {
                 assertOAuthHeaderCompatibility(definition, headers);
                 return {
                     transport: new StreamableHTTPClientTransport(httpEndpoint(definition.endpoint), {
-                        requestInit: { headers },
-                        authProvider: definition.authProvider,
-                    }),
-                };
-            }
-            case "sse": {
-                const { headers } = resolveEnvironmentHeaders(definition.headers, this.environment);
-                assertOAuthHeaderCompatibility(definition, headers);
-                return {
-                    transport: new SSEClientTransport(httpEndpoint(definition.endpoint), {
                         requestInit: { headers },
                         authProvider: definition.authProvider,
                     }),
@@ -886,7 +807,7 @@ export class ConnectionManager {
     }
 
     private referencedSecretValues(definition: ConnectionDefinition): readonly string[] {
-        if (definition.kind === "streamable-http" || definition.kind === "sse") {
+        if (definition.kind === "streamable-http") {
             return resolveEnvironmentHeaders(definition.headers, this.environment).secretValues;
         }
         if (definition.kind === "stdio") {
@@ -1120,7 +1041,7 @@ function drainStdioStderr(
 function connectionPeer(
     definition: ConnectionDefinition,
 ): { address: string; port?: number } | undefined {
-    if (definition.kind !== "streamable-http" && definition.kind !== "sse") return undefined;
+    if (definition.kind !== "streamable-http") return undefined;
     const endpoint = new URL(definition.endpoint);
     const port = endpoint.port.length > 0
         ? Number(endpoint.port)
@@ -1166,7 +1087,6 @@ function validateDefinition(definition: ConnectionDefinition): void {
             requireNonEmpty(definition.command, "Stdio command");
             break;
         case "streamable-http":
-        case "sse":
             httpEndpoint(definition.endpoint);
             break;
         case "inproc":
@@ -1199,7 +1119,7 @@ function httpEndpoint(value: string): URL {
 }
 
 function assertOAuthHeaderCompatibility(
-    definition: StreamableHttpConnectionDefinition | SseConnectionDefinition,
+    definition: StreamableHttpConnectionDefinition,
     headers: Headers,
 ): void {
     if (definition.authProvider && headers.has("authorization")) {

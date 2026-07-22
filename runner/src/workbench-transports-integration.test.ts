@@ -12,7 +12,7 @@ import { McpTelemetry } from "./telemetry.js";
 import { WorkbenchApi } from "./workbench-api.js";
 import { WorkbenchRepository } from "./workbench-repository.js";
 
-test("authenticated workbench API discovers and invokes real stdio and SSE servers", { timeout: 30_000 }, async () => {
+test("authenticated workbench API discovers and invokes real stdio and Streamable HTTP servers", { timeout: 30_000 }, async () => {
     const directory = await mkdtemp(join(tmpdir(), "qyl-workbench-transports-"));
     const secret = "workbench-transport-arbitrary-secret";
     const environment = { MCP_AUTH: secret, QYL_MCP_TELEMETRY: "0" };
@@ -48,6 +48,7 @@ test("authenticated workbench API discovers and invokes real stdio and SSE serve
         const configurations = [
             {
                 name: "Real stdio fixture",
+                counts: { tools: 6, resources: 3, resourceTemplates: 3, prompts: 3 },
                 configuration: {
                     transport: "stdio",
                     command: process.execPath,
@@ -55,10 +56,11 @@ test("authenticated workbench API discovers and invokes real stdio and SSE serve
                 },
             },
             {
-                name: "Real SSE fixture",
+                name: "Real Streamable HTTP fixture",
+                counts: { tools: 6, resources: 3, resourceTemplates: 3, prompts: 3 },
                 configuration: {
-                    transport: "sse",
-                    endpoint: fixture.sseUrl.toString(),
+                    transport: "streamable_http",
+                    endpoint: fixture.streamableUrl.toString(),
                     headers: [{
                         name: "Authorization",
                         scheme: "bearer",
@@ -74,7 +76,11 @@ test("authenticated workbench API discovers and invokes real stdio and SSE serve
         for (const item of configurations) {
             const created = await requestJson(origin, cookie, "/runner/workspaces/default/servers", {
                 method: "POST",
-                body: { ...item, autoConnect: false },
+                body: {
+                    name: item.name,
+                    configuration: item.configuration,
+                    autoConnect: false,
+                },
             });
             assert.equal(created.response.status, 200);
             const serverId = String(created.body.id);
@@ -95,10 +101,13 @@ test("authenticated workbench API discovers and invokes real stdio and SSE serve
             );
             assert.equal(discovery.response.status, 200);
             assert.equal(record(discovery.body.tools).items instanceof Array, true);
-            assert.equal((record(discovery.body.tools).items as unknown[]).length, 6);
-            assert.equal((record(discovery.body.resources).items as unknown[]).length, 3);
-            assert.equal((record(discovery.body.resourceTemplates).items as unknown[]).length, 3);
-            assert.equal((record(discovery.body.prompts).items as unknown[]).length, 3);
+            assert.equal((record(discovery.body.tools).items as unknown[]).length, item.counts.tools);
+            assert.equal((record(discovery.body.resources).items as unknown[]).length, item.counts.resources);
+            assert.equal(
+                (record(discovery.body.resourceTemplates).items as unknown[]).length,
+                item.counts.resourceTemplates,
+            );
+            assert.equal((record(discovery.body.prompts).items as unknown[]).length, item.counts.prompts);
 
             const accepted = await requestJson(
                 origin,
@@ -142,14 +151,12 @@ function unavailableObservability(): QylObservabilityProvider {
                 signals: {
                     traces: { status: "unavailable", unavailableReason: "fixture", itemCount: 0 },
                     logs: { status: "unavailable", unavailableReason: "fixture", itemCount: 0 },
-                    metrics: { status: "unavailable", unavailableReason: "fixture", itemCount: 0 },
                     exceptions: { status: "unavailable", unavailableReason: "fixture", itemCount: 0 },
                     toolCallEvents: { status: "unavailable", unavailableReason: "fixture", itemCount: 0 },
                 },
                 correlation: { executionId: "fixture", traceIds: [], spanIds: [] },
                 traces: [],
                 logs: [],
-                metrics: [],
                 queriedAt: new Date(0).toISOString(),
                 selfExportSuppressed: true,
             };

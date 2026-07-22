@@ -125,7 +125,6 @@ function unavailableObservability(): QylObservabilityProvider {
                 signals: [],
                 traces: [],
                 logs: [],
-                metrics: [],
             };
         },
     } as unknown as QylObservabilityProvider;

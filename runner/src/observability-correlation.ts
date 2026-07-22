@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { RequestId } from "@modelcontextprotocol/sdk/types.js";
+import type { RequestId } from "@modelcontextprotocol/server";
 import type { ProtocolExecutionCorrelation } from "./protocol-journal.js";
 import { SecretRedactor } from "./secret-redactor.js";
 

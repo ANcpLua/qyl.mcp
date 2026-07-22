@@ -2,18 +2,9 @@ import type {
   RunnerMcpExecutionCost,
   RunnerMcpExecutionTokenUsage,
 } from "@ancplua/qyl-api-schema/types";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import {
-  CallToolRequestSchema,
-  CallToolResultSchema,
-  ErrorCode,
-  McpError,
-  type CallToolRequest,
-  type CallToolResult,
-  type ServerNotification,
-  type ServerRequest,
-} from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequestSchema, CallToolResultSchema } from "@modelcontextprotocol/core";
+import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
+import type { McpServer, CallToolRequest, CallToolResult, ServerContext } from "@modelcontextprotocol/server";
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -214,7 +205,7 @@ export interface NativeExecutionRuntimeOptions {
 
 export interface NativeToolCallInput {
   request: CallToolRequest;
-  extra: RequestHandlerExtra<ServerRequest, ServerNotification>;
+  extra: ServerContext;
   transport: McpTelemetryTransport;
 }
 
@@ -245,7 +236,7 @@ export class NativeExecutionRuntime {
     const startedMs = this.now();
     const executionId = this.id();
     const startedAt = timestamp(startedMs);
-    const requestId = input.extra.requestId;
+    const requestId = input.extra.mcpReq.id;
     const durableRequestId = sanitizeRequestId(requestId, this.redactor);
     const toolName = input.request.params.name;
     const operation = this.startTelemetry(input, executionId, startedMs);
@@ -316,7 +307,7 @@ export class NativeExecutionRuntime {
         endTimeMs: completedMs,
         jsonRpcRequestId: requestId,
         errorType: errorType(error),
-        ...(error instanceof McpError
+        ...(error instanceof ProtocolError
           ? { rpcResponseStatusCode: String(error.code) }
           : {}),
       });
@@ -399,12 +390,16 @@ export class NativeExecutionRuntime {
   }
 }
 
-type NativeRequestExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
+type NativeRequestExtra = ServerContext;
 type UntypedRequestHandler = (
   request: unknown,
   extra: NativeRequestExtra,
 ) => unknown | Promise<unknown>;
-type UntypedSetRequestHandler = (schema: unknown, handler: UntypedRequestHandler) => void;
+type UntypedSetRequestHandler = (
+  method: string,
+  handlerOrSchemas: unknown,
+  handler?: UntypedRequestHandler,
+) => void;
 const instrumentedServers = new WeakSet<McpServer>();
 const nativeTelemetryServers = new WeakSet<McpServer>();
 
@@ -419,12 +414,13 @@ export function installNativeExecutionRecording(
   if (runtime.telemetryEnabled) nativeTelemetryServers.add(server);
   const lowLevel = server.server as unknown as { setRequestHandler: UntypedSetRequestHandler };
   const original = lowLevel.setRequestHandler.bind(server.server);
-  lowLevel.setRequestHandler = (schema, handler) => {
-    if (schema !== CallToolRequestSchema) {
-      original(schema, handler);
+  lowLevel.setRequestHandler = (method, handlerOrSchemas, customHandler) => {
+    const handler = customHandler ?? handlerOrSchemas;
+    if (method !== "tools/call" || typeof handler !== "function") {
+      original(method, handlerOrSchemas, customHandler);
       return;
     }
-    original(schema, async (request, extra) => {
+    original(method, async (request: unknown, extra: NativeRequestExtra) => {
       const validated = CallToolRequestSchema.parse(request);
       return runtime.execute(
         { request: validated, extra, transport },
@@ -537,7 +533,7 @@ function errorEvent(
       jsonrpc: "2.0",
       id: requestId,
       error: {
-        code: error instanceof McpError ? error.code : ErrorCode.InternalError,
+        code: error instanceof ProtocolError ? error.code : ProtocolErrorCode.InternalError,
         message: evidence.message,
         data: { toolName: redactor.redactText(toolName).slice(0, 1_024) },
       },
@@ -557,7 +553,7 @@ function errorEvidence(
 }
 
 function errorType(error: unknown): string {
-  if (error instanceof McpError) return `mcp_${error.code}`;
+  if (error instanceof ProtocolError) return `mcp_${error.code}`;
   if (error instanceof Error && /^[A-Za-z][A-Za-z0-9]*$/u.test(error.name)) {
     return error.name.slice(0, 128);
   }

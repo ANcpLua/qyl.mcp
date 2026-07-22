@@ -1,12 +1,4 @@
-import type {
-  AudioContent,
-  CallToolResult,
-  ContentBlock,
-  EmbeddedResource,
-  ImageContent,
-  ResourceLink,
-  TextContent,
-} from "@modelcontextprotocol/sdk/types.js";
+import type { AudioContent, CallToolResult, ContentBlock, EmbeddedResource, ImageContent, ResourceLink, TextContent } from "@modelcontextprotocol/server";
 import { JsonCodeView } from "./JsonCodeView.js";
 import {
   estimatedBase64Bytes,

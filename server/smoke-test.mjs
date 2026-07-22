@@ -7,9 +7,8 @@
  *
  * Run: node smoke-test.mjs   (after `npm run build`)
  */
-
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { Client } from "@modelcontextprotocol/client";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -41,7 +40,10 @@ const transport = new StdioClientTransport({
     QYL_MCP_NATIVE_STATE_PATH: nativeStatePath,
   },
 });
-const client = new Client({ name: "qyl-smoke", version: "1.0.0" });
+const client = new Client(
+  { name: "qyl-smoke", version: "1.0.0" },
+  { versionNegotiation: { mode: { pin: "2026-07-28" } } },
+);
 try {
   await client.connect(transport);
 

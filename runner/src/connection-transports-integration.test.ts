@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { ConnectionManager, type ConnectionProtocolOperation } from "./connection-manager.js";
 import { startFixtureHttpServer, type FixtureHttpRequest } from "./fixture-http.js";
-import { runWithMcpPropagation, runWithMcpTraceparent } from "./telemetry.js";
+import { runWithMcpPropagation } from "./telemetry.js";
 
 test("connection manager owns a real stdio MCP lifecycle and exhaustive discovery", { timeout: 15_000 }, async () => {
     const scriptPath = fileURLToPath(
@@ -44,11 +44,10 @@ test("connection manager owns a real stdio MCP lifecycle and exhaustive discover
         });
         assert.equal(result.isError, undefined);
         assert(operations.some((operation) => operation.method === "tools/call"));
-        for (const method of ["initialize", "notifications/initialized"]) {
-            const operation = operations.find((candidate) => candidate.method === method);
-            assert(operation, `missing ${method} operation`);
-            assert.equal(operation.mcpSessionId, undefined);
-        }
+        const discover = operations.find((candidate) => candidate.method === "server/discover");
+        assert(discover, "missing server/discover operation");
+        assert.equal(discover.mcpSessionId, undefined);
+        assert.equal(operations.some((operation) => operation.method === "initialize"), false);
     } finally {
         if (manager.get("stdio-fixture").lifecycle !== "disconnected") {
             await manager.disconnect("stdio-fixture");
@@ -71,8 +70,8 @@ test("stdio drains chatty child stderr without retaining its raw output", { time
     try {
         const connected = await manager.connect("chatty-stdio-fixture");
         assert.equal(connected.lifecycle, "connected");
-        const result = await runWithMcpTraceparent(
-            "00-11111111111111111111111111111111-2222222222222222-01",
+        const result = await runWithMcpPropagation(
+            { traceparent: "00-11111111111111111111111111111111-2222222222222222-01" },
             () => manager.getClient("chatty-stdio-fixture").callTool({
                 name: "fixture.safe_lookup",
                 arguments: { query: "chatty-stdio" },
@@ -90,7 +89,7 @@ test("stdio drains chatty child stderr without retaining its raw output", { time
     }
 });
 
-for (const transport of ["streamable-http", "sse"] as const) {
+for (const transport of ["streamable-http"] as const) {
     test(`connection manager owns an authenticated ${transport} MCP lifecycle`, { timeout: 15_000 }, async () => {
         const secret = `${transport}-arbitrary-env-secret`;
         const fixture = await startFixtureHttpServer({ bearerToken: secret });
@@ -102,7 +101,7 @@ for (const transport of ["streamable-http", "sse"] as const) {
         manager.register({
             id: transport,
             kind: transport,
-            endpoint: (transport === "streamable-http" ? fixture.streamableUrl : fixture.sseUrl).toString(),
+            endpoint: fixture.streamableUrl.toString(),
             headers: [{
                 header: "Authorization",
                 scheme: "bearer",
@@ -113,10 +112,14 @@ for (const transport of ["streamable-http", "sse"] as const) {
         try {
             const connected = await manager.connect(transport);
             assert.equal(connected.lifecycle, "connected");
-            assert.equal(connected.initialization?.discovery.tools.length, 6);
-            assert.equal(connected.initialization?.discovery.resources.length, 3);
-            assert.equal(connected.initialization?.discovery.resourceTemplates.length, 3);
-            assert.equal(connected.initialization?.discovery.prompts.length, 3);
+            const expectedCounts = { tools: 6, resources: 3, resourceTemplates: 3, prompts: 3 };
+            assert.equal(connected.initialization?.discovery.tools.length, expectedCounts.tools);
+            assert.equal(connected.initialization?.discovery.resources.length, expectedCounts.resources);
+            assert.equal(
+                connected.initialization?.discovery.resourceTemplates.length,
+                expectedCounts.resourceTemplates,
+            );
+            assert.equal(connected.initialization?.discovery.prompts.length, expectedCounts.prompts);
 
             const firstTraceparent = "00-11111111111111111111111111111111-aaaaaaaaaaaaaaaa-01";
             const secondTraceparent = "00-22222222222222222222222222222222-bbbbbbbbbbbbbbbb-00";
@@ -161,23 +164,11 @@ for (const transport of ["streamable-http", "sse"] as const) {
             assert(operations.some((operation) => operation.method === "tools/call"
                 && operation.role === "client"));
             assert.equal(operations.some((operation) => operation.role === "server"), false);
-            if (transport === "streamable-http") {
-                const sessionId = connected.initialization?.sessionId;
-                assert.equal(typeof sessionId, "string");
-                assert(sessionId !== undefined);
-                assert(sessionId.length > 0);
-                for (const method of ["initialize", "notifications/initialized"]) {
-                    const operation = operations.find((candidate) => candidate.method === method);
-                    assert(operation, `missing ${method} operation`);
-                    assert.equal(operation.mcpSessionId, sessionId);
-                }
-            } else {
-                for (const method of ["initialize", "notifications/initialized"]) {
-                    const operation = operations.find((candidate) => candidate.method === method);
-                    assert(operation, `missing ${method} operation`);
-                    assert.equal(operation.mcpSessionId, undefined);
-                }
-            }
+            assert.equal(connected.initialization?.sessionId, undefined);
+            const discover = operations.find((candidate) => candidate.method === "server/discover");
+            assert(discover, "missing server/discover operation");
+            assert.equal(discover.mcpSessionId, undefined);
+            assert.equal(operations.some((operation) => operation.method === "initialize"), false);
             assert.doesNotMatch(
                 JSON.stringify({ connected, journal: manager.getJournal(transport)?.snapshot() }),
                 new RegExp(secret, "u"),
@@ -190,6 +181,50 @@ for (const transport of ["streamable-http", "sse"] as const) {
         }
     });
 }
+
+test("connection manager pins Streamable HTTP to protocol revision 2026-07-28", { timeout: 15_000 }, async () => {
+    const secret = "modern-protocol-arbitrary-env-secret";
+    const fixture = await startFixtureHttpServer({ bearerToken: secret });
+    const manager = new ConnectionManager({
+        environment: { MCP_AUTH: secret },
+    });
+    manager.register({
+        id: "modern-http",
+        kind: "streamable-http",
+        endpoint: fixture.streamableUrl.toString(),
+        headers: [{
+            header: "Authorization",
+            scheme: "bearer",
+            environmentVariable: "MCP_AUTH",
+        }],
+    });
+
+    try {
+        const connected = await manager.connect("modern-http");
+        assert.equal(connected.initialization?.protocolVersion, "2026-07-28");
+        assert.equal(connected.initialization?.sessionId, undefined);
+        assert.equal(manager.getClient("modern-http").getProtocolEra(), "modern");
+        assert.equal(connected.initialization?.serverInfo?.name, "qyl-mcp-conformance-fixture");
+        assert.equal(connected.initialization?.discovery.tools.length, 6);
+
+        const result = await manager.getClient("modern-http").callTool({
+            name: "fixture.safe_lookup",
+            arguments: { query: "modern" },
+        });
+        assert.equal(result.isError, undefined);
+
+        const methods = manager.getJournal("modern-http")?.snapshot()
+            .filter((entry) => entry.kind === "message")
+            .map((entry) => entry.method);
+        assert(methods?.includes("server/discover"));
+        assert.equal(methods?.includes("initialize"), false);
+    } finally {
+        if (manager.get("modern-http").lifecycle !== "disconnected") {
+            await manager.disconnect("modern-http");
+        }
+        await fixture.close();
+    }
+});
 
 interface ToolCallRequest {
     query: string;

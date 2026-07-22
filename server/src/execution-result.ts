@@ -1,4 +1,4 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { SecretRedactor } from "./secret-redactor.js";
 
 export const MAX_PERSISTED_RESULT_CHARACTERS = 2_000_000;

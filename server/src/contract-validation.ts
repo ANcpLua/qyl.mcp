@@ -230,9 +230,6 @@ export const TraceSchema = publishedContractSchema<QylContracts.Trace>("OTel.Tra
 export const LogRecordSchema = publishedContractSchema<QylContracts.LogRecord>(
   "OTel.Logs.LogRecord",
 );
-export const MetricPointSchema = publishedContractSchema<QylContracts.MetricPoint>(
-  "OTel.Metrics.MetricPoint",
-);
 export const SessionSchema = publishedContractSchema<QylContracts.SessionEntity>(
   "Domains.Observe.Session.SessionEntity",
 );
@@ -255,10 +252,6 @@ export const SessionTracesListResponseSchema =
 export const LogsListResponseSchema =
   publishedContractSchema<QylContracts.CursorPageLogRecord>(
     "Operations.LogsApi_list.Response.200",
-  );
-export const MetricsListResponseSchema =
-  publishedContractSchema<QylContracts.CursorPageMetricPoint>(
-    "Operations.MetricsApi_list.Response.200",
   );
 export const SessionsListResponseSchema =
   publishedContractSchema<QylContracts.CursorPageSessionEntity>(
@@ -410,14 +403,6 @@ export const RunnerMcpStdioServerConfigurationSchema =
 export const RunnerMcpStreamableHttpServerConfigurationSchema =
   runnerContractSchema<QylContracts.RunnerMcpStreamableHttpServerConfiguration>(
     "RunnerMcpStreamableHttpServerConfiguration",
-  );
-export const RunnerMcpSseServerConfigurationSchema =
-  runnerContractSchema<QylContracts.RunnerMcpSseServerConfiguration>(
-    "RunnerMcpSseServerConfiguration",
-  );
-export const RunnerMcpInProcessServerConfigurationSchema =
-  runnerContractSchema<QylContracts.RunnerMcpInProcessServerConfiguration>(
-    "RunnerMcpInProcessServerConfiguration",
   );
 export const RunnerMcpBuiltinServerConfigurationSchema =
   runnerContractSchema<QylContracts.RunnerMcpBuiltinServerConfiguration>(

@@ -1,9 +1,4 @@
-import type {
-  Prompt,
-  Resource,
-  ResourceTemplate as ResourceTemplateDescriptor,
-  Tool,
-} from "@modelcontextprotocol/sdk/types.js";
+import type { Prompt, Resource, ResourceTemplateType as ResourceTemplateDescriptor, Tool } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 
 export const FIXTURE_PAGE_SIZE = 2;

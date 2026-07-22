@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ContentRenderer } from "./ContentRenderer.js";
 import { JsonCodeView, SchemaViewer } from "./JsonCodeView.js";

@@ -152,7 +152,7 @@ jobs:
             npm publish --workspace server --access public --provenance --tag "$NPM_DIST_TAG"
           fi
 
-      # Publish -> index -> restore-verify: drive the published package's stdio MCP handshake from
+      # Publish -> index -> restore-verify: drive the published package's stdio MCP discovery from
       # a clean npx consumer outside the repository. The registry is eventually consistent — the
       # version endpoint can serve 200 while the packument npx resolves against still lacks the
       # version (observed on the 0.1.1 release: ETARGET seconds after publish) — so the retry loop
@@ -171,7 +171,7 @@ jobs:
             stdio: ["pipe", "pipe", "inherit"],
           });
           const timer = setTimeout(() => {
-            console.error("no initialize response within 120s");
+            console.error("no server/discover response within 120s");
             child.kill("SIGKILL");
             process.exit(1);
           }, 120_000);
@@ -187,8 +187,13 @@ jobs:
               if (!line.trim()) continue;
               let message;
               try { message = JSON.parse(line); } catch { continue; }
-              if (message.id === 1 && message.result?.serverInfo?.name === "qyl.mcp") {
-                console.log(`initialize ok: ${message.result.serverInfo.name} ${message.result.serverInfo.version}`);
+              const serverInfo = message.result?._meta?.["io.modelcontextprotocol/serverInfo"];
+              if (
+                message.id === 1 &&
+                message.result?.supportedVersions?.includes("2026-07-28") &&
+                serverInfo?.name === "qyl.mcp"
+              ) {
+                console.log(`server/discover ok: ${serverInfo.name} ${serverInfo.version}`);
                 clearTimeout(timer);
                 child.removeAllListeners("exit");
                 child.kill("SIGTERM");
@@ -197,8 +202,12 @@ jobs:
             }
           });
           child.stdin.write(JSON.stringify({
-            jsonrpc: "2.0", id: 1, method: "initialize",
-            params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "publish-smoke", version: "0.0.0" } },
+            jsonrpc: "2.0", id: 1, method: "server/discover",
+            params: { _meta: {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientInfo": { name: "publish-smoke", version: "0.0.0" },
+              "io.modelcontextprotocol/clientCapabilities": {},
+            } },
           }) + "\n");
           EOF
             then

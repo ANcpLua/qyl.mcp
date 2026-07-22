@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
+import { InMemoryTransport } from "@modelcontextprotocol/server";
+import type { Transport, JSONRPCMessage } from "@modelcontextprotocol/server";
 import {
     JournaledTransport,
     ProtocolJournal,
@@ -244,6 +243,17 @@ test("journaled transport transparently records SDK messages and close", async (
         ["message", "message", "transport_close"],
     );
     assert.deepEqual(entries[0]?.correlation, { executionId: "execution-transport" });
+});
+
+test("journaled transport preserves per-request stream cancellation", () => {
+    const inner: Transport = {
+        hasPerRequestStream: true,
+        async start() {},
+        async send() {},
+        async close() {},
+    };
+    const transport = new JournaledTransport(inner, new ProtocolJournal());
+    assert.equal(transport.hasPerRequestStream, true);
 });
 
 test("live operation starts before send and injects bounded metadata without mutating input", async () => {

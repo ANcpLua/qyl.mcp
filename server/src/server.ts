@@ -12,11 +12,6 @@
  * QYL_DEMO=1. A collector failure remains an error and never changes modes.
  */
 
-import {
-  registerAppResource,
-  registerAppTool,
-  RESOURCE_MIME_TYPE,
-} from "@modelcontextprotocol/ext-apps/server";
 import type {
   DisplayMcpDashboardInput,
   DisplayMcpDashboardOutput,
@@ -25,11 +20,9 @@ import type {
   FetchTelemetryInput,
   FetchTelemetryOutput,
 } from "@ancplua/qyl-api-schema/types";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type {
-  CallToolResult,
-  ReadResourceResult,
-} from "@modelcontextprotocol/sdk/types.js";
+import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
+import { McpServer } from "@modelcontextprotocol/server";
+import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/server";
 import fs from "node:fs/promises";
 import path from "node:path";
 import packageMetadata from "../package.json" with { type: "json" };
@@ -77,11 +70,12 @@ export {
 
 // The vite-built single-file viewers live next to the compiled server code.
 const DIST_DIR = import.meta.dirname;
-
 // Cached across createServer() calls — in stateless HTTP deployments a fresh
 // server is created per request and per-instance caches would be useless.
 let cachedAppHtml: string | undefined;
 let cachedDashboardHtml: string | undefined;
+const PUBLIC_CATALOG_CACHE = { ttlMs: 300_000, cacheScope: "public" } as const;
+const PUBLIC_APP_CACHE = { ttlMs: 86_400_000, cacheScope: "public" } as const;
 
 export interface CreateServerOptions {
   /** Transport identity recorded on native server spans and durable evidence. */
@@ -92,10 +86,21 @@ export interface CreateServerOptions {
 
 /** Creates a server with automatic native execution evidence for every tool. */
 export function createServer(options: CreateServerOptions = {}): McpServer {
-  const server = new McpServer({
-    name: "qyl.mcp",
-    version: packageMetadata.version,
-  });
+  const server = new McpServer(
+    {
+      name: "qyl.mcp",
+      version: packageMetadata.version,
+    },
+    {
+      cacheHints: {
+        "server/discover": PUBLIC_CATALOG_CACHE,
+        "tools/list": PUBLIC_CATALOG_CACHE,
+        "prompts/list": PUBLIC_CATALOG_CACHE,
+        "resources/list": PUBLIC_CATALOG_CACHE,
+        "resources/templates/list": PUBLIC_CATALOG_CACHE,
+      },
+    },
+  );
   if (options.nativeExecution !== false) {
     installNativeExecutionRecording(
       server,
@@ -104,8 +109,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
     );
   }
 
-  registerAppTool(
-    server,
+  server.registerTool(
     "display_traces",
     {
       title: "Display Traces",
@@ -159,8 +163,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
     },
   );
 
-  registerAppTool(
-    server,
+  server.registerTool(
     "display_mcp_dashboard",
     {
       title: "Display MCP Dashboard",
@@ -190,8 +193,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
   registerTelemetryTools(server);
   registerCiTools(server);
 
-  registerAppTool(
-    server,
+  server.registerTool(
     "fetch_telemetry",
     {
       title: "Fetch Telemetry",
@@ -261,11 +263,10 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
     },
   );
 
-  registerAppResource(
-    server,
+  server.registerResource(
     RESOURCE_URI,
     RESOURCE_URI,
-    { mimeType: RESOURCE_MIME_TYPE },
+    { mimeType: RESOURCE_MIME_TYPE, cacheHint: PUBLIC_APP_CACHE },
     async (): Promise<ReadResourceResult> => {
       const html = (cachedAppHtml ??= await fs.readFile(
         path.join(DIST_DIR, "mcp-app.html"),
@@ -291,11 +292,10 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
     },
   );
 
-  registerAppResource(
-    server,
+  server.registerResource(
     DASHBOARD_RESOURCE_URI,
     DASHBOARD_RESOURCE_URI,
-    { mimeType: RESOURCE_MIME_TYPE },
+    { mimeType: RESOURCE_MIME_TYPE, cacheHint: PUBLIC_APP_CACHE },
     async (): Promise<ReadResourceResult> => {
       if (cachedDashboardHtml === undefined) {
         try {

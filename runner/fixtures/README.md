@@ -15,7 +15,7 @@ node runner/fixtures/mcp-conformance-stdio.mjs
 ```
 
 The HTTP fixture requires an environment-sourced bearer credential and exposes
-both Streamable HTTP and deprecated HTTP+SSE compatibility endpoints:
+one Streamable HTTP endpoint:
 
 ```bash
 export QYL_MCP_FIXTURE_BEARER="replace-with-a-test-secret"
@@ -24,8 +24,7 @@ node runner/fixtures/mcp-conformance-http.mjs
 ```
 
 - Streamable HTTP: `http://127.0.0.1:3334/mcp`
-- Legacy SSE: `http://127.0.0.1:3334/sse`
-- Header for both: `Authorization: Bearer $QYL_MCP_FIXTURE_BEARER`
+- Header: `Authorization: Bearer $QYL_MCP_FIXTURE_BEARER`
 
 The credential is compared without logging or returning it. The HTTP server is
 loopback-bound by default and uses the SDK's MCP Express host-header protection.

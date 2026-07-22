@@ -16,14 +16,14 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { McpTelemetry } from "./dist/src/telemetry.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import {
-  getDefaultEnvironment,
-  StdioClientTransport,
-} from "@modelcontextprotocol/sdk/client/stdio.js";
+import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { Client } from "@modelcontextprotocol/client";
 import qylOpenApi from "@ancplua/qyl-api-schema/openapi" with { type: "json" };
 
 const apiKeyHeader = qylOpenApi.components.securitySchemes.ApiKeyAuth.name;
+if (Object.hasOwn(qylOpenApi.paths ?? {}, "/api/v1/metrics")) {
+  throw new Error("published Qyl contract unexpectedly exposes persisted metrics");
+}
 
 const here = dirname(fileURLToPath(import.meta.url));
 const collectorProject = resolve(
@@ -207,28 +207,7 @@ try {
   }
   console.log("ok official OTLP/protobuf receiver parsed and persisted the SDK export");
   console.log("ok user content and URI secrets were not exported");
-
-  const expectedMetrics = new Set([
-    "mcp.client.operation.duration",
-    "mcp.client.session.duration",
-    "mcp.server.operation.duration",
-    "mcp.server.session.duration",
-  ]);
-  const persistedMetrics = await waitUntil(async () => {
-    const response = await fetch(`${baseUrl}/api/v1/metrics?limit=1000`, {
-      headers: { [apiKeyHeader]: collectorApiKey },
-    });
-    if (!response.ok) throw new Error(`metric query returned ${response.status}`);
-    const body = await response.json();
-    const names = new Set((body.items ?? []).map((item) => item?.name));
-    return [...expectedMetrics].every((name) => names.has(name)) ? body : undefined;
-  }, 15_000, "all four MCP duration histograms to be queryable");
-  console.log("ok all four pinned MCP duration histograms were persisted");
-  const persistedMetricJson = JSON.stringify(persistedMetrics);
-  if (!persistedMetricJson.includes(marker) || !persistedMetricJson.includes("mcp.method.name")) {
-    throw new Error("client operation histogram did not retain its pinned semantic identity");
-  }
-  console.log("ok MCP operation histogram retained its pinned semantic identity");
+  console.log("ok generated Qyl contract exposes no discarded metrics read surface");
 
   if (!existsSync(runnerMain)) {
     throw new Error(`qyl MCP runner build not found at ${runnerMain}; run npm run build`);
@@ -333,27 +312,19 @@ try {
       span.name === "tools/call list_traces" &&
       span.parent_span_id === clientSpan?.span_id
     );
-    const metricNames = new Set((body.metrics ?? []).map((metric) => metric.name));
     if (body.traces?.length > 0
         && clientSpan
-        && hasServerChild
-        && metricNames.has("mcp.client.operation.duration")
-        && body.signals?.metrics?.status === "partial") return body;
+        && hasServerChild) return body;
     throw new Error(JSON.stringify({
       traceCount: body.traces?.length ?? 0,
       spans: spans.map((span) => ({ name: span.name, kind: span.kind })),
       logCount: body.logs?.length ?? 0,
-      metricCount: body.metrics?.length ?? 0,
-      metricNames: [...metricNames],
       signals: body.signals,
       correlation: body.correlation,
     }));
-  }, 20_000, "workbench traces and explicitly approximate MCP metrics");
+  }, 20_000, "workbench trace evidence");
   if (correlated.selfExportSuppressed !== true) {
     throw new Error("workbench telemetry read did not report self-export suppression");
-  }
-  if (!correlated.signals.metrics.unavailableReason?.includes("does not export exemplars")) {
-    throw new Error("workbench telemetry did not label time-window metric evidence as approximate");
   }
   const correlatedSpans = correlated.traces.flatMap((trace) => trace.spans ?? []);
   const clientToolSpan = correlatedSpans.find((span) =>
@@ -383,25 +354,8 @@ try {
   if (toolSpanAttributes.includes(marker) || toolSpanAttributes.includes(secret)) {
     throw new Error("native MCP spans captured tool arguments or result content");
   }
-  const nativeServerMetric = await waitUntil(async () => {
-    const response = await fetch(`${baseUrl}/api/v1/metrics?limit=1000`, {
-      headers: { [apiKeyHeader]: collectorApiKey },
-    });
-    if (!response.ok) throw new Error(`metric query returned ${response.status}`);
-    const body = await response.json();
-    return (body.items ?? []).find((metric) =>
-      metric.name === "mcp.server.operation.duration" &&
-      metric.attributes?.some((attribute) =>
-        attribute?.key === "gen_ai.tool.name" && attribute.value === "list_traces"
-      )
-    );
-  }, 15_000, "the native server operation duration metric");
-  if (JSON.stringify(nativeServerMetric.attributes).includes(marker) ||
-      JSON.stringify(nativeServerMetric.attributes).includes(secret)) {
-    throw new Error("native MCP duration metric captured tool arguments or result content");
-  }
-  console.log("ok real runner returned exact trace evidence and labelled semantic/time-window metric evidence as partial");
-  console.log("ok native server span and duration metric were correlated without tool payload content");
+  console.log("ok real runner returned exact trace evidence");
+  console.log("ok native server span was correlated without tool payload content");
   await stop(runner);
   runner = undefined;
 
@@ -420,7 +374,10 @@ try {
     },
     stderr: "pipe",
   });
-  const client = new Client({ name: "qyl-live-contract-smoke", version: "1.0.0" });
+  const client = new Client(
+    { name: "qyl-live-contract-smoke", version: "1.0.0" },
+    { versionNegotiation: { mode: { pin: "2026-07-28" } } },
+  );
   try {
     await client.connect(transport);
     const listed = await client.callTool({ name: "list_traces", arguments: { limit: 100 } });

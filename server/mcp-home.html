@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Bring qyl traces, logs, and MCP telemetry into your coding agent.">
+  <title>qyl · MCP telemetry for coding agents</title>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="qyl MCP home">qyl<span>.</span>mcp</a>
+    <nav aria-label="Primary navigation">
+      <a href="#tools">Tools</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/ANcpLua/qyl.mcp" rel="noreferrer">GitHub</a>
+    </nav>
+    <span class="release-badge">Beta</span>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span aria-hidden="true"></span> Hosted MCP endpoint</p>
+        <h1 id="hero-title">Your telemetry,<br><em>inside the agent.</em></h1>
+        <p class="hero-lede">
+          Give coding agents direct, read-only access to qyl traces, logs, sessions,
+          CI evidence, and MCP traffic—without leaving the work where failures happen.
+        </p>
+
+        <div class="endpoint" aria-label="MCP endpoint">
+          <span class="endpoint-protocol">https</span>
+          <code id="endpoint-value">mcp.qyl.at/mcp</code>
+          <button id="copy-endpoint" type="button" aria-label="Copy MCP endpoint">Copy</button>
+        </div>
+
+        <div class="protocol-facts" aria-label="Protocol properties">
+          <span><i class="fact-dot fact-live" aria-hidden="true"></i>2026-07-28</span>
+          <span><i class="fact-dot" aria-hidden="true"></i>OAuth 2.1</span>
+          <span><i class="fact-dot" aria-hidden="true"></i>Stateless HTTP</span>
+        </div>
+      </div>
+
+      <div class="trace-window" aria-label="Example qyl agent trace">
+        <div class="trace-titlebar">
+          <div>
+            <span class="traffic-lights" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="trace-name">trace / agent.fix</span>
+          </div>
+          <span class="trace-duration">1.84 s</span>
+        </div>
+        <div class="trace-ruler" aria-hidden="true">
+          <span>0</span><span>460 ms</span><span>920 ms</span><span>1.38 s</span><span>1.84 s</span>
+        </div>
+        <div class="trace-rows">
+          <div class="trace-row root-span">
+            <span class="span-label"><b>agent.run</b><small>codex</small></span>
+            <span class="span-track"><i style="--start: 0%; --size: 100%"></i></span>
+          </div>
+          <div class="trace-row">
+            <span class="span-label"><b>mcp.tools.call</b><small>search_logs</small></span>
+            <span class="span-track"><i style="--start: 7%; --size: 39%"></i></span>
+          </div>
+          <div class="trace-row">
+            <span class="span-label"><b>qyl.query</b><small>logs</small></span>
+            <span class="span-track"><i style="--start: 14%; --size: 21%"></i></span>
+          </div>
+          <div class="trace-row">
+            <span class="span-label"><b>mcp.tools.call</b><small>get_trace</small></span>
+            <span class="span-track"><i style="--start: 49%; --size: 44%"></i></span>
+          </div>
+          <div class="trace-row">
+            <span class="span-label"><b>qyl.query</b><small>trace + spans</small></span>
+            <span class="span-track"><i style="--start: 58%; --size: 27%"></i></span>
+          </div>
+        </div>
+        <div class="trace-footer">
+          <span><b>5</b> spans</span>
+          <span><b>2</b> tool calls</span>
+          <span class="trace-ok"><b>0</b> errors</span>
+          <span class="trace-id">4bf92f35…4736</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="tools" class="tool-surface" aria-labelledby="tools-title">
+      <div class="section-intro">
+        <p class="section-index">01 / TOOL SURFACE</p>
+        <h2 id="tools-title">Ask from the place you’re already fixing.</h2>
+        <p>Every tool is explicitly read-only. Results remain structured for the model and inspectable for you.</p>
+      </div>
+      <ol class="tool-list">
+        <li><code>display_traces</code><span>Open a correlated waterfall and its logs.</span><b>MCP App</b></li>
+        <li><code>search_logs</code><span>Find runtime evidence without changing context.</span><b>Read</b></li>
+        <li><code>get_trace</code><span>Inspect the complete span tree for one trace.</span><b>Read</b></li>
+        <li><code>display_mcp_dashboard</code><span>See tool traffic, latency, and failures.</span><b>MCP App</b></li>
+        <li><code>ci_log</code><span>Bring CI execution evidence into the investigation.</span><b>Read</b></li>
+      </ol>
+    </section>
+
+    <section class="protocol-section" aria-labelledby="protocol-title">
+      <p class="section-index">02 / PROTOCOL</p>
+      <div class="protocol-heading">
+        <h2 id="protocol-title">Built for the stateless MCP.</h2>
+        <p>No sticky session, legacy handshake, or SSE transport compatibility layer.</p>
+      </div>
+      <div class="protocol-grid">
+        <article><span>01</span><h3>Per-request identity</h3><p>Every request carries its protocol, client identity, and capabilities.</p></article>
+        <article><span>02</span><h3>OAuth resource server</h3><p>Your client discovers authorization and opens the browser flow automatically.</p></article>
+        <article><span>03</span><h3>Trace context intact</h3><p>W3C trace context follows calls from the agent through MCP into downstream work.</p></article>
+        <article><span>04</span><h3>Server-rendered views</h3><p>Trace and traffic interfaces travel as MCP Apps, beside the evidence they explain.</p></article>
+      </div>
+    </section>
+
+    <section id="install" class="install-section" aria-labelledby="install-title">
+      <div class="install-copy">
+        <p class="section-index">03 / CONNECT</p>
+        <h2 id="install-title">One URL. Your client handles OAuth.</h2>
+        <p>Add qyl, follow the browser sign-in, then ask for the trace or logs you need.</p>
+        <div class="client-tabs" role="tablist" aria-label="Client setup">
+          <button type="button" role="tab" aria-selected="true" data-client="codex">Codex</button>
+          <button type="button" role="tab" aria-selected="false" data-client="claude">Claude Code</button>
+          <button type="button" role="tab" aria-selected="false" data-client="cursor">Cursor</button>
+        </div>
+      </div>
+      <div class="install-terminal">
+        <div class="terminal-bar">
+          <span><i></i><i></i><i></i></span>
+          <b id="terminal-title">terminal</b>
+          <button id="copy-install" type="button">Copy</button>
+        </div>
+        <pre><code id="install-command"></code></pre>
+        <p><span aria-hidden="true">↗</span> Authentication continues in your browser.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <a class="brand" href="/">qyl<span>.</span>mcp</a>
+    <p>OTLP-native observability for work done by people and agents.</p>
+    <div><span id="release-version"></span><a href="https://github.com/ANcpLua/qyl.mcp" rel="noreferrer">Source</a></div>
+  </footer>
+
+  <div id="copy-status" class="copy-status" role="status" aria-live="polite"></div>
+  <script type="module" src="/ui/mcp-home.ts"></script>
+</body>
+</html>

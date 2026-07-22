@@ -35,12 +35,5 @@ export function connectionSafetyReview(configuration: ServerConfiguration): Conn
       acknowledgement: "I reviewed the exact command, arguments, working directory, and environment references.",
     };
   }
-  if (configuration.transport === "inproc") {
-    return {
-      title: "Load an in-process MCP implementation?",
-      body: `Connecting will load “${configuration.implementation}” inside the local runner process with the runner’s permissions.`,
-      acknowledgement: "I reviewed the exact in-process implementation and accept that it runs inside the local runner.",
-    };
-  }
   return null;
 }

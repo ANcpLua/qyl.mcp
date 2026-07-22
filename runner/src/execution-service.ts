@@ -10,13 +10,9 @@ import type {
     RunnerMcpExecutionStatus,
     RunnerMcpExecutionTokenUsage,
 } from "@ancplua/qyl-api-schema/types";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import {
-    CallToolResultSchema,
-    ErrorCode,
-    McpError,
-    type Tool,
-} from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResultSchema } from "@modelcontextprotocol/core";
+import { ProtocolError, SdkErrorCode, SdkError } from "@modelcontextprotocol/client";
+import type { Client, Tool } from "@modelcontextprotocol/client";
 import type {
     ConnectionInitializationSnapshot,
     ConnectionSnapshot,
@@ -444,7 +440,6 @@ export class ExecutionService {
                                 ? {}
                                 : { _meta: { ...telemetryOperation.propagation } }),
                         },
-                        CallToolResultSchema,
                         {
                             signal: pending.controller.signal,
                             timeout: record.request.timeoutMs,
@@ -725,8 +720,8 @@ export class ExecutionService {
 }
 
 function telemetryErrorType(error: unknown, fallback: string): string {
-    if (error instanceof McpError && error.code === ErrorCode.RequestTimeout) return "request_timeout";
-    if (error instanceof McpError && error.code === ErrorCode.ConnectionClosed) return "connection_closed";
+    if (error instanceof SdkError && error.code === SdkErrorCode.RequestTimeout) return "request_timeout";
+    if (error instanceof SdkError && error.code === SdkErrorCode.ConnectionClosed) return "connection_closed";
     return fallback;
 }
 
@@ -926,7 +921,7 @@ function classifyExecutionError(
             error: cancellationError(now),
         };
     }
-    if (error instanceof McpError && error.code === ErrorCode.RequestTimeout) {
+    if (error instanceof SdkError && error.code === SdkErrorCode.RequestTimeout) {
         return {
             status: "timed_out",
             error: {
@@ -945,16 +940,16 @@ function classifyExecutionError(
         ? "authentication"
         : error instanceof SyntaxError
           ? "serialization"
-          : error instanceof McpError && error.code === ErrorCode.ConnectionClosed
+          : error instanceof SdkError && error.code === SdkErrorCode.ConnectionClosed
             ? "transport"
-            : error instanceof McpError
+            : error instanceof ProtocolError
               ? "protocol"
               : "transport";
     return {
         status: "failed",
         error: {
             category,
-            code: error instanceof McpError ? `mcp_${error.code}` : `${category}_failure`,
+            code: error instanceof ProtocolError ? `mcp_${error.code}` : `${category}_failure`,
             message,
             occurredAt: timestamp(now),
             retryable: category === "transport" || category === "authentication",
@@ -1023,6 +1018,6 @@ function clone<T>(value: T): T {
     return structuredClone(value);
 }
 
-function telemetryTransport(kind: ConnectionSnapshot["kind"]): "stdio" | "streamable_http" | "sse" | "inproc" | "builtin" {
+function telemetryTransport(kind: ConnectionSnapshot["kind"]): "stdio" | "streamable_http" | "inproc" | "builtin" {
     return kind === "streamable-http" ? "streamable_http" : kind;
 }

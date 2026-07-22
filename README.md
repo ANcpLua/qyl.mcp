@@ -5,6 +5,10 @@ inspecting their negotiated protocol surface, invoking tools safely, and
 retaining execution and evaluation evidence. It also includes Qyl telemetry
 tools and MCP Apps for exploring a live Qyl collector.
 
+This repository is the sole MCP runtime and MCP workbench owner in the Qyl
+workspace. It owns the default loopback listener on `18888`; the sibling C#
+host owns collector and diagnostics orchestration on its separate host API.
+
 The browser, runner API, and managed MCP processes run with the local user's
 permissions. The runner binds only to loopback; it is not an Internet-facing
 multi-user service.
@@ -43,14 +47,13 @@ interrupted by a restart is restored as explicit failure evidence.
 
 ## Connect an MCP server
 
-Choose **Add server** in the sidebar. User-created connections support all
-three client transports below; runner-registered built-ins and in-process
-servers are visible but cannot be created from the browser.
+Choose **Add server** in the sidebar. User-created connections support the two
+client transports below; runner-registered built-ins are visible but cannot be
+created from the browser.
 
 | Transport | Configuration |
 | --- | --- |
 | Streamable HTTP | Credential-free HTTP(S) endpoint plus header references such as `Authorization=MCP_TOKEN|bearer` |
-| SSE | Legacy SSE endpoint plus the same environment-backed header references |
 | stdio | Command, one argument per line, optional working directory, and environment mappings such as `SERVER_TOKEN=MCP_SERVER_TOKEN` |
 
 Set referenced values in the runner environment before startup:
@@ -68,6 +71,16 @@ persistent `Cookie` headers are rejected. Stdio credentials cannot be placed in
 command arguments. Starting or reconnecting a stdio server requires review of
 the exact executable, arguments, working directory, and environment references
 because it launches code with the current user's permissions.
+
+### Protocol revision
+
+The runner uses the MCP v2 split packages. Every user-configured stdio and
+Streamable HTTP connection pins protocol revision `2026-07-28` and fails when a
+peer cannot negotiate it; there is no fallback or negotiation setting. The
+built-in Qyl server uses the SDK's legacy-only in-memory transport internally,
+which is not a user-configurable or network-facing connection. A Streamable
+HTTP conformance test verifies `server/discover`, modern-era identity, and the
+absence of `initialize`.
 
 ## Workbench workflow
 
@@ -126,11 +139,15 @@ through credential and URI redaction.
 
 ## Qyl observability and MCP telemetry
 
-The built-in `qyl-telemetry` server reads real traces, logs, sessions, and
-metrics from `QYL_COLLECTOR_URL`. `QYL_API_KEY`, when present, is sent using the
+The built-in `qyl-telemetry` server reads real traces, logs, and sessions from
+`QYL_COLLECTOR_URL`. `QYL_API_KEY`, when present, is sent using the
 header defined by the generated Qyl API contract. Every correlated read runs
 under async self-export suppression, so inspecting Qyl evidence does not create
 recursive MCP telemetry.
+
+qyl.mcp still exports the pinned MCP duration histograms over OTLP. The current
+Qyl collector accepts and discards metrics, so its generated read contract and
+workbench correlation response expose only retained trace and log evidence.
 
 | Variable | Purpose |
 | --- | --- |
@@ -219,8 +236,10 @@ node server/dist/main.js --stdio
 
 After `npm run build`, `npm start` launches this standalone HTTP server. Without
 `--stdio`, it serves stateless Streamable HTTP on
-`http://127.0.0.1:3001/mcp` by default; set `PORT` to change the port. The
-local default binds only to loopback and accepts local or absent browser
+`http://127.0.0.1:3001/mcp` by default; set `PORT` to change the port. The v2
+`createMcpHandler` and `serveStdio` entries accept only protocol revision
+`2026-07-28`; older openings are rejected.
+The local default binds only to loopback and accepts local or absent browser
 origins. It uses the same `QYL_COLLECTOR_URL`, `QYL_API_KEY`, and `QYL_DEMO`
 configuration. `QYL_API_KEY` is only an outgoing collector credential; it does
 not authenticate incoming MCP clients. The model-visible tools are
@@ -232,33 +251,45 @@ The workbench runner remains available with `npm run start:runner`.
 
 ### Hosted standalone server
 
-The reference deployment serves `https://mcp.qyl.at/` from Railway with
-`/mcp` retained as a compatibility alias (the host prefix is the namespace) and
-`/healthz` as its platform healthcheck; pushes to `main` deploy automatically
-after CI passes.
+The reference deployment serves a public product page at
+`https://mcp.qyl.at/`, the canonical MCP endpoint at
+`https://mcp.qyl.at/mcp`, and `/healthz` as its platform healthcheck; pushes to
+`main` deploy automatically after CI passes. The root page is presentation
+only and never acts as a second MCP endpoint.
 
-Hosting is opt-in. Set `MCP_BIND_HOST=0.0.0.0` and configure a public URL; the
-server then requires a static Bearer token from `MCP_AUTH_TOKEN` before it will
-start. The token is intended for a controlled first deployment. OAuth 2.1 with
-Protected Resource Metadata and scopes is the production target for a general
-remote MCP service.
+Hosting is opt-in and authenticates as an OAuth 2.1 Resource Server backed by
+Auth0. Configure an Auth0 API with identifier `https://mcp.qyl.at/mcp`, RS256,
+the RFC 9068 access-token profile, Resource Parameter Compatibility Profile,
+and permission `qyl:read`. For stock third-party MCP clients, enable Auth0's
+strict Dynamic Client Registration and grant `qyl:read` as the API's default
+user-delegated permission; enable Client ID Metadata Document Registration
+separately and promote the login connection to domain level. qyl itself hosts
+neither client registration nor an authorization server. Production uses
+`MCP_OAUTH_ISSUER=https://qyl-eu.eu.auth0.com/`. The server discovers the
+issuer at startup, verifies RFC 9068 bearer tokens against its JWKS, requires
+the exact resource audience and `qyl:read` scope, and publishes only the RFC
+9728 protected-resource document. It never mints tokens and keeps no static
+operator credential; startup fails closed when the issuer is unset or
+unreachable.
 
 ```bash
 NODE_ENV=production \
 MCP_BIND_HOST=0.0.0.0 \
 MCP_PUBLIC_URL=https://mcp.qyl.at \
 MCP_ALLOWED_HOSTS=mcp.qyl.at,<service>.up.railway.app,healthcheck.railway.app \
-MCP_ALLOWED_ORIGINS=https://mcp.qyl.at,https://<service>.up.railway.app \
-MCP_AUTH_TOKEN='<long-random-secret>' \
+MCP_ALLOWED_ORIGIN_HOSTS=mcp.qyl.at,<service>.up.railway.app \
+MCP_OAUTH_ISSUER=https://qyl-eu.eu.auth0.com/ \
 QYL_COLLECTOR_URL=http://qyl-collector.railway.internal:5100 \
 QYL_API_KEY='<collector-api-key>' \
 npm start
 ```
 
-`MCP_PUBLIC_URL` adds its hostname and origin to the SDK's Host and Origin
-allowlists. Additional comma-separated values support Railway's generated
-domain and healthcheck host. Native clients without an Origin header remain
-valid, but every hosted request still needs `Authorization: Bearer ...`.
+`MCP_PUBLIC_URL` adds its hostname to the SDK's Host and Origin host allowlists
+and, as `<public-url>/mcp`, is the fixed resource identifier tokens are
+audience-bound to. A non-loopback bind requires `MCP_PUBLIC_URL`. Additional
+comma-separated hostnames support Railway's generated domain and healthcheck
+host. Native clients without an Origin header remain valid, but every hosted
+MCP request needs a valid issuer-minted `Authorization: Bearer ...` token.
 
 The repository includes `railway.toml`. In Railway, use `/` as the root
 directory, or equivalent settings:
@@ -302,17 +333,13 @@ read surfaces.
 
 - Evaluation usage and cost are displayed only when the execution evidence
   records them; qyl.mcp does not synthesize or estimate missing values.
-- Workbench MCP spans retain exact trace/span correlation. The installed
-  JavaScript OTLP metrics pipeline does not export exemplars, so correlated MCP
-  metrics are explicitly marked partial and selected by a bounded execution
-  time window plus semantic operation identity rather than an exact trace link.
 - Downstream spans from an external or stdio server correlate only when that
   server honors the MCP propagation metadata; qyl.mcp cannot retrofit
   instrumentation into an uninstrumented peer.
 - The live connection journal is process-local. Execution, test, and evaluation
   evidence is durable, but protocol traffic that is not attached to retained
   execution evidence is not reconstructed after a runner restart.
-- Local conformance servers cover stdio, Streamable HTTP, and SSE. External
+- Local conformance servers cover stdio and Streamable HTTP. External
   remote services cannot be verified without their endpoints and credentials.
 
 ```mermaid
@@ -323,14 +350,12 @@ flowchart TD
   C -- "no" --> E["Unavailable; no estimate"]
   B --> F["Workbench MCP span"]
   F --> G["Exact trace/span correlation"]
-  F --> H["OTLP metric"]
-  H --> I["Partial: bounded time window + semantic operation"]
   B --> J["External or stdio peer"]
   J --> K{"Honors MCP propagation metadata?"}
   K -- "yes" --> L["Downstream span correlates"]
   K -- "no" --> M["qyl.mcp cannot retrofit instrumentation"]
   A --> N["Live process-local connection journal"]
   N --> O["Unattached traffic is not reconstructed after restart"]
-  P["Local conformance servers"] --> Q["stdio / Streamable HTTP / SSE"]
+  P["Local conformance servers"] --> Q["stdio / Streamable HTTP"]
   R["External remote service"] --> S["Requires endpoint and credentials"]
 ```

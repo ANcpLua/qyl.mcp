@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { ErrorCode, McpError, type Tool } from "@modelcontextprotocol/sdk/types.js";
+import { ProtocolError, ProtocolErrorCode, SdkErrorCode, SdkError } from "@modelcontextprotocol/client";
+import type { Client, Tool } from "@modelcontextprotocol/client";
 import type { ConnectionSnapshot } from "./connection-manager.js";
 import {
     ExecutionConflictError,
@@ -13,7 +13,7 @@ import {
 import { ProtocolJournal } from "./protocol-journal.js";
 import { SecretRedactor } from "./secret-redactor.js";
 import {
-    currentMcpTraceparent,
+    currentMcpPropagation,
     McpTelemetry,
     type ActiveMcpOperation,
     type McpOperationInput,
@@ -81,7 +81,7 @@ class FakeConnections implements ExecutionConnectionPort {
 
     getClient(): Pick<Client, "callTool"> {
         return {
-            callTool: ((params: { name: string; arguments?: Record<string, unknown>; _meta?: Record<string, unknown> }, _schema: unknown, options?: { signal?: AbortSignal; timeout?: number }) =>
+            callTool: ((params: { name: string; arguments?: Record<string, unknown>; _meta?: Record<string, unknown> }, options?: { signal?: AbortSignal; timeout?: number }) =>
                 this.invoke(params, options)) as Client["callTool"],
         };
     }
@@ -353,7 +353,7 @@ test("execution distinguishes tool errors and protocol timeouts", async () => {
 
     const timeoutService = new ExecutionService(
         new FakeConnections([safeTool], async () => {
-            throw new McpError(ErrorCode.RequestTimeout, "timed out");
+            throw new SdkError(SdkErrorCode.RequestTimeout, "timed out");
         }),
         { telemetry },
     );
@@ -373,7 +373,7 @@ test("execution distinguishes tool errors and protocol timeouts", async () => {
 
     const connectionService = new ExecutionService(
         new FakeConnections([safeTool], async () => {
-            throw new McpError(ErrorCode.ConnectionClosed, "connection closed");
+            throw new SdkError(SdkErrorCode.ConnectionClosed, "connection closed");
         }),
         { telemetry },
     );
@@ -404,9 +404,9 @@ test("execution distinguishes tool errors and protocol timeouts", async () => {
             journal.recordMessage("inbound", {
                 jsonrpc: "2.0",
                 id: 42,
-                error: { code: ErrorCode.InvalidParams, message: "invalid params" },
+                error: { code: ProtocolErrorCode.InvalidParams, message: "invalid params" },
             });
-            throw new McpError(ErrorCode.InvalidParams, "invalid params");
+            throw new ProtocolError(ProtocolErrorCode.InvalidParams, "invalid params");
         }, journal),
         {
             telemetry,
@@ -424,8 +424,8 @@ test("execution distinguishes tool errors and protocol timeouts", async () => {
     const protocolFailed = await waitForTerminal(protocolService, protocolAccepted.id);
     assert.equal(protocolFailed.status, "failed");
     assert.equal(protocolFailed.error?.category, "protocol");
-    assert.equal(telemetryInputs.at(-1)?.errorType, String(ErrorCode.InvalidParams));
-    assert.equal(telemetryInputs.at(-1)?.rpcResponseStatusCode, String(ErrorCode.InvalidParams));
+    assert.equal(telemetryInputs.at(-1)?.errorType, String(ProtocolErrorCode.InvalidParams));
+    assert.equal(telemetryInputs.at(-1)?.rpcResponseStatusCode, String(ProtocolErrorCode.InvalidParams));
 });
 
 test("execution activates a pre-call span and clears its traceparent after completion", async () => {
@@ -450,7 +450,7 @@ test("execution activates a pre-call span and clears its traceparent after compl
     };
     const service = new ExecutionService(
         new FakeConnections([safeTool], async (params) => {
-            events.push(`invoke:${currentMcpTraceparent() ?? "missing"}`);
+            events.push(`invoke:${currentMcpPropagation()?.traceparent ?? "missing"}`);
             assert.equal(params._meta?.traceparent, traceparent);
             return { content: [{ type: "text", text: "ok" }] };
         }),
@@ -471,7 +471,7 @@ test("execution activates a pre-call span and clears its traceparent after compl
         `invoke:${traceparent}`,
         "end:ok",
     ]);
-    assert.equal(currentMcpTraceparent(), undefined);
+    assert.equal(currentMcpPropagation(), undefined);
 });
 
 test("execution cancellation aborts the real in-flight request signal", async () => {

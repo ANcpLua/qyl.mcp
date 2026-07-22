@@ -15,7 +15,6 @@ if (!Number.isInteger(port) || port < 0 || port > 65_535) {
 
 const running = await startFixtureHttpServer({ bearerToken, port });
 console.error(`qyl.mcp conformance fixture listening at ${running.streamableUrl}`);
-console.error(`legacy SSE compatibility endpoint at ${running.sseUrl}`);
 
 let stopping = false;
 async function stop() {

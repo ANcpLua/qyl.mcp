@@ -10,11 +10,7 @@ import type {
   SearchLogsInput,
   SearchLogsOutput,
 } from "@ancplua/qyl-api-schema/types";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type {
-  CallToolResult,
-  ToolAnnotations,
-} from "@modelcontextprotocol/sdk/types.js";
+import type { McpServer, CallToolResult, ToolAnnotations } from "@modelcontextprotocol/server";
 import {
   GetTraceInputSchema,
   GetTraceOutputSchema,

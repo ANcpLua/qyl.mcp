@@ -133,7 +133,7 @@ export default function App() {
             ) : (
               <section className="empty-state panel-surface">
                 <strong>Add an MCP server</strong>
-                <span>Add Streamable HTTP, SSE, or local stdio. Runner-registered internal servers appear automatically; credentials remain server-side environment references.</span>
+                <span>Add Streamable HTTP or local stdio. Runner-registered internal servers appear automatically; credentials remain server-side environment references.</span>
               </section>
             )
           ) : activePanel === "tests" ? (

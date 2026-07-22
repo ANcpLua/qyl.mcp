@@ -1,12 +1,10 @@
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import type { Server as NodeHttpServer } from "node:http";
-import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
+import { createMcpHandler } from "@modelcontextprotocol/server";
+import { toNodeHandler } from "@modelcontextprotocol/node";
+import { createMcpExpressApp } from "@modelcontextprotocol/express";
 import type { NextFunction, Request, Response } from "express";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createFixtureMcpServer } from "./fixture-server.js";
 
 export interface FixtureHttpOptions {
@@ -19,7 +17,6 @@ export interface RunningFixtureHttpServer {
   host: string;
   port: number;
   streamableUrl: URL;
-  sseUrl: URL;
   requests: FixtureHttpRequest[];
   close(): Promise<void>;
 }
@@ -29,16 +26,6 @@ export interface FixtureHttpRequest {
   path: string;
   traceparent?: string;
   body: unknown;
-}
-
-interface StreamableSession {
-  server: McpServer;
-  transport: StreamableHTTPServerTransport;
-}
-
-interface SseSession {
-  server: McpServer;
-  transport: SSEServerTransport;
 }
 
 export function hasExpectedBearer(authorization: unknown, expectedToken: string): boolean {
@@ -56,12 +43,6 @@ function sendUnauthorized(response: Response): void {
   response.status(401).type("text/plain").send("Bearer authentication required");
 }
 
-function sendPlainError(response: Response, status: number, message: string): void {
-  if (!response.headersSent) {
-    response.status(status).type("text/plain").send(message);
-  }
-}
-
 export async function startFixtureHttpServer(
   options: FixtureHttpOptions,
 ): Promise<RunningFixtureHttpServer> {
@@ -75,8 +56,11 @@ export async function startFixtureHttpServer(
   }
 
   const app = createMcpExpressApp({ host });
-  const streamableSessions = new Map<string, StreamableSession>();
-  const sseSessions = new Map<string, SseSession>();
+  const modernHandler = createMcpHandler(
+    () => createFixtureMcpServer().server,
+    { legacy: "reject" },
+  );
+  const nodeHandler = toNodeHandler(modernHandler);
   const requests: FixtureHttpRequest[] = [];
 
   app.use((request: Request, response: Response, next: NextFunction) => {
@@ -95,77 +79,12 @@ export async function startFixtureHttpServer(
   });
 
   app.all("/mcp", async (request, response) => {
-    const sessionHeader = request.headers["mcp-session-id"];
-    const sessionId = typeof sessionHeader === "string" ? sessionHeader : undefined;
-    let session = sessionId === undefined ? undefined : streamableSessions.get(sessionId);
-
-    try {
-      if (session === undefined && request.method === "POST" && isInitializeRequest(request.body)) {
-        const fixture = createFixtureMcpServer();
-        let transport: StreamableHTTPServerTransport;
-        transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: () => randomUUID(),
-          onsessioninitialized: (initializedSessionId) => {
-            session = { server: fixture.server, transport };
-            streamableSessions.set(initializedSessionId, session);
-          },
-        });
-        transport.onclose = () => {
-          const initializedSessionId = transport.sessionId;
-          if (initializedSessionId !== undefined) {
-            streamableSessions.delete(initializedSessionId);
-          }
-        };
-        await fixture.server.connect(transport);
-        session = { server: fixture.server, transport };
-      }
-
-      if (session === undefined) {
-        sendPlainError(response, 400, "A valid MCP session or initialize request is required");
-        return;
-      }
-
-      await session.transport.handleRequest(request, response, request.body);
-    } catch {
-      sendPlainError(response, 500, "The MCP fixture could not handle the request");
-    }
+    await nodeHandler(request, response, request.body);
   });
 
-  app.get("/sse", async (_request, response) => {
-    const fixture = createFixtureMcpServer();
-    const transport = new SSEServerTransport("/messages", response);
-    const session: SseSession = { server: fixture.server, transport };
-    sseSessions.set(transport.sessionId, session);
-    transport.onclose = () => {
-      sseSessions.delete(transport.sessionId);
-    };
-
-    try {
-      await fixture.server.connect(transport);
-    } catch {
-      sseSessions.delete(transport.sessionId);
-      sendPlainError(response, 500, "The legacy SSE fixture could not start");
-    }
-  });
-
-  app.post("/messages", async (request, response) => {
-    const sessionId = typeof request.query.sessionId === "string" ? request.query.sessionId : undefined;
-    const session = sessionId === undefined ? undefined : sseSessions.get(sessionId);
-    if (session === undefined) {
-      sendPlainError(response, 400, "A valid legacy SSE session is required");
-      return;
-    }
-
-    try {
-      await session.transport.handlePostMessage(request, response, request.body);
-    } catch {
-      sendPlainError(response, 500, "The legacy SSE fixture could not handle the request");
-    }
-  });
-
-  const httpServer = await new Promise<NodeHttpServer>((resolve, reject) => {
-    const listener = app.listen(port, host, () => resolve(listener));
-    listener.once("error", reject);
+  const httpServer = await new Promise<NodeHttpServer>((resolveListening, rejectListening) => {
+    const listener = app.listen(port, host, () => resolveListening(listener));
+    listener.once("error", rejectListening);
   });
   const address = httpServer.address() as AddressInfo;
   const baseUrl = new URL(`http://${host}:${address.port}`);
@@ -175,20 +94,14 @@ export async function startFixtureHttpServer(
     host,
     port: address.port,
     streamableUrl: new URL("/mcp", baseUrl),
-    sseUrl: new URL("/sse", baseUrl),
     requests,
     async close(): Promise<void> {
-      if (closed) {
-        return;
-      }
+      if (closed) return;
       closed = true;
 
-      const sessions = [...streamableSessions.values(), ...sseSessions.values()];
-      streamableSessions.clear();
-      sseSessions.clear();
-      await Promise.allSettled(sessions.map(async ({ server }) => server.close()));
-      await new Promise<void>((resolve, reject) => {
-        httpServer.close((error) => (error === undefined ? resolve() : reject(error)));
+      await modernHandler.close();
+      await new Promise<void>((resolveClose, rejectClose) => {
+        httpServer.close((error) => (error === undefined ? resolveClose() : rejectClose(error)));
       });
     },
   };

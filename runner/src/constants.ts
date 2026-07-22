@@ -42,23 +42,9 @@ export const Constants = {
         Runner: "/runner",
     },
 
-    Orchestrator: {
-        HealthPollIntervalMs: 500,
-        HealthProbeAttemptTimeoutSeconds: 5,
-        StartupTimeoutSeconds: 60,
-        MaxRestarts: 3,
-    },
-
     LogEvents: {
-        OrchestratorStarted: 1100,
-        ResourceStarting: 1101,
-        ResourceReady: 1102,
-        ResourceFailed: 1103,
-        ResourceStopped: 1104,
         RunnerApiListening: 1107,
         RunnerApiBindFailed: 1108,
         RunnerApiRequestFailed: 1109,
-        ResourceRestarting: 1113,
-        ResourceUserRestart: 1114,
     },
 } as const;

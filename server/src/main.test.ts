@@ -1,30 +1,34 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import test from "node:test";
+import type { OAuthMetadata } from "@modelcontextprotocol/server";
+import { createMcpApp } from "./http-security.js";
 import {
-  closeMcpRequestResources,
+  closeHttpListener,
+  mountLandingPage,
+  mountProtectedResourceMetadata,
   readStreamableHTTPConfig,
   sanitizedErrorType,
 } from "./main.js";
 
-test("server-owned cleanup closes the transport only as a failure fallback", async () => {
-  let transportCloses = 0;
-  const success = await closeMcpRequestResources(
-    { close: async () => undefined },
-    { close: async () => { transportCloses += 1; } },
-  );
-  assert.deepEqual(success, []);
-  assert.equal(transportCloses, 0);
+test("the public root serves the qyl MCP landing page", async (context) => {
+  const app = createMcpApp({ bindHost: "127.0.0.1" });
+  mountLandingPage(app, "<!doctype html><title>qyl MCP</title><main>ready</main>");
+  const listener = app.listen(0, "127.0.0.1");
+  await once(listener, "listening");
+  context.after(() => closeHttpListener(listener));
+  const address = listener.address();
+  assert(address && typeof address === "object");
 
-  const failures = await closeMcpRequestResources(
-    { close: async () => { throw new TypeError("authorization=do-not-log"); } },
-    { close: async () => { transportCloses += 1; throw new RangeError("token=do-not-log"); } },
+  const response = await fetch(`http://127.0.0.1:${address.port}/`);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "text/html; charset=utf-8");
+  assert.equal(response.headers.get("cache-control"), "public, max-age=300");
+  assert.match(await response.text(), /<main>ready<\/main>/u);
+  assert.equal(
+    (await fetch(`http://127.0.0.1:${address.port}/`, { method: "POST" })).status,
+    404,
   );
-  assert.deepEqual(failures, [
-    { resource: "server", errorType: "TypeError" },
-    { resource: "transport", errorType: "RangeError" },
-  ]);
-  assert.equal(transportCloses, 1);
-  assert.doesNotMatch(JSON.stringify(failures), /authorization|token|do-not-log/);
 });
 
 test("sanitized errors expose only a safe error class", () => {
@@ -40,13 +44,8 @@ test("standalone HTTP configuration keeps the loopback default", () => {
 
   assert.equal(config.port, 3001);
   assert.equal(config.bindHost, "127.0.0.1");
-  assert.equal(config.hosted, false);
-  assert.equal(config.authToken, undefined);
-  assert.deepEqual(config.allowedOrigins, [
-    "http://127.0.0.1:3001",
-    "http://localhost:3001",
-    "http://[::1]:3001",
-  ]);
+  assert.equal(config.allowedHosts, undefined);
+  assert.equal(config.allowedOrigins, undefined);
 });
 
 test("hosted HTTP configuration composes public and additional allowlists", () => {
@@ -55,8 +54,7 @@ test("hosted HTTP configuration composes public and additional allowlists", () =
     MCP_BIND_HOST: "0.0.0.0",
     MCP_PUBLIC_URL: "https://mcp.qyl.at",
     MCP_ALLOWED_HOSTS: "railway.example, healthcheck.railway.app",
-    MCP_ALLOWED_ORIGINS: "https://railway.example",
-    MCP_AUTH_TOKEN: "hosted-static-token",
+    MCP_ALLOWED_ORIGIN_HOSTS: "railway.example",
   });
 
   assert.equal(config.port, 8080);
@@ -67,17 +65,71 @@ test("hosted HTTP configuration composes public and additional allowlists", () =
     "railway.example",
     "healthcheck.railway.app",
   ]);
-  assert.deepEqual(config.allowedOrigins, [
-    "https://mcp.qyl.at",
-    "https://railway.example",
-  ]);
-  assert.equal(config.authToken, "hosted-static-token");
-  assert.equal(config.hosted, true);
+  assert.deepEqual(config.allowedOrigins, ["mcp.qyl.at", "railway.example"]);
 });
 
-test("hosted HTTP configuration fails closed without an incoming auth token", () => {
+test("a non-loopback bind fails closed without a public URL", () => {
   assert.throws(
     () => readStreamableHTTPConfig({ MCP_BIND_HOST: "0.0.0.0" }),
-    /MCP_AUTH_TOKEN must be configured/u,
+    /MCP_PUBLIC_URL must be set/u,
   );
+});
+
+test("the hosted resource identity is an HTTPS origin", () => {
+  assert.throws(
+    () => readStreamableHTTPConfig({ MCP_PUBLIC_URL: "http://mcp.qyl.at" }),
+    /must use HTTPS/u,
+  );
+  assert.throws(
+    () => readStreamableHTTPConfig({ MCP_PUBLIC_URL: "https://mcp.qyl.at/base" }),
+    /without a path/u,
+  );
+});
+
+test("hosted OAuth serves only path-aware protected-resource metadata", async (context) => {
+  const app = createMcpApp({ bindHost: "127.0.0.1" });
+  const resourceServerUrl = new URL("https://mcp.qyl.at/mcp");
+  const oauthMetadata: OAuthMetadata = {
+    issuer: "https://qyl.eu.auth0.com/",
+    authorization_endpoint: "https://qyl.eu.auth0.com/authorize",
+    token_endpoint: "https://qyl.eu.auth0.com/oauth/token",
+    jwks_uri: "https://qyl.eu.auth0.com/.well-known/jwks.json",
+    response_types_supported: ["code"],
+    token_endpoint_auth_methods_supported: ["none"],
+    code_challenge_methods_supported: ["S256"],
+  };
+  const metadataUrl = mountProtectedResourceMetadata(app, {
+    oauthMetadata,
+    resourceServerUrl,
+    scopesSupported: ["qyl:read"],
+  });
+  const listener = app.listen(0, "127.0.0.1");
+  await once(listener, "listening");
+  context.after(() => closeHttpListener(listener));
+  const address = listener.address();
+  assert(address && typeof address === "object");
+  const origin = `http://127.0.0.1:${address.port}`;
+
+  assert.equal(
+    metadataUrl,
+    "https://mcp.qyl.at/.well-known/oauth-protected-resource/mcp",
+  );
+  const response = await fetch(`${origin}/.well-known/oauth-protected-resource/mcp`);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("access-control-allow-origin"), "*");
+  assert.deepEqual(await response.json(), {
+    resource: resourceServerUrl.href,
+    authorization_servers: [oauthMetadata.issuer],
+    scopes_supported: ["qyl:read"],
+  });
+  assert.equal(
+    (await fetch(`${origin}/.well-known/oauth-authorization-server`)).status,
+    404,
+  );
+  const rejected = await fetch(
+    `${origin}/.well-known/oauth-protected-resource/mcp`,
+    { method: "POST" },
+  );
+  assert.equal(rejected.status, 405);
+  assert.equal(rejected.headers.get("allow"), "GET, HEAD, OPTIONS");
 });

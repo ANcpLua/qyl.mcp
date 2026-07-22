@@ -1,4 +1,4 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { isCredentialKey, SecretRedactor } from "./secret-redactor.js";
 
 // The standalone server and the runner share this implementation through the

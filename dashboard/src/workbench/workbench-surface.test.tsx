@@ -69,7 +69,7 @@ const suite = RunnerMcpTestSuiteSchema.parse({
 });
 
 test("the workbench sidebar limits creation to routable transports and retains internal server display", () => {
-  assert.deepEqual(SERVER_TRANSPORT_OPTIONS.map((option) => option.value), ["streamable_http", "sse", "stdio"]);
+  assert.deepEqual(SERVER_TRANSPORT_OPTIONS.map((option) => option.value), ["streamable_http", "stdio"]);
   assert.equal(isUserConfigurableServer(server), false);
   assert.equal(isUserConfigurableServer(userServer), true);
   const workspaces = [RunnerMcpWorkspaceSchema.parse({
@@ -228,8 +228,7 @@ test("Qyl observability renders available, partial, and unavailable states witho
     signals: {
       traces: { status: "available", itemCount: 1 },
       logs: { status: "partial", itemCount: 2, unavailableReason: "retention window" },
-      metrics: { status: "unavailable", itemCount: 0, unavailableReason: "<script>collector disabled</script>" },
-      exceptions: { status: "available", itemCount: 0 },
+      exceptions: { status: "unavailable", itemCount: 0, unavailableReason: "<script>collector disabled</script>" },
       toolCallEvents: { status: "available", itemCount: 1 },
     },
     correlation: {
@@ -239,7 +238,6 @@ test("Qyl observability renders available, partial, and unavailable states witho
     },
     traces: [],
     logs: [],
-    metrics: [],
     queriedAt: timestamp,
     selfExportSuppressed: true,
   });

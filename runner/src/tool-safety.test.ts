@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+import type { Tool } from "@modelcontextprotocol/server";
 import { classifyToolSafety } from "./tool-safety.js";
 
 function fixtureTool(annotations?: Tool["annotations"]): Tool {

@@ -25,7 +25,6 @@ test("local executable connection modes require an exact safety review", () => {
   assert.match(stdio?.body ?? "", /\/workspace/u);
   assert.doesNotMatch(stdio?.body ?? "", /MCP_TOKEN/u);
 
-  assert.match(connectionSafetyReview({ transport: "inproc", implementation: "fixture" })?.body ?? "", /fixture/u);
   assert.equal(connectionSafetyReview({ transport: "builtin", name: "qyl" }), null);
-  assert.equal(connectionSafetyReview({ transport: "sse", endpoint: "https://example.test/sse" }), null);
+  assert.equal(connectionSafetyReview({ transport: "streamable_http", endpoint: "https://example.test/mcp" }), null);
 });

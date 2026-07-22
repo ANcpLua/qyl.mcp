@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import { createServer as createHttpServer, type Server as HttpServer } from "node:http";
 import test from "node:test";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResultSchema } from "@modelcontextprotocol/core";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { getDemo } from "./demo.js";
 import { createServer } from "./server.js";
 

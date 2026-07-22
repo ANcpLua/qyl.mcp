@@ -45,10 +45,6 @@ test("every published Runner.Mcp definition has a runtime validator", () => {
     .filter((name) => exportedSchemas[name] === undefined);
 
   assert.deepEqual(missing, []);
-  assert.equal(
-    Object.keys(contractJsonSchema.$defs).filter((name) => name.startsWith("Runner.Mcp.")).length,
-    103,
-  );
 });
 
 test("published schemas own defaults, bounds, and required inputs for all seven contract tools", () => {

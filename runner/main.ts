@@ -1,28 +1,27 @@
-// The runnable qyl.mcp host. From the repo root:
-//     node runner/dist/main.js
-//
-// Hosts the qyl telemetry MCP server IN-PROCESS (no child process, no sibling
-// checkout) and blocks with the runner API live. The authenticated workbench
-// API owns server connections, discovery, executions, tests, evaluations, and
-// protocol evidence under http://127.0.0.1:18888/runner. Legacy resource
-// lifecycle state remains available at /runner/resources (+ /stream).
-//
-// The in-process server reads its configuration from THIS process's
-// environment: QYL_COLLECTOR_URL (default http://127.0.0.1:5100) for live
-// mode, or QYL_DEMO=1 to select generated demo telemetry explicitly.
-
 import {
   closeDefaultNativeExecutionRuntime,
   createServer,
 } from "qyl-mcp-server";
-import { McpAppBuilder } from "./src/app-builder.js";
+import { RunnerApi } from "./src/runner-api.js";
 
-const app = McpAppBuilder.create();
-
-app.addInProcessServer("qyl-telemetry", () => createServer({ transport: "inproc" }));
+const api = new RunnerApi([{
+  name: "qyl-telemetry",
+  serverFactory: () => createServer({ transport: "inproc" }),
+}]);
 
 try {
-  await app.build().run();
+  await api.listen();
+  await new Promise<void>((resolve) => {
+    let shuttingDown = false;
+    const shutdown = (signal: string) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      console.error(`${signal} received — stopping runner`);
+      void api.close().then(resolve);
+    };
+    process.once("SIGINT", () => shutdown("SIGINT"));
+    process.once("SIGTERM", () => shutdown("SIGTERM"));
+  });
 } finally {
   await closeDefaultNativeExecutionRuntime();
 }

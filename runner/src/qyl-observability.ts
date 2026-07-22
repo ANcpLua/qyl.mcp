@@ -1,7 +1,6 @@
 import qylOpenApi from "@ancplua/qyl-api-schema/openapi" with { type: "json" };
 import type {
     LogRecord,
-    MetricPoint,
     RunnerMcpExecutionTelemetryResponse,
     RunnerMcpTelemetryAvailability,
     RunnerMcpTelemetrySignalAvailability,
@@ -11,31 +10,22 @@ import type {
 import {
     LogsListResponseSchema,
     LogRecordSchema,
-    MetricsListResponseSchema,
-    MetricPointSchema,
     RunnerMcpTelemetryCorrelationSchema,
     TraceSchema,
 } from "qyl-mcp-server/contract-validation";
 import type { WorkbenchTelemetryCorrelation } from "./observability-correlation.js";
 import { runWithObservabilitySelfExportSuppressed } from "./observability-suppression.js";
 import { isCredentialKey, SecretRedactor } from "./secret-redactor.js";
-import { WorkbenchTelemetryAttributes } from "./telemetry.js";
 
 const TRACE_DEFINITION = "OTel.Traces.Trace";
 const LOG_DEFINITION = "OTel.Logs.LogRecord";
-const METRIC_DEFINITION = "OTel.Metrics.MetricPoint";
 const TRACE_ID_PATTERN = /^[0-9a-f]{32}$/iu;
 const SPAN_ID_PATTERN = /^[0-9a-f]{16}$/iu;
 const DEFAULT_READ_TIMEOUT_MS = 5_000;
-const DEFAULT_MAX_METRIC_PAGES = 10;
-const METRIC_PAGE_SIZE = 1_000;
 const LOG_PAGE_SIZE = 10_000;
 const MAX_REASON_LENGTH = 1_000;
-const METRIC_CORRELATION_MARGIN_MS = 10_000;
-const APPROXIMATE_METRIC_REASON =
-    "The installed JavaScript OTLP metrics pipeline does not export exemplars; MCP metrics are bounded by execution time and semantic operation identity rather than an exact trace link.";
 
-type SignalName = "traces" | "logs" | "metrics";
+type SignalName = "traces" | "logs";
 export type TelemetryAvailability = RunnerMcpTelemetryAvailability;
 export type TelemetrySignalAvailability = RunnerMcpTelemetrySignalAvailability;
 export type TelemetrySignalSummary = RunnerMcpTelemetrySignalSummary;
@@ -44,11 +34,6 @@ export type QylExecutionObservability = RunnerMcpExecutionTelemetryResponse;
 export interface QylObservabilityQuery {
     correlation: WorkbenchTelemetryCorrelation;
     instrumentationUnavailableReason?: string;
-    startedAt?: string;
-    completedAt?: string;
-    serviceName?: string;
-    method?: string;
-    toolName?: string;
 }
 
 export interface ContractParser<T> {
@@ -58,7 +43,6 @@ export interface ContractParser<T> {
 export interface QylObservabilityValidators {
     trace?: ContractParser<Trace>;
     log?: ContractParser<LogRecord>;
-    metric?: ContractParser<MetricPoint>;
 }
 
 export interface QylObservabilityProviderOptions {
@@ -69,7 +53,6 @@ export interface QylObservabilityProviderOptions {
     fetcher?: typeof fetch;
     validators?: QylObservabilityValidators;
     requestTimeoutMs?: number;
-    maxMetricPages?: number;
     now?: () => Date;
     redactor?: SecretRedactor;
 }
@@ -112,7 +95,6 @@ export class QylObservabilityProvider {
     private readonly fetcher: typeof fetch;
     private readonly validators: QylObservabilityValidators;
     private readonly requestTimeoutMs: number;
-    private readonly maxMetricPages: number;
     private readonly now: () => Date;
     private readonly redactor: SecretRedactor;
 
@@ -127,10 +109,6 @@ export class QylObservabilityProvider {
         this.requestTimeoutMs = positiveInteger(
             options.requestTimeoutMs ?? DEFAULT_READ_TIMEOUT_MS,
             "requestTimeoutMs",
-        );
-        this.maxMetricPages = positiveInteger(
-            options.maxMetricPages ?? DEFAULT_MAX_METRIC_PAGES,
-            "maxMetricPages",
         );
         this.now = options.now ?? (() => new Date());
         this.redactor = options.redactor ?? new SecretRedactor({
@@ -156,22 +134,19 @@ export class QylObservabilityProvider {
                 signals: {
                     traces: signal(),
                     logs: signal(),
-                    metrics: signal(),
                     exceptions: signal(),
                     toolCallEvents: signal(),
                 },
                 correlation: RunnerMcpTelemetryCorrelationSchema.parse(correlation),
                 traces: [],
                 logs: [],
-                metrics: [],
                 queriedAt: this.now().toISOString(),
                 selfExportSuppressed: true,
             };
         }
-        const [traces, logs, metrics] = await Promise.all([
+        const [traces, logs] = await Promise.all([
             this.collectTraces(correlation.traceIds),
             this.collectLogs(correlation.traceIds),
-            this.collectMetrics(query, correlation),
         ]);
         const expandedCorrelation = RunnerMcpTelemetryCorrelationSchema.parse(
             expandCorrelation(correlation, traces.items),
@@ -182,14 +157,12 @@ export class QylObservabilityProvider {
             signals: {
                 traces: traces.availability,
                 logs: logs.availability,
-                metrics: metrics.availability,
                 exceptions: derived.exceptions,
                 toolCallEvents: derived.toolCallEvents,
             },
             correlation: expandedCorrelation,
             traces: traces.items,
             logs: logs.items,
-            metrics: metrics.items,
             queriedAt: this.now().toISOString(),
             selfExportSuppressed: true,
         };
@@ -247,66 +220,6 @@ export class QylObservabilityProvider {
             }
         }
         return collected(items, failures, successfulReads);
-    }
-
-    private async collectMetrics(
-        query: QylObservabilityQuery,
-        correlation: WorkbenchTelemetryCorrelation,
-    ): Promise<CollectedSignal<MetricPoint>> {
-        const parser = this.validators.metric;
-        if (!parser) return unavailable(missingContractReason(METRIC_DEFINITION));
-        const window = executionWindow(query.startedAt, query.completedAt);
-        if (!window) {
-            return unavailable("Execution timestamps are unavailable for a bounded Qyl metrics query.");
-        }
-
-        const candidates: MetricPoint[] = [];
-        const failures: string[] = [];
-        let successfulReads = 0;
-        let cursor: string | undefined;
-        for (let pageNumber = 0; pageNumber < this.maxMetricPages; pageNumber += 1) {
-            try {
-                const body = await this.getJson(
-                    "/api/v1/metrics",
-                    {
-                        startTime: window.startTime,
-                        endTime: window.endTime,
-                        limit: METRIC_PAGE_SIZE,
-                        cursor,
-                        serviceName: query.serviceName,
-                    },
-                    "metrics",
-                );
-                const page = this.parsePage(body, parser, MetricsListResponseSchema, "metrics");
-                successfulReads += 1;
-                candidates.push(...page.items);
-                if (!page.hasMore) break;
-                if (!page.nextCursor) {
-                    failures.push("Qyl metrics reported more data without a continuation cursor.");
-                    break;
-                }
-                cursor = page.nextCursor;
-                if (pageNumber === this.maxMetricPages - 1) {
-                    failures.push("Qyl metrics exceeded the configured pagination bound.");
-                }
-            } catch (error) {
-                failures.push(this.failureReason(error, "Qyl metric evidence is unavailable."));
-                break;
-            }
-        }
-
-        const exact = candidates.filter((metric) => metricMatchesCorrelation(metric, correlation));
-        if (exact.length > 0 || query.method === undefined) {
-            return collected(exact, failures, successfulReads);
-        }
-
-        const approximate = candidates.filter((metric) =>
-            metricMatchesOperation(metric, query.method!, query.toolName));
-        return collected(
-            approximate,
-            [...failures, APPROXIMATE_METRIC_REASON],
-            successfulReads,
-        );
     }
 
     private async getJson(
@@ -405,7 +318,6 @@ function publishedValidators(): QylObservabilityValidators {
     return {
         trace: TraceSchema,
         log: LogRecordSchema,
-        metric: MetricPointSchema,
     };
 }
 
@@ -471,20 +383,6 @@ function requiredIdentifier(value: string, name: string): string {
 
 function uniqueW3cIds(values: readonly string[], pattern: RegExp): string[] {
     return [...new Set(values.filter((value) => pattern.test(value)).map((value) => value.toLowerCase()))];
-}
-
-function executionWindow(
-    startedAt: string | undefined,
-    completedAt: string | undefined,
-): { startTime: string; endTime: string } | undefined {
-    if (startedAt === undefined || completedAt === undefined) return undefined;
-    const start = Date.parse(startedAt);
-    const end = Date.parse(completedAt);
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return undefined;
-    return {
-        startTime: new Date(start).toISOString(),
-        endTime: new Date(end + METRIC_CORRELATION_MARGIN_MS).toISOString(),
-    };
 }
 
 function unavailable<T>(reason: string): CollectedSignal<T> {
@@ -559,59 +457,6 @@ function sanitizeCredentialAttributes(
     } finally {
         seen.delete(value);
     }
-}
-
-function metricMatchesCorrelation(
-    metric: unknown,
-    correlation: WorkbenchTelemetryCorrelation,
-): boolean {
-    const record = asOptionalRecord(metric);
-    if (!record) return false;
-    const exemplars = Array.isArray(record.exemplars) ? record.exemplars : [];
-    for (const exemplar of exemplars) {
-        const candidate = asOptionalRecord(exemplar);
-        if (!candidate) continue;
-        if (typeof candidate.trace_id === "string" && correlation.traceIds.includes(candidate.trace_id)) {
-            return true;
-        }
-        if (typeof candidate.span_id === "string" && correlation.spanIds.includes(candidate.span_id)) {
-            return true;
-        }
-    }
-
-    // Evaluation and case identifiers are shared by multiple executions. An
-    // attribute-only match is exact only when the globally unique execution id
-    // itself is present; exemplars above remain the preferred trace link.
-    const execution = new Map<string, string>([
-        [WorkbenchTelemetryAttributes.executionId, correlation.executionId],
-    ]);
-    return attributesContainAll(record.attributes, execution) ||
-        attributesContainAll(asOptionalRecord(record.resource)?.attributes, execution);
-}
-
-function metricMatchesOperation(
-    metric: unknown,
-    method: string,
-    toolName: string | undefined,
-): boolean {
-    const record = asOptionalRecord(metric);
-    if (!record || record.name !== "mcp.client.operation.duration") return false;
-    const expected = new Map<string, string>([["mcp.method.name", method]]);
-    if (toolName !== undefined) expected.set("gen_ai.tool.name", toolName);
-    return attributesContainAll(record.attributes, expected);
-}
-
-function attributesContainAll(value: unknown, expected: ReadonlyMap<string, string>): boolean {
-    if (!Array.isArray(value)) return false;
-    const found = new Map<string, unknown>();
-    for (const attribute of value) {
-        const record = asOptionalRecord(attribute);
-        if (record && typeof record.key === "string") found.set(record.key, record.value);
-    }
-    for (const [key, expectedValue] of expected) {
-        if (found.get(key) !== expectedValue) return false;
-    }
-    return true;
 }
 
 function expandCorrelation(

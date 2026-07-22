@@ -1,80 +1,36 @@
 #!/usr/bin/env node
-/**
- * Standalone entry point for the qyl telemetry MCP server.
- * Run with: node dist/main.js [--stdio]
- *
- * The qyl.mcp runner does NOT go through this file — it hosts createServer()
- * in-process over an in-memory transport (runner/main.ts). This entry exists
- * for direct chat-client wiring (stdio) and hosted HTTP deployments.
- */
-
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import { ErrorCode } from "@modelcontextprotocol/sdk/types.js";
-import type { Request, Response } from "express";
+import {
+  buildOAuthProtectedResourceMetadata,
+  createMcpHandler,
+  getOAuthProtectedResourceMetadataUrl,
+  OAuthError,
+  OAuthErrorCode,
+  type AuthMetadataOptions,
+  type McpServer,
+} from "@modelcontextprotocol/server";
+import { serveStdio, type StdioServerHandle } from "@modelcontextprotocol/server/stdio";
+import { toNodeHandler } from "@modelcontextprotocol/node";
+import type { Express, Request, Response } from "express";
 import { realpathSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import type { Server as HttpServer } from "node:http";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createServer } from "./server.js";
-import {
-  createMcpApp,
-  createMcpTransport,
-  isLoopbackBindHost,
-  loopbackOrigins,
-  readMcpAuthToken,
-  requireMcpAuthentication,
-} from "./http-security.js";
-import { mcpErrorResponse, mcpRequestId } from "./mcp-errors.js";
+import { requireBearerAuth } from "@modelcontextprotocol/express";
+import { createMcpApp, isLoopbackBindHost } from "./http-security.js";
+import { loadHostedOAuth } from "./oauth.js";
 import { closeDefaultNativeExecutionRuntime } from "./native-execution.js";
-import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
-import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
-import { AnonymousOAuthProvider } from "./oauth.js";
-
-interface CleanupFailure {
-  resource: "server" | "transport";
-  errorType: string;
-}
 
 export function sanitizedErrorType(error: unknown): string {
   if (!(error instanceof Error)) return "UnknownError";
   return /^[A-Za-z][A-Za-z0-9]*$/.test(error.name) ? error.name : "Error";
 }
 
-/**
- * McpServer owns its connected transport. A direct transport close is only a
- * fallback when the server-owned close fails, avoiding duplicate close races.
- */
-export async function closeMcpRequestResources(
-  server: Pick<McpServer, "close">,
-  transport: Pick<Transport, "close">,
-): Promise<CleanupFailure[]> {
-  try {
-    await server.close();
-    return [];
-  } catch (error) {
-    const failures: CleanupFailure[] = [
-      { resource: "server", errorType: sanitizedErrorType(error) },
-    ];
-    try {
-      await transport.close();
-    } catch (fallbackError) {
-      failures.push({
-        resource: "transport",
-        errorType: sanitizedErrorType(fallbackError),
-      });
-    }
-    return failures;
-  }
-}
-
-function logCleanupFailures(failures: readonly CleanupFailure[]): void {
-  for (const failure of failures) {
-    console.error(
-      `Standalone MCP ${failure.resource} cleanup failed (${failure.errorType}); secret details omitted`,
-    );
-  }
+function reportError(scope: string, error: unknown): void {
+  console.error(
+    `${scope} failed (${sanitizedErrorType(error)}); secret details omitted`,
+  );
 }
 
 export function closeHttpListener(server: HttpServer): Promise<void> {
@@ -88,9 +44,7 @@ export interface StreamableHTTPServerConfig {
   bindHost: string;
   publicUrl?: URL;
   allowedHosts?: string[];
-  allowedOrigins: string[];
-  authToken?: string;
-  hosted: boolean;
+  allowedOrigins?: string[];
 }
 
 function commaSeparated(value: string | undefined): string[] {
@@ -115,17 +69,18 @@ function configuredPublicUrl(environment: NodeJS.ProcessEnv): URL | undefined {
     throw new Error("MCP_PUBLIC_URL must be an absolute URL");
   }
 
-  if (publicUrl.protocol !== "http:" && publicUrl.protocol !== "https:") {
-    throw new Error("MCP_PUBLIC_URL must use HTTP or HTTPS");
+  if (publicUrl.protocol !== "https:") {
+    throw new Error("MCP_PUBLIC_URL must use HTTPS");
+  }
+  if (publicUrl.username || publicUrl.password || publicUrl.search || publicUrl.hash) {
+    throw new Error("MCP_PUBLIC_URL must not contain credentials, a query, or a fragment");
+  }
+  if (publicUrl.pathname !== "/") {
+    throw new Error("MCP_PUBLIC_URL must be an origin without a path");
   }
   return publicUrl;
 }
 
-/**
- * Reads the standalone HTTP configuration without exposing secret values in
- * errors or logs. The default remains loopback-only; a non-loopback bind or a
- * public URL is an explicit hosted mode and requires authentication.
- */
 export function readStreamableHTTPConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): StreamableHTTPServerConfig {
@@ -136,31 +91,27 @@ export function readStreamableHTTPConfig(
 
   const bindHost = environment.MCP_BIND_HOST?.trim() || "127.0.0.1";
   const publicUrl = configuredPublicUrl(environment);
-  const additionalHosts = commaSeparated(environment.MCP_ALLOWED_HOSTS);
-  const additionalOrigins = commaSeparated(environment.MCP_ALLOWED_ORIGINS);
-  const allowedHosts = publicUrl
-    ? unique([publicUrl.hostname, ...additionalHosts])
-    : undefined;
-  const allowedOrigins = publicUrl
-    ? unique([publicUrl.origin, ...additionalOrigins])
-    : loopbackOrigins(port);
-  const authToken = readMcpAuthToken(environment);
-  const hosted = publicUrl !== undefined || !isLoopbackBindHost(bindHost);
 
-  if (hosted && authToken === undefined) {
+  if (!isLoopbackBindHost(bindHost) && publicUrl === undefined) {
     throw new Error(
-      "MCP_AUTH_TOKEN must be configured when MCP_BIND_HOST is non-loopback or MCP_PUBLIC_URL is set",
+      "MCP_PUBLIC_URL must be set when MCP_BIND_HOST is a non-loopback address",
     );
   }
+
+  const additionalHosts = commaSeparated(environment.MCP_ALLOWED_HOSTS);
+  const additionalOrigins = commaSeparated(environment.MCP_ALLOWED_ORIGIN_HOSTS);
+
+  const allowedHosts =
+    publicUrl !== undefined ? unique([publicUrl.hostname, ...additionalHosts]) : undefined;
+  const allowedOrigins =
+    publicUrl !== undefined ? unique([publicUrl.hostname, ...additionalOrigins]) : undefined;
 
   return {
     port,
     bindHost,
     ...(publicUrl === undefined ? {} : { publicUrl }),
     ...(allowedHosts === undefined ? {} : { allowedHosts }),
-    allowedOrigins,
-    ...(authToken === undefined ? {} : { authToken }),
-    hosted,
+    ...(allowedOrigins === undefined ? {} : { allowedOrigins }),
   };
 }
 
@@ -168,103 +119,123 @@ function urlHost(host: string): string {
   return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
 }
 
-/**
- * Starts an MCP server with Streamable HTTP transport in stateless mode.
- *
- * @param createServer - Factory function that creates a new McpServer instance per request.
- */
+export function mountProtectedResourceMetadata(
+  app: Express,
+  options: AuthMetadataOptions,
+): string {
+  const metadataUrl = getOAuthProtectedResourceMetadataUrl(options.resourceServerUrl);
+  const metadataPath = new URL(metadataUrl).pathname;
+  const metadata = buildOAuthProtectedResourceMetadata(options);
+
+  app.all(metadataPath, (request, response) => {
+    response.set("Access-Control-Allow-Origin", "*");
+    if (request.method === "OPTIONS") {
+      response.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+      const requestedHeaders = request.get("Access-Control-Request-Headers");
+      if (requestedHeaders !== undefined) {
+        response.set("Access-Control-Allow-Headers", requestedHeaders);
+        response.vary("Access-Control-Request-Headers");
+      }
+      response.status(204).end();
+      return;
+    }
+    if (request.method === "GET") {
+      response.status(200).json(metadata);
+      return;
+    }
+    if (request.method === "HEAD") {
+      response.status(200).end();
+      return;
+    }
+
+    const error = new OAuthError(
+      OAuthErrorCode.MethodNotAllowed,
+      `The method ${request.method} is not allowed for this endpoint`,
+    );
+    response
+      .set("Allow", "GET, HEAD, OPTIONS")
+      .status(405)
+      .json(error.toResponseObject());
+  });
+  return metadataUrl;
+}
+
+export function mountLandingPage(app: Express, html: string): void {
+  app.get("/", (_request, response) => {
+    response
+      .set("Cache-Control", "public, max-age=300")
+      .status(200)
+      .type("html")
+      .send(html);
+  });
+}
+
 export async function startStreamableHTTPServer(
-  createServer: () => McpServer,
+  serverFactory: () => McpServer,
 ): Promise<void> {
   const config = readStreamableHTTPConfig();
-
+  const handler = createMcpHandler(serverFactory, {
+    legacy: "reject",
+    onerror: (error) => reportError("Standalone MCP request", error),
+  });
+  const nodeHandler = toNodeHandler(handler, {
+    onerror: (error) => reportError("Standalone MCP adapter", error),
+  });
   const app = createMcpApp({
     bindHost: config.bindHost,
     allowedHosts: config.allowedHosts,
+    allowedOrigins: config.allowedOrigins,
   });
 
   app.get("/healthz", (_request, response) => {
     response.status(200).json({ status: "ok" });
   });
+  mountLandingPage(
+    app,
+    await readFile(new URL("./mcp-home.html", import.meta.url), "utf8"),
+  );
 
-  const handleMcpRequest = async (req: Request, res: Response) => {
-    const server = createServer();
-    const transport = createMcpTransport(config.allowedOrigins);
-
-    res.once("close", () => {
-      void closeMcpRequestResources(server, transport).then(logCleanupFailures);
-    });
-
-    try {
-      await server.connect(transport);
-      await transport.handleRequest(req, res, req.body);
-    } catch (error) {
-      console.error(
-        `Standalone MCP request failed (${sanitizedErrorType(error)}); secret details omitted`,
-      );
-      if (!res.headersSent) {
-        res
-          .status(500)
-          .json(
-            mcpErrorResponse(
-              ErrorCode.InternalError,
-              "Internal server error",
-              mcpRequestId(req.body),
-            ),
-          );
-      }
-    }
+  const handleMcpRequest = async (request: Request, response: Response): Promise<void> => {
+    await nodeHandler(request, response, request.body);
   };
 
-  // The host is the namespace (mcp.<domain>), so the root is the canonical MCP endpoint.
-  // "/mcp" stays as a compatibility alias: published READMEs and configured connectors use it.
-  //
-  // Hosted deployments speak OAuth 2.1 (SDK-owned wire protocol, anonymous auto-approve
-  // policy) so stock MCP clients connect via discovery without an account; the operator's
-  // static bearer token keeps working. Loopback keeps the legacy static-token/no-auth modes.
-  if (config.publicUrl !== undefined && config.authToken !== undefined) {
-    const oauthProvider = new AnonymousOAuthProvider(config.authToken, config.authToken);
-    app.use(
-      mcpAuthRouter({
-        provider: oauthProvider,
-        issuerUrl: config.publicUrl,
-        resourceName: "qyl telemetry MCP server",
-        scopesSupported: ["qyl"],
-      }),
-    );
-    const requireOAuthBearer = requireBearerAuth({
-      verifier: oauthProvider,
-      resourceMetadataUrl: new URL("/.well-known/oauth-protected-resource", config.publicUrl)
-        .href,
+  if (config.publicUrl !== undefined) {
+    const resourceServerUrl = new URL("/mcp", config.publicUrl);
+    const oauth = await loadHostedOAuth(resourceServerUrl);
+    const resourceMetadataUrl = mountProtectedResourceMetadata(app, {
+      oauthMetadata: oauth.oauthMetadata,
+      resourceServerUrl,
+      scopesSupported: oauth.requiredScopes,
     });
-    app.all("/", requireOAuthBearer, handleMcpRequest);
-    app.all("/mcp", requireOAuthBearer, handleMcpRequest);
+    const requireAuth = requireBearerAuth({
+      verifier: oauth.verifier,
+      requiredScopes: oauth.requiredScopes,
+      resourceMetadataUrl,
+    });
+    app.all("/mcp", requireAuth, handleMcpRequest);
   } else {
-    app.all("/", requireMcpAuthentication(config.authToken), handleMcpRequest);
-    app.all("/mcp", requireMcpAuthentication(config.authToken), handleMcpRequest);
+    app.all("/mcp", handleMcpRequest);
   }
 
   const httpServer = app.listen(config.port, config.bindHost);
-  await new Promise<void>((resolve, reject) => {
-    httpServer.once("listening", resolve);
-    httpServer.once("error", reject);
+  await new Promise<void>((resolveListening, rejectListening) => {
+    httpServer.once("listening", resolveListening);
+    httpServer.once("error", rejectListening);
   });
   const endpoint = config.publicUrl
-    ? new URL("/", config.publicUrl).href
-    : `http://${urlHost(config.bindHost)}:${config.port}/`;
-  console.log(`MCP server listening on ${endpoint} (alias: /mcp)`);
+    ? new URL("/mcp", config.publicUrl).href
+    : `http://${urlHost(config.bindHost)}:${config.port}/mcp`;
+  console.log(`MCP server listening on ${endpoint}`);
 
   let shuttingDown = false;
   const shutdown = () => {
     if (shuttingDown) return;
     shuttingDown = true;
-    console.log("\nShutting down...");
-    void closeHttpListener(httpServer)
+    void handler.close()
+      .then(() => closeHttpListener(httpServer))
       .then(closeDefaultNativeExecutionRuntime)
       .catch((error: unknown) => {
-        console.error(
-          `Standalone MCP HTTP shutdown cleanup failed (${sanitizedErrorType(error)}); secret details omitted`,
-        );
+        reportError("Standalone MCP HTTP shutdown cleanup", error);
         process.exitCode = 1;
       });
   };
@@ -273,36 +244,33 @@ export async function startStreamableHTTPServer(
   process.once("SIGTERM", shutdown);
 }
 
-/**
- * Starts an MCP server with stdio transport.
- *
- * @param createServer - Factory function that creates a new McpServer instance.
- */
-export async function startStdioServer(
-  createServer: () => McpServer,
-): Promise<void> {
-  const server = createServer();
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-
+export function startStdioServer(serverFactory: () => McpServer): StdioServerHandle {
+  const handle = serveStdio(serverFactory, {
+    legacy: "reject",
+    onerror: (error) => reportError("Standalone MCP stdio", error),
+  });
   let shuttingDown = false;
   const shutdown = () => {
     if (shuttingDown) return;
     shuttingDown = true;
-    void closeMcpRequestResources(server, transport)
-      .then(logCleanupFailures)
-      .finally(closeDefaultNativeExecutionRuntime);
+    void handle.close()
+      .then(closeDefaultNativeExecutionRuntime)
+      .catch((error: unknown) => {
+        reportError("Standalone MCP stdio shutdown cleanup", error);
+        process.exitCode = 1;
+      });
   };
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
+  return handle;
 }
 
-async function main() {
+async function main(): Promise<void> {
   if (process.argv.includes("--stdio")) {
-    await startStdioServer(() => createServer({ transport: "stdio" }));
-  } else {
-    await startStreamableHTTPServer(() => createServer({ transport: "streamable_http" }));
+    startStdioServer(() => createServer({ transport: "stdio" }));
+    return;
   }
+  await startStreamableHTTPServer(() => createServer({ transport: "streamable_http" }));
 }
 
 function toRealEntryHref(entryPoint: string): string {
@@ -310,21 +278,15 @@ function toRealEntryHref(entryPoint: string): string {
   try {
     return pathToFileURL(realpathSync(resolved)).href;
   } catch {
-    // A vanished or unreadable entry path cannot be this module; fall back to the lexical path.
     return pathToFileURL(resolved).href;
   }
 }
 
-// npm bin shims invoke this file through a node_modules/.bin symlink, so the entry point must be
-// realpath'd before comparing against import.meta.url (which the loader already resolved) — plain
-// resolve() keeps the symlink path, the comparison fails, and main() silently never runs.
 const entryPoint = process.argv[1];
 const entryHref = entryPoint === undefined ? undefined : toRealEntryHref(entryPoint);
 if (entryHref === import.meta.url) {
   void main().catch((error: unknown) => {
-    console.error(
-      `Standalone MCP startup failed (${sanitizedErrorType(error)}); secret details omitted`,
-    );
+    reportError("Standalone MCP startup", error);
     process.exitCode = 1;
   });
 }

@@ -9,9 +9,16 @@ npx qyl-mcp-server --stdio    # stdio MCP server
 npx qyl-mcp-server            # Streamable HTTP on loopback
 ```
 
-Works standalone with any MCP client, and composes with the qyl local stack —
-`qyl up --mcp-stdio npx qyl-mcp-server --stdio` supervises it next to the
-collector with reads and OTLP export pre-wired.
+Works standalone with any MCP client. Point `QYL_COLLECTOR_URL` and
+`QYL_OTLP_ENDPOINT` at a local or hosted Qyl collector; MCP process supervision
+and interactive connections belong to the qyl.mcp workbench runner.
+
+The HTTP server publishes a product and setup page at `/`; the protocol remains
+available only at `/mcp`.
+
+The server uses the MCP v2 serving entries. Streamable HTTP uses
+`createMcpHandler` and stdio uses `serveStdio`; both accept only protocol
+revision `2026-07-28`.
 
 ## Tools
 
