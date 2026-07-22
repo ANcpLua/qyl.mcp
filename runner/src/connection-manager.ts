@@ -6,7 +6,6 @@ import {
 } from "@modelcontextprotocol/client";
 import type {
     Implementation,
-    OAuthClientProvider,
     Prompt,
     Resource,
     ResourceTemplateType,
@@ -80,8 +79,6 @@ export interface StdioConnectionDefinition extends ConnectionDefinitionBase {
 interface RemoteConnectionDefinitionBase extends ConnectionDefinitionBase {
     endpoint: string;
     headers?: readonly EnvironmentHeaderReference[];
-    /** Runtime-only SDK OAuth provider; never serialized into a connection DTO. */
-    authProvider?: OAuthClientProvider;
 }
 
 export interface StreamableHttpConnectionDefinition extends RemoteConnectionDefinitionBase {
@@ -718,11 +715,9 @@ export class ConnectionManager {
             }
             case "streamable-http": {
                 const { headers } = resolveEnvironmentHeaders(definition.headers, this.environment);
-                assertOAuthHeaderCompatibility(definition, headers);
                 return {
                     transport: new StreamableHTTPClientTransport(httpEndpoint(definition.endpoint), {
                         requestInit: { headers },
-                        authProvider: definition.authProvider,
                     }),
                 };
             }
@@ -1116,15 +1111,6 @@ function httpEndpoint(value: string): URL {
         );
     }
     return url;
-}
-
-function assertOAuthHeaderCompatibility(
-    definition: StreamableHttpConnectionDefinition,
-    headers: Headers,
-): void {
-    if (definition.authProvider && headers.has("authorization")) {
-        throw new Error("OAuth and an environment-backed Authorization header cannot be configured together.");
-    }
 }
 
 function requestOptions(

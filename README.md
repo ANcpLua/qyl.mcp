@@ -244,8 +244,8 @@ origins. It uses the same `QYL_COLLECTOR_URL`, `QYL_API_KEY`, and `QYL_DEMO`
 configuration. `QYL_API_KEY` is only an outgoing collector credential; it does
 not authenticate incoming MCP clients. The model-visible tools are
 `display_traces`, `display_mcp_dashboard`, `list_traces`, `get_trace`,
-`list_sessions`, and `search_logs`; `fetch_telemetry` is reserved for the
-bundled MCP Apps.
+`list_sessions`, `search_logs`, and `ci_log`; `fetch_telemetry` is reserved for
+the bundled MCP Apps.
 
 The workbench runner remains available with `npm run start:runner`.
 

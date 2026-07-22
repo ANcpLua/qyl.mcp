@@ -5,6 +5,7 @@
  * - display_traces:        trace explorer UI (waterfall + logs) — THE app tool
  * - display_mcp_dashboard: aggregate MCP traffic dashboard UI
  * - list_traces, get_trace, list_sessions, search_logs: direct read tools
+ * - ci_log:                CI execution evidence from qyl telemetry
  * - fetch_telemetry:       app-only (viewer iframes; hidden from the model)
  *
  * Modes: live against the qyl collector REST API (QYL_COLLECTOR_URL, default
