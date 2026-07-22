@@ -1,7 +1,7 @@
 {
   "name": "qyl-mcp-runner",
   "private": true,
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "type": "module",
   "description": "Local MCP server host with orchestration, an authenticated workbench API, and in-process qyl telemetry tools",
   "scripts": {
@@ -23,7 +23,7 @@
     "@opentelemetry/sdk-trace-base": "^2.9.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
     "express": "^5.2.1",
-    "qyl-mcp-server": "1.0.0-beta.1",
+    "qyl-mcp-server": "1.0.0-beta.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {

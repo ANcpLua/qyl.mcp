@@ -1,9 +1,8 @@
 name: Publish (npmjs.org)
 
 # qyl-mcp-server -> registry.npmjs.org via npm trusted publishing (OIDC + provenance) — no stored
-# secrets, no hand-bumped versions. The git tag is the single source of version truth: "Resolve
-# release version" stamps the server workspace from it, so committed files carry no authoritative
-# version. Mirrors the qyl-api-schema release workflow, minus its NuGet leg and GitHub Packages
+# secrets. The committed package metadata is the runtime version source, and the release tag must
+# match it exactly. Mirrors the qyl-api-schema release workflow, minus its NuGet leg and GitHub Packages
 # scope routing (this package is unscoped and installs everything from npmjs).
 #
 # Restartable: an existing immutable version must carry this checkout's commit, in which case the
@@ -82,9 +81,7 @@ jobs:
           echo "NPM_DIST_TAG=$dist_tag" >> "$GITHUB_ENV"
           echo "Resolved dist-tag: $dist_tag"
 
-      # The git tag is the single source of version truth: stamp the server workspace so npm
-      # publishes exactly that version. Strict SemVer without build metadata (npm rejects it).
-      - name: Resolve release version (from tag)
+      - name: Verify release version
         shell: bash
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
@@ -105,9 +102,13 @@ jobs:
             echo "::error::Version '$ver' is not strict MAJOR.MINOR.PATCH[-prerelease] with no build metadata."
             exit 1
           fi
-          npm version "$ver" --no-git-tag-version --allow-same-version --workspace server
+          package_ver="$(node -p "require('./server/package.json').version")"
+          if [ "$package_ver" != "$ver" ]; then
+            echo "::error::Release tag version '$ver' does not match server/package.json '$package_ver'"
+            exit 1
+          fi
           echo "RELEASE_VERSION=$ver" >> "$GITHUB_ENV"
-          echo "Release version: $ver (stamped from the git tag)"
+          echo "Release version: $ver"
 
       - name: Validate any existing immutable version
         shell: bash

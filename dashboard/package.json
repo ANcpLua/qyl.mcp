@@ -1,7 +1,7 @@
 {
   "name": "qyl-mcp-dashboard",
   "private": true,
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "type": "module",
   "description": "Local dashboard for qyl.mcp resources and telemetry",
   "scripts": {
@@ -14,7 +14,7 @@
     "@ancplua/qyl-api-schema": "1.0.5",
     "@modelcontextprotocol/core": "2.0.0-beta.5",
     "@modelcontextprotocol/server": "2.0.0-beta.5",
-    "qyl-mcp-server": "1.0.0-beta.1",
+    "qyl-mcp-server": "1.0.0-beta.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "zod": "^4.4.3"
