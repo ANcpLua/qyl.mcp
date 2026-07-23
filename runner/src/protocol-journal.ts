@@ -66,6 +66,7 @@ interface PendingRequest {
     method: string;
     correlation?: ProtocolExecutionCorrelation;
     target: ProtocolOperationTarget;
+    requestBody?: unknown;
     remotePropagation?: ProtocolPropagationCarrier;
     activeOperation?: ActiveProtocolOperation;
 }
@@ -91,6 +92,7 @@ export interface StartedProtocolOperation extends ProtocolOperationTarget {
     requestId?: RequestId;
     correlation?: ProtocolExecutionCorrelation;
     startTimeMs: number;
+    requestBody?: unknown;
     /** Configured propagation fields extracted from inbound MCP params._meta. */
     remotePropagation?: ProtocolPropagationCarrier;
 }
@@ -98,7 +100,9 @@ export interface StartedProtocolOperation extends ProtocolOperationTarget {
 export interface CompletedProtocolOperation extends StartedProtocolOperation {
     endTimeMs: number;
     errorType?: string;
+    errorMessage?: string;
     rpcResponseStatusCode?: string;
+    responseBody?: unknown;
     /** Negotiated version extracted from a successful initialize result. */
     protocolVersion?: string;
 }
@@ -153,7 +157,7 @@ export class ProtocolJournal {
         return () => this.subscribers.delete(push);
     }
 
-    /** Start a request or notification before transport dispatch. */
+    /** Start a JSON-RPC request or notification before transport dispatch. */
     startOperation(
         direction: ProtocolDirection,
         message: JSONRPCMessage,
@@ -173,6 +177,7 @@ export class ProtocolJournal {
             ...(correlation === undefined ? {} : { correlation }),
             startTimeMs: this.now(),
             ...operationTarget(parsed.data.method, parsed.data.params),
+            requestBody: this.boundPayload(this.redactor.redact(parsed.data)),
             ...(direction === "inbound" ? optionalRemotePropagation(parsed.data.params) : {}),
         };
         try {
@@ -221,6 +226,7 @@ export class ProtocolJournal {
                 method,
                 correlation,
                 target: operationTarget(parsed.data.method, parsed.data.params),
+                requestBody: this.boundPayload(this.redactor.redact(parsed.data)),
                 ...(direction === "inbound" ? optionalRemotePropagation(parsed.data.params) : {}),
                 ...(activeOperation === undefined
                     ? {}
@@ -247,9 +253,11 @@ export class ProtocolJournal {
                     options.responseSendErrorType
                         ?? (resultIsToolError(parsed.data.result) ? "tool_error" : undefined),
                     undefined,
+                    undefined,
                     matched.method === "initialize"
                         ? resultProtocolVersion(parsed.data.result)
                         : undefined,
+                    this.boundPayload(this.redactor.redact(parsed.data)),
                 );
             }
         } else if (isJSONRPCErrorResponse(parsed.data)) {
@@ -271,6 +279,9 @@ export class ProtocolJournal {
                         effectiveCorrelation,
                         options.responseSendErrorType ?? statusCode,
                         statusCode,
+                        this.redactor.redactText(parsed.data.error.message),
+                        undefined,
+                        this.boundPayload(this.redactor.redact(parsed.data)),
                     );
                 }
             }
@@ -326,6 +337,7 @@ export class ProtocolJournal {
         message: JSONRPCMessage,
         correlation: ProtocolExecutionCorrelation | undefined,
         errorType: string,
+        errorMessage?: string,
     ): void {
         const parsed = JSONRPCMessageSchema.safeParse(message);
         if (!parsed.success || !isJSONRPCRequest(parsed.data)) return;
@@ -343,10 +355,22 @@ export class ProtocolJournal {
             startTimeMs: pending.timestampMs,
             endTimeMs: Math.max(pending.timestampMs, this.now()),
             ...pending.target,
+            ...(pending.requestBody === undefined ? {} : { requestBody: pending.requestBody }),
             ...(direction === "inbound" && pending.remotePropagation !== undefined
                 ? { remotePropagation: pending.remotePropagation }
                 : {}),
             errorType,
+            ...(errorMessage === undefined
+                ? {}
+                : { errorMessage: this.redactor.redactText(errorMessage) }),
+            responseBody: {
+                error: {
+                    type: errorType,
+                    ...(errorMessage === undefined
+                        ? {}
+                        : { message: this.redactor.redactText(errorMessage) }),
+                },
+            },
         }, pending.activeOperation);
     }
 
@@ -366,6 +390,7 @@ export class ProtocolJournal {
                 startTimeMs: pending.timestampMs,
                 endTimeMs: Math.max(pending.timestampMs, endTimeMs),
                 ...pending.target,
+                ...(pending.requestBody === undefined ? {} : { requestBody: pending.requestBody }),
                 ...(direction === "inbound" && pending.remotePropagation !== undefined
                     ? { remotePropagation: pending.remotePropagation }
                     : {}),
@@ -454,7 +479,11 @@ export class ProtocolJournal {
         }
         if (!this.onOperation) return;
         try {
-            this.onOperation(structuredClone(operation));
+            const summary = structuredClone(operation);
+            delete summary.requestBody;
+            delete summary.responseBody;
+            delete summary.errorMessage;
+            this.onOperation(summary);
         } catch (error) {
             this.recordObserverError(error, operation.correlation);
         }
@@ -490,6 +519,7 @@ export class ProtocolJournal {
                 startTimeMs: replaced.timestampMs,
                 endTimeMs: Math.max(replaced.timestampMs, this.now()),
                 ...replaced.target,
+                ...(replaced.requestBody === undefined ? {} : { requestBody: replaced.requestBody }),
                 ...(direction === "inbound" && replaced.remotePropagation !== undefined
                     ? { remotePropagation: replaced.remotePropagation }
                     : {}),
@@ -515,6 +545,7 @@ export class ProtocolJournal {
                     startTimeMs: evicted.timestampMs,
                     endTimeMs: Math.max(evicted.timestampMs, this.now()),
                     ...evicted.target,
+                    ...(evicted.requestBody === undefined ? {} : { requestBody: evicted.requestBody }),
                     ...(direction === "inbound" && evicted.remotePropagation !== undefined
                         ? { remotePropagation: evicted.remotePropagation }
                         : {}),
@@ -597,6 +628,7 @@ export class JournaledTransport implements Transport {
                             message,
                             correlation,
                             operationErrorType(error),
+                            operationErrorMessage(error),
                         );
                     }
                     throw error;
@@ -693,6 +725,7 @@ export class JournaledTransport implements Transport {
                     contextualMessage,
                     correlation,
                     errorType,
+                    operationErrorMessage(error),
                 );
             }
             this.journal.recordTransportError(error, this.options.correlation?.());
@@ -762,7 +795,9 @@ function completedFromResponse(
     correlation: ProtocolExecutionCorrelation | undefined,
     errorType?: string,
     rpcResponseStatusCode?: string,
+    errorMessage?: string,
     protocolVersion?: string,
+    responseBody?: unknown,
 ): CompletedProtocolOperation {
     const requestDirection = opposite(responseDirection);
     return {
@@ -774,12 +809,15 @@ function completedFromResponse(
         startTimeMs: matched.timestampMs,
         endTimeMs,
         ...matched.target,
+        ...(matched.requestBody === undefined ? {} : { requestBody: matched.requestBody }),
         ...(requestDirection === "inbound" && matched.remotePropagation !== undefined
             ? { remotePropagation: matched.remotePropagation }
             : {}),
         ...(errorType === undefined ? {} : { errorType }),
+        ...(errorMessage === undefined ? {} : { errorMessage }),
         ...(rpcResponseStatusCode === undefined ? {} : { rpcResponseStatusCode }),
         ...(protocolVersion === undefined ? {} : { protocolVersion }),
+        ...(responseBody === undefined ? {} : { responseBody }),
     };
 }
 
@@ -804,6 +842,10 @@ function operationErrorType(error: unknown): string {
     return error instanceof Error && error.name !== "Error" && error.name.length > 0
         ? error.name
         : "transport_error";
+}
+
+function operationErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
 function runActiveOperation<T>(
@@ -874,18 +916,20 @@ function prioritizedPropagationEntries(
 function operationTarget(method: string, params: unknown): ProtocolOperationTarget {
     if (typeof params !== "object" || params === null || Array.isArray(params)) return {};
     const record = params as Record<string, unknown>;
+    const target: ProtocolOperationTarget = {};
     if (method === "tools/call" && typeof record.name === "string") {
-        return { toolName: record.name };
+        target.toolName = record.name;
     }
     if (method === "prompts/get" && typeof record.name === "string") {
-        return { promptName: record.name };
+        target.promptName = record.name;
     }
     if ((method === "resources/read" || method === "resources/subscribe"
-        || method === "resources/unsubscribe" || method === "notifications/resources/updated")
+        || method === "resources/unsubscribe"
+        || method === "notifications/resources/updated")
         && typeof record.uri === "string") {
-        return { resourceUri: record.uri };
+        target.resourceUri = record.uri;
     }
-    return {};
+    return target;
 }
 
 function resultIsToolError(result: unknown): boolean {

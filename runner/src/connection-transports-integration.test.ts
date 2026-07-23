@@ -46,7 +46,6 @@ test("connection manager owns a real stdio MCP lifecycle and exhaustive discover
         assert(operations.some((operation) => operation.method === "tools/call"));
         const discover = operations.find((candidate) => candidate.method === "server/discover");
         assert(discover, "missing server/discover operation");
-        assert.equal(discover.mcpSessionId, undefined);
         assert.equal(operations.some((operation) => operation.method === "initialize"), false);
     } finally {
         if (manager.get("stdio-fixture").lifecycle !== "disconnected") {
@@ -167,7 +166,6 @@ for (const transport of ["streamable-http"] as const) {
             assert.equal(connected.initialization?.sessionId, undefined);
             const discover = operations.find((candidate) => candidate.method === "server/discover");
             assert(discover, "missing server/discover operation");
-            assert.equal(discover.mcpSessionId, undefined);
             assert.equal(operations.some((operation) => operation.method === "initialize"), false);
             assert.doesNotMatch(
                 JSON.stringify({ connected, journal: manager.getJournal(transport)?.snapshot() }),

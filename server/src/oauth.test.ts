@@ -145,7 +145,7 @@ async function testKeys() {
 }
 
 async function issueToken(
-  privateKey: CryptoKey,
+  privateKey: Awaited<ReturnType<typeof generateKeyPair>>["privateKey"],
   claims: Record<string, unknown>,
   options: { typ?: string; audience?: string } = {},
 ): Promise<string> {

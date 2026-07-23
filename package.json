@@ -1,7 +1,7 @@
 {
   "name": "qyl.mcp",
   "private": true,
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.3",
   "type": "module",
   "description": "qyl MCP host, telemetry tools, MCP Apps viewers, and local resource dashboard",
   "workspaces": [
@@ -19,13 +19,11 @@
     "dev": "npm run build --workspace server && npm run dev --workspace dashboard"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": "24.x"
   },
   "devDependencies": {
-    "@types/node": "26.1.1",
-    "qyl-mcp-dashboard": "^1.0.0-beta.2",
-    "qyl-mcp-runner": "^1.0.0-beta.2",
-    "qyl-mcp-server": "^1.0.0-beta.2",
+    "@types/node": "24.13.3",
+    "typescript": "7.0.2",
     "vite": "8.1.5"
   },
   "optionalDependencies": {

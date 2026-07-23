@@ -39,7 +39,8 @@ atomically to `~/.qyl/mcp-native-executions.json`.
 | `QYL_API_KEY` | Collector read and OTLP credential. |
 | `QYL_OTLP_ENDPOINT` | Optional OTLP base for self-telemetry. |
 | `QYL_DEMO=1` | Explicit generated demo telemetry. Collector failure never silently substitutes demo data. |
-| `QYL_MCP_TELEMETRY=0` | Disable MCP spans and duration metrics. |
+| `QYL_MCP_TELEMETRY=0` | Disable MCP spans, metrics, and operation logs. |
+| `QYL_MCP_CAPTURE_CONTENT=1` | Include redacted, size-bounded request and response bodies in MCP operation logs. Disabled by default. |
 | `QYL_MCP_NATIVE_STATE_PATH` | Override the native execution-evidence path. |
 
 Secrets are redacted before results reach the model, structured content, or

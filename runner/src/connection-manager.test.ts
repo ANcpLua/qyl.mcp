@@ -5,7 +5,6 @@ import {
     ConnectionManager,
     ConnectionManagerError,
     resolveEnvironmentHeaders,
-    type CompletedConnectionSession,
     type ConnectionProtocolOperation,
 } from "./connection-manager.js";
 
@@ -50,12 +49,10 @@ function fullFixtureServer(): McpServer {
 
 test("connection manager initializes an in-process SDK client and discovers every capability", async () => {
     const operations: ConnectionProtocolOperation[] = [];
-    const sessions: CompletedConnectionSession[] = [];
     const manager = new ConnectionManager({
         clientInfo: { name: "connection-test-client", version: "1.0.0" },
         correlation: (connectionId) => ({ executionId: `execution-${connectionId}` }),
         onOperation: (operation) => operations.push(operation),
-        onSession: (session) => sessions.push(session),
     });
     const lifecycles: string[] = [];
     manager.subscribe((snapshot) => lifecycles.push(snapshot.lifecycle));
@@ -134,9 +131,6 @@ test("connection manager initializes an in-process SDK client and discovers ever
         && operation.role === "client" && operation.toolName === "probe"));
     assert(operations.some((operation) => operation.method === "tools/call"
         && operation.role === "server" && operation.toolName === "probe"));
-    assert.deepEqual(sessions.map((session) => session.role).sort(), ["client", "server"]);
-    assert(sessions.every((session) => session.connectionId === "local"));
-    assert(sessions.every((session) => session.endTimeMs >= session.startTimeMs));
 });
 
 test("connection manager supports builtin registration and reconnects with a fresh server", async () => {

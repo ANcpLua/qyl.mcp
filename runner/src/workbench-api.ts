@@ -37,7 +37,6 @@ import {
     ConnectionManager,
     ConnectionManagerError,
     type ActiveConnectionProtocolOperation,
-    type CompletedConnectionSession,
     type ConnectionDefinition,
     type ConnectionInitializationSnapshot,
     type ConnectionProtocolOperation,
@@ -182,7 +181,6 @@ export class WorkbenchApi {
             correlation: (serverId) => executions?.correlationFor(serverId),
             onOperationStart: (operation) => this.startProtocolOperation(operation),
             onOperation: (operation) => this.recordProtocolOperation(operation),
-            onSession: (session) => this.recordProtocolSession(session),
             now: () => this.now().getTime(),
         });
         this.executions = executions = new ExecutionService(this.connections, {
@@ -232,7 +230,6 @@ export class WorkbenchApi {
             method: operation.method,
             transport: operation.transport,
             protocolVersion: operation.protocolVersion,
-            mcpSessionId: operation.mcpSessionId,
             jsonRpcProtocolVersion: "2.0",
             peerAddress: operation.peerAddress,
             peerPort: operation.peerPort,
@@ -244,6 +241,7 @@ export class WorkbenchApi {
             evaluationRunId: operation.correlation?.evaluationRunId,
             testCaseId: operation.correlation?.testCaseId,
             startTimeMs: operation.startTimeMs,
+            requestBody: operation.requestBody,
             ...(operation.remotePropagation === undefined
                 ? {}
                 : { remotePropagation: operation.remotePropagation }),
@@ -255,10 +253,11 @@ export class WorkbenchApi {
                 const span = active.end({
                     endTimeMs: completed.endTimeMs,
                     protocolVersion: completed.protocolVersion,
-                    mcpSessionId: completed.mcpSessionId,
                     errorType: completed.errorType,
+                    errorMessage: completed.errorMessage,
                     rpcResponseStatusCode: completed.rpcResponseStatusCode,
                     jsonRpcRequestId: completed.requestId,
+                    responseBody: completed.responseBody,
                 });
                 const executionId = completed.correlation?.executionId;
                 if (executionId !== undefined && span !== undefined) {
@@ -266,20 +265,6 @@ export class WorkbenchApi {
                 }
             },
         };
-    }
-
-    private recordProtocolSession(session: CompletedConnectionSession): void {
-        this.telemetry.recordSession({
-            role: session.role,
-            transport: session.transport,
-            protocolVersion: session.protocolVersion,
-            jsonRpcProtocolVersion: "2.0",
-            peerAddress: session.peerAddress,
-            peerPort: session.peerPort,
-            errorType: session.errorType,
-            startTimeMs: session.startTimeMs,
-            endTimeMs: session.endTimeMs,
-        });
     }
 
     async initialize(): Promise<void> {
