@@ -1,6 +1,6 @@
 {
   "name": "qyl-mcp-server",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.3",
   "type": "module",
   "description": "qyl telemetry MCP Apps server: trace explorer and MCP dashboard for a live collector or explicit demo mode",
   "repository": {
@@ -64,19 +64,22 @@
   },
   "dependencies": {
     "@ancplua/qyl-api-schema": "1.0.5",
-    "@modelcontextprotocol/ext-apps": "^1.7.4",
     "@modelcontextprotocol/core": "2.0.0-beta.5",
     "@modelcontextprotocol/express": "2.0.0-beta.5",
+    "@modelcontextprotocol/ext-apps": "^1.7.4",
     "@modelcontextprotocol/node": "2.0.0-beta.5",
     "@modelcontextprotocol/server": "2.0.0-beta.5",
     "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/core": "^2.9.0",
-    "@opentelemetry/exporter-metrics-otlp-proto": "^0.220.0",
-    "@opentelemetry/exporter-trace-otlp-proto": "^0.220.0",
-    "@opentelemetry/resources": "^2.9.0",
-    "@opentelemetry/sdk-metrics": "^2.9.0",
-    "@opentelemetry/sdk-trace-base": "^2.9.0",
-    "@opentelemetry/sdk-trace-node": "^2.9.0",
+    "@opentelemetry/api-logs": "^0.221.0",
+    "@opentelemetry/core": "^2.10.0",
+    "@opentelemetry/exporter-logs-otlp-proto": "^0.221.0",
+    "@opentelemetry/exporter-metrics-otlp-proto": "^0.221.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.221.0",
+    "@opentelemetry/resources": "^2.10.0",
+    "@opentelemetry/sdk-logs": "^0.221.0",
+    "@opentelemetry/sdk-metrics": "^2.10.0",
+    "@opentelemetry/sdk-trace-base": "^2.10.0",
+    "@opentelemetry/sdk-trace-node": "^2.10.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
     "express": "^5.2.1",
     "jose": "^6.2.3",
@@ -85,12 +88,12 @@
   "devDependencies": {
     "@modelcontextprotocol/client": "2.0.0-beta.5",
     "@types/express": "5.0.6",
-    "@types/node": "26.1.1",
+    "@types/node": "24.13.3",
     "typescript": "7.0.2",
     "vite": "8.1.5",
     "vite-plugin-singlefile": "2.3.3"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": "24.x"
   }
 }

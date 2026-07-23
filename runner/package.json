@@ -1,7 +1,7 @@
 {
   "name": "qyl-mcp-runner",
   "private": true,
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.3",
   "type": "module",
   "description": "Local MCP server host with orchestration, an authenticated workbench API, and in-process qyl telemetry tools",
   "scripts": {
@@ -20,19 +20,20 @@
     "@modelcontextprotocol/node": "2.0.0-beta.5",
     "@modelcontextprotocol/server": "2.0.0-beta.5",
     "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/sdk-trace-base": "^2.9.0",
+    "@opentelemetry/sdk-trace-base": "^2.10.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
     "express": "^5.2.1",
-    "qyl-mcp-server": "1.0.0-beta.2",
+    "qyl-mcp-server": "1.0.0-beta.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@opentelemetry/sdk-logs": "^0.221.0",
     "@types/express": "5.0.6",
-    "@types/node": "26.1.1",
+    "@types/node": "24.13.3",
     "typescript": "7.0.2",
     "vite": "8.1.5"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": "24.x"
   }
 }

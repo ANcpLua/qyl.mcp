@@ -137,22 +137,26 @@ test("native tools/call automatically persists validated, redacted, correlated e
     assert.match(durableJson, /\[REDACTED\]/u);
 
     assert.equal(starts.length, 1);
-    assert.deepEqual(starts[0], {
-      role: "server",
-      method: "tools/call",
-      serverId: "qyl.mcp/native",
-      toolName: "fixture.evidence",
-      transport: "stdio",
-      jsonRpcProtocolVersion: "2.0",
-      executionId: "native-execution-1",
-      remotePropagation: { traceparent: `00-${TRACE_ID}-${SPAN_ID}-01` },
-      startTimeMs: Date.parse("2026-07-17T12:00:00.000Z"),
+    const started = starts[0] as Record<string, unknown>;
+    assert.equal(started.role, "server");
+    assert.equal(started.method, "tools/call");
+    assert.equal(started.serverId, "qyl.mcp/native");
+    assert.equal(started.toolName, "fixture.evidence");
+    assert.equal(started.transport, "stdio");
+    assert.equal(started.jsonRpcProtocolVersion, "2.0");
+    assert.equal(started.executionId, "native-execution-1");
+    assert.deepEqual(started.remotePropagation, {
+      traceparent: `00-${TRACE_ID}-${SPAN_ID}-01`,
     });
-    assert.doesNotMatch(JSON.stringify(starts), /authorization|arguments|result|NATIVE_EXECUTION_SECRET/u);
-    assert.deepEqual(completions, [{
-      endTimeMs: Date.parse("2026-07-17T12:00:00.037Z"),
-      jsonRpcRequestId: persisted.request.requestId,
-    }]);
+    assert.equal(started.startTimeMs, Date.parse("2026-07-17T12:00:00.000Z"));
+    assert.doesNotMatch(JSON.stringify(started), /NATIVE_EXECUTION_SECRET/u);
+    assert.match(JSON.stringify(started.requestBody), /\[REDACTED\]/u);
+    assert.equal(completions.length, 1);
+    const completion = completions[0] as Record<string, unknown>;
+    assert.equal(completion.endTimeMs, Date.parse("2026-07-17T12:00:00.037Z"));
+    assert.equal(completion.jsonRpcRequestId, persisted.request.requestId);
+    assert.doesNotMatch(JSON.stringify(completion), /NATIVE_EXECUTION_SECRET/u);
+    assert.match(JSON.stringify(completion.responseBody), /\[REDACTED\]/u);
   } finally {
     await client.close().catch(() => undefined);
     await server.close().catch(() => undefined);

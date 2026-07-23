@@ -1,5 +1,10 @@
 import { SpanKind, type Attributes } from "@opentelemetry/api";
 import {
+    SeverityNumber,
+    type LogAttributes,
+    type LogBody,
+} from "@opentelemetry/api-logs";
+import {
     ATTR_CLIENT_ADDRESS,
     ATTR_CLIENT_PORT,
     ATTR_ERROR_TYPE,
@@ -20,46 +25,18 @@ import {
     ATTR_MCP_METHOD_NAME,
     ATTR_MCP_PROTOCOL_VERSION,
     ATTR_MCP_RESOURCE_URI,
-    ATTR_MCP_SESSION_ID,
     ATTR_RPC_RESPONSE_STATUS_CODE,
     GEN_AI_OPERATION_NAME_VALUE_EXECUTE_TOOL,
     METRIC_MCP_CLIENT_OPERATION_DURATION,
-    METRIC_MCP_CLIENT_SESSION_DURATION,
     METRIC_MCP_SERVER_OPERATION_DURATION,
-    METRIC_MCP_SERVER_SESSION_DURATION,
 } from "@opentelemetry/semantic-conventions/incubating";
 import { SecretRedactor } from "./secret-redactor.js";
 
 const ATTRIBUTE_VALUE_LIMIT = 2_000;
+const LOG_BODY_CHARACTER_LIMIT = 64_000;
 const JSONRPC_DEFAULT_VERSION = "2.0";
 
-export const MCP_WELL_KNOWN_METHODS = [
-    "initialize",
-    "notifications/initialized",
-    "ping",
-    "notifications/cancelled",
-    "notifications/progress",
-    "resources/list",
-    "resources/templates/list",
-    "resources/read",
-    "resources/subscribe",
-    "resources/unsubscribe",
-    "notifications/resources/list_changed",
-    "notifications/resources/updated",
-    "prompts/list",
-    "prompts/get",
-    "notifications/prompts/list_changed",
-    "tools/list",
-    "tools/call",
-    "notifications/tools/list_changed",
-    "roots/list",
-    "notifications/roots/list_changed",
-    "logging/setLevel",
-    "notifications/message",
-    "sampling/createMessage",
-    "completion/complete",
-    "elicitation/create",
-] as const;
+export const EVENT_QYL_MCP_OPERATION = "qyl.mcp.operation";
 
 export type McpTelemetryRole = "client" | "server";
 export type McpTelemetryTransport =
@@ -71,7 +48,6 @@ export type McpTelemetryTransport =
     | "inproc"
     | "builtin";
 
-/** Propagation-only MCP metadata. Values are never emitted as attributes. */
 export type McpPropagationCarrier = Readonly<Record<string, string>>;
 
 interface McpNetworkInput {
@@ -79,7 +55,6 @@ interface McpNetworkInput {
     transport: McpTelemetryTransport;
     networkProtocolName?: string;
     networkProtocolVersion?: string;
-    /** Remote server for client signals; remote client for server spans. */
     peerAddress?: string;
     peerPort?: number;
 }
@@ -88,6 +63,7 @@ interface McpProtocolInput extends McpNetworkInput {
     protocolVersion?: string;
     jsonRpcProtocolVersion?: string;
     errorType?: string;
+    errorMessage?: string;
     rpcResponseStatusCode?: string;
 }
 
@@ -96,23 +72,16 @@ export interface McpOperationInput extends McpProtocolInput {
     toolName?: string;
     promptName?: string;
     resourceUri?: string;
-    /** `mcp.resource.uri` is opt-in on operation metrics. */
-    recordResourceUriOnMetric?: boolean;
-    mcpSessionId?: string;
     jsonRpcRequestId?: string | number;
     serverId?: string;
     executionId?: string;
     evaluationRunId?: string;
     testCaseId?: string;
+    requestBody?: unknown;
+    responseBody?: unknown;
     startTimeMs: number;
     endTimeMs: number;
-    /** Remote propagation extracted from MCP params._meta; never emitted as attributes. */
     remotePropagation?: McpPropagationCarrier;
-}
-
-export interface McpSessionInput extends McpProtocolInput {
-    startTimeMs: number;
-    endTimeMs: number;
 }
 
 export interface McpSpanDescriptor {
@@ -122,10 +91,20 @@ export interface McpSpanDescriptor {
 }
 
 export interface McpMetricDescriptor {
-    name: string;
+    name:
+        | typeof METRIC_MCP_CLIENT_OPERATION_DURATION
+        | typeof METRIC_MCP_SERVER_OPERATION_DURATION;
     unit: "s";
     value: number;
     attributes: Attributes;
+}
+
+export interface McpLogDescriptor {
+    eventName: typeof EVENT_QYL_MCP_OPERATION;
+    severityNumber: SeverityNumber.INFO | SeverityNumber.ERROR;
+    severityText: "INFO" | "ERROR";
+    body: LogBody;
+    attributes: LogAttributes;
 }
 
 export const WorkbenchTelemetryAttributes = {
@@ -135,7 +114,6 @@ export const WorkbenchTelemetryAttributes = {
     serverId: "qyl.mcp.server.id",
 } as const;
 
-/** Build only attributes defined for the pinned `mcp.client`/`mcp.server` span. */
 export function describeMcpOperationSpan(
     input: McpOperationInput,
     redactor: SecretRedactor = new SecretRedactor(),
@@ -145,8 +123,7 @@ export function describeMcpOperationSpan(
     const method = requireText(input.method, "method", safe);
     const attributes: Attributes = { [ATTR_MCP_METHOD_NAME]: method };
 
-    addOperationCommon(attributes, input, safe, true);
-    if (input.mcpSessionId) attributes[ATTR_MCP_SESSION_ID] = safe(input.mcpSessionId);
+    addOperationAttributes(attributes, input, safe);
     if (input.jsonRpcRequestId !== undefined) {
         attributes[ATTR_JSONRPC_REQUEST_ID] = safe(String(input.jsonRpcRequestId));
     }
@@ -154,7 +131,7 @@ export function describeMcpOperationSpan(
         attributes[ATTR_MCP_RESOURCE_URI] = bounded(redactor.redactUri(input.resourceUri));
     }
     addPeerAttributes(attributes, input, safe, true);
-    addWorkbenchSpanAttributes(attributes, input, safe);
+    addWorkbenchAttributes(attributes, input, safe);
 
     const target = input.method === "tools/call"
         ? input.toolName
@@ -166,7 +143,6 @@ export function describeMcpOperationSpan(
     };
 }
 
-/** Build only attributes defined for the pinned operation-duration histogram. */
 export function describeMcpOperationMetric(
     input: McpOperationInput,
     redactor: SecretRedactor = new SecretRedactor(),
@@ -176,10 +152,7 @@ export function describeMcpOperationMetric(
     const attributes: Attributes = {
         [ATTR_MCP_METHOD_NAME]: requireText(input.method, "method", safe),
     };
-    addOperationCommon(attributes, input, safe, false);
-    if (input.recordResourceUriOnMetric && input.resourceUri && resourceMethodHasUri(input.method)) {
-        attributes[ATTR_MCP_RESOURCE_URI] = bounded(redactor.redactUri(input.resourceUri));
-    }
+    addOperationAttributes(attributes, input, safe);
     addPeerAttributes(attributes, input, safe, false);
     return {
         name: input.role === "client"
@@ -191,34 +164,76 @@ export function describeMcpOperationMetric(
     };
 }
 
-/** Build only attributes defined for the pinned session-duration histogram. */
-export function describeMcpSessionMetric(
-    input: McpSessionInput,
+export function describeMcpOperationLog(
+    input: McpOperationInput,
     redactor: SecretRedactor = new SecretRedactor(),
-): McpMetricDescriptor {
+    captureContent = false,
+): McpLogDescriptor {
     validateTiming(input.startTimeMs, input.endTimeMs);
     const safe = safeText(redactor);
-    const attributes: Attributes = {};
-    // rpc.response.status_code is defined for MCP operations, not sessions.
-    addProtocolAndNetwork(attributes, input, safe, false);
-    addPeerAttributes(attributes, input, safe, false);
+    const attributes: Attributes = {
+        [ATTR_MCP_METHOD_NAME]: requireText(input.method, "method", safe),
+    };
+    addOperationAttributes(attributes, input, safe);
+    if (input.jsonRpcRequestId !== undefined) {
+        attributes[ATTR_JSONRPC_REQUEST_ID] = safe(String(input.jsonRpcRequestId));
+    }
+    if (input.resourceUri && resourceMethodHasUri(input.method)) {
+        attributes[ATTR_MCP_RESOURCE_URI] = bounded(redactor.redactUri(input.resourceUri));
+    }
+    addPeerAttributes(attributes, input, safe, true);
+    addWorkbenchAttributes(attributes, input, safe);
+
+    const failed = input.errorType !== undefined;
+    const body = {
+        message: "MCP operation completed.",
+        role: input.role,
+        duration_ms: input.endTimeMs - input.startTimeMs,
+        ...(captureContent && input.requestBody !== undefined
+            ? { request: input.requestBody }
+            : {}),
+        ...(captureContent && input.responseBody !== undefined
+            ? { response: input.responseBody }
+            : {}),
+        ...(failed
+            ? {
+                error: {
+                    type: input.errorType,
+                    ...(input.rpcResponseStatusCode === undefined
+                        ? {}
+                        : { code: input.rpcResponseStatusCode }),
+                    ...(!captureContent || input.errorMessage === undefined
+                        ? {}
+                        : { message: input.errorMessage }),
+                },
+            }
+            : {}),
+    };
     return {
-        name: input.role === "client"
-            ? METRIC_MCP_CLIENT_SESSION_DURATION
-            : METRIC_MCP_SERVER_SESSION_DURATION,
-        unit: "s",
-        value: durationSeconds(input.startTimeMs, input.endTimeMs),
-        attributes,
+        eventName: EVENT_QYL_MCP_OPERATION,
+        severityNumber: failed ? SeverityNumber.ERROR : SeverityNumber.INFO,
+        severityText: failed ? "ERROR" : "INFO",
+        body: boundedLogBody(body, redactor),
+        attributes: attributes as LogAttributes,
     };
 }
 
-function addOperationCommon(
+function addOperationAttributes(
     attributes: Attributes,
     input: McpOperationInput,
     safe: (value: string) => string,
-    span: boolean,
 ): void {
-    addProtocolAndNetwork(attributes, input, safe);
+    if (input.errorType) attributes[ATTR_ERROR_TYPE] = safe(input.errorType);
+    if (input.protocolVersion) {
+        attributes[ATTR_MCP_PROTOCOL_VERSION] = safe(input.protocolVersion);
+    }
+    if (input.jsonRpcProtocolVersion
+        && input.jsonRpcProtocolVersion !== JSONRPC_DEFAULT_VERSION) {
+        attributes[ATTR_JSONRPC_PROTOCOL_VERSION] = safe(input.jsonRpcProtocolVersion);
+    }
+    if (input.rpcResponseStatusCode) {
+        attributes[ATTR_RPC_RESPONSE_STATUS_CODE] = safe(input.rpcResponseStatusCode);
+    }
     if (input.method === "tools/call") {
         attributes[ATTR_GEN_AI_OPERATION_NAME] = GEN_AI_OPERATION_NAME_VALUE_EXECUTE_TOOL;
     }
@@ -227,25 +242,6 @@ function addOperationCommon(
     }
     if (input.method === "prompts/get" && input.promptName) {
         attributes[ATTR_GEN_AI_PROMPT_NAME] = safe(input.promptName);
-    }
-    // Arguments/results/prompt variables are deliberately not captured: those
-    // registry attributes are opt-in and may contain credentials or user data.
-    if (!span) return;
-}
-
-function addProtocolAndNetwork(
-    attributes: Attributes,
-    input: McpProtocolInput,
-    safe: (value: string) => string,
-    includeRpcResponseStatusCode = true,
-): void {
-    if (input.errorType) attributes[ATTR_ERROR_TYPE] = safe(input.errorType);
-    if (input.protocolVersion) attributes[ATTR_MCP_PROTOCOL_VERSION] = safe(input.protocolVersion);
-    if (input.jsonRpcProtocolVersion && input.jsonRpcProtocolVersion !== JSONRPC_DEFAULT_VERSION) {
-        attributes[ATTR_JSONRPC_PROTOCOL_VERSION] = safe(input.jsonRpcProtocolVersion);
-    }
-    if (includeRpcResponseStatusCode && input.rpcResponseStatusCode) {
-        attributes[ATTR_RPC_RESPONSE_STATUS_CODE] = safe(input.rpcResponseStatusCode);
     }
     const transport = networkTransport(input.transport);
     if (transport) attributes[ATTR_NETWORK_TRANSPORT] = transport;
@@ -260,29 +256,38 @@ function addPeerAttributes(
     attributes: Attributes,
     input: McpNetworkInput,
     safe: (value: string) => string,
-    span: boolean,
+    spanOrLog: boolean,
 ): void {
     if (input.role === "client") {
         if (input.peerAddress) attributes[ATTR_SERVER_ADDRESS] = safe(input.peerAddress);
-        if (input.peerAddress && input.peerPort !== undefined) attributes[ATTR_SERVER_PORT] = input.peerPort;
+        if (input.peerAddress && input.peerPort !== undefined) {
+            attributes[ATTR_SERVER_PORT] = input.peerPort;
+        }
         return;
     }
-    // Server metrics do not define client.address/client.port; server spans do.
-    if (span && input.peerAddress) attributes[ATTR_CLIENT_ADDRESS] = safe(input.peerAddress);
-    if (span && input.peerAddress && input.peerPort !== undefined) attributes[ATTR_CLIENT_PORT] = input.peerPort;
+    if (spanOrLog && input.peerAddress) {
+        attributes[ATTR_CLIENT_ADDRESS] = safe(input.peerAddress);
+    }
+    if (spanOrLog && input.peerAddress && input.peerPort !== undefined) {
+        attributes[ATTR_CLIENT_PORT] = input.peerPort;
+    }
 }
 
-function addWorkbenchSpanAttributes(
+function addWorkbenchAttributes(
     attributes: Attributes,
     input: McpOperationInput,
     safe: (value: string) => string,
 ): void {
     if (input.serverId) attributes[WorkbenchTelemetryAttributes.serverId] = safe(input.serverId);
-    if (input.executionId) attributes[WorkbenchTelemetryAttributes.executionId] = safe(input.executionId);
+    if (input.executionId) {
+        attributes[WorkbenchTelemetryAttributes.executionId] = safe(input.executionId);
+    }
     if (input.evaluationRunId) {
         attributes[WorkbenchTelemetryAttributes.evaluationRunId] = safe(input.evaluationRunId);
     }
-    if (input.testCaseId) attributes[WorkbenchTelemetryAttributes.testCaseId] = safe(input.testCaseId);
+    if (input.testCaseId) {
+        attributes[WorkbenchTelemetryAttributes.testCaseId] = safe(input.testCaseId);
+    }
 }
 
 function resourceMethodHasUri(method: string): boolean {
@@ -323,8 +328,24 @@ function bounded(value: string): string {
         : `${value.slice(0, ATTRIBUTE_VALUE_LIMIT - 1)}…`;
 }
 
+function boundedLogBody(value: unknown, redactor: SecretRedactor): LogBody {
+    const redacted = redactor.redact(value);
+    const serialized = JSON.stringify(redacted);
+    if (serialized === undefined) return String(redacted);
+    if (serialized.length <= LOG_BODY_CHARACTER_LIMIT) {
+        return JSON.parse(serialized) as LogBody;
+    }
+    return {
+        truncated: true,
+        original_characters: serialized.length,
+        preview: `${serialized.slice(0, LOG_BODY_CHARACTER_LIMIT - 1)}…`,
+    };
+}
+
 function validateTiming(startTimeMs: number, endTimeMs: number): void {
-    if (!Number.isFinite(startTimeMs) || !Number.isFinite(endTimeMs) || endTimeMs < startTimeMs) {
+    if (!Number.isFinite(startTimeMs)
+        || !Number.isFinite(endTimeMs)
+        || endTimeMs < startTimeMs) {
         throw new Error("MCP telemetry timestamps must be finite and ordered.");
     }
 }

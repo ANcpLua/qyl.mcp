@@ -354,6 +354,7 @@ export class NativeExecutionRuntime {
       endTimeMs: completedMs,
       jsonRpcRequestId: requestId,
       ...(toolFailed ? { errorType: "tool_error" } : {}),
+      responseBody: this.redactor.redact(result),
     });
     return result;
   }
@@ -378,9 +379,9 @@ export class NativeExecutionRuntime {
         serverId: NATIVE_SERVER_ID,
         toolName: input.request.params.name,
         transport: input.transport,
-        ...(input.extra.sessionId === undefined ? {} : { mcpSessionId: input.extra.sessionId }),
         jsonRpcProtocolVersion: "2.0",
         executionId,
+        requestBody: this.redactor.redact(input.request),
         remotePropagation: propagationCarrier(input.request.params._meta),
         startTimeMs: startedMs,
       });

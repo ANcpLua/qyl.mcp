@@ -459,7 +459,13 @@ export class ExecutionService {
             const toolErrorType = cancellationWon
                 ? "cancelled"
                 : result.isError === true ? "tool_error" : undefined;
-            this.finishTelemetry(record, telemetryOperation, completedMs, toolErrorType);
+            this.finishTelemetry(
+                record,
+                telemetryOperation,
+                completedMs,
+                toolErrorType,
+                this.redactor.redact(result),
+            );
             if (cancellationWon) {
                 record.status = "cancelled";
                 record.cancelledAt = timestamp(completedMs);
@@ -489,6 +495,8 @@ export class ExecutionService {
                 telemetryOperation,
                 completedMs,
                 telemetryErrorType(error, classified.error.code),
+                this.redactor.redact({ error: classified.error }),
+                classified.error.message,
             );
             record.status = classified.status;
             record.error = classified.error;
@@ -514,10 +522,17 @@ export class ExecutionService {
                 toolName: record.request.toolName,
                 transport: telemetryTransport(snapshot.kind),
                 protocolVersion: snapshot.initialization?.protocolVersion,
-                mcpSessionId: snapshot.initialization?.sessionId,
                 executionId: record.id,
                 ...(record.correlation.evaluationRunId === undefined ? {} : { evaluationRunId: record.correlation.evaluationRunId }),
                 ...(record.correlation.testCaseId === undefined ? {} : { testCaseId: record.correlation.testCaseId }),
+                requestBody: this.redactor.redact({
+                    jsonrpc: "2.0",
+                    method: "tools/call",
+                    params: {
+                        name: record.request.toolName,
+                        arguments: record.request.arguments,
+                    },
+                }),
                 startTimeMs: startedMs,
             });
             if (operation?.correlation) {
@@ -538,6 +553,8 @@ export class ExecutionService {
         operation: ActiveMcpOperation | undefined,
         completedMs: number,
         errorType?: string,
+        responseBody?: unknown,
+        errorMessage?: string,
     ): void {
         if (operation === undefined) return;
         let requestId: string | number | undefined;
@@ -572,7 +589,9 @@ export class ExecutionService {
                 endTimeMs: completedMs,
                 ...(requestId === undefined ? {} : { jsonRpcRequestId: requestId }),
                 ...(effectiveErrorType === undefined ? {} : { errorType: effectiveErrorType }),
+                ...(errorMessage === undefined ? {} : { errorMessage }),
                 ...(rpcResponseStatusCode === undefined ? {} : { rpcResponseStatusCode }),
+                ...(responseBody === undefined ? {} : { responseBody }),
             });
             if (span) {
                 try {

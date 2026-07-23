@@ -178,18 +178,6 @@ try {
     startTimeMs: endTimeMs - 15,
     endTimeMs,
   });
-  telemetry.recordSession({
-    role: "client",
-    transport: "http",
-    startTimeMs: endTimeMs - 1_000,
-    endTimeMs,
-  });
-  telemetry.recordSession({
-    role: "server",
-    transport: "http",
-    startTimeMs: endTimeMs - 1_000,
-    endTimeMs,
-  });
   await telemetry.close();
 
   const stored = await waitUntil(async () => {
@@ -312,9 +300,16 @@ try {
       span.name === "tools/call list_traces" &&
       span.parent_span_id === clientSpan?.span_id
     );
+    const correlatedLogs = (body.logs ?? []).filter((log) =>
+      log.event_name === "qyl.mcp.operation" &&
+      [clientSpan?.span_id, ...spans.filter((span) =>
+        span.kind === 2 && span.parent_span_id === clientSpan?.span_id
+      ).map((span) => span.span_id)].includes(log.span_id)
+    );
     if (body.traces?.length > 0
         && clientSpan
-        && hasServerChild) return body;
+        && hasServerChild
+        && correlatedLogs.length >= 2) return body;
     throw new Error(JSON.stringify({
       traceCount: body.traces?.length ?? 0,
       spans: spans.map((span) => ({ name: span.name, kind: span.kind })),
@@ -347,6 +342,13 @@ try {
       })),
     )}`);
   }
+  const requestLogs = correlated.logs.filter((log) =>
+    log.event_name === "qyl.mcp.operation" &&
+    [clientToolSpan.span_id, serverToolSpan.span_id].includes(log.span_id)
+  );
+  if (requestLogs.length !== 2) {
+    throw new Error(`MCP operation logs were not correlated to both operation spans: ${JSON.stringify(requestLogs)}`);
+  }
   const toolSpanAttributes = JSON.stringify([
     clientToolSpan.attributes,
     serverToolSpan.attributes,
@@ -356,6 +358,7 @@ try {
   }
   console.log("ok real runner returned exact trace evidence");
   console.log("ok native server span was correlated without tool payload content");
+  console.log("ok OTel operation logs carry the matching trace and span identifiers");
   await stop(runner);
   runner = undefined;
 

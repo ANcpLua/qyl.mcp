@@ -1,5 +1,3 @@
-/** MCP self-telemetry exported through the official OpenTelemetry SDK. */
-
 import {
     context,
     defaultTextMapGetter,
@@ -15,14 +13,20 @@ import {
     type Span,
     type Tracer,
 } from "@opentelemetry/api";
+import type { Logger } from "@opentelemetry/api-logs";
 import {
     CompositePropagator,
     W3CBaggagePropagator,
     W3CTraceContextPropagator,
 } from "@opentelemetry/core";
+import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-proto";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-proto";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
 import { resourceFromAttributes } from "@opentelemetry/resources";
+import {
+    BatchLogRecordProcessor,
+    LoggerProvider,
+} from "@opentelemetry/sdk-logs";
 import {
     MeterProvider,
     PeriodicExportingMetricReader,
@@ -36,33 +40,29 @@ import {
 } from "@opentelemetry/semantic-conventions";
 import {
     METRIC_MCP_CLIENT_OPERATION_DURATION,
-    METRIC_MCP_CLIENT_SESSION_DURATION,
     METRIC_MCP_SERVER_OPERATION_DURATION,
-    METRIC_MCP_SERVER_SESSION_DURATION,
 } from "@opentelemetry/semantic-conventions/incubating";
 import qylOpenApi from "@ancplua/qyl-api-schema/openapi" with { type: "json" };
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import packageMetadata from "../package.json" with { type: "json" };
 import {
+    describeMcpOperationLog,
     describeMcpOperationMetric,
     describeMcpOperationSpan,
-    describeMcpSessionMetric,
     type McpPropagationCarrier,
     type McpOperationInput,
-    type McpSessionInput,
 } from "./mcp-semconv.js";
 import { isObservabilitySelfExportSuppressed } from "./observability-suppression.js";
 import { SecretRedactor } from "./secret-redactor.js";
 
 export {
     WorkbenchTelemetryAttributes,
+    describeMcpOperationLog,
     describeMcpOperationMetric,
     describeMcpOperationSpan,
-    describeMcpSessionMetric,
     type McpOperationInput,
     type McpPropagationCarrier,
-    type McpSessionInput,
 } from "./mcp-semconv.js";
 
 const Product = {
@@ -99,16 +99,22 @@ export interface McpSpanCorrelation {
 
 export type McpOperationStartInput = Omit<
     McpOperationInput,
-    "endTimeMs" | "errorType" | "rpcResponseStatusCode" | "jsonRpcRequestId"
+    | "endTimeMs"
+    | "errorType"
+    | "errorMessage"
+    | "rpcResponseStatusCode"
+    | "jsonRpcRequestId"
+    | "responseBody"
 >;
 
 export interface McpOperationCompletion {
     endTimeMs: number;
     errorType?: string;
+    errorMessage?: string;
     rpcResponseStatusCode?: string;
     jsonRpcRequestId?: string | number;
     protocolVersion?: string;
-    mcpSessionId?: string;
+    responseBody?: unknown;
 }
 
 export interface ActiveMcpOperation {
@@ -119,18 +125,12 @@ export interface ActiveMcpOperation {
 }
 
 export interface McpTelemetryOptions {
-    /** Test/embedding seam; production creates its isolated OTLP tracer. */
     tracer?: Tracer;
+    logger?: Logger;
 }
 
 const activeMcpContext = new AsyncLocalStorage<Context | null>();
 
-/**
- * Carries one explicitly-created MCP operation through SDK dispatch without
- * installing a global OpenTelemetry provider or context manager. A null store
- * deliberately clears any outer operation so unrelated requests cannot inherit
- * stale propagation state.
- */
 export function runWithMcpPropagation<T>(
     carrier: McpPropagationCarrier | undefined,
     operation: () => T,
@@ -140,7 +140,6 @@ export function runWithMcpPropagation<T>(
     return activeMcpContext.run(extracted, () => context.with(extracted, operation));
 }
 
-/** Current execution-local propagation carrier, if an MCP operation exists. */
 export function currentMcpPropagation(): McpPropagationCarrier | undefined {
     const active = activeMcpContext.getStore();
     return active === null || active === undefined ? undefined : injectPropagation(active);
@@ -148,11 +147,13 @@ export function currentMcpPropagation(): McpPropagationCarrier | undefined {
 
 export function signalEndpoint(
     env: Readonly<Record<string, string | undefined>>,
-    signal: "traces" | "metrics",
+    signal: "traces" | "metrics" | "logs",
 ): string {
     const explicit = signal === "traces"
         ? env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
-        : env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT;
+        : signal === "metrics"
+            ? env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+            : env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT;
     if (explicit) return explicit;
 
     const base = (
@@ -164,17 +165,15 @@ export function signalEndpoint(
     return `${base}/v1/${signal}`;
 }
 
-/**
- * Records completed MCP operations and sessions without installing global SDK
- * providers. Signal-specific descriptors prevent span-only identifiers from
- * appearing on duration histograms.
- */
 export class McpTelemetry {
     private readonly traceProvider?: NodeTracerProvider;
     private readonly metricProvider?: MeterProvider;
+    private readonly logProvider?: LoggerProvider;
     private tracer?: Tracer;
+    private logger?: Logger;
     private readonly histograms = new Map<string, Histogram>();
     private readonly redactor: SecretRedactor;
+    private readonly captureContent: boolean;
 
     get operationTracingEnabled(): boolean {
         return this.tracer !== undefined;
@@ -186,7 +185,9 @@ export class McpTelemetry {
         options: McpTelemetryOptions = {},
     ) {
         this.redactor = redactor;
+        this.captureContent = env.QYL_MCP_CAPTURE_CONTENT === "1";
         this.tracer = options.tracer;
+        this.logger = options.logger;
         if (env.QYL_MCP_TELEMETRY === "0") return;
 
         const resource = resourceFromAttributes({
@@ -203,7 +204,7 @@ export class McpTelemetry {
             timeoutMillis: EXPORT_TIMEOUT_MS,
             headers,
         });
-        const processor = new BatchSpanProcessor(traceExporter, {
+        const spanProcessor = new BatchSpanProcessor(traceExporter, {
             maxQueueSize: MAX_QUEUE,
             maxExportBatchSize: MAX_QUEUE,
             scheduledDelayMillis: FLUSH_INTERVAL_MS,
@@ -211,7 +212,7 @@ export class McpTelemetry {
         });
         this.traceProvider = new NodeTracerProvider({
             resource,
-            spanProcessors: [processor],
+            spanProcessors: [spanProcessor],
             spanLimits: {
                 attributeValueLengthLimit: ATTRIBUTE_VALUE_LIMIT,
                 attributeCountLimit: 32,
@@ -237,9 +238,7 @@ export class McpTelemetry {
         const meter = this.metricProvider.getMeter(INSTRUMENTATION_SCOPE, Product.version);
         for (const name of [
             METRIC_MCP_CLIENT_OPERATION_DURATION,
-            METRIC_MCP_CLIENT_SESSION_DURATION,
             METRIC_MCP_SERVER_OPERATION_DURATION,
-            METRIC_MCP_SERVER_SESSION_DURATION,
         ]) {
             this.histograms.set(name, meter.createHistogram(name, {
                 unit: "s",
@@ -248,13 +247,29 @@ export class McpTelemetry {
                 },
             }));
         }
+
+        const logExporter = new OTLPLogExporter({
+            url: signalEndpoint(env, "logs"),
+            timeoutMillis: EXPORT_TIMEOUT_MS,
+            headers,
+        });
+        this.logProvider = new LoggerProvider({
+            resource,
+            processors: [new BatchLogRecordProcessor({
+                exporter: logExporter,
+                maxQueueSize: MAX_QUEUE,
+                maxExportBatchSize: MAX_QUEUE,
+                scheduledDelayMillis: FLUSH_INTERVAL_MS,
+                exportTimeoutMillis: EXPORT_TIMEOUT_MS,
+            })],
+            logRecordLimits: {
+                attributeValueLengthLimit: ATTRIBUTE_VALUE_LIMIT,
+                attributeCountLimit: 32,
+            },
+        });
+        this.logger ??= this.logProvider.getLogger(INSTRUMENTATION_SCOPE, Product.version);
     }
 
-    /**
-     * Start an MCP operation before the SDK call so its trace context can be
-     * propagated. Completion-only attributes are applied immediately before
-     * ending the span, and the metric is recorded exactly once at completion.
-     */
     startOperation(input: McpOperationStartInput): ActiveMcpOperation {
         if (isObservabilitySelfExportSuppressed()) return inactiveOperation();
 
@@ -263,11 +278,7 @@ export class McpTelemetry {
         const parentContext = input.remotePropagation === undefined
             ? baseParentContext
             : extractPropagation(baseParentContext, input.remotePropagation);
-        const links = operationLinks(
-            input.role,
-            ambientContext,
-            parentContext,
-        );
+        const links = operationLinks(input.role, ambientContext, parentContext);
         let span: Span | undefined;
         let operationContext: Context | undefined;
         if (this.tracer) {
@@ -284,7 +295,8 @@ export class McpTelemetry {
                 }, parentContext);
                 operationContext = trace.setSpan(parentContext, span);
             } catch {
-                // Self-telemetry must never change the MCP request.
+                span = undefined;
+                operationContext = undefined;
             }
         }
 
@@ -310,96 +322,109 @@ export class McpTelemetry {
                 if (ended) return correlation;
                 ended = true;
                 const completed: McpOperationInput = { ...input, ...completion };
-                let metric: ReturnType<typeof describeMcpOperationMetric> | undefined;
-                try {
-                    metric = describeMcpOperationMetric(completed, this.redactor);
-                } catch {
-                    // Self-telemetry must never change the MCP response.
-                }
+                const durationMetric = safeDescriptor(
+                    () => describeMcpOperationMetric(completed, this.redactor),
+                );
+                const signalContext = operationContext ?? parentContext;
+                this.recordOperationMetric(durationMetric, signalContext);
+                this.emitOperationLog(completed, signalContext);
 
-                if (span === undefined) {
-                    this.recordOperationMetric(metric);
-                    return correlation;
-                }
-
+                if (span === undefined) return correlation;
                 try {
-                    try {
-                        const descriptor = describeMcpOperationSpan(completed, this.redactor);
-                        span.setAttributes(descriptor.attributes);
-                    } catch {
-                        // Keep the already-started span valid even if optional completion data is invalid.
-                    }
-                    if (metric !== undefined) {
-                        this.histograms.get(metric.name)?.record(
-                            metric.value,
-                            metric.attributes,
-                            operationContext,
-                        );
-                        metric = undefined;
-                    }
+                    const descriptor = safeDescriptor(
+                        () => describeMcpOperationSpan(completed, this.redactor),
+                    );
+                    if (descriptor !== undefined) span.setAttributes(descriptor.attributes);
                     if (completed.errorType) {
-                        span.setStatus({ code: SpanStatusCode.ERROR });
+                        span.setStatus({
+                            code: SpanStatusCode.ERROR,
+                            ...(!this.captureContent || completed.errorMessage === undefined
+                                ? {}
+                                : { message: this.redactor.redactText(completed.errorMessage) }),
+                        });
                     }
                 } catch {
-                    // Self-telemetry must never change the MCP response.
+                    span.setStatus({ code: SpanStatusCode.ERROR });
                 } finally {
-                    try {
-                        span.end(completed.endTimeMs);
-                    } catch {
-                        // Self-telemetry must never change the MCP response.
-                    }
+                    span.end(completed.endTimeMs);
                 }
-                this.recordOperationMetric(metric);
                 return correlation;
             },
         };
     }
 
-    /** Record one already-completed client or server operation. Never throws. */
     recordOperation(input: McpOperationInput): McpSpanCorrelation | undefined {
         const {
             endTimeMs,
             errorType,
+            errorMessage,
             rpcResponseStatusCode,
             jsonRpcRequestId,
+            responseBody,
             ...start
         } = input;
         return this.startOperation(start).end({
             endTimeMs,
             ...(errorType === undefined ? {} : { errorType }),
+            ...(errorMessage === undefined ? {} : { errorMessage }),
             ...(rpcResponseStatusCode === undefined ? {} : { rpcResponseStatusCode }),
             ...(jsonRpcRequestId === undefined ? {} : { jsonRpcRequestId }),
+            ...(responseBody === undefined ? {} : { responseBody }),
         });
     }
 
-    /** Record one completed client or server session histogram. Never throws. */
-    recordSession(input: McpSessionInput): void {
-        if (isObservabilitySelfExportSuppressed()) return;
-        try {
-            const metric = describeMcpSessionMetric(input, this.redactor);
-            this.histograms.get(metric.name)?.record(metric.value, metric.attributes);
-        } catch {
-            // Self-telemetry must never change connection shutdown.
-        }
-    }
-
-    /** Flush and stop both SDK providers during runner shutdown. */
     async close(): Promise<void> {
         await Promise.all([
             this.traceProvider?.shutdown(),
             this.metricProvider?.shutdown(),
+            this.logProvider?.shutdown(),
         ]);
     }
 
     private recordOperationMetric(
         metric: ReturnType<typeof describeMcpOperationMetric> | undefined,
+        operationContext: Context,
     ): void {
         if (metric === undefined) return;
         try {
-            this.histograms.get(metric.name)?.record(metric.value, metric.attributes);
+            this.histograms.get(metric.name)?.record(
+                metric.value,
+                metric.attributes,
+                operationContext,
+            );
         } catch {
-            // Self-telemetry must never change the MCP response.
+            return;
         }
+    }
+
+    private emitOperationLog(input: McpOperationInput, operationContext: Context): void {
+        if (this.logger === undefined) return;
+        try {
+            const descriptor = describeMcpOperationLog(
+                input,
+                this.redactor,
+                this.captureContent,
+            );
+            this.logger.emit({
+                eventName: descriptor.eventName,
+                severityNumber: descriptor.severityNumber,
+                severityText: descriptor.severityText,
+                body: descriptor.body,
+                attributes: descriptor.attributes,
+                timestamp: input.endTimeMs,
+                context: operationContext,
+            });
+        } catch {
+            return;
+        }
+    }
+}
+
+function safeDescriptor<T>(create: () => T): T | undefined {
+    try {
+        return create();
+    } catch {
+        return undefined;
     }
 }
 
@@ -418,7 +443,7 @@ function extractPropagation(
     try {
         extracted = propagation.extract(extracted, carrier, defaultTextMapGetter);
     } catch {
-        // A host-configured propagator cannot change MCP behavior.
+        return extracted;
     }
     return extracted;
 }
@@ -429,7 +454,7 @@ function injectPropagation(value: Context): McpPropagationCarrier | undefined {
     try {
         propagation.inject(value, staging, defaultTextMapSetter);
     } catch {
-        // Retain the standard W3C fields when a host propagator fails.
+        // Standard W3C propagation remains available.
     }
     const bounded = Object.create(null) as Record<string, string>;
     for (const [key, entry] of prioritizedPropagationEntries(staging)) {
@@ -455,9 +480,7 @@ function operationLinks(
     if (role !== "server") return undefined;
     const ambient = trace.getSpanContext(ambientContext);
     const parent = trace.getSpanContext(parentContext);
-    if (ambient === undefined || !isSpanContextValid(ambient)) {
-        return undefined;
-    }
+    if (ambient === undefined || !isSpanContextValid(ambient)) return undefined;
     if (parent !== undefined
         && isSpanContextValid(parent)
         && ambient.traceId === parent.traceId

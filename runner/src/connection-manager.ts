@@ -163,7 +163,6 @@ export interface ConnectionManagerOptions {
         operation: StartedConnectionProtocolOperation,
     ) => ActiveConnectionProtocolOperation | undefined;
     onOperation?: (operation: ConnectionProtocolOperation) => void;
-    onSession?: (session: CompletedConnectionSession) => void;
     redactor?: SecretRedactor;
     onSecretsResolved?: (connectionId: string, values: readonly string[]) => void;
     now?: () => number;
@@ -173,7 +172,6 @@ export interface ConnectionProtocolOperation extends CompletedProtocolOperation 
     connectionId: string;
     transport: ConnectionTransportKind;
     protocolVersion?: string;
-    mcpSessionId?: string;
     peerAddress?: string;
     peerPort?: number;
     nativeExecutionTelemetry?: boolean;
@@ -183,7 +181,6 @@ export interface StartedConnectionProtocolOperation extends StartedProtocolOpera
     connectionId: string;
     transport: ConnectionTransportKind;
     protocolVersion?: string;
-    mcpSessionId?: string;
     peerAddress?: string;
     peerPort?: number;
     nativeExecutionTelemetry?: boolean;
@@ -193,18 +190,6 @@ export interface ActiveConnectionProtocolOperation {
     readonly propagation?: ProtocolPropagationCarrier;
     run<T>(operation: () => T): T;
     complete(operation: ConnectionProtocolOperation): void;
-}
-
-export interface CompletedConnectionSession {
-    connectionId: string;
-    role: "client" | "server";
-    transport: ConnectionTransportKind;
-    protocolVersion?: string;
-    peerAddress?: string;
-    peerPort?: number;
-    startTimeMs: number;
-    endTimeMs: number;
-    errorType?: string;
 }
 
 export type ConnectionManagerErrorCode =
@@ -245,9 +230,7 @@ interface ConnectionEntry {
     initialization?: ConnectionInitializationSnapshot;
     lastError?: string;
     redactor?: SecretRedactor;
-    sessionStartedAtMs?: number;
-    sessionProtocolVersion?: string;
-    sessionId?: string;
+    negotiatedProtocolVersion?: string;
 }
 
 interface CreatedTransport {
@@ -302,7 +285,6 @@ export class ConnectionManager {
         operation: StartedConnectionProtocolOperation,
     ) => ActiveConnectionProtocolOperation | undefined;
     private readonly onOperation?: (operation: ConnectionProtocolOperation) => void;
-    private readonly onSession?: (session: CompletedConnectionSession) => void;
     private readonly redactor: SecretRedactor;
     private readonly onSecretsResolved?: (connectionId: string, values: readonly string[]) => void;
     private readonly now: () => number;
@@ -326,7 +308,6 @@ export class ConnectionManager {
         this.correlation = options.correlation;
         this.onOperationStart = options.onOperationStart;
         this.onOperation = options.onOperation;
-        this.onSession = options.onSession;
         this.redactor = options.redactor ?? new SecretRedactor({ environment: this.environment });
         this.onSecretsResolved = options.onSecretsResolved;
         this.now = options.now ?? Date.now;
@@ -478,6 +459,7 @@ export class ConnectionManager {
             ? serverJournal
             : undefined;
         entry.initialization = undefined;
+        entry.negotiatedProtocolVersion = undefined;
         entry.lastError = undefined;
         this.transition(entry, "connecting");
 
@@ -514,11 +496,9 @@ export class ConnectionManager {
             );
 
             const connectedAtMs = this.now();
-            entry.sessionStartedAtMs = connectedAtMs;
             const negotiatedProtocolVersion = client.getNegotiatedProtocolVersion()
                 ?? transport.protocolVersion;
-            entry.sessionProtocolVersion = negotiatedProtocolVersion;
-            entry.sessionId = transport.sessionId;
+            entry.negotiatedProtocolVersion = negotiatedProtocolVersion;
             entry.connectingTransport = undefined;
 
             const capabilities = client.getServerCapabilities() ?? {};
@@ -552,7 +532,7 @@ export class ConnectionManager {
             const message = redactor.redactText(errorMessage(error));
             entry.active = undefined;
             entry.lastError = message;
-            this.completeSession(entry, this.now(), isTimeoutError(error) ? "timeout" : "connect_failed");
+            entry.negotiatedProtocolVersion = undefined;
             this.transition(entry, "failed");
             const code = isTimeoutError(error) ? "timeout" : "connect_failed";
             throw new ConnectionManagerError(
@@ -579,6 +559,7 @@ export class ConnectionManager {
         }
         if (entry.active === undefined) {
             entry.initialization = undefined;
+            entry.negotiatedProtocolVersion = undefined;
             entry.lastError = undefined;
             this.transition(entry, "disconnected");
             return this.snapshotOf(entry);
@@ -599,9 +580,9 @@ export class ConnectionManager {
                 timeoutMs,
                 `Disconnect for '${connectionId}' timed out.`,
             );
-            this.completeSession(entry, this.now());
             entry.active = undefined;
             entry.initialization = undefined;
+            entry.negotiatedProtocolVersion = undefined;
             entry.lastError = undefined;
             this.transition(entry, "disconnected");
             return this.snapshotOf(entry);
@@ -852,7 +833,7 @@ export class ConnectionManager {
         const server = entry.active.server;
         entry.active = undefined;
         entry.lastError = "MCP transport closed unexpectedly.";
-        this.completeSession(entry, this.now(), "connection_closed");
+        entry.negotiatedProtocolVersion = undefined;
         this.transition(entry, "failed");
         if (server) {
             void server.close().catch((error: unknown) => journal.recordTransportError(error));
@@ -902,73 +883,20 @@ export class ConnectionManager {
         };
         if ("protocolVersion" in operation
             && operation.protocolVersion !== undefined
-            && entry.sessionProtocolVersion === undefined) {
-            entry.sessionProtocolVersion = operation.protocolVersion;
+            && entry.negotiatedProtocolVersion === undefined) {
+            entry.negotiatedProtocolVersion = operation.protocolVersion;
         }
         const protocolVersion = ("protocolVersion" in operation ? operation.protocolVersion : undefined)
             ?? entry.initialization?.protocolVersion
-            ?? entry.sessionProtocolVersion
+            ?? entry.negotiatedProtocolVersion
             ?? entry.connectingTransport?.protocolVersion;
-        const mcpSessionId = entry.initialization?.sessionId
-            ?? entry.sessionId
-            ?? entry.connectingTransport?.sessionId;
         if (protocolVersion !== undefined) enriched.protocolVersion = protocolVersion;
-        if (mcpSessionId !== undefined) enriched.mcpSessionId = mcpSessionId;
         if (peer?.address !== undefined) enriched.peerAddress = peer.address;
         if (peer?.port !== undefined) enriched.peerPort = peer.port;
         if (operation.role === "server" && hasNativeExecutionTelemetry(entry.active?.server)) {
             enriched.nativeExecutionTelemetry = true;
         }
         return enriched;
-    }
-
-    private completeSession(
-        entry: ConnectionEntry,
-        endTimeMs: number,
-        errorType?: string,
-    ): void {
-        const startTimeMs = entry.sessionStartedAtMs;
-        if (startTimeMs === undefined) return;
-        entry.sessionStartedAtMs = undefined;
-        const protocolVersion = entry.sessionProtocolVersion;
-        entry.sessionProtocolVersion = undefined;
-        entry.sessionId = undefined;
-        if (!this.onSession) return;
-
-        const base = {
-            connectionId: entry.definition.id,
-            transport: entry.definition.kind,
-            startTimeMs,
-            endTimeMs: Math.max(startTimeMs, endTimeMs),
-            ...(protocolVersion === undefined ? {} : { protocolVersion }),
-            ...(errorType === undefined ? {} : { errorType }),
-        };
-        const peer = connectionPeer(entry.definition);
-        const clientSession: CompletedConnectionSession = {
-            ...base,
-            role: "client",
-            ...(peer?.address === undefined ? {} : { peerAddress: peer.address }),
-            ...(peer?.port === undefined ? {} : { peerPort: peer.port }),
-        };
-        this.notifySession(entry, clientSession);
-        if (entry.definition.kind === "inproc" || entry.definition.kind === "builtin") {
-            this.notifySession(entry, { ...base, role: "server" });
-        }
-    }
-
-    private notifySession(entry: ConnectionEntry, session: CompletedConnectionSession): void {
-        try {
-            this.onSession?.(structuredClone(session));
-        } catch (error) {
-            const redactor = entry.redactor ?? new SecretRedactor({ environment: this.environment });
-            this.observerErrors.push({
-                timestamp: new Date(this.now()).toISOString(),
-                message: redactor.redactText(errorMessage(error)),
-            });
-            while (this.observerErrors.length > DEFAULT_MAX_OBSERVER_ERRORS) {
-                this.observerErrors.shift();
-            }
-        }
     }
 
     private requireEntry(connectionId: string): ConnectionEntry {

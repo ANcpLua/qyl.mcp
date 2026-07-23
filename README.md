@@ -145,40 +145,41 @@ header defined by the generated Qyl API contract. Every correlated read runs
 under async self-export suppression, so inspecting Qyl evidence does not create
 recursive MCP telemetry.
 
-qyl.mcp still exports the pinned MCP duration histograms over OTLP. The current
-Qyl collector accepts and discards metrics, so its generated read contract and
-workbench correlation response expose only retained trace and log evidence.
+qyl.mcp exports correlated MCP operation spans, duration histograms, and
+metadata-only operation logs over OTLP. The current Qyl collector accepts and
+discards metrics, so its generated read contract and workbench correlation
+response expose only retained trace and log evidence.
 
 | Variable | Purpose |
 | --- | --- |
 | `QYL_COLLECTOR_URL` | Qyl read API base URL; default `http://127.0.0.1:5100`. Also used as the OTLP base when set. |
 | `QYL_API_KEY` | Collector read and OTLP credential. |
 | `QYL_OTLP_ENDPOINT` | Optional OTLP base URL for workbench self-telemetry. |
-| `QYL_MCP_TELEMETRY=0` | Disable native-server and workbench MCP spans and duration metrics. Telemetry is enabled otherwise. |
+| `QYL_MCP_TELEMETRY=0` | Disable native-server and workbench MCP spans, metrics, and operation logs. Telemetry is enabled otherwise. |
+| `QYL_MCP_CAPTURE_CONTENT=1` | Include redacted, size-bounded MCP request and response bodies in operation logs. Disabled by default. |
 | `QYL_MCP_STATE_PATH` | Override the durable workbench JSON path. |
 | `QYL_MCP_NATIVE_STATE_PATH` | Override the durable native-server execution evidence path. |
 
-Signal-specific `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` and
-`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` take precedence. Otherwise the base order
-is `QYL_OTLP_ENDPOINT`, `QYL_COLLECTOR_URL`,
+Signal-specific `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`,
+`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`, and
+`OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` take precedence. Otherwise the base order is
+`QYL_OTLP_ENDPOINT`, `QYL_COLLECTOR_URL`,
 `OTEL_EXPORTER_OTLP_ENDPOINT`, then `http://127.0.0.1:4318`.
 
 ### Pinned MCP semantic surface
 
-The implementation targets OpenTelemetry semantic conventions v1.43.0 and the
-separately pinned GenAI registry `gen-ai-dev/1.42.0-dev` at commit `c321d7e…`.
-All ten MCP-native conventions are development/incubating; the pin defines no
-MCP events.
+The implementation targets OpenTelemetry semantic conventions v1.43.0 and its
+development MCP conventions.
 
-- Operation attributes: required `mcp.method.name`, recommended
-  `mcp.protocol.version`, conditional/opt-in `mcp.resource.uri`, and recommended
-  operation-span `mcp.session.id`.
-- Spans: `mcp.client` (`CLIENT`) and `mcp.server` (`SERVER`), named
-  `{mcp.method.name} {target}` where the target is normally
-  `gen_ai.tool.name` or `gen_ai.prompt.name` and is omitted when unavailable.
-- Recommended seconds histograms: `mcp.client.operation.duration`,
-  `mcp.client.session.duration`, `mcp.server.operation.duration`, and
-  `mcp.server.session.duration`.
+- `mcp.client` and `mcp.server` spans are named `{mcp.method.name} {target}`
+  when a low-cardinality tool or prompt target exists. They cover requests and
+  notifications and never put argument or result content in attributes.
+- `mcp.client.operation.duration` and `mcp.server.operation.duration`
+  histograms carry the upstream dimensions. Failures use `error.type` on the
+  same operation histogram rather than a second counter.
+- The local `qyl.mcp.operation` log event carries matching trace/span context. Its
+  body is metadata-only unless `QYL_MCP_CAPTURE_CONTENT=1`; opted-in payloads
+  are redacted and bounded before export.
 
 Operations start before SDK dispatch. Standard W3C trace context and baggage,
 plus fields from a host-configured propagator, travel in the unprefixed MCP
@@ -187,32 +188,8 @@ that remote context as its parent (or starts as a root when none is valid) and
 links any independent ambient transport span. HTTP/SSE propagation remains a
 separate instrumentation concern and is never replaced by the MCP carrier.
 
-The 25 well-known `mcp.method.name` values are:
-
-- Lifecycle/control: `initialize`, `notifications/initialized`, `ping`,
-  `notifications/cancelled`, `notifications/progress`
-- Resources: `resources/list`, `resources/templates/list`, `resources/read`,
-  `resources/subscribe`, `resources/unsubscribe`,
-  `notifications/resources/list_changed`, `notifications/resources/updated`
-- Prompts: `prompts/list`, `prompts/get`,
-  `notifications/prompts/list_changed`
-- Tools: `tools/list`, `tools/call`, `notifications/tools/list_changed`
-- Roots: `roots/list`, `notifications/roots/list_changed`
-- Logging: `logging/setLevel`, `notifications/message`
-- Sampling: `sampling/createMessage`
-- Completion: `completion/complete`
-- Elicitation: `elicitation/create`
-
-Signal-valid descriptors may also use `client.address`, `client.port`,
-`error.type`, `gen_ai.operation.name`, `gen_ai.prompt.name`,
-`gen_ai.prompt.variable.*`, `gen_ai.tool.call.arguments`,
-`gen_ai.tool.call.result`, `gen_ai.tool.name`, `jsonrpc.protocol.version`,
-`jsonrpc.request.id`, `network.protocol.name`, `network.protocol.version`,
-`network.transport`, `rpc.response.status_code`, `server.address`, and
-`server.port`. qyl.mcp deliberately does not record the opt-in prompt-variable,
-tool-argument, or tool-result attributes because they may contain credentials
-or user content. Workbench execution, evaluation, test-case, and server IDs are
-added only to spans as `qyl.mcp.*` correlation attributes.
+The method vocabulary follows the active MCP SDK registry rather than a copied
+list in qyl.mcp.
 
 ## Explicit demo mode
 

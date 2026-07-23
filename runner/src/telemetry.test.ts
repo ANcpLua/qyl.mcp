@@ -3,6 +3,11 @@ import { createServer } from "node:http";
 import test from "node:test";
 import { SpanKind, SpanStatusCode } from "@opentelemetry/api";
 import {
+    InMemoryLogRecordExporter,
+    LoggerProvider,
+    SimpleLogRecordProcessor,
+} from "@opentelemetry/sdk-logs";
+import {
     BasicTracerProvider,
     InMemorySpanExporter,
     SimpleSpanProcessor,
@@ -27,110 +32,207 @@ import {
     ATTR_MCP_METHOD_NAME,
     ATTR_MCP_PROTOCOL_VERSION,
     ATTR_MCP_RESOURCE_URI,
-    ATTR_MCP_SESSION_ID,
     ATTR_RPC_RESPONSE_STATUS_CODE,
     GEN_AI_OPERATION_NAME_VALUE_EXECUTE_TOOL,
     METRIC_MCP_CLIENT_OPERATION_DURATION,
-    METRIC_MCP_CLIENT_SESSION_DURATION,
     METRIC_MCP_SERVER_OPERATION_DURATION,
-    METRIC_MCP_SERVER_SESSION_DURATION,
 } from "@opentelemetry/semantic-conventions/incubating";
-import { MCP_WELL_KNOWN_METHODS } from "./mcp-semconv.js";
 import {
-    McpTelemetry,
-    MCP_DURATION_EXPLICIT_BUCKET_BOUNDARIES,
-    WorkbenchTelemetryAttributes,
-    currentMcpPropagation,
+    EVENT_QYL_MCP_OPERATION,
+    describeMcpOperationLog,
     describeMcpOperationMetric,
     describeMcpOperationSpan,
-    describeMcpSessionMetric,
+} from "./mcp-semconv.js";
+import {
+    MCP_DURATION_EXPLICIT_BUCKET_BOUNDARIES,
+    McpTelemetry,
+    WorkbenchTelemetryAttributes,
+    currentMcpPropagation,
     runWithMcpPropagation,
     signalEndpoint,
 } from "./telemetry.js";
 import { SecretRedactor } from "./secret-redactor.js";
 
-test("pinned registry exposes exactly 25 well-known MCP methods", () => {
-    assert.deepEqual(MCP_WELL_KNOWN_METHODS, [
-        "initialize",
-        "notifications/initialized",
-        "ping",
-        "notifications/cancelled",
-        "notifications/progress",
-        "resources/list",
-        "resources/templates/list",
-        "resources/read",
-        "resources/subscribe",
-        "resources/unsubscribe",
-        "notifications/resources/list_changed",
-        "notifications/resources/updated",
-        "prompts/list",
-        "prompts/get",
-        "notifications/prompts/list_changed",
-        "tools/list",
-        "tools/call",
-        "notifications/tools/list_changed",
-        "roots/list",
-        "notifications/roots/list_changed",
-        "logging/setLevel",
-        "notifications/message",
-        "sampling/createMessage",
-        "completion/complete",
-        "elicitation/create",
-    ]);
+const baseInput = {
+    role: "client" as const,
+    method: "tools/call",
+    toolName: "weather.lookup",
+    transport: "streamable-http" as const,
+    protocolVersion: "2026-07-28",
+    jsonRpcProtocolVersion: "2.0",
+    jsonRpcRequestId: 7,
+    startTimeMs: 1_000,
+    endTimeMs: 1_025,
+};
+
+test("MCP operation telemetry uses the upstream duration boundaries", () => {
     assert.deepEqual(MCP_DURATION_EXPLICIT_BUCKET_BOUNDARIES, [
         0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 30, 60, 120, 300,
     ]);
-});
 
-test("telemetry defaults OTLP export to the same configured Qyl collector", () => {
-    assert.equal(
-        signalEndpoint({
-            QYL_COLLECTOR_URL: "http://127.0.0.1:5100/",
-            OTEL_EXPORTER_OTLP_ENDPOINT: "http://ambient-collector.example",
-        }, "traces"),
-        "http://127.0.0.1:5100/v1/traces",
-    );
-    assert.equal(
-        signalEndpoint({
-            QYL_COLLECTOR_URL: "http://collector.example",
-            QYL_OTLP_ENDPOINT: "http://otlp.example/",
-        }, "metrics"),
-        "http://otlp.example/v1/metrics",
-    );
-});
-
-test("client tool span uses client conventions and bounded workbench correlation", () => {
-    const descriptor = describeMcpOperationSpan({
-        role: "client",
-        method: "tools/call",
-        serverId: "server-1",
-        toolName: "probe",
+    const notification = describeMcpOperationSpan({
+        role: "server",
+        method: "notifications/resources/updated",
+        resourceUri: "fixture://item/1",
         transport: "streamable-http",
-        protocolVersion: "2025-11-25",
-        jsonRpcProtocolVersion: "2.1",
-        mcpSessionId: "mcp-session-1",
-        jsonRpcRequestId: 17,
+        protocolVersion: "2026-07-28",
+        startTimeMs: 1_000,
+        endTimeMs: 1_001,
+    });
+    assert.equal(notification.name, "notifications/resources/updated");
+    assert.equal(notification.kind, SpanKind.SERVER);
+    assert.equal(
+        notification.attributes[ATTR_MCP_RESOURCE_URI],
+        "fixture://item/1",
+    );
+});
+
+test("spans and histograms use the upstream MCP operation conventions", () => {
+    const input = {
+        ...baseInput,
+        errorType: "-32602",
+        errorMessage: "Invalid params",
+        rpcResponseStatusCode: "-32602",
+    };
+    const span = describeMcpOperationSpan(input);
+    assert.equal(span.name, "tools/call weather.lookup");
+    assert.equal(span.kind, SpanKind.CLIENT);
+    assert.equal(span.attributes[ATTR_MCP_METHOD_NAME], "tools/call");
+    assert.equal(span.attributes[ATTR_GEN_AI_TOOL_NAME], "weather.lookup");
+    assert.equal(
+        span.attributes[ATTR_GEN_AI_OPERATION_NAME],
+        GEN_AI_OPERATION_NAME_VALUE_EXECUTE_TOOL,
+    );
+    assert.equal(span.attributes[ATTR_MCP_PROTOCOL_VERSION], "2026-07-28");
+    assert.equal(span.attributes[ATTR_JSONRPC_PROTOCOL_VERSION], undefined);
+    assert.equal(span.attributes[ATTR_JSONRPC_REQUEST_ID], "7");
+    assert.equal(span.attributes[ATTR_RPC_RESPONSE_STATUS_CODE], "-32602");
+    assert.equal(span.attributes[ATTR_ERROR_TYPE], "-32602");
+
+    const duration = describeMcpOperationMetric(input);
+    assert.equal(duration.name, METRIC_MCP_CLIENT_OPERATION_DURATION);
+    assert.equal(duration.unit, "s");
+    assert.equal(duration.value, 0.025);
+    assert.equal(duration.attributes[ATTR_MCP_METHOD_NAME], "tools/call");
+    assert.equal(duration.attributes[ATTR_GEN_AI_TOOL_NAME], "weather.lookup");
+    assert.equal(
+        duration.attributes[ATTR_GEN_AI_OPERATION_NAME],
+        GEN_AI_OPERATION_NAME_VALUE_EXECUTE_TOOL,
+    );
+    assert.equal(duration.attributes[ATTR_ERROR_TYPE], "-32602");
+    assert.equal(duration.attributes[ATTR_JSONRPC_REQUEST_ID], undefined);
+});
+
+test("operation logs capture redacted content only after explicit opt-in", async () => {
+    const secret = "request-secret";
+    const redactor = new SecretRedactor({ environment: { API_KEY: secret } });
+    const spanExporter = new InMemorySpanExporter();
+    const traceProvider = new BasicTracerProvider({
+        spanProcessors: [new SimpleSpanProcessor(spanExporter)],
+    });
+    const logExporter = new InMemoryLogRecordExporter();
+    const logProvider = new LoggerProvider({
+        processors: [new SimpleLogRecordProcessor({ exporter: logExporter })],
+    });
+    const telemetry = new McpTelemetry(
+        { QYL_MCP_TELEMETRY: "0", QYL_MCP_CAPTURE_CONTENT: "1" },
+        redactor,
+        {
+            tracer: traceProvider.getTracer("test"),
+            logger: logProvider.getLogger("test"),
+        },
+    );
+
+    try {
+        const operation = telemetry.startOperation({
+            role: "server",
+            method: "tools/call",
+            toolName: "weather.lookup",
+            transport: "inproc",
+            protocolVersion: "2026-07-28",
+            requestBody: {
+                jsonrpc: "2.0",
+                method: "tools/call",
+                params: { authorization: `Bearer ${secret}` },
+            },
+            remotePropagation: {
+                traceparent: "00-22222222222222222222222222222222-bbbbbbbbbbbbbbbb-01",
+            },
+            startTimeMs: 2_000,
+        });
+        assert(operation.correlation);
+        operation.end({
+            endTimeMs: 2_040,
+            jsonRpcRequestId: 9,
+            errorType: "-32021",
+            errorMessage: "Missing required client capability",
+            rpcResponseStatusCode: "-32021",
+            responseBody: {
+                jsonrpc: "2.0",
+                id: 9,
+                error: { code: -32021, message: "Missing required client capability" },
+            },
+        });
+        await Promise.all([traceProvider.forceFlush(), logProvider.forceFlush()]);
+
+        const span = assertSingle(spanExporter.getFinishedSpans());
+        const log = assertSingle(logExporter.getFinishedLogRecords());
+        assert.equal(span.status.code, SpanStatusCode.ERROR);
+        assert.equal(span.status.message, "Missing required client capability");
+        assert.equal(span.parentSpanContext?.traceId, "22222222222222222222222222222222");
+        assert.equal(log.eventName, EVENT_QYL_MCP_OPERATION);
+        assert.equal(log.severityText, "ERROR");
+        assert.equal(log.spanContext?.traceId, span.spanContext().traceId);
+        assert.equal(log.spanContext?.spanId, span.spanContext().spanId);
+        assert.equal(log.attributes[ATTR_MCP_METHOD_NAME], "tools/call");
+        assert.equal(JSON.stringify(log.body).includes(secret), false);
+        assert.match(JSON.stringify(log.body), /\[REDACTED\]/u);
+    } finally {
+        await telemetry.close();
+        await Promise.all([traceProvider.shutdown(), logProvider.shutdown()]);
+    }
+});
+
+test("local operation-log descriptors and signal endpoints cover all OTel signals", () => {
+    const requestBody = { params: { arguments: { city: "Vienna" } } };
+    const responseBody = { result: { content: "sunny" } };
+    const log = describeMcpOperationLog({ ...baseInput, requestBody, responseBody });
+    assert.equal(log.eventName, EVENT_QYL_MCP_OPERATION);
+    assert.equal(log.severityText, "INFO");
+    assert.equal("request" in (log.body as Record<string, unknown>), false);
+    assert.equal("response" in (log.body as Record<string, unknown>), false);
+    const contentLog = describeMcpOperationLog(
+        { ...baseInput, requestBody, responseBody },
+        new SecretRedactor(),
+        true,
+    );
+    assert.deepEqual((contentLog.body as Record<string, unknown>).request, requestBody);
+    assert.deepEqual((contentLog.body as Record<string, unknown>).response, responseBody);
+    assert.equal(
+        signalEndpoint({ QYL_OTLP_ENDPOINT: "http://collector:4318/" }, "traces"),
+        "http://collector:4318/v1/traces",
+    );
+    assert.equal(
+        signalEndpoint({ QYL_OTLP_ENDPOINT: "http://collector:4318/" }, "metrics"),
+        "http://collector:4318/v1/metrics",
+    );
+    assert.equal(
+        signalEndpoint({ QYL_OTLP_ENDPOINT: "http://collector:4318/" }, "logs"),
+        "http://collector:4318/v1/logs",
+    );
+});
+
+test("client spans carry network and bounded workbench correlation attributes", () => {
+    const descriptor = describeMcpOperationSpan({
+        ...baseInput,
+        serverId: "server-1",
         peerAddress: "mcp.example.test",
         peerPort: 443,
         executionId: "execution-1",
         evaluationRunId: "evaluation-1",
         testCaseId: "test-1",
-        startTimeMs: 1_000,
-        endTimeMs: 1_025,
     });
 
-    assert.equal(descriptor.name, "tools/call probe");
-    assert.equal(descriptor.kind, SpanKind.CLIENT);
-    assert.equal(descriptor.attributes[ATTR_MCP_METHOD_NAME], "tools/call");
-    assert.equal(descriptor.attributes[ATTR_MCP_PROTOCOL_VERSION], "2025-11-25");
-    assert.equal(descriptor.attributes[ATTR_MCP_SESSION_ID], "mcp-session-1");
-    assert.equal(descriptor.attributes[ATTR_JSONRPC_PROTOCOL_VERSION], "2.1");
-    assert.equal(descriptor.attributes[ATTR_JSONRPC_REQUEST_ID], "17");
-    assert.equal(descriptor.attributes[ATTR_GEN_AI_TOOL_NAME], "probe");
-    assert.equal(
-        descriptor.attributes[ATTR_GEN_AI_OPERATION_NAME],
-        GEN_AI_OPERATION_NAME_VALUE_EXECUTE_TOOL,
-    );
     assert.equal(descriptor.attributes[ATTR_NETWORK_PROTOCOL_NAME], "http");
     assert.equal(descriptor.attributes[ATTR_NETWORK_TRANSPORT], NETWORK_TRANSPORT_VALUE_TCP);
     assert.equal(descriptor.attributes[ATTR_SERVER_ADDRESS], "mcp.example.test");
@@ -138,17 +240,20 @@ test("client tool span uses client conventions and bounded workbench correlation
     assert.equal(descriptor.attributes[ATTR_CLIENT_ADDRESS], undefined);
     assert.equal(descriptor.attributes[WorkbenchTelemetryAttributes.serverId], "server-1");
     assert.equal(descriptor.attributes[WorkbenchTelemetryAttributes.executionId], "execution-1");
-    assert.equal(descriptor.attributes[WorkbenchTelemetryAttributes.evaluationRunId], "evaluation-1");
+    assert.equal(
+        descriptor.attributes[WorkbenchTelemetryAttributes.evaluationRunId],
+        "evaluation-1",
+    );
     assert.equal(descriptor.attributes[WorkbenchTelemetryAttributes.testCaseId], "test-1");
 });
 
-test("server prompt span uses server peer attributes and omits JSON-RPC 2.0", () => {
+test("server prompt spans use client peer attributes and preserve non-default JSON-RPC", () => {
     const descriptor = describeMcpOperationSpan({
         role: "server",
         method: "prompts/get",
         promptName: "release-notes",
         transport: "streamable_http",
-        jsonRpcProtocolVersion: "2.0",
+        jsonRpcProtocolVersion: "2.1",
         peerAddress: "192.0.2.7",
         peerPort: 51999,
         errorType: "-32602",
@@ -160,7 +265,7 @@ test("server prompt span uses server peer attributes and omits JSON-RPC 2.0", ()
     assert.equal(descriptor.name, "prompts/get release-notes");
     assert.equal(descriptor.kind, SpanKind.SERVER);
     assert.equal(descriptor.attributes[ATTR_GEN_AI_PROMPT_NAME], "release-notes");
-    assert.equal(descriptor.attributes[ATTR_JSONRPC_PROTOCOL_VERSION], undefined);
+    assert.equal(descriptor.attributes[ATTR_JSONRPC_PROTOCOL_VERSION], "2.1");
     assert.equal(descriptor.attributes[ATTR_ERROR_TYPE], "-32602");
     assert.equal(descriptor.attributes[ATTR_RPC_RESPONSE_STATUS_CODE], "-32602");
     assert.equal(descriptor.attributes[ATTR_CLIENT_ADDRESS], "192.0.2.7");
@@ -168,15 +273,13 @@ test("server prompt span uses server peer attributes and omits JSON-RPC 2.0", ()
     assert.equal(descriptor.attributes[ATTR_SERVER_ADDRESS], undefined);
 });
 
-test("operation metrics exclude span-only request, session, and workbench identifiers", () => {
+test("operation metrics exclude request and workbench identifiers", () => {
     const client = describeMcpOperationMetric({
         role: "client",
         method: "resources/read",
         resourceUri: "https://example.test/item/1?token=secret",
-        recordResourceUriOnMetric: false,
         transport: "stdio",
-        protocolVersion: "2025-11-25",
-        mcpSessionId: "session-1",
+        protocolVersion: "2026-07-28",
         jsonRpcRequestId: "request-1",
         peerAddress: "ignored-for-stdio.example",
         serverId: "server-1",
@@ -187,11 +290,9 @@ test("operation metrics exclude span-only request, session, and workbench identi
         endTimeMs: 3_125,
     });
     assert.equal(client.name, METRIC_MCP_CLIENT_OPERATION_DURATION);
-    assert.equal(client.unit, "s");
     assert.equal(client.value, 0.125);
     assert.equal(client.attributes[ATTR_NETWORK_TRANSPORT], NETWORK_TRANSPORT_VALUE_PIPE);
     assert.equal(client.attributes[ATTR_MCP_RESOURCE_URI], undefined);
-    assert.equal(client.attributes[ATTR_MCP_SESSION_ID], undefined);
     assert.equal(client.attributes[ATTR_JSONRPC_REQUEST_ID], undefined);
     assert.equal(client.attributes[WorkbenchTelemetryAttributes.executionId], undefined);
     assert.equal(client.attributes[WorkbenchTelemetryAttributes.evaluationRunId], undefined);
@@ -212,36 +313,7 @@ test("operation metrics exclude span-only request, session, and workbench identi
     assert.equal(server.attributes[ATTR_CLIENT_PORT], undefined);
 });
 
-test("session metrics use the distinct client and server session inventories", () => {
-    const client = describeMcpSessionMetric({
-        role: "client",
-        transport: "streamable-http",
-        protocolVersion: "2025-11-25",
-        rpcResponseStatusCode: "-32603",
-        peerAddress: "mcp.example.test",
-        peerPort: 443,
-        startTimeMs: 5_000,
-        endTimeMs: 7_500,
-    });
-    assert.equal(client.name, METRIC_MCP_CLIENT_SESSION_DURATION);
-    assert.equal(client.value, 2.5);
-    assert.equal(client.attributes[ATTR_SERVER_ADDRESS], "mcp.example.test");
-    assert.equal(client.attributes[ATTR_SERVER_PORT], 443);
-    assert.equal(client.attributes[ATTR_MCP_METHOD_NAME], undefined);
-    assert.equal(client.attributes[ATTR_MCP_SESSION_ID], undefined);
-    assert.equal(client.attributes[ATTR_RPC_RESPONSE_STATUS_CODE], undefined);
-
-    const server = describeMcpSessionMetric({
-        role: "server",
-        transport: "inproc",
-        startTimeMs: 8_000,
-        endTimeMs: 9_000,
-    });
-    assert.equal(server.name, METRIC_MCP_SERVER_SESSION_DURATION);
-    assert.deepEqual(server.attributes, {});
-});
-
-test("resource spans sanitize URIs and only attach them to URI-bearing methods", () => {
+test("resource telemetry sanitizes URIs and only records URI-bearing methods", () => {
     const read = describeMcpOperationSpan({
         role: "client",
         method: "resources/read",
@@ -253,7 +325,6 @@ test("resource spans sanitize URIs and only attach them to URI-bearing methods",
     });
     assert.equal(read.attributes[ATTR_MCP_RESOURCE_URI], "https://example.test/resource");
     assert.equal(read.attributes[ATTR_NETWORK_TRANSPORT], undefined);
-    assert.equal(read.attributes[ATTR_ERROR_TYPE], "resource_not_found");
     assert.equal(JSON.stringify(read).includes("password"), false);
     assert.equal(JSON.stringify(read).includes("api_key"), false);
 
@@ -279,20 +350,9 @@ test("resource spans sanitize URIs and only attach them to URI-bearing methods",
     assert.equal(mismatchedTarget.name, "ping");
     assert.equal(mismatchedTarget.attributes[ATTR_GEN_AI_TOOL_NAME], undefined);
     assert.equal(mismatchedTarget.attributes[ATTR_GEN_AI_PROMPT_NAME], undefined);
-
-    const mismatchedMetric = describeMcpOperationMetric({
-        role: "client",
-        method: "ping",
-        resourceUri: "fixture://must-not-appear",
-        recordResourceUriOnMetric: true,
-        transport: "inproc",
-        startTimeMs: 13_000,
-        endTimeMs: 13_001,
-    });
-    assert.equal(mismatchedMetric.attributes[ATTR_MCP_RESOURCE_URI], undefined);
 });
 
-test("disabled self-telemetry remains a no-op for operations and sessions", async () => {
+test("disabled self-telemetry remains a no-op", async () => {
     const telemetry = new McpTelemetry({ QYL_MCP_TELEMETRY: "0" });
     assert.equal(telemetry.operationTracingEnabled, false);
     assert.equal(telemetry.recordOperation({
@@ -302,16 +362,10 @@ test("disabled self-telemetry remains a no-op for operations and sessions", asyn
         startTimeMs: 1,
         endTimeMs: 2,
     }), undefined);
-    telemetry.recordSession({
-        role: "server",
-        transport: "inproc",
-        startTimeMs: 1,
-        endTimeMs: 2,
-    });
     await telemetry.close();
 });
 
-test("server operations parent from MCP metadata and link independent ambient transport context", async () => {
+test("server operations parent from MCP metadata and link ambient transport context", async () => {
     const exporter = new InMemorySpanExporter();
     const provider = new BasicTracerProvider({
         spanProcessors: [new SimpleSpanProcessor(exporter)],
@@ -321,7 +375,6 @@ test("server operations parent from MCP metadata and link independent ambient tr
         new SecretRedactor(),
         { tracer: provider.getTracer("qyl.mcp/test") },
     );
-    assert.equal(telemetry.operationTracingEnabled, true);
     const ambientCarrier = {
         traceparent: "00-11111111111111111111111111111111-aaaaaaaaaaaaaaaa-01",
         tracestate: "qyl=ambient",
@@ -354,7 +407,7 @@ test("server operations parent from MCP metadata and link independent ambient tr
         assert.deepEqual(operation.run(currentMcpPropagation), operation.propagation);
         assert.equal(currentMcpPropagation(), undefined);
 
-        operation.end({ endTimeMs: 1_025, protocolVersion: "2025-11-25" });
+        operation.end({ endTimeMs: 1_025, protocolVersion: "2026-07-28" });
         const rootOperation = runWithMcpPropagation(ambientCarrier, () => telemetry.startOperation({
             role: "server",
             method: "ping",
@@ -373,7 +426,7 @@ test("server operations parent from MCP metadata and link independent ambient tr
         assert.equal(span.links[0]?.context.traceId, "11111111111111111111111111111111");
         assert.equal(span.links[0]?.context.spanId, "aaaaaaaaaaaaaaaa");
         assert.equal(span.status.code, SpanStatusCode.UNSET);
-        assert.equal(span.attributes[ATTR_MCP_PROTOCOL_VERSION], "2025-11-25");
+        assert.equal(span.attributes[ATTR_MCP_PROTOCOL_VERSION], "2026-07-28");
         const rootSpan = spans.find(({ name }) => name === "ping")!;
         assert.equal(rootSpan.parentSpanContext, undefined);
         assert.equal(rootSpan.links.length, 1);
@@ -384,7 +437,7 @@ test("server operations parent from MCP metadata and link independent ambient tr
     }
 });
 
-test("a live pre-call operation exposes its non-global W3C trace context until completion", async () => {
+test("a live operation exposes W3C context and exports every OTel signal", async () => {
     const receivedPaths: string[] = [];
     const receiver = createServer((request, response) => {
         receivedPaths.push(request.url ?? "");
@@ -414,10 +467,7 @@ test("a live pre-call operation exposes its non-global W3C trace context until c
         assert(operation.correlation);
         const traceparent = operation.propagation?.traceparent;
         assert(traceparent);
-        assert.match(
-            traceparent,
-            /^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/u,
-        );
+        assert.match(traceparent, /^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/u);
         const [, traceId, spanId] = traceparent.split("-");
         assert.equal(traceId, operation.correlation.traceId);
         assert.equal(spanId, operation.correlation.spanId);
@@ -457,4 +507,10 @@ test("a live pre-call operation exposes its non-global W3C trace context until c
     }
     assert(receivedPaths.includes("/v1/traces"));
     assert(receivedPaths.includes("/v1/metrics"));
+    assert(receivedPaths.includes("/v1/logs"));
 });
+
+function assertSingle<T>(values: readonly T[]): T {
+    assert.equal(values.length, 1);
+    return values[0]!;
+}
