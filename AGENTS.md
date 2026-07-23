@@ -61,6 +61,36 @@ namespace, even when an operator allowlists a matching header name. Any future
 argument-content capture belongs at an MCP-owned boundary, is disabled by
 default, and requires its own explicit policy and sanitization.
 
+## Telemetry and protocol-era discipline
+
+qyl.mcp emits MCP telemetry, and the 2026-07-28 revision changes what several
+recorded fields mean. `doc/support-2026-07-28.md` is the per-era authority; these
+rules bind the emit path to it.
+
+- Protocol era is the negotiated version (`getProtocolEra()` /
+  `getNegotiatedProtocolVersion()`), never the presence of a `_meta` envelope: the
+  legacy-fallback probe also carries one.
+- Client and server identity is per-request and self-reported. Read
+  `ctx.mcpReq.envelope`, not `getClientCapabilities()` / `getClientVersion()`
+  (`undefined` on a 2026 connection). `clientInfo` / `serverInfo` are display,
+  logging, and debugging values only — never a telemetry resource attribute, a
+  span dimension, or a behavior or security input.
+- A multi-round tool call is N linked requests, not a nested exchange. Correlate
+  rounds with linked spans, never a parent-child tree, and mint the link only
+  after the `requestState.verify` hook succeeds: `requestState` round-trips
+  through the client, is signed rather than encrypted, and is untrusted until
+  then. The 2025 legacy shim reaches the same handler over real server→client
+  requests, so never hard-code one topology.
+- Span and RPC status come from the JSON-RPC and tool outcome, never the HTTP
+  status: on the modern path a well-formed JSON-RPC error rides HTTP 400, and a
+  committed 200 can still carry an in-stream error. Map from `isError` tool
+  results and the `ProtocolError` code family.
+- Wire concepts OpenTelemetry semconv has not defined — `requestState`, round
+  index, `resultType`, `subscriptions/listen` lifetime, cache hints — emit under
+  an experimental `qyl.mcp.*` staging namespace, deletion-targeted on every
+  semconv bump that lands an upstream equivalent. Never mint an `mcp.*` alias for
+  an unratified concept.
+
 ## Repository shape
 
 Keep the root README current and concise. Do not retain architecture diaries or
