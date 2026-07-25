@@ -91,14 +91,15 @@ import {
 
 type ExternalServerConfiguration = QylContracts.WorkbenchServerConfiguration;
 
+/** Keyed by the contract's path-parameter names, which is what Express binds. */
 const ContractIdSchemas: Readonly<Record<string, z.ZodType<string>>> = {
-    workspaceId: WorkbenchWorkspaceIdSchema,
-    serverId: WorkbenchServerIdSchema,
-    executionId: WorkbenchExecutionIdSchema,
-    testCaseId: WorkbenchTestCaseIdSchema,
-    suiteId: WorkbenchSuiteIdSchema,
-    evaluationRunId: WorkbenchEvaluationRunIdSchema,
-    exportId: WorkbenchEvaluationExportIdSchema,
+    workspace_id: WorkbenchWorkspaceIdSchema,
+    server_id: WorkbenchServerIdSchema,
+    execution_id: WorkbenchExecutionIdSchema,
+    test_case_id: WorkbenchTestCaseIdSchema,
+    suite_id: WorkbenchSuiteIdSchema,
+    evaluation_run_id: WorkbenchEvaluationRunIdSchema,
+    export_id: WorkbenchEvaluationExportIdSchema,
 };
 const AUTO_CONNECT_CONCURRENCY = 4;
 const TELEMETRY_DISABLED_REASON =
@@ -426,16 +427,16 @@ export class WorkbenchApi {
             const body = parseBody<QylContracts.WorkbenchWorkspaceCreateRequest>(request);
             response.json(await this.repository.createWorkspace(body));
         }));
-        app.get("/workbench/workspaces/:workspaceId", this.route(async (request, response) => {
-            response.json(await this.repository.getWorkspace(param(request, "workspaceId")));
+        app.get("/workbench/workspaces/:workspace_id", this.route(async (request, response) => {
+            response.json(await this.repository.getWorkspace(param(request, "workspace_id")));
         }));
-        app.patch("/workbench/workspaces/:workspaceId", this.route(async (request, response) => {
+        app.patch("/workbench/workspaces/:workspace_id", this.route(async (request, response) => {
             const body = parseBody<QylContracts.WorkbenchWorkspaceUpdateRequest>(request);
             requireNonEmptyPatch(body);
-            response.json(await this.repository.updateWorkspace(param(request, "workspaceId"), body));
+            response.json(await this.repository.updateWorkspace(param(request, "workspace_id"), body));
         }));
-        app.delete("/workbench/workspaces/:workspaceId", this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
+        app.delete("/workbench/workspaces/:workspace_id", this.route(async (request, response) => {
+            const workspaceId = param(request, "workspace_id");
             const servers = await this.repository.listServers(workspaceId);
             if (servers.some((server) => this.builtinServerIds.has(server.id))) {
                 throw new RepositoryConflictError(
@@ -456,12 +457,12 @@ export class WorkbenchApi {
             for (const server of servers) this.executions.forgetServer(workspaceId, server.id);
             response.status(204).end();
         }, "exclusive"));
-        app.get("/workbench/workspaces/:workspaceId/preferences", this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
+        app.get("/workbench/workspaces/:workspace_id/preferences", this.route(async (request, response) => {
+            const workspaceId = param(request, "workspace_id");
             response.json(preferencesResponse(workspaceId, await this.repository.getPreferences(workspaceId), this.now()));
         }));
-        app.put("/workbench/workspaces/:workspaceId/preferences", this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
+        app.put("/workbench/workspaces/:workspace_id/preferences", this.route(async (request, response) => {
+            const workspaceId = param(request, "workspace_id");
             const body = parseBody<QylContracts.WorkbenchWorkspacePreferencesUpdateRequest>(request);
             if (body.selected_server_id !== undefined) await this.repository.getServer(workspaceId, body.selected_server_id);
             const saved = await this.repository.savePreferences(workspaceId, {
@@ -473,13 +474,13 @@ export class WorkbenchApi {
     }
 
     private registerServerRoutes(app: Express): void {
-        const base = "/workbench/workspaces/:workspaceId/servers";
+        const base = "/workbench/workspaces/:workspace_id/servers";
         app.get(base, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
+            const workspaceId = param(request, "workspace_id");
             response.json({ servers: (await this.repository.listServers(workspaceId)).map((server) => this.serverResponse(server)) });
         }));
         app.post(base, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
+            const workspaceId = param(request, "workspace_id");
             const body = parseBody<QylContracts.WorkbenchServerCreateRequest>(request);
             const server = await this.repository.createServer(workspaceId, {
                 name: body.name,
@@ -499,12 +500,12 @@ export class WorkbenchApi {
             }
             response.json(this.serverResponse(server));
         }));
-        app.get(`${base}/:serverId`, this.route(async (request, response) => {
+        app.get(`${base}/:server_id`, this.route(async (request, response) => {
             response.json(this.serverResponse(await this.scopedServer(request)));
         }));
-        app.patch(`${base}/:serverId`, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
-            const serverId = param(request, "serverId");
+        app.patch(`${base}/:server_id`, this.route(async (request, response) => {
+            const workspaceId = param(request, "workspace_id");
+            const serverId = param(request, "server_id");
             this.requireMutableServer(serverId);
             const previous = await this.repository.getServer(workspaceId, serverId);
             const body = parseBody<QylContracts.WorkbenchServerUpdateRequest>(request);
@@ -537,9 +538,9 @@ export class WorkbenchApi {
             }
             response.json(this.serverResponse(updated));
         }));
-        app.delete(`${base}/:serverId`, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
-            const serverId = param(request, "serverId");
+        app.delete(`${base}/:server_id`, this.route(async (request, response) => {
+            const workspaceId = param(request, "workspace_id");
+            const serverId = param(request, "server_id");
             this.requireMutableServer(serverId);
             const server = await this.repository.getServer(workspaceId, serverId);
             await this.repository.ensureServerDeletable(workspaceId, serverId);
@@ -556,7 +557,7 @@ export class WorkbenchApi {
         }, "exclusive"));
 
         for (const action of ["connect", "disconnect", "reconnect"] as const) {
-            app.post(`${base}/:serverId/${action}`, this.route(async (request, response) => {
+            app.post(`${base}/:server_id/${action}`, this.route(async (request, response) => {
                 const server = await this.scopedServer(request);
                 if (action === "connect") await this.connections.connect(server.id);
                 else if (action === "disconnect") await this.connections.disconnect(server.id);
@@ -564,21 +565,21 @@ export class WorkbenchApi {
                 response.status(202).json({ server: this.serverResponse(server) });
             }));
         }
-        app.get(`${base}/:serverId/discovery`, this.route(async (request, response) => {
+        app.get(`${base}/:server_id/discovery`, this.route(async (request, response) => {
             const server = await this.scopedServer(request);
             response.json(this.discoveryResponse(server.id, this.connections.get(server.id)));
         }));
-        app.post(`${base}/:serverId/discovery/refresh`, this.route(async (request, response) => {
+        app.post(`${base}/:server_id/discovery/refresh`, this.route(async (request, response) => {
             const server = await this.scopedServer(request);
             response.json(this.discoveryResponse(server.id, await this.connections.refreshDiscovery(server.id)));
         }));
-        app.get(`${base}/:serverId/protocol`, this.route(async (request, response) => {
+        app.get(`${base}/:server_id/protocol`, this.route(async (request, response) => {
             const server = await this.scopedServer(request);
             const entries = this.connections.getJournal(server.id)?.snapshot() ?? [];
             const page = paginate(entries.map((entry) => protocolEvent(server.id, entry)), request, 200);
             response.json({ events: page.items, ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }) });
         }));
-        app.get(`${base}/:serverId/protocol/stream`, this.route(async (request, response) => {
+        app.get(`${base}/:server_id/protocol/stream`, this.route(async (request, response) => {
             const server = await this.scopedServer(request);
             const lastEventId = parseLastEventId(request.headers["last-event-id"]);
             openSse(response);
@@ -601,7 +602,7 @@ export class WorkbenchApi {
     }
 
     private registerExecutionRoutes(app: Express): void {
-        const base = "/workbench/workspaces/:workspaceId/servers/:serverId/executions";
+        const base = "/workbench/workspaces/:workspace_id/servers/:server_id/executions";
         app.get(base, this.route(async (request, response) => {
             const server = await this.scopedServer(request);
             const requestedStatus = optionalString(request.query.status);
@@ -652,19 +653,19 @@ export class WorkbenchApi {
             );
             request.on("close", unsubscribe);
         }));
-        app.get(`${base}/:executionId`, this.route(async (request, response) => {
+        app.get(`${base}/:execution_id`, this.route(async (request, response) => {
             const server = await this.scopedServer(request);
-            response.json(executionResponse(await this.findExecution(server.workspaceId, server.id, param(request, "executionId"))));
+            response.json(executionResponse(await this.findExecution(server.workspaceId, server.id, param(request, "execution_id"))));
         }));
-        app.post(`${base}/:executionId/cancel`, this.route(async (request, response) => {
+        app.post(`${base}/:execution_id/cancel`, this.route(async (request, response) => {
             const server = await this.scopedServer(request);
             parseBody<QylContracts.WorkbenchExecutionCancelRequest>(request);
-            const execution = await this.executions.cancel(server.workspaceId, server.id, param(request, "executionId"));
+            const execution = await this.executions.cancel(server.workspaceId, server.id, param(request, "execution_id"));
             response.status(202).json({ execution: executionResponse(execution) });
         }));
-        app.get(`${base}/:executionId/telemetry`, this.route(async (request, response) => {
+        app.get(`${base}/:execution_id/telemetry`, this.route(async (request, response) => {
             const server = await this.scopedServer(request);
-            const execution = await this.findExecution(server.workspaceId, server.id, param(request, "executionId"));
+            const execution = await this.findExecution(server.workspaceId, server.id, param(request, "execution_id"));
             const persisted = (await this.repository.listExecutions(server.workspaceId, server.id))
                 .find((item) => item.id === execution.id);
             const correlation = this.correlations.correlation(execution.id) ?? persisted?.telemetryCorrelation ?? {
@@ -684,9 +685,9 @@ export class WorkbenchApi {
     }
 
     private registerTestRoutes(app: Express): void {
-        const tests = "/workbench/workspaces/:workspaceId/test-cases";
+        const tests = "/workbench/workspaces/:workspace_id/test-cases";
         app.get(tests, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
+            const workspaceId = param(request, "workspace_id");
             const serverId = optionalString(request.query.serverId);
             const toolName = optionalString(request.query.toolName);
             const filtered = (await this.repository.listTestCases(workspaceId)).filter((testCase) =>
@@ -696,7 +697,7 @@ export class WorkbenchApi {
             response.json({ testCases: page.items.map(testCaseResponse), ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }) });
         }));
         app.post(tests, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
+            const workspaceId = param(request, "workspace_id");
             const body = parseBody<QylContracts.WorkbenchTestCaseCreateRequest>(request);
             const timestamp = this.now().toISOString();
             const testCase = await this.repository.saveTestCase(
@@ -704,12 +705,12 @@ export class WorkbenchApi {
             );
             response.json(testCaseResponse(testCase));
         }));
-        app.get(`${tests}/:testCaseId`, this.route(async (request, response) => {
-            response.json(testCaseResponse(await this.repository.getTestCase(param(request, "workspaceId"), param(request, "testCaseId"))));
+        app.get(`${tests}/:test_case_id`, this.route(async (request, response) => {
+            response.json(testCaseResponse(await this.repository.getTestCase(param(request, "workspace_id"), param(request, "test_case_id"))));
         }));
-        app.patch(`${tests}/:testCaseId`, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
-            const testCaseId = param(request, "testCaseId");
+        app.patch(`${tests}/:test_case_id`, this.route(async (request, response) => {
+            const workspaceId = param(request, "workspace_id");
+            const testCaseId = param(request, "test_case_id");
             const current = await this.repository.getTestCase(workspaceId, testCaseId);
             const body = parseBody<QylContracts.WorkbenchTestCaseUpdateRequest>(request);
             requireNonEmptyPatch(body);
@@ -731,13 +732,13 @@ export class WorkbenchApi {
             ));
             response.json(testCaseResponse(updated));
         }));
-        app.delete(`${tests}/:testCaseId`, this.route(async (request, response) => {
-            await this.repository.deleteTestCase(param(request, "workspaceId"), param(request, "testCaseId"));
+        app.delete(`${tests}/:test_case_id`, this.route(async (request, response) => {
+            await this.repository.deleteTestCase(param(request, "workspace_id"), param(request, "test_case_id"));
             response.status(204).end();
         }));
-        app.post(`${tests}/:testCaseId/run`, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
-            const testCase = await this.repository.getTestCase(workspaceId, param(request, "testCaseId"));
+        app.post(`${tests}/:test_case_id/run`, this.route(async (request, response) => {
+            const workspaceId = param(request, "workspace_id");
+            const testCase = await this.repository.getTestCase(workspaceId, param(request, "test_case_id"));
             const body = parseBody<QylContracts.WorkbenchTestCaseRunRequest>(request);
             const suite: PersistedSuite = {
                 id: `single:${testCase.id}`,
@@ -750,14 +751,14 @@ export class WorkbenchApi {
             response.status(202).json({ run: await this.startEvaluation(workspaceId, suite, [testCase], body) });
         }));
 
-        const suites = "/workbench/workspaces/:workspaceId/suites";
+        const suites = "/workbench/workspaces/:workspace_id/suites";
         app.get(suites, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
+            const workspaceId = param(request, "workspace_id");
             const page = paginate(await this.repository.listSuites(workspaceId), request, 100);
             response.json({ suites: page.items.map(suiteResponse), ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }) });
         }));
         app.post(suites, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
+            const workspaceId = param(request, "workspace_id");
             const body = parseBody<QylContracts.WorkbenchTestSuiteCreateRequest>(request);
             const timestamp = this.now().toISOString();
             const suite = await this.repository.saveSuite({
@@ -772,12 +773,12 @@ export class WorkbenchApi {
             });
             response.json(suiteResponse(suite));
         }));
-        app.get(`${suites}/:suiteId`, this.route(async (request, response) => {
-            response.json(suiteResponse(await this.repository.getSuite(param(request, "workspaceId"), param(request, "suiteId"))));
+        app.get(`${suites}/:suite_id`, this.route(async (request, response) => {
+            response.json(suiteResponse(await this.repository.getSuite(param(request, "workspace_id"), param(request, "suite_id"))));
         }));
-        app.patch(`${suites}/:suiteId`, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
-            const current = await this.repository.getSuite(workspaceId, param(request, "suiteId"));
+        app.patch(`${suites}/:suite_id`, this.route(async (request, response) => {
+            const workspaceId = param(request, "workspace_id");
+            const current = await this.repository.getSuite(workspaceId, param(request, "suite_id"));
             const body = parseBody<QylContracts.WorkbenchTestSuiteUpdateRequest>(request);
             requireNonEmptyPatch(body);
             const updated = await this.repository.saveSuite({
@@ -787,13 +788,13 @@ export class WorkbenchApi {
             });
             response.json(suiteResponse(updated));
         }));
-        app.delete(`${suites}/:suiteId`, this.route(async (request, response) => {
-            await this.repository.deleteSuite(param(request, "workspaceId"), param(request, "suiteId"));
+        app.delete(`${suites}/:suite_id`, this.route(async (request, response) => {
+            await this.repository.deleteSuite(param(request, "workspace_id"), param(request, "suite_id"));
             response.status(204).end();
         }));
-        app.post(`${suites}/:suiteId/run`, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
-            const suite = await this.repository.getSuite(workspaceId, param(request, "suiteId"));
+        app.post(`${suites}/:suite_id/run`, this.route(async (request, response) => {
+            const workspaceId = param(request, "workspace_id");
+            const suite = await this.repository.getSuite(workspaceId, param(request, "suite_id"));
             const body = parseBody<QylContracts.WorkbenchSuiteRunRequest>(request);
             const selected = body.selected_test_case_ids ?? suite.testCaseIds;
             if (selected.some((id) => !suite.testCaseIds.includes(id))) {
@@ -805,9 +806,9 @@ export class WorkbenchApi {
     }
 
     private registerEvaluationRoutes(app: Express): void {
-        const base = "/workbench/workspaces/:workspaceId/evaluation-runs";
+        const base = "/workbench/workspaces/:workspace_id/evaluation-runs";
         app.get(base, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
+            const workspaceId = param(request, "workspace_id");
             const requestedStatus = optionalString(request.query.status);
             const parsedStatus = requestedStatus === undefined
                 ? undefined
@@ -822,11 +823,11 @@ export class WorkbenchApi {
             const page = paginate(runs, request, 100);
             response.json({ runs: page.items.map(evaluationRunResponse), ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }) });
         }));
-        app.get(`${base}/:evaluationRunId`, this.route(async (request, response) => {
-            response.json(evaluationRunResponse(await this.repository.getEvaluationRun(param(request, "workspaceId"), param(request, "evaluationRunId"))));
+        app.get(`${base}/:evaluation_run_id`, this.route(async (request, response) => {
+            response.json(evaluationRunResponse(await this.repository.getEvaluationRun(param(request, "workspace_id"), param(request, "evaluation_run_id"))));
         }));
         app.post(`${base}/compare`, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
+            const workspaceId = param(request, "workspace_id");
             const body = parseBody<QylContracts.WorkbenchEvaluationComparisonRequest>(request);
             const baseline = await this.repository.getEvaluationRun(workspaceId, body.baseline_run_id);
             const candidate = await this.repository.getEvaluationRun(workspaceId, body.candidate_run_id);
@@ -835,9 +836,9 @@ export class WorkbenchApi {
             }
             response.json(comparisonResponse(compareEvaluationRuns(baseline, candidate), baseline, candidate, this.now()));
         }));
-        app.post(`${base}/:evaluationRunId/export`, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
-            const run = await this.repository.getEvaluationRun(workspaceId, param(request, "evaluationRunId"));
+        app.post(`${base}/:evaluation_run_id/export`, this.route(async (request, response) => {
+            const workspaceId = param(request, "workspace_id");
+            const run = await this.repository.getEvaluationRun(workspaceId, param(request, "evaluation_run_id"));
             if (run.status === "queued" || run.status === "running") {
                 throw new RepositoryConflictError("An evaluation run must finish before it can be exported.");
             }
@@ -887,16 +888,16 @@ export class WorkbenchApi {
             }
             response.status(202).json({ export: item.metadata });
         }));
-        app.get(`${base}/:evaluationRunId/exports/:exportId`, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
-            const run = await this.repository.getEvaluationRun(workspaceId, param(request, "evaluationRunId"));
-            const item = await this.repository.getEvaluationExport(workspaceId, run.id, param(request, "exportId"));
+        app.get(`${base}/:evaluation_run_id/exports/:export_id`, this.route(async (request, response) => {
+            const workspaceId = param(request, "workspace_id");
+            const run = await this.repository.getEvaluationRun(workspaceId, param(request, "evaluation_run_id"));
+            const item = await this.repository.getEvaluationExport(workspaceId, run.id, param(request, "export_id"));
             response.json(item.metadata);
         }));
-        app.get(`${base}/:evaluationRunId/exports/:exportId/content`, this.route(async (request, response) => {
-            const workspaceId = param(request, "workspaceId");
-            const run = await this.repository.getEvaluationRun(workspaceId, param(request, "evaluationRunId"));
-            const item = await this.repository.getEvaluationExport(workspaceId, run.id, param(request, "exportId"));
+        app.get(`${base}/:evaluation_run_id/exports/:export_id/content`, this.route(async (request, response) => {
+            const workspaceId = param(request, "workspace_id");
+            const run = await this.repository.getEvaluationRun(workspaceId, param(request, "evaluation_run_id"));
+            const item = await this.repository.getEvaluationExport(workspaceId, run.id, param(request, "export_id"));
             response.json({ export: item.metadata, payload: item.payload });
         }));
     }
@@ -1074,7 +1075,7 @@ export class WorkbenchApi {
     }
 
     private async scopedServer(request: Request): Promise<ServerRecord> {
-        return this.repository.getServer(param(request, "workspaceId"), param(request, "serverId"));
+        return this.repository.getServer(param(request, "workspace_id"), param(request, "server_id"));
     }
 
     private requireMutableServer(serverId: string): void {

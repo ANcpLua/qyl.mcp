@@ -111,7 +111,7 @@ test("evaluation engine uses real invocation evidence and preserves suite order"
         p50LatencyMs: 100,
         p95LatencyMs: 200,
         p99LatencyMs: 200,
-        tokenUsage: { inputTokens: 16, outputTokens: 8, totalTokens: 24, estimated: false },
+        tokenUsage: { input_tokens: 16, output_tokens: 8, total_tokens: 24, estimated: false },
         cost: { amount_usd: 0.0004, estimated: false, source: "fixture" },
     });
 });

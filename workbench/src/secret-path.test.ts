@@ -57,11 +57,11 @@ test("env-referenced transport credentials cannot leak through echoed results, p
                         scheme: "bearer",
                         secret: {
                             source: "environment",
-                            environmentVariable: "MCP_AUTH",
+                            environment_variable: "MCP_AUTH",
                         },
                     }],
                 },
-                autoConnect: false,
+                auto_connect: false,
             },
         });
         assert.equal(created.response.status, 200);
@@ -83,10 +83,10 @@ test("env-referenced transport credentials cannot leak through echoed results, p
             {
                 method: "POST",
                 body: {
-                    toolName: "fixture.safe_lookup",
+                    tool_name: "fixture.safe_lookup",
                     arguments: { query: secret },
-                    timeoutMs: 5_000,
-                    idempotencyKey: "env-secret-echo-0001",
+                    timeout_ms: 5_000,
+                    idempotency_key: "env-secret-echo-0001",
                 },
             },
         );

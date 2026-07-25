@@ -73,10 +73,10 @@ test("workbench API authenticates, scopes, discovers, validates, and invokes ide
         );
 
         const invocation = {
-            toolName: "fixture.safe_lookup",
+            tool_name: "fixture.safe_lookup",
             arguments: { query: "Alpha" },
-            timeoutMs: 5_000,
-            idempotencyKey: "safe-lookup-0001",
+            timeout_ms: 5_000,
+            idempotency_key: "safe-lookup-0001",
         };
         const accepted = await postJson(
             harness,
@@ -113,10 +113,10 @@ test("workbench API authenticates, scopes, discovers, validates, and invokes ide
             harness,
             `/workbench/workspaces/default/servers/${serverId}/executions`,
             {
-                toolName: "fixture.tool_error",
+                tool_name: "fixture.tool_error",
                 arguments: { message: "intentional failure" },
-                timeoutMs: 5_000,
-                idempotencyKey: "tool-error-0001",
+                timeout_ms: 5_000,
+                idempotency_key: "tool-error-0001",
             },
         );
         assert.equal(toolErrorAccepted.response.status, 202);
@@ -133,10 +133,10 @@ test("workbench API authenticates, scopes, discovers, validates, and invokes ide
             harness,
             `/workbench/workspaces/default/servers/${serverId}/executions`,
             {
-                toolName: "fixture.safe_lookup",
+                tool_name: "fixture.safe_lookup",
                 arguments: { query: 42 },
-                timeoutMs: 5_000,
-                idempotencyKey: "schema-error-0001",
+                timeout_ms: 5_000,
+                idempotency_key: "schema-error-0001",
             },
         );
         assert.equal(schemaError.response.status, 400);
@@ -164,54 +164,54 @@ test("exposes only provider-reported usage and cost in execution and evaluation 
             harness,
             `/workbench/workspaces/default/servers/${serverId}/executions`,
             {
-                toolName: "fixture.evidence",
+                tool_name: "fixture.evidence",
                 arguments: { query: "explicit" },
-                timeoutMs: 5_000,
-                idempotencyKey: "evidence-execution-0001",
+                timeout_ms: 5_000,
+                idempotency_key: "evidence-execution-0001",
             },
         );
         const executionId = String(record(accepted.body.execution).id);
         const execution = await waitForExecution(harness, serverId, executionId);
-        assert.deepEqual(execution.tokenUsage, {
-            inputTokens: 12,
-            outputTokens: 5,
-            totalTokens: 17,
+        assert.deepEqual(execution.token_usage, {
+            input_tokens: 12,
+            output_tokens: 5,
+            total_tokens: 17,
             estimated: false,
         });
         assert.deepEqual(execution.cost, {
-            amountUsd: 0.000123,
+            amount_usd: 0.000123,
             estimated: false,
             source: "fixture",
         });
 
         const testCase = await postJson(harness, "/workbench/workspaces/default/test-cases", {
-            serverId,
+            server_id: serverId,
             name: "Explicit evidence",
-            toolName: "fixture.evidence",
+            tool_name: "fixture.evidence",
             arguments: { query: "evaluation" },
-            timeoutMs: 5_000,
+            timeout_ms: 5_000,
             assertions: [{ id: "status", kind: "status", expected: ["succeeded"] }],
         });
         const testCaseId = String(testCase.body.id);
         const suite = await postJson(harness, "/workbench/workspaces/default/suites", {
             name: "Evidence suite",
-            testCaseIds: [testCaseId],
+            test_case_ids: [testCaseId],
         });
         const runAccepted = await postJson(
             harness,
             `/workbench/workspaces/default/suites/${String(suite.body.id)}/run`,
-            { idempotencyKey: "evidence-evaluation-0001" },
+            { idempotency_key: "evidence-evaluation-0001" },
         );
         const runId = String(record(runAccepted.body.run).id);
         const run = await waitForEvaluation(harness, runId);
-        assert.deepEqual(record(run.summary).tokenUsage, {
-            inputTokens: 12,
-            outputTokens: 5,
-            totalTokens: 17,
+        assert.deepEqual(record(run.summary).token_usage, {
+            input_tokens: 12,
+            output_tokens: 5,
+            total_tokens: 17,
             estimated: false,
         });
         assert.deepEqual(record(run.summary).cost, {
-            amountUsd: 0.000123,
+            amount_usd: 0.000123,
             estimated: false,
             source: "fixture",
         });
@@ -259,10 +259,10 @@ test("workbench API exposes cancellation, timeout, and connection failure states
             harness,
             `/workbench/workspaces/default/servers/${serverId}/executions`,
             {
-                toolName: "fixture.delayed",
+                tool_name: "fixture.delayed",
                 arguments: { delayMs: 1_000 },
-                timeoutMs: 5_000,
-                idempotencyKey: "cancel-execution-0001",
+                timeout_ms: 5_000,
+                idempotency_key: "cancel-execution-0001",
             },
         );
         assert.equal(delayed.response.status, 202);
@@ -270,7 +270,7 @@ test("workbench API exposes cancellation, timeout, and connection failure states
         const cancellation = await postJson(
             harness,
             `/workbench/workspaces/default/servers/${serverId}/executions/${delayedId}/cancel`,
-            { reason: "exercise cancellation", idempotencyKey: "cancel-request-0001" },
+            { reason: "exercise cancellation", idempotency_key: "cancel-request-0001" },
         );
         assert.equal(cancellation.response.status, 202);
         const cancelled = await waitForExecution(harness, serverId, delayedId);
@@ -283,10 +283,10 @@ test("workbench API exposes cancellation, timeout, and connection failure states
             harness,
             `/workbench/workspaces/default/servers/${serverId}/executions`,
             {
-                toolName: "fixture.delayed",
+                tool_name: "fixture.delayed",
                 arguments: { delayMs: 250 },
-                timeoutMs: 20,
-                idempotencyKey: "timeout-execution-0001",
+                timeout_ms: 20,
+                idempotency_key: "timeout-execution-0001",
             },
         );
         assert.equal(timed.response.status, 202);
@@ -302,7 +302,7 @@ test("workbench API exposes cancellation, timeout, and connection failure states
         const missing = await postJson(harness, "/workbench/workspaces/default/servers", {
             name: "Missing builtin",
             configuration: { transport: "builtin", name: "not-registered" },
-            autoConnect: false,
+            auto_connect: false,
         });
         assert.equal(missing.response.status, 200);
         const missingId = String(missing.body.id);
@@ -317,7 +317,7 @@ test("workbench API exposes cancellation, timeout, and connection failure states
         const failedAutoConnect = await postJson(harness, "/workbench/workspaces/default/servers", {
             name: "Missing auto-connect builtin",
             configuration: { transport: "builtin", name: "not-registered-auto" },
-            autoConnect: true,
+            auto_connect: true,
         });
         assert.equal(failedAutoConnect.response.status, 200);
         assert.equal(record(failedAutoConnect.body.connection).status, "failed");
@@ -332,10 +332,10 @@ test("workbench API exposes cancellation, timeout, and connection failure states
             harness,
             `/workbench/workspaces/default/servers/${serverId}/executions`,
             {
-                toolName: "fixture.safe_lookup",
+                tool_name: "fixture.safe_lookup",
                 arguments: { query: "offline" },
-                timeoutMs: 1_000,
-                idempotencyKey: "offline-call-0001",
+                timeout_ms: 1_000,
+                idempotency_key: "offline-call-0001",
             },
         );
         assert.equal(invokeWhileDisconnected.response.status, 409);
@@ -353,7 +353,7 @@ test("server configuration persistence failure preserves the connected runtime",
         const created = await postJson(harness, "/workbench/workspaces/default/servers", {
             name: "Mutable fixture",
             configuration: { transport: "builtin", name: fixtureResource.name },
-            autoConnect: true,
+            auto_connect: true,
         });
         assert.equal(created.response.status, 200);
         const serverId = String(created.body.id);
@@ -415,11 +415,11 @@ test("referenced-server deletion rejection leaves the server connected", async (
     try {
         const serverId = await fixtureServerId(harness);
         const created = await postJson(harness, "/workbench/workspaces/default/test-cases", {
-            serverId,
+            server_id: serverId,
             name: "server delete guard",
-            toolName: "fixture.safe_lookup",
+            tool_name: "fixture.safe_lookup",
             arguments: { query: "guard" },
-            timeoutMs: 5_000,
+            timeout_ms: 5_000,
             assertions: [{ id: "status-1", kind: "status", expected: ["succeeded"] }],
         });
         assert.equal(created.response.status, 200);
@@ -442,7 +442,7 @@ test("server deletion shuts down first and restores the runtime when persistence
         const created = await postJson(harness, "/workbench/workspaces/default/servers", {
             name: "Deletion rollback fixture",
             configuration: { transport: "builtin", name: fixtureResource.name },
-            autoConnect: true,
+            auto_connect: true,
         });
         assert.equal(created.response.status, 200);
         const serverId = String(created.body.id);
@@ -478,7 +478,7 @@ test("server deletion cannot overtake an active execution", async () => {
         const created = await postJson(harness, "/workbench/workspaces/default/servers", {
             name: "Active deletion fixture",
             configuration: { transport: "builtin", name: fixtureResource.name },
-            autoConnect: true,
+            auto_connect: true,
         });
         assert.equal(created.response.status, 200);
         const serverId = String(created.body.id);
@@ -486,10 +486,10 @@ test("server deletion cannot overtake an active execution", async () => {
             harness,
             `/workbench/workspaces/default/servers/${serverId}/executions`,
             {
-                toolName: "fixture.delayed",
+                tool_name: "fixture.delayed",
                 arguments: { delayMs: 500 },
-                timeoutMs: 5_000,
-                idempotencyKey: "active-delete-guard-0001",
+                timeout_ms: 5_000,
+                idempotency_key: "active-delete-guard-0001",
             },
         );
         assert.equal(accepted.response.status, 202);
@@ -519,10 +519,10 @@ test("workbench SSE frames conform to the generated protocol and execution contr
             harness,
             `/workbench/workspaces/default/servers/${serverId}/executions`,
             {
-                toolName: "fixture.safe_lookup",
+                tool_name: "fixture.safe_lookup",
                 arguments: { query: "SSE" },
-                timeoutMs: 5_000,
-                idempotencyKey: "sse-contract-0001",
+                timeout_ms: 5_000,
+                idempotency_key: "sse-contract-0001",
             },
         );
         const executionId = String(record(accepted.body.execution).id);
@@ -621,10 +621,10 @@ test("execution SSE replays lifecycle cursors, closes the snapshot race, and sur
             first,
             `/workbench/workspaces/default/servers/${serverId}/executions`,
             {
-                toolName: "fixture.safe_lookup",
+                tool_name: "fixture.safe_lookup",
                 arguments: { query: "execution SSE lifecycle" },
-                timeoutMs: 5_000,
-                idempotencyKey: "execution-sse-lifecycle-0001",
+                timeout_ms: 5_000,
+                idempotency_key: "execution-sse-lifecycle-0001",
             },
         );
         const executionId = String(record(accepted.body.execution).id);
@@ -739,16 +739,16 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
                     secret: { source: "environment", environmentVariable: "WORKBENCH_TEST_TOKEN" },
                 }],
             },
-            autoConnect: false,
+            auto_connect: false,
         });
         assert.equal(referencedConnection.response.status, 200);
 
         const testCase = await postJson(first, "/workbench/workspaces/default/test-cases", {
-            serverId,
+            server_id: serverId,
             name: "Sanitized lookup",
-            toolName: "fixture.safe_lookup",
+            tool_name: "fixture.safe_lookup",
             arguments: { query: secret },
-            timeoutMs: 5_000,
+            timeout_ms: 5_000,
             assertions: [{ id: "status-succeeds", kind: "status", expected: ["succeeded", "failed"] }],
             tags: ["persistence"],
         });
@@ -757,7 +757,7 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
 
         const suite = await postJson(first, "/workbench/workspaces/default/suites", {
             name: "Persistence suite",
-            testCaseIds: [testCaseId],
+            test_case_ids: [testCaseId],
             tags: ["regression"],
         });
         assert.equal(suite.response.status, 200);
@@ -766,14 +766,14 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
         const baselineAccepted = await postJson(
             first,
             `/workbench/workspaces/default/suites/${suiteId}/run`,
-            { idempotencyKey: "baseline-evaluation-0001" },
+            { idempotency_key: "baseline-evaluation-0001" },
         );
         assert.equal(baselineAccepted.response.status, 202);
         baselineRunId = String(record(baselineAccepted.body.run).id);
         const baselineReplay = await postJson(
             first,
             `/workbench/workspaces/default/suites/${suiteId}/run`,
-            { idempotencyKey: "baseline-evaluation-0001" },
+            { idempotency_key: "baseline-evaluation-0001" },
         );
         assert.equal(record(baselineReplay.body.run).id, baselineRunId);
         const baseline = await waitForEvaluation(first, baselineRunId);
@@ -784,20 +784,20 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
         const candidateAccepted = await postJson(
             first,
             `/workbench/workspaces/default/suites/${suiteId}/run`,
-            { idempotencyKey: "candidate-evaluation-0001" },
+            { idempotency_key: "candidate-evaluation-0001" },
         );
         candidateRunId = String(record(candidateAccepted.body.run).id);
         const candidate = await waitForEvaluation(first, candidateRunId);
         assert.equal(record(candidate.summary).passed, 1);
 
         const comparison = await postJson(first, "/workbench/workspaces/default/evaluation-runs/compare", {
-            baselineRunId,
-            candidateRunId,
+            baseline_run_id: baselineRunId,
+            candidate_run_id: candidateRunId,
         });
         assert.equal(comparison.response.status, 200);
-        assert.equal(comparison.body.baselineRunId, baselineRunId);
-        assert.equal(comparison.body.candidateRunId, candidateRunId);
-        assert.equal(comparison.body.successRateDelta, 0);
+        assert.equal(comparison.body.baseline_run_id, baselineRunId);
+        assert.equal(comparison.body.candidate_run_id, candidateRunId);
+        assert.equal(comparison.body.success_rate_delta, 0);
         assert.equal((comparison.body.tests as Array<Record<string, unknown>>)[0]?.status, "unchanged");
 
         const jsonExport = await postJson(
@@ -805,9 +805,9 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
             `/workbench/workspaces/default/evaluation-runs/${baselineRunId}/export`,
             {
                 format: "json",
-                includeProtocolEvents: true,
-                includeTelemetry: false,
-                idempotencyKey: "json-export-0001",
+                include_protocol_events: true,
+                include_telemetry: false,
+                idempotency_key: "json-export-0001",
             },
         );
         assert.equal(jsonExport.response.status, 202);
@@ -817,9 +817,9 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
             `/workbench/workspaces/default/evaluation-runs/${baselineRunId}/export`,
             {
                 format: "json",
-                includeProtocolEvents: true,
-                includeTelemetry: false,
-                idempotencyKey: "json-export-0001",
+                include_protocol_events: true,
+                include_telemetry: false,
+                idempotency_key: "json-export-0001",
             },
         );
         assert.equal(record(jsonExportReplay.body.export).id, jsonExportId);
@@ -833,7 +833,7 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
         const reportExport = await postJson(
             first,
             `/workbench/workspaces/default/evaluation-runs/${baselineRunId}/export`,
-            { format: "report", idempotencyKey: "report-export-0001" },
+            { format: "report", idempotency_key: "report-export-0001" },
         );
         reportExportId = String(record(reportExport.body.export).id);
         const reportContent = await getJson(
@@ -844,11 +844,11 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
         assert.doesNotMatch(JSON.stringify(reportContent.body), new RegExp(secret, "u"));
 
         const preferences = await putJson(first, "/workbench/workspaces/default/preferences", {
-            selectedServerId: serverId,
-            selectedToolName: "fixture.safe_lookup",
-            inputMode: "json",
-            activePanel: "protocol",
-            compactMode: true,
+            selected_server_id: serverId,
+            selected_tool_name: "fixture.safe_lookup",
+            input_mode: "json",
+            active_panel: "protocol",
+            compact_mode: true,
         });
         assert.equal(preferences.response.status, 200);
 
@@ -856,10 +856,10 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
             first,
             `/workbench/workspaces/default/servers/${serverId}/executions`,
             {
-                toolName: "fixture.safe_lookup",
+                tool_name: "fixture.safe_lookup",
                 arguments: { query: "durable idempotency" },
-                timeoutMs: 5_000,
-                idempotencyKey: "durable-execution-0001",
+                timeout_ms: 5_000,
+                idempotency_key: "durable-execution-0001",
             },
         );
         directExecutionId = String(record(directExecution.body.execution).id);
@@ -920,13 +920,13 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
         const replayedEvaluation = await postJson(
             reopened,
             `/workbench/workspaces/default/suites/${suiteId}/run`,
-            { idempotencyKey: "baseline-evaluation-0001" },
+            { idempotency_key: "baseline-evaluation-0001" },
         );
         assert.equal(record(replayedEvaluation.body.run).id, baselineRunId);
         const conflictingEvaluation = await postJson(
             reopened,
             `/workbench/workspaces/default/suites/${suiteId}/run`,
-            { idempotencyKey: "baseline-evaluation-0001", concurrency: 2 },
+            { idempotency_key: "baseline-evaluation-0001", concurrency: 2 },
         );
         assert.equal(conflictingEvaluation.response.status, 409);
 
@@ -934,10 +934,10 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
             reopened,
             `/workbench/workspaces/default/servers/${serverId}/executions`,
             {
-                toolName: "fixture.safe_lookup",
+                tool_name: "fixture.safe_lookup",
                 arguments: { query: "durable idempotency" },
-                timeoutMs: 5_000,
-                idempotencyKey: "durable-execution-0001",
+                timeout_ms: 5_000,
+                idempotency_key: "durable-execution-0001",
             },
         );
         assert.equal(replayedExecution.response.status, 202);
@@ -946,10 +946,10 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
             reopened,
             `/workbench/workspaces/default/servers/${serverId}/executions`,
             {
-                toolName: "fixture.safe_lookup",
+                tool_name: "fixture.safe_lookup",
                 arguments: { query: "different durable payload" },
-                timeoutMs: 5_000,
-                idempotencyKey: "durable-execution-0001",
+                timeout_ms: 5_000,
+                idempotency_key: "durable-execution-0001",
             },
         );
         assert.equal(conflictingExecution.response.status, 409);
@@ -958,17 +958,17 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
             reopened,
             `/workbench/workspaces/default/servers/${serverId}/executions/${executionId}/telemetry`,
         );
-        assert.deepEqual(record(telemetry.body.correlation).traceIds, ["11111111111111111111111111111111"]);
-        assert.deepEqual(record(telemetry.body.correlation).spanIds, ["2222222222222222"]);
+        assert.deepEqual(record(telemetry.body.correlation).trace_ids, ["11111111111111111111111111111111"]);
+        assert.deepEqual(record(telemetry.body.correlation).span_ids, ["2222222222222222"]);
 
         const repeatedExport = await postJson(
             reopened,
             `/workbench/workspaces/default/evaluation-runs/${baselineRunId}/export`,
             {
                 format: "json",
-                includeProtocolEvents: true,
-                includeTelemetry: false,
-                idempotencyKey: "json-export-0001",
+                include_protocol_events: true,
+                include_telemetry: false,
+                idempotency_key: "json-export-0001",
             },
         );
         assert.equal(record(repeatedExport.body.export).id, jsonExportId);
@@ -977,9 +977,9 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
             `/workbench/workspaces/default/evaluation-runs/${baselineRunId}/export`,
             {
                 format: "json",
-                includeProtocolEvents: true,
-                includeTelemetry: false,
-                idempotencyKey: "json-export-after-reopen-0001",
+                include_protocol_events: true,
+                include_telemetry: false,
+                idempotency_key: "json-export-after-reopen-0001",
             },
         );
         const reopenedExportId = String(record(reopenedExport.body.export).id);
@@ -987,7 +987,7 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
             reopened,
             `/workbench/workspaces/default/evaluation-runs/${baselineRunId}/exports/${reopenedExportId}/content`,
         );
-        const reopenedEvents = record(reopenedContent.body.payload).protocolEvents;
+        const reopenedEvents = record(reopenedContent.body.payload).protocol_events;
         assert(Array.isArray(reopenedEvents));
         assert(reopenedEvents.some((event) => record(event).method === "tools/call"));
         assert.doesNotMatch(JSON.stringify(reopenedContent.body), new RegExp(secret, "u"));
@@ -997,14 +997,14 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
         )).response.status, 200);
 
         const comparison = await postJson(reopened, "/workbench/workspaces/default/evaluation-runs/compare", {
-            baselineRunId,
-            candidateRunId,
+            baseline_run_id: baselineRunId,
+            candidate_run_id: candidateRunId,
         });
         assert.equal(comparison.response.status, 200);
         const preferences = await getJson(reopened, "/workbench/workspaces/default/preferences");
-        assert.equal(preferences.body.selectedServerId, serverId);
-        assert.equal(preferences.body.inputMode, "json");
-        assert.equal(preferences.body.compactMode, true);
+        assert.equal(preferences.body.selected_server_id, serverId);
+        assert.equal(preferences.body.input_mode, "json");
+        assert.equal(preferences.body.compact_mode, true);
 
         const persistedText = await readFile(filePath, "utf8");
         assert.doesNotMatch(persistedText, new RegExp(secret, "u"));
@@ -1064,22 +1064,22 @@ test("startup reconciles crashed executions and evaluations before idempotent re
         await first.workbench.repository.saveExecution(crashedExecution);
 
         const testCase = await postJson(first, "/workbench/workspaces/default/test-cases", {
-            serverId,
+            server_id: serverId,
             name: "Crash recovery case",
-            toolName: "fixture.safe_lookup",
+            tool_name: "fixture.safe_lookup",
             arguments: { query: "evaluation recovery" },
-            timeoutMs: 5_000,
+            timeout_ms: 5_000,
             assertions: [{ id: "status-succeeds", kind: "status", expected: ["succeeded"] }],
         });
         const suite = await postJson(first, "/workbench/workspaces/default/suites", {
             name: "Crash recovery suite",
-            testCaseIds: [String(testCase.body.id)],
+            test_case_ids: [String(testCase.body.id)],
         });
         suiteId = String(suite.body.id);
         const evaluation = await postJson(
             first,
             `/workbench/workspaces/default/suites/${suiteId}/run`,
-            { idempotencyKey: "crash-recovery-evaluation" },
+            { idempotency_key: "crash-recovery-evaluation" },
         );
         evaluationRunId = String(record(evaluation.body.run).id);
         await waitForEvaluation(first, evaluationRunId);
@@ -1111,7 +1111,7 @@ test("startup reconciles crashed executions and evaluations before idempotent re
         );
         assert.equal(recoveredExecution.body.status, "failed");
         assert.equal(record(recoveredExecution.body.error).code, "execution_interrupted");
-        assert.equal(typeof recoveredExecution.body.completedAt, "string");
+        assert.equal(typeof recoveredExecution.body.completed_at, "string");
         const replayedExecution = await postJson(
             reopened,
             `/workbench/workspaces/default/servers/${serverId}/executions`,
@@ -1138,7 +1138,7 @@ test("startup reconciles crashed executions and evaluations before idempotent re
         const replayedEvaluation = await postJson(
             reopened,
             `/workbench/workspaces/default/suites/${suiteId}/run`,
-            { idempotencyKey: "crash-recovery-evaluation" },
+            { idempotency_key: "crash-recovery-evaluation" },
         );
         assert.equal(replayedEvaluation.response.status, 202);
         assert.equal(record(replayedEvaluation.body.run).id, evaluationRunId);
@@ -1158,16 +1158,16 @@ test("workbench API persists background evaluation failures as failed runs", asy
     try {
         const serverId = await fixtureServerId(harness);
         const testCase = await postJson(harness, "/workbench/workspaces/default/test-cases", {
-            serverId,
+            server_id: serverId,
             name: "Failure evidence",
-            toolName: "fixture.safe_lookup",
+            tool_name: "fixture.safe_lookup",
             arguments: { query: "never invoked" },
-            timeoutMs: 5_000,
+            timeout_ms: 5_000,
             assertions: [{ id: "status-succeeds", kind: "status", expected: ["succeeded"] }],
         });
         const suite = await postJson(harness, "/workbench/workspaces/default/suites", {
             name: "Failing evaluation",
-            testCaseIds: [String(testCase.body.id)],
+            test_case_ids: [String(testCase.body.id)],
         });
         Object.defineProperty(harness.workbench.evaluations, "runSuite", {
             configurable: true,
@@ -1179,7 +1179,7 @@ test("workbench API persists background evaluation failures as failed runs", asy
         const accepted = await postJson(
             harness,
             `/workbench/workspaces/default/suites/${String(suite.body.id)}/run`,
-            { idempotencyKey: "failed-evaluation-0001" },
+            { idempotency_key: "failed-evaluation-0001" },
         );
         assert.equal(accepted.response.status, 202);
         const runId = String(record(accepted.body.run).id);
@@ -1205,16 +1205,16 @@ test("concurrent evaluation idempotency coalesces one run and rejects payload co
     try {
         const serverId = await fixtureServerId(harness);
         const testCase = await postJson(harness, "/workbench/workspaces/default/test-cases", {
-            serverId,
+            server_id: serverId,
             name: "Concurrent evaluation",
-            toolName: "fixture.safe_lookup",
+            tool_name: "fixture.safe_lookup",
             arguments: { query: "coalesce" },
-            timeoutMs: 5_000,
+            timeout_ms: 5_000,
             assertions: [{ id: "status-succeeds", kind: "status", expected: ["succeeded"] }],
         });
         const suite = await postJson(harness, "/workbench/workspaces/default/suites", {
             name: "Concurrent suite",
-            testCaseIds: [String(testCase.body.id)],
+            test_case_ids: [String(testCase.body.id)],
         });
         const suiteId = String(suite.body.id);
 
@@ -1253,11 +1253,11 @@ test("concurrent evaluation idempotency coalesces one run and rejects payload co
         });
 
         const path = `/workbench/workspaces/default/suites/${suiteId}/run`;
-        const first = postJson(harness, path, { idempotencyKey: "concurrent-evaluation-0001" });
+        const first = postJson(harness, path, { idempotency_key: "concurrent-evaluation-0001" });
         await started;
-        const duplicate = postJson(harness, path, { idempotencyKey: "concurrent-evaluation-0001" });
+        const duplicate = postJson(harness, path, { idempotency_key: "concurrent-evaluation-0001" });
         const conflict = await postJson(harness, path, {
-            idempotencyKey: "concurrent-evaluation-0001",
+            idempotency_key: "concurrent-evaluation-0001",
             concurrency: 2,
         });
         assert.equal(conflict.response.status, 409);
@@ -1475,7 +1475,7 @@ async function startHarness(
     const cookie = cookieValue(setCookie);
     const session = await responseJson(bootstrap);
     assert(!("token" in session));
-    assert.equal(session.activeWorkspaceId, "default");
+    assert.equal(session.active_workspace_id, "default");
 
     let closed = false;
     return {
