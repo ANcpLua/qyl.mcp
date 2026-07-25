@@ -168,10 +168,10 @@ try {
 
   const executionUrl = `${baseUrl}/workbench/workspaces/default/servers/${serverId}/executions`;
   const invocation = {
-    toolName: "list_traces",
+    tool_name: "list_traces",
     arguments: { limit: 1 },
-    timeoutMs: 5_000,
-    idempotencyKey: "smoke-list-traces-0001",
+    timeout_ms: 5_000,
+    idempotency_key: "smoke-list-traces-0001",
   };
   const call = await fetch(executionUrl, {
     method: "POST",
@@ -215,20 +215,20 @@ try {
       && !("metrics" in (telemetry.signals ?? {}))
       && signalAvailability.every((signal) =>
         signal.status === "unavailable"
-        && signal.unavailableReason?.includes("QYL_MCP_TELEMETRY=0"))
-      && telemetry.correlation?.traceIds?.length === 0
-      && telemetry.correlation?.spanIds?.length === 0
-      && telemetry.selfExportSuppressed === true,
+        && signal.unavailable_reason?.includes("QYL_MCP_TELEMETRY=0"))
+      && telemetry.correlation?.trace_ids?.length === 0
+      && telemetry.correlation?.span_ids?.length === 0
+      && telemetry.self_export_suppressed === true,
   );
 
   const invalid = await fetch(`${baseUrl}/workbench/workspaces/default/servers/${serverId}/executions`, {
     method: "POST",
     headers: { "content-type": "application/json", cookie },
     body: JSON.stringify({
-      toolName: "list_traces",
+      tool_name: "list_traces",
       arguments: "not-an-object",
-      timeoutMs: 5_000,
-      idempotencyKey: "smoke-invalid-args-0001",
+      timeout_ms: 5_000,
+      idempotency_key: "smoke-invalid-args-0001",
     }),
   });
   const problem = await invalid.json();

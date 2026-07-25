@@ -332,7 +332,7 @@ if (existsSync(new URL("./dist/mcp-dashboard.html", import.meta.url))) {
 const nativeState = JSON.parse(await readFile(nativeStatePath, "utf8"));
 check(
   "native tool execution evidence is automatic and terminal",
-  nativeState.version === 1 &&
+  nativeState.version === 2 &&
     nativeState.executions.length >= 9 &&
     nativeState.executions.every((execution) =>
       execution.status !== "running" &&

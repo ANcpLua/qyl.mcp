@@ -255,10 +255,10 @@ try {
       method: "POST",
       headers: workbenchHeaders,
       body: JSON.stringify({
-        toolName: "list_traces",
+        tool_name: "list_traces",
         arguments: { limit: 100 },
-        timeoutMs: 10_000,
-        idempotencyKey: `otlp-workbench-${randomUUID()}`,
+        timeout_ms: 10_000,
+        idempotency_key: `otlp-workbench-${randomUUID()}`,
         confirmation: {
           acknowledged: true,
           acknowledgement: "Run the read-only live collector trace query for OTLP verification.",
@@ -318,7 +318,7 @@ try {
       correlation: body.correlation,
     }));
   }, 20_000, "workbench trace evidence");
-  if (correlated.selfExportSuppressed !== true) {
+  if (correlated.self_export_suppressed !== true) {
     throw new Error("workbench telemetry read did not report self-export suppression");
   }
   const correlatedSpans = correlated.traces.flatMap((trace) => trace.spans ?? []);
