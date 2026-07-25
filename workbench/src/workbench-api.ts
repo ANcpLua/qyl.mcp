@@ -466,7 +466,7 @@ export class WorkbenchApi {
             const body = parseBody<QylContracts.WorkbenchWorkspacePreferencesUpdateRequest>(request);
             if (body.selected_server_id !== undefined) await this.repository.getServer(workspaceId, body.selected_server_id);
             const saved = await this.repository.savePreferences(workspaceId, {
-                ...body,
+                ...fromPreferencesUpdateRequest(body),
                 updatedAt: this.now().toISOString(),
             });
             response.json(preferencesResponse(workspaceId, saved, this.now()));
@@ -1729,6 +1729,19 @@ function preferencesResponse(workspaceId: string, preferences: WorkspacePreferen
         compact_mode: preferences.compactMode ?? false,
         updated_at: preferences.updatedAt ?? now.toISOString(),
     } satisfies ContractInput<QylContracts.WorkbenchWorkspacePreferences>);
+}
+
+/** The contract's snake_case preferences update as the internal persisted shape. */
+function fromPreferencesUpdateRequest(
+    body: QylContracts.WorkbenchWorkspacePreferencesUpdateRequest,
+): WorkspacePreferences {
+    return {
+        ...(body.selected_server_id === undefined ? {} : { selectedServerId: body.selected_server_id }),
+        ...(body.selected_tool_name === undefined ? {} : { selectedToolName: body.selected_tool_name }),
+        ...(body.input_mode === undefined ? {} : { inputMode: body.input_mode }),
+        ...(body.active_panel === undefined ? {} : { activePanel: body.active_panel }),
+        ...(body.compact_mode === undefined ? {} : { compactMode: body.compact_mode }),
+    };
 }
 
 /** The contract's snake_case secret reference as the internal persisted shape. */

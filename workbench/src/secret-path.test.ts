@@ -119,12 +119,23 @@ test("env-referenced transport credentials cannot leak through echoed results, p
 function unavailableObservability(): QylObservabilityProvider {
     return {
         async queryExecution() {
+            const unavailable = {
+                status: "unavailable" as const,
+                unavailable_reason: "No collector is configured for this test.",
+                item_count: 0,
+            };
             return {
-                executionId: "unused",
-                availability: "unavailable",
-                signals: [],
+                signals: {
+                    traces: unavailable,
+                    logs: unavailable,
+                    exceptions: unavailable,
+                    tool_call_events: unavailable,
+                },
+                correlation: { execution_id: "unused", trace_ids: [], span_ids: [] },
                 traces: [],
                 logs: [],
+                queried_at: new Date(0).toISOString(),
+                self_export_suppressed: true,
             };
         },
     } as unknown as QylObservabilityProvider;

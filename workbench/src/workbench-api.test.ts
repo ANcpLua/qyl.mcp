@@ -779,7 +779,7 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
         const baseline = await waitForEvaluation(first, baselineRunId);
         assert.equal(baseline.status, "completed");
         assert.equal(record(baseline.summary).passed, 1);
-        executionId = String(record((baseline.results as Array<Record<string, unknown>>)[0]).executionId);
+        executionId = String(record((baseline.results as Array<Record<string, unknown>>)[0]).execution_id);
 
         const candidateAccepted = await postJson(
             first,
@@ -1456,11 +1456,24 @@ async function startHarness(
                         exceptions: unavailable,
                         tool_call_events: unavailable,
                     },
-                    correlation: query.correlation,
+                    // The real provider projects the internal correlation to the
+                    // contract's wire shape before returning it; a stub that
+                    // skipped that would describe a boundary that does not exist.
+                    correlation: {
+                        execution_id: query.correlation.executionId,
+                        ...(query.correlation.evaluationRunId === undefined
+                            ? {}
+                            : { evaluation_run_id: query.correlation.evaluationRunId }),
+                        ...(query.correlation.testCaseId === undefined
+                            ? {}
+                            : { test_case_id: query.correlation.testCaseId }),
+                        trace_ids: [...query.correlation.traceIds],
+                        span_ids: [...query.correlation.spanIds],
+                    },
                     traces: [],
                     logs: [],
-                    queriedAt: new Date().toISOString(),
-                    selfExportSuppressed: true as const,
+                    queried_at: new Date().toISOString(),
+                    self_export_suppressed: true as const,
                 };
             },
         } as unknown as QylObservabilityProvider,

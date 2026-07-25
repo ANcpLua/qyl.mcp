@@ -79,7 +79,7 @@ test("authenticated workbench API discovers and invokes real stdio and Streamabl
                 body: {
                     name: item.name,
                     configuration: item.configuration,
-                    autoConnect: false,
+                    auto_connect: false,
                 },
             });
             assert.equal(created.response.status, 200);
@@ -104,7 +104,7 @@ test("authenticated workbench API discovers and invokes real stdio and Streamabl
             assert.equal((record(discovery.body.tools).items as unknown[]).length, item.counts.tools);
             assert.equal((record(discovery.body.resources).items as unknown[]).length, item.counts.resources);
             assert.equal(
-                (record(discovery.body.resourceTemplates).items as unknown[]).length,
+                (record(discovery.body.resource_templates).items as unknown[]).length,
                 item.counts.resourceTemplates,
             );
             assert.equal((record(discovery.body.prompts).items as unknown[]).length, item.counts.prompts);
@@ -116,10 +116,10 @@ test("authenticated workbench API discovers and invokes real stdio and Streamabl
                 {
                     method: "POST",
                     body: {
-                        toolName: "fixture.safe_lookup",
+                        tool_name: "fixture.safe_lookup",
                         arguments: { query: item.name },
-                        timeoutMs: 5_000,
-                        idempotencyKey: `transport-${serverId}`,
+                        timeout_ms: 5_000,
+                        idempotency_key: `transport-${serverId}`,
                     },
                 },
             );
@@ -154,11 +154,11 @@ function unavailableObservability(): QylObservabilityProvider {
                     exceptions: { status: "unavailable", unavailable_reason: "fixture", item_count: 0 },
                     tool_call_events: { status: "unavailable", unavailable_reason: "fixture", item_count: 0 },
                 },
-                correlation: { executionId: "fixture", traceIds: [], spanIds: [] },
+                correlation: { execution_id: "fixture", trace_ids: [], span_ids: [] },
                 traces: [],
                 logs: [],
-                queriedAt: new Date(0).toISOString(),
-                selfExportSuppressed: true,
+                queried_at: new Date(0).toISOString(),
+                self_export_suppressed: true,
             };
         },
     } as unknown as QylObservabilityProvider;
