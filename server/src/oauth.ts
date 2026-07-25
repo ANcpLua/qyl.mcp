@@ -84,20 +84,16 @@ async function verifyJwt(
   audience: string,
 ): Promise<JWTPayload> {
   try {
-    const { payload, protectedHeader } = await jwtVerify(token, key, {
+    // jwtVerify already enforces every one of these from its options, and it
+    // does so per RFC 7519 — `aud` may be an array, which Auth0 issues whenever
+    // the client also requests userinfo. Re-checking `payload.aud !== audience`
+    // rejected those tokens outright.
+    const { payload } = await jwtVerify(token, key, {
       issuer,
       audience,
       algorithms: ["RS256"],
       typ: "at+jwt",
     });
-    if (
-      protectedHeader.alg !== "RS256"
-      || protectedHeader.typ !== "at+jwt"
-      || payload.iss !== issuer
-      || payload.aud !== audience
-    ) {
-      throw invalidToken();
-    }
     return payload;
   } catch {
     throw invalidToken();

@@ -111,6 +111,35 @@ test("token verification rejects the wrong token type, audience, or missing clie
   );
 });
 
+test("an access token audienced to several resources is accepted for the qyl one", async () => {
+  const keys = await testKeys();
+  const verifier = createJwtTokenVerifier({
+    issuer,
+    resource,
+    key: keys.verificationKey,
+  });
+
+  // Auth0 issues a multi-valued `aud` whenever the client also asks for
+  // userinfo, and RFC 7519 allows it. Only the presence of this resource
+  // decides acceptance.
+  const auth = await verifier.verifyAccessToken(await issueToken(keys.privateKey, {
+    sub: "auth0|user-1",
+    client_id: "https://client.example/mcp.json",
+    scope: QYL_MCP_SCOPE,
+  }, { audience: [resource.href, `${issuer}userinfo`] }));
+  assert.equal(auth.clientId, "https://client.example/mcp.json");
+  assert.equal(auth.resource?.href, resource.href);
+
+  await assert.rejects(
+    async () => verifier.verifyAccessToken(await issueToken(keys.privateKey, {
+      sub: "auth0|user-1",
+      client_id: "https://client.example/mcp.json",
+      scope: QYL_MCP_SCOPE,
+    }, { audience: [`${issuer}userinfo`, "https://wrong.example/mcp"] })),
+    /Access token verification failed/u,
+  );
+});
+
 test("token verification rejects signing algorithms other than RS256", async () => {
   const { publicKey, privateKey } = await generateKeyPair("ES256");
   const jwk = await exportJWK(publicKey);
@@ -151,7 +180,7 @@ async function testKeys() {
 async function issueToken(
   privateKey: Awaited<ReturnType<typeof generateKeyPair>>["privateKey"],
   claims: Record<string, unknown>,
-  options: { typ?: string; audience?: string } = {},
+  options: { typ?: string; audience?: string | string[] } = {},
 ): Promise<string> {
   return new SignJWT(claims)
     .setProtectedHeader({ alg: "RS256", kid: "test-key", typ: options.typ ?? "at+jwt" })
