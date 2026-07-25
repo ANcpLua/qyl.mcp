@@ -66,7 +66,7 @@ test("authenticated workbench API discovers and invokes real stdio and Streamabl
                         scheme: "bearer",
                         secret: {
                             source: "environment",
-                            environmentVariable: "MCP_AUTH",
+                            environment_variable: "MCP_AUTH",
                         },
                     }],
                 },

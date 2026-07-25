@@ -12,6 +12,8 @@ import {
     WorkbenchEvaluationExportSchema,
     WorkbenchEvaluationRunStatusSchema,
     WorkbenchExecutionConfirmationEvidenceSchema,
+    WorkbenchExecutionCostSchema,
+    WorkbenchExecutionTokenUsageSchema,
     WorkbenchTestAssertionSchema,
     WorkbenchWorkspaceSchema,
 } from "qyl-mcp-server/contract-validation";
@@ -214,17 +216,11 @@ const EvaluationSummarySchema = z.object({
     p50LatencyMs: z.number().finite().nonnegative().optional(),
     p95LatencyMs: z.number().finite().nonnegative().optional(),
     p99LatencyMs: z.number().finite().nonnegative().optional(),
-    tokenUsage: z.object({
-        inputTokens: z.number().int().nonnegative().optional(),
-        outputTokens: z.number().int().nonnegative().optional(),
-        totalTokens: z.number().int().nonnegative().optional(),
-        estimated: z.boolean(),
-    }).strict().optional(),
-    cost: z.object({
-        amount_usd: z.number().finite().nonnegative(),
-        estimated: z.boolean(),
-        source: z.string().min(1).max(256).optional(),
-    }).strict().optional(),
+    // Usage and cost evidence is the published contract's own shape, so the
+    // persisted summary validates against the generated schema rather than a
+    // local copy that can drift from it.
+    tokenUsage: WorkbenchExecutionTokenUsageSchema.optional(),
+    cost: WorkbenchExecutionCostSchema.optional(),
 }).strict();
 
 const EvaluationRunSchema: z.ZodType<EvaluationRun> = z.object({

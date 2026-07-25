@@ -276,8 +276,8 @@ test("workbench API exposes cancellation, timeout, and connection failure states
         const cancelled = await waitForExecution(harness, serverId, delayedId);
         assert.equal(cancelled.status, "cancelled");
         assert.equal(record(cancelled.error).category, "cancelled");
-        assert.equal(typeof cancelled.cancelRequestedAt, "string");
-        assert.equal(typeof cancelled.cancelledAt, "string");
+        assert.equal(typeof cancelled.cancel_requested_at, "string");
+        assert.equal(typeof cancelled.cancelled_at, "string");
 
         const timed = await postJson(
             harness,
@@ -736,7 +736,7 @@ test("workbench API persists evaluations, comparisons, exports, and sanitized ev
                 headers: [{
                     name: "Authorization",
                     scheme: "bearer",
-                    secret: { source: "environment", environmentVariable: "WORKBENCH_TEST_TOKEN" },
+                    secret: { source: "environment", environment_variable: "WORKBENCH_TEST_TOKEN" },
                 }],
             },
             auto_connect: false,
@@ -1035,6 +1035,14 @@ test("startup reconciles crashed executions and evaluations before idempotent re
         timeoutMs: 5_000,
         idempotencyKey: "crash-recovery-execution",
     } as const;
+    // The same invocation as the contract's request body: the replay below
+    // crosses HTTP, where the published wire names apply.
+    const invocationRequest = {
+        tool_name: invocation.toolName,
+        arguments: invocation.arguments,
+        timeout_ms: invocation.timeoutMs,
+        idempotency_key: invocation.idempotencyKey,
+    } as const;
     try {
         serverId = await fixtureServerId(first);
         const accepted = await first.workbench.executions.start({
@@ -1115,7 +1123,7 @@ test("startup reconciles crashed executions and evaluations before idempotent re
         const replayedExecution = await postJson(
             reopened,
             `/workbench/workspaces/default/servers/${serverId}/executions`,
-            invocation,
+            invocationRequest,
         );
         assert.equal(replayedExecution.response.status, 202);
         assert.equal(record(replayedExecution.body.execution).id, executionId);

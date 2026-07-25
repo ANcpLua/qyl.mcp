@@ -1010,7 +1010,13 @@ export class WorkbenchApi {
             ...completed,
             idempotencyKey: request.idempotency_key,
             idempotencyFingerprint: fingerprint,
-        })).catch(async () => {
+        })).catch(async (error: unknown) => {
+            // The durable evidence below records *that* the run failed. Without
+            // this line the cause is discarded, and an operator sees only
+            // "failed before producing complete evidence".
+            console.error(`Evaluation run '${runId}' failed: ${this.redactor.redactText(
+                error instanceof Error ? (error.stack ?? error.message) : String(error),
+            )}`);
             const completedAt = this.now().toISOString();
             try {
                 await this.repository.saveEvaluationRun({
