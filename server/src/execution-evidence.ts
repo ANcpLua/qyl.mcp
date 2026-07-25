@@ -45,9 +45,9 @@ function parseTokenUsage(value: unknown): WorkbenchExecutionTokenUsage | undefin
     return undefined;
   }
   return {
-    ...(inputTokens === undefined ? {} : { inputTokens }),
-    ...(outputTokens === undefined ? {} : { outputTokens }),
-    ...(totalTokens === undefined ? {} : { totalTokens }),
+    ...(inputTokens === undefined ? {} : { input_tokens: inputTokens }),
+    ...(outputTokens === undefined ? {} : { output_tokens: outputTokens }),
+    ...(totalTokens === undefined ? {} : { total_tokens: totalTokens }),
     // A producer that reports token counts has supplied observed evidence.
     // It can opt into the explicit estimated=true state when appropriate.
     estimated: value.estimated === true,
@@ -61,13 +61,13 @@ function parseCost(value: unknown): WorkbenchExecutionCost | undefined {
       : { amount_usd: value, estimated: false };
   }
   if (!isRecord(value)) return undefined;
-  const amount_usd = nonNegativeNumber(value.amount_usd ?? value.amount_usd);
-  if (amount_usd === undefined) return undefined;
+  const amountUsd = nonNegativeNumber(value.amountUsd ?? value.amount_usd);
+  if (amountUsd === undefined) return undefined;
   const source = typeof value.source === "string" && value.source.trim().length > 0
     ? value.source.trim().slice(0, 256)
     : undefined;
   return {
-    amount_usd,
+    amount_usd: amountUsd,
     estimated: value.estimated === true,
     ...(source === undefined ? {} : { source }),
   };

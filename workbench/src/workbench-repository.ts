@@ -65,6 +65,8 @@ export const PersistedConnectionDefinitionSchema = z.discriminatedUnion("kind", 
 
 export type PersistedConnectionDefinition = z.infer<typeof PersistedConnectionDefinitionSchema>;
 
+export type PersistedSecretReference = z.infer<typeof SecretReferenceSchema>;
+
 export type WorkspaceRecord = WorkbenchWorkspace;
 
 export interface ServerRecord {

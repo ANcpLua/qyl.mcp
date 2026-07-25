@@ -40,7 +40,7 @@ function logRecord(overrides: Record<string, unknown> = {}): Record<string, unkn
         observed_time_unix_nano: 1,
         severity_number: 9,
         body: { string_value: "fixture log" },
-        resource: { "service.name": "fixture" },
+        resource: { service_name: "fixture" },
         ...overrides,
     };
 }
@@ -74,7 +74,7 @@ test("provider returns correlated real signals, derived events, redaction, and d
             });
         }
         if (url.pathname === "/api/v1/logs") {
-            assert.equal(url.searchParams.get("traceId"), traceId);
+            assert.equal(url.searchParams.get("trace_id"), traceId);
             return json({
                 items: [logRecord({
                     trace_id: traceId,
@@ -106,10 +106,10 @@ test("provider returns correlated real signals, derived events, redaction, and d
 
     assert.equal(requests.length, 2);
     assert.deepEqual(result.signals, {
-        traces: { status: "available", itemCount: 1 },
-        logs: { status: "available", itemCount: 1 },
-        exceptions: { status: "available", itemCount: 1 },
-        tool_call_events: { status: "available", itemCount: 1 },
+        traces: { status: "available", item_count: 1 },
+        logs: { status: "available", item_count: 1 },
+        exceptions: { status: "available", item_count: 1 },
+        tool_call_events: { status: "available", item_count: 1 },
     });
     assert.deepEqual(result.correlation.span_ids, [spanId, downstreamSpanId]);
     assert.equal(result.self_export_suppressed, true);
@@ -162,7 +162,7 @@ test("provider distinguishes partial retained evidence from unavailable signals"
             return json({ trace_id: traceId, spans: [] });
         }
         if (url.pathname === `/api/v1/traces/${secondTraceId}`) return json({}, 404);
-        if (url.pathname === "/api/v1/logs" && url.searchParams.get("traceId") === traceId) {
+        if (url.pathname === "/api/v1/logs" && url.searchParams.get("trace_id") === traceId) {
             return json({ items: [logRecord({ trace_id: traceId })], has_more: true });
         }
         if (url.pathname === "/api/v1/logs") return json({}, 500);
@@ -218,6 +218,6 @@ test("provider does not fabricate trace or log evidence without correlation ids"
     assert.equal(fetchCount, 0);
     for (const availability of Object.values(disabled.signals)) {
         assert.equal(availability.status, "unavailable");
-        assert.equal(availability.unavailableReason, disabledReason);
+        assert.equal(availability.unavailable_reason, disabledReason);
     }
 });

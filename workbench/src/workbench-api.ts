@@ -33,6 +33,7 @@ import {
     WorkbenchSessionSchema,
     publishedContractSchema,
 } from "qyl-mcp-server/contract-validation";
+import type { ContractInput } from "qyl-mcp-server/contract-validation";
 import {
     ConnectionManager,
     ConnectionManagerError,
@@ -73,6 +74,7 @@ import {
     RepositoryNotFoundError,
     WorkbenchRepository,
     type PersistedConnectionDefinition,
+    type PersistedSecretReference,
     type PersistedSuite,
     type PersistedTestCase,
     type ServerRecord,
@@ -850,30 +852,30 @@ export class WorkbenchApi {
                     ? WorkbenchEvaluationJsonExportPayloadSchema.parse({
                           format: "json",
                           run: mappedRun,
-                          protocolEvents: body.include_protocol_events ? await this.protocolEventsForRun(run) : [],
+                          protocol_events: body.include_protocol_events ? await this.protocolEventsForRun(run) : [],
                           telemetry: body.include_telemetry ? await this.telemetryForRun(run) : [],
-                          exportedAt,
-                      })
+                          exported_at: exportedAt,
+                      } satisfies ContractInput<QylContracts.WorkbenchEvaluationJsonExportPayload>)
                     : WorkbenchEvaluationReportExportPayloadSchema.parse({
                           format: "report",
                           markdown: exportEvaluationReport(run),
-                          exportedAt,
-                      });
+                          exported_at: exportedAt,
+                      } satisfies ContractInput<QylContracts.WorkbenchEvaluationReportExportPayload>);
                 const serialized = payload.format === "json"
                     ? `${JSON.stringify(payload, null, 2)}\n`
                     : payload.markdown;
                 const metadata = WorkbenchEvaluationExportSchema.parse({
                     id: exportId,
-                    runId,
+                    run_id: runId,
                     format: body.format,
                     status: "ready",
-                    requestedAt: exportedAt,
-                    completedAt: exportedAt,
-                    mediaType: body.format === "json" ? "application/json" : "text/markdown",
-                    fileName: `${safeFileName(run.suiteName)}-${run.id}.${body.format === "json" ? "json" : "md"}`,
-                    byteSize: Buffer.byteLength(serialized),
+                    requested_at: exportedAt,
+                    completed_at: exportedAt,
+                    media_type: body.format === "json" ? "application/json" : "text/markdown",
+                    file_name: `${safeFileName(run.suiteName)}-${run.id}.${body.format === "json" ? "json" : "md"}`,
+                    byte_size: Buffer.byteLength(serialized),
                     sha256: createHash("sha256").update(serialized).digest("hex"),
-                });
+                } satisfies ContractInput<QylContracts.WorkbenchEvaluationExport>);
                 item = await this.repository.saveEvaluationExport({
                     id: exportId,
                     workspaceId,
@@ -1041,27 +1043,27 @@ export class WorkbenchApi {
         const workspaceIds = workspaces.map((workspace) => workspace.id);
         return WorkbenchSessionSchema.parse({
             id: identity.id,
-            principal: { id: identity.userId, displayName: "Local user", local: true },
-            workspaceIds,
+            principal: { id: identity.userId, display_name: "Local user", local: true },
+            workspace_ids: workspaceIds,
             ...(workspaceIds.some((workspaceId) => workspaceId === identity.defaultWorkspaceId)
-                ? { activeWorkspaceId: identity.defaultWorkspaceId }
-                : workspaceIds[0] === undefined ? {} : { activeWorkspaceId: workspaceIds[0] }),
-            createdAt: identity.createdAt,
-            expiresAt: identity.expiresAt,
-        });
+                ? { active_workspace_id: identity.defaultWorkspaceId }
+                : workspaceIds[0] === undefined ? {} : { active_workspace_id: workspaceIds[0] }),
+            created_at: identity.createdAt,
+            expires_at: identity.expiresAt,
+        } satisfies ContractInput<QylContracts.WorkbenchSession>);
     }
 
     private serverResponse(server: ServerRecord): QylContracts.WorkbenchServer {
         return WorkbenchServerSchema.parse({
             id: server.id,
-            workspaceId: server.workspaceId,
+            workspace_id: server.workspaceId,
             name: server.name,
             ...(server.description === undefined ? {} : { description: server.description }),
             configuration: externalConfiguration(server.configuration),
             connection: connectionResponse(this.connections.get(server.id), this.changedAt.get(server.id) ?? server.updatedAt),
-            createdAt: server.createdAt,
-            updatedAt: server.updatedAt,
-        });
+            created_at: server.createdAt,
+            updated_at: server.updatedAt,
+        } satisfies ContractInput<QylContracts.WorkbenchServer>);
     }
 
     private discoveryResponse(serverId: string, snapshot: ConnectionSnapshot): QylContracts.WorkbenchDiscoverySnapshot {
@@ -1499,21 +1501,24 @@ function externalConfiguration(configuration: PersistedConnectionDefinition): Qy
                 transport: "stdio",
                 command: configuration.command,
                 arguments: configuration.args,
-                ...(configuration.cwd === undefined ? {} : { workingDirectory: configuration.cwd }),
-                environment: configuration.environment.map((reference) => ({ name: reference.variable, secret: reference.secret })),
-            });
+                ...(configuration.cwd === undefined ? {} : { working_directory: configuration.cwd }),
+                environment: configuration.environment.map((reference) => ({
+                    name: reference.variable,
+                    secret: toSecretReference(reference.secret),
+                })),
+            } satisfies ContractInput<QylContracts.WorkbenchServerConfiguration>);
         case "streamable_http":
             return WorkbenchServerConfigurationSchema.parse({
                 transport: configuration.kind,
                 endpoint: configuration.endpoint,
                 headers: configuration.headers.map((reference) => ({
                     name: reference.header,
-                    secret: reference.secret,
+                    secret: toSecretReference(reference.secret),
                     ...(reference.scheme === undefined ? {} : { scheme: reference.scheme }),
                 })),
-            });
+            } satisfies ContractInput<QylContracts.WorkbenchServerConfiguration>);
         case "builtin":
-            return WorkbenchServerConfigurationSchema.parse({ transport: "builtin", name: configuration.builtin });
+            return WorkbenchServerConfigurationSchema.parse({ transport: "builtin", name: configuration.builtin } satisfies ContractInput<QylContracts.WorkbenchServerConfiguration>);
     }
 }
 
@@ -1552,84 +1557,89 @@ function connectionResponse(snapshot: ConnectionSnapshot, changedAt: string): Qy
     const status = snapshot.lifecycle;
     return WorkbenchConnectionSnapshotSchema.parse({
         status,
-        changedAt,
+        changed_at: changedAt,
         ...(snapshot.initialization === undefined ? {} : {
-            connectedAt: snapshot.initialization.connectedAt,
+            connected_at: snapshot.initialization.connectedAt,
             initialization: initializationResponse(snapshot.initialization),
         }),
-        ...(status === "disconnected" ? { disconnectedAt: changedAt } : {}),
+        ...(status === "disconnected" ? { disconnected_at: changedAt } : {}),
         ...(snapshot.lastError === undefined ? {} : {
-            recentError: {
+            recent_error: {
                 category: "transport",
                 code: "connection_failure",
                 message: snapshot.lastError,
-                occurredAt: changedAt,
+                occurred_at: changedAt,
                 retryable: true,
             },
         }),
-    });
+    } satisfies ContractInput<QylContracts.WorkbenchConnectionSnapshot>);
 }
 
 function initializationResponse(initialization: ConnectionInitializationSnapshot): QylContracts.WorkbenchInitializationSnapshot {
     const protocolVersion = initialization.protocolVersion ?? "unknown";
     const serverIdentity = initialization.serverInfo ?? { name: "unknown", version: "unknown" };
     return WorkbenchInitializationSnapshotSchema.parse({
-        initializedAt: initialization.connectedAt,
-        protocolVersion,
-        serverIdentity,
+        initialized_at: initialization.connectedAt,
+        protocol_version: protocolVersion,
+        server_identity: serverIdentity,
         capabilities: initialization.capabilities,
         ...(initialization.instructions === undefined ? {} : { instructions: initialization.instructions }),
-        ...(initialization.sessionId === undefined ? {} : { sessionInfo: { id: initialization.sessionId } }),
+        ...(initialization.sessionId === undefined ? {} : { session_info: { id: initialization.sessionId } }),
         result: {
             protocolVersion,
             serverInfo: serverIdentity,
             capabilities: initialization.capabilities,
             ...(initialization.instructions === undefined ? {} : { instructions: initialization.instructions }),
         },
-    });
+    } satisfies ContractInput<QylContracts.WorkbenchInitializationSnapshot>);
 }
 
 function discoveryResponse(serverId: string, initialization: ConnectionInitializationSnapshot, now: Date): QylContracts.WorkbenchDiscoverySnapshot {
     const discoveredAt = now.toISOString();
-    const collection = (items: readonly unknown[]) => ({ items, count: items.length, complete: true, discoveredAt });
+    const collection = (items: readonly unknown[]) => ({
+        items,
+        count: items.length,
+        complete: true,
+        discovered_at: discoveredAt,
+    });
     return WorkbenchDiscoverySnapshotSchema.parse({
-        serverId,
-        startedAt: initialization.connectedAt,
-        completedAt: discoveredAt,
+        server_id: serverId,
+        started_at: initialization.connectedAt,
+        completed_at: discoveredAt,
         tools: collection(initialization.discovery.tools),
         resources: collection(initialization.discovery.resources),
-        resourceTemplates: collection(initialization.discovery.resourceTemplates),
+        resource_templates: collection(initialization.discovery.resourceTemplates),
         prompts: collection(initialization.discovery.prompts),
-    });
+    } satisfies ContractInput<QylContracts.WorkbenchDiscoverySnapshot>);
 }
 
 function protocolEvent(serverId: string, entry: ProtocolJournalEntry): QylContracts.WorkbenchProtocolEvent {
     if (entry.kind === "message") {
         return WorkbenchProtocolEventSchema.parse({
             id: String(entry.sequence),
-            serverId,
+            server_id: serverId,
             direction: entry.direction === "outbound" ? "client_to_server" : "server_to_client",
             kind: entry.messageKind === "error_response" ? "error" : entry.messageKind,
             ...(entry.method === undefined ? {} : { method: entry.method }),
-            ...(entry.requestId === undefined ? {} : { requestId: entry.requestId }),
+            ...(entry.requestId === undefined ? {} : { request_id: entry.requestId }),
             timestamp: entry.timestamp,
-            ...(entry.durationMs === undefined ? {} : { durationMs: entry.durationMs }),
+            ...(entry.durationMs === undefined ? {} : { duration_ms: entry.durationMs }),
             payload: entry.payload,
-            redactionApplied: true,
-            ...(entry.correlation?.executionId === undefined ? {} : { executionId: entry.correlation.executionId }),
-        });
+            redaction_applied: true,
+            ...(entry.correlation?.executionId === undefined ? {} : { execution_id: entry.correlation.executionId }),
+        } satisfies ContractInput<QylContracts.WorkbenchProtocolEvent>);
     }
     const message = entry.kind === "transport_close" ? "MCP transport closed." : entry.message;
     return WorkbenchProtocolEventSchema.parse({
         id: String(entry.sequence),
-        serverId,
+        server_id: serverId,
         direction: "local",
         kind: entry.kind === "transport_error" ? "error" : "transport",
         timestamp: entry.timestamp,
         payload: { message },
-        redactionApplied: true,
-        ...(entry.correlation?.executionId === undefined ? {} : { executionId: entry.correlation.executionId }),
-    });
+        redaction_applied: true,
+        ...(entry.correlation?.executionId === undefined ? {} : { execution_id: entry.correlation.executionId }),
+    } satisfies ContractInput<QylContracts.WorkbenchProtocolEvent>);
 }
 
 function isProtocolJournalEntry(value: unknown): value is ProtocolJournalEntry {
@@ -1662,36 +1672,36 @@ function isProtocolJournalEntry(value: unknown): value is ProtocolJournalEntry {
 function executionResponse(record: ExecutionRecord): QylContracts.WorkbenchExecutionRecord {
     return WorkbenchExecutionRecordSchema.parse({
         id: record.id,
-        workspaceId: record.workspaceId,
-        serverId: record.serverId,
+        workspace_id: record.workspaceId,
+        server_id: record.serverId,
         request: {
-            toolName: record.request.toolName,
+            tool_name: record.request.toolName,
             arguments: record.request.arguments,
-            timeoutMs: record.request.timeoutMs,
+            timeout_ms: record.request.timeoutMs,
             ...(record.confirmation === undefined ? {} : {
                 confirmation: {
                     acknowledged: true,
                     acknowledgement: record.confirmation.acknowledgement,
                 },
             }),
-            idempotencyKey: record.request.idempotencyKey,
+            idempotency_key: record.request.idempotencyKey,
         },
         effect: record.effect,
         ...(record.confirmation === undefined ? {} : { confirmation: record.confirmation }),
         status: record.status,
-        createdAt: record.createdAt,
-        ...(record.startedAt === undefined ? {} : { startedAt: record.startedAt }),
-        ...(record.completedAt === undefined ? {} : { completedAt: record.completedAt }),
-        ...(record.durationMs === undefined ? {} : { durationMs: record.durationMs }),
-        attemptCount: record.attemptCount,
-        retryCount: record.retryCount ?? 0,
-        ...(record.cancelRequestedAt === undefined ? {} : { cancelRequestedAt: record.cancelRequestedAt }),
-        ...(record.cancelledAt === undefined ? {} : { cancelledAt: record.cancelledAt }),
+        created_at: record.createdAt,
+        ...(record.startedAt === undefined ? {} : { started_at: record.startedAt }),
+        ...(record.completedAt === undefined ? {} : { completed_at: record.completedAt }),
+        ...(record.durationMs === undefined ? {} : { duration_ms: record.durationMs }),
+        attempt_count: record.attemptCount,
+        retry_count: record.retryCount ?? 0,
+        ...(record.cancelRequestedAt === undefined ? {} : { cancel_requested_at: record.cancelRequestedAt }),
+        ...(record.cancelledAt === undefined ? {} : { cancelled_at: record.cancelledAt }),
         ...(record.result === undefined ? {} : { result: record.result }),
         ...(record.error === undefined ? {} : { error: record.error }),
-        ...(record.tokenUsage === undefined ? {} : { tokenUsage: record.tokenUsage }),
+        ...(record.tokenUsage === undefined ? {} : { token_usage: record.tokenUsage }),
         ...(record.cost === undefined ? {} : { cost: record.cost }),
-    });
+    } satisfies ContractInput<QylContracts.WorkbenchExecutionRecord>);
 }
 
 function isExecutionRecord(value: unknown): value is ExecutionRecord {
@@ -1704,21 +1714,24 @@ function isExecutionRecord(value: unknown): value is ExecutionRecord {
 
 function preferencesResponse(workspaceId: string, preferences: WorkspacePreferences, now: Date): QylContracts.WorkbenchWorkspacePreferences {
     return WorkbenchWorkspacePreferencesSchema.parse({
-        workspaceId,
-        ...(preferences.selectedServerId === undefined ? {} : { selectedServerId: preferences.selectedServerId }),
-        ...(preferences.selectedToolName === undefined ? {} : { selectedToolName: preferences.selectedToolName }),
-        inputMode: preferences.inputMode ?? "form",
-        ...(preferences.activePanel === undefined ? {} : { activePanel: preferences.activePanel }),
-        compactMode: preferences.compactMode ?? false,
-        updatedAt: preferences.updatedAt ?? now.toISOString(),
-    });
+        workspace_id: workspaceId,
+        ...(preferences.selectedServerId === undefined ? {} : { selected_server_id: preferences.selectedServerId }),
+        ...(preferences.selectedToolName === undefined ? {} : { selected_tool_name: preferences.selectedToolName }),
+        input_mode: preferences.inputMode ?? "form",
+        ...(preferences.activePanel === undefined ? {} : { active_panel: preferences.activePanel }),
+        compact_mode: preferences.compactMode ?? false,
+        updated_at: preferences.updatedAt ?? now.toISOString(),
+    } satisfies ContractInput<QylContracts.WorkbenchWorkspacePreferences>);
 }
 
 /** The contract's snake_case secret reference as the internal persisted shape. */
-function fromSecretReference(
-    secret: QylContracts.WorkbenchSecretReference,
-): { source: "environment"; environmentVariable: string } {
+function fromSecretReference(secret: QylContracts.WorkbenchSecretReference): PersistedSecretReference {
     return { source: secret.source, environmentVariable: secret.environment_variable };
+}
+
+/** The persisted secret reference as the contract's snake_case wire shape. */
+function toSecretReference(secret: PersistedSecretReference): QylContracts.WorkbenchSecretReference {
+    return { source: secret.source, environment_variable: secret.environmentVariable };
 }
 
 /** The contract's snake_case create request as the internal test-case shape. */
@@ -1784,18 +1797,18 @@ function testCaseResponse(testCase: PersistedTestCase | WorkbenchTestCase): QylC
     const record = testCase as PersistedTestCase;
     return WorkbenchTestCaseSchema.parse({
         id: testCase.id,
-        workspaceId: testCase.workspaceId,
-        serverId: testCase.serverId,
+        workspace_id: testCase.workspaceId,
+        server_id: testCase.serverId,
         name: testCase.name,
         ...(record.description === undefined ? {} : { description: record.description }),
-        toolName: testCase.toolName,
+        tool_name: testCase.toolName,
         arguments: testCase.arguments,
-        timeoutMs: testCase.timeoutMs,
+        timeout_ms: testCase.timeoutMs,
         assertions: [...testCase.assertions],
         tags: testCase.tags ?? [],
-        createdAt: record.createdAt ?? new Date(0).toISOString(),
-        updatedAt: record.updatedAt ?? record.createdAt ?? new Date(0).toISOString(),
-    });
+        created_at: record.createdAt ?? new Date(0).toISOString(),
+        updated_at: record.updatedAt ?? record.createdAt ?? new Date(0).toISOString(),
+    } satisfies ContractInput<QylContracts.WorkbenchTestCase>);
 }
 
 function suiteResponse(suite: PersistedSuite): QylContracts.WorkbenchTestSuite {
@@ -1808,7 +1821,7 @@ function suiteResponse(suite: PersistedSuite): QylContracts.WorkbenchTestSuite {
         tags: suite.tags ?? [],
         created_at: suite.createdAt,
         updated_at: suite.updatedAt,
-    });
+    } satisfies ContractInput<QylContracts.WorkbenchTestSuite>);
 }
 
 function suiteSnapshot(suite: WorkbenchSuite & { description?: string; tags?: readonly string[] }): WorkbenchSuite {
@@ -1819,25 +1832,25 @@ function evaluationRunResponse(run: EvaluationRun): QylContracts.WorkbenchEvalua
     const testCases = run.testCases ?? [];
     return WorkbenchEvaluationRunSchema.parse({
         id: run.id,
-        workspaceId: run.workspaceId,
+        workspace_id: run.workspaceId,
         ...(run.suite === undefined ? {} : {
             suite: {
                 id: run.suite.id,
                 name: run.suite.name,
                 ...((run.suite as PersistedSuite).description === undefined ? {} : { description: (run.suite as PersistedSuite).description }),
-                testCaseIds: run.suite.testCaseIds,
+                test_case_ids: run.suite.testCaseIds,
                 tags: (run.suite as PersistedSuite).tags ?? [],
             },
         }),
-        testCases: testCases.map(evaluationTestSnapshot),
+        test_cases: testCases.map(evaluationTestSnapshot),
         status: run.status,
-        createdAt: run.startedAt,
-        startedAt: run.startedAt,
-        ...(run.completedAt === undefined ? {} : { completedAt: run.completedAt }),
+        created_at: run.startedAt,
+        started_at: run.startedAt,
+        ...(run.completedAt === undefined ? {} : { completed_at: run.completedAt }),
         ...(run.confirmation === undefined ? {} : { confirmation: run.confirmation }),
         ...(run.error === undefined ? {} : { error: run.error }),
         results: run.results.map((result) => ({
-            testCase: evaluationTestSnapshot(testCases.find((testCase) => testCase.id === result.testCaseId) ?? {
+            test_case: evaluationTestSnapshot(testCases.find((testCase) => testCase.id === result.testCaseId) ?? {
                 id: result.testCaseId,
                 workspaceId: run.workspaceId,
                 serverId: "unknown",
@@ -1848,29 +1861,29 @@ function evaluationRunResponse(run: EvaluationRun): QylContracts.WorkbenchEvalua
                 assertions: [],
                 tags: [],
             }),
-            ...(result.executionId === undefined ? {} : { executionId: result.executionId }),
+            ...(result.executionId === undefined ? {} : { execution_id: result.executionId }),
             status: result.status,
-            ...(result.startedAt === undefined ? {} : { startedAt: result.startedAt }),
-            ...(result.completedAt === undefined ? {} : { completedAt: result.completedAt }),
-            ...(result.durationMs === undefined ? {} : { durationMs: result.durationMs }),
+            ...(result.startedAt === undefined ? {} : { started_at: result.startedAt }),
+            ...(result.completedAt === undefined ? {} : { completed_at: result.completedAt }),
+            ...(result.durationMs === undefined ? {} : { duration_ms: result.durationMs }),
             assertions: [...result.assertionResults],
         })),
         summary: evaluationSummary(run),
-    });
+    } satisfies ContractInput<QylContracts.WorkbenchEvaluationRun>);
 }
 
 function evaluationTestSnapshot(testCase: WorkbenchTestCase): QylContracts.WorkbenchEvaluationTestCaseSnapshot {
     return WorkbenchEvaluationTestCaseSnapshotSchema.parse({
         id: testCase.id,
-        serverId: testCase.serverId,
+        server_id: testCase.serverId,
         name: testCase.name,
         ...((testCase as PersistedTestCase).description === undefined ? {} : { description: (testCase as PersistedTestCase).description }),
-        toolName: testCase.toolName,
+        tool_name: testCase.toolName,
         arguments: testCase.arguments,
-        timeoutMs: testCase.timeoutMs,
+        timeout_ms: testCase.timeoutMs,
         assertions: [...testCase.assertions],
         tags: testCase.tags ?? [],
-    });
+    } satisfies ContractInput<QylContracts.WorkbenchEvaluationTestCaseSnapshot>);
 }
 
 function evaluationSummary(run: EvaluationRun): QylContracts.WorkbenchEvaluationSummary {
@@ -1881,15 +1894,15 @@ function evaluationSummary(run: EvaluationRun): QylContracts.WorkbenchEvaluation
         failed: summary.failed,
         errors: summary.errors,
         skipped: summary.skipped,
-        successRate: summary.successRate,
+        success_rate: summary.successRate,
         reliability: summary.reliability,
-        ...(summary.averageLatencyMs === undefined ? {} : { meanDurationMs: summary.averageLatencyMs }),
-        ...(summary.p50LatencyMs === undefined ? {} : { p50DurationMs: summary.p50LatencyMs }),
-        ...(summary.p95LatencyMs === undefined ? {} : { p95DurationMs: summary.p95LatencyMs }),
-        ...(summary.p99LatencyMs === undefined ? {} : { p99DurationMs: summary.p99LatencyMs }),
-        ...(summary.tokenUsage === undefined ? {} : { tokenUsage: summary.tokenUsage }),
+        ...(summary.averageLatencyMs === undefined ? {} : { mean_duration_ms: summary.averageLatencyMs }),
+        ...(summary.p50LatencyMs === undefined ? {} : { p50_duration_ms: summary.p50LatencyMs }),
+        ...(summary.p95LatencyMs === undefined ? {} : { p95_duration_ms: summary.p95LatencyMs }),
+        ...(summary.p99LatencyMs === undefined ? {} : { p99_duration_ms: summary.p99LatencyMs }),
+        ...(summary.tokenUsage === undefined ? {} : { token_usage: summary.tokenUsage }),
         ...(summary.cost === undefined ? {} : { cost: summary.cost }),
-    });
+    } satisfies ContractInput<QylContracts.WorkbenchEvaluationSummary>);
 }
 
 function comparisonResponse(
@@ -1899,22 +1912,22 @@ function comparisonResponse(
     now: Date,
 ): QylContracts.WorkbenchEvaluationRunComparison {
     return WorkbenchEvaluationRunComparisonSchema.parse({
-        baselineRunId: comparison.baselineRunId,
-        candidateRunId: comparison.candidateRunId,
+        baseline_run_id: comparison.baselineRunId,
+        candidate_run_id: comparison.candidateRunId,
         baseline: evaluationSummary(baseline),
         candidate: evaluationSummary(candidate),
-        successRateDelta: comparison.successRateChange,
-        reliabilityDelta: comparison.reliabilityChange,
-        ...(comparison.p95LatencyChangeMs === undefined ? {} : { p95DurationDeltaMs: comparison.p95LatencyChangeMs }),
+        success_rate_delta: comparison.successRateChange,
+        reliability_delta: comparison.reliabilityChange,
+        ...(comparison.p95LatencyChangeMs === undefined ? {} : { p95_duration_delta_ms: comparison.p95LatencyChangeMs }),
         tests: comparison.cases.map((item) => ({
-            testCaseId: item.testCaseId,
+            test_case_id: item.testCaseId,
             status: item.statusChange,
-            ...(item.baselineStatus === undefined ? {} : { baselineStatus: item.baselineStatus }),
-            ...(item.candidateStatus === undefined ? {} : { candidateStatus: item.candidateStatus }),
-            ...(item.latencyChangeMs === undefined ? {} : { durationDeltaMs: item.latencyChangeMs }),
+            ...(item.baselineStatus === undefined ? {} : { baseline_status: item.baselineStatus }),
+            ...(item.candidateStatus === undefined ? {} : { candidate_status: item.candidateStatus }),
+            ...(item.latencyChangeMs === undefined ? {} : { duration_delta_ms: item.latencyChangeMs }),
         })),
-        comparedAt: now.toISOString(),
-    });
+        compared_at: now.toISOString(),
+    } satisfies ContractInput<QylContracts.WorkbenchEvaluationRunComparison>);
 }
 
 function executionOutcome(record: ExecutionRecord): ExecutionOutcome {

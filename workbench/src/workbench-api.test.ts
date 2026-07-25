@@ -1438,15 +1438,15 @@ async function startHarness(
             async queryExecution(query: QylObservabilityQuery) {
                 const unavailable = {
                     status: "unavailable" as const,
-                    unavailableReason: "No collector is configured for this test.",
-                    itemCount: 0,
+                    unavailable_reason: "No collector is configured for this test.",
+                    item_count: 0,
                 };
                 return {
                     signals: {
                         traces: unavailable,
                         logs: unavailable,
                         exceptions: unavailable,
-                        toolCallEvents: unavailable,
+                        tool_call_events: unavailable,
                     },
                     correlation: query.correlation,
                     traces: [],

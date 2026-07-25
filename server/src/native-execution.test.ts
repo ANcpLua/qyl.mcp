@@ -122,9 +122,9 @@ test("native tools/call automatically persists validated, redacted, correlated e
       spanIds: [SPAN_ID],
     });
     assert.deepEqual(persisted.tokenUsage, {
-      inputTokens: 10,
-      outputTokens: 4,
-      totalTokens: 14,
+      input_tokens: 10,
+      output_tokens: 4,
+      total_tokens: 14,
       estimated: false,
     });
     assert.deepEqual(persisted.cost, {
@@ -307,7 +307,7 @@ test("file native repository uses atomic private persistence", async () => {
       version: number;
       executions: NativeExecutionRecord[];
     };
-    assert.equal(state.version, 1);
+    assert.equal(state.version, 2);
     assert.equal(state.executions.length, 1);
     assert.equal(state.executions[0]?.status, "succeeded");
     assert.equal(state.executions[0]?.request.transport, "streamable_http");

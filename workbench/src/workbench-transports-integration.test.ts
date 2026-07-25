@@ -149,10 +149,10 @@ function unavailableObservability(): QylObservabilityProvider {
         async queryExecution() {
             return {
                 signals: {
-                    traces: { status: "unavailable", unavailableReason: "fixture", itemCount: 0 },
-                    logs: { status: "unavailable", unavailableReason: "fixture", itemCount: 0 },
-                    exceptions: { status: "unavailable", unavailableReason: "fixture", itemCount: 0 },
-                    toolCallEvents: { status: "unavailable", unavailableReason: "fixture", itemCount: 0 },
+                    traces: { status: "unavailable", unavailable_reason: "fixture", item_count: 0 },
+                    logs: { status: "unavailable", unavailable_reason: "fixture", item_count: 0 },
+                    exceptions: { status: "unavailable", unavailable_reason: "fixture", item_count: 0 },
+                    tool_call_events: { status: "unavailable", unavailable_reason: "fixture", item_count: 0 },
                 },
                 correlation: { executionId: "fixture", traceIds: [], spanIds: [] },
                 traces: [],

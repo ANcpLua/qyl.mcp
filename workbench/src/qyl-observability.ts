@@ -208,7 +208,7 @@ export class QylObservabilityProvider {
             try {
                 const body = await this.getJson(
                     "/api/v1/logs",
-                    { traceId, limit: LOG_PAGE_SIZE },
+                    { trace_id: traceId, limit: LOG_PAGE_SIZE },
                     "logs",
                 );
                 const page = this.parsePage(body, parser, LogsListResponseSchema, "logs");

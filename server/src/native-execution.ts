@@ -10,6 +10,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { AtomicJsonStore } from "./atomic-json-store.js";
+import {
+  WorkbenchExecutionCostSchema,
+  WorkbenchExecutionTokenUsageSchema,
+} from "./contract-validation.js";
 import { extractExecutionEvidence } from "./execution-evidence.js";
 import {
   MAX_PERSISTED_RESULT_CHARACTERS,
@@ -26,7 +30,9 @@ import {
   type McpSpanCorrelation,
 } from "./telemetry.js";
 
-const NATIVE_STATE_VERSION = 1 as const;
+// 2: usage and cost evidence follows the published contract's snake_case names,
+// so a version-1 file must fail loudly rather than half-parse.
+const NATIVE_STATE_VERSION = 2 as const;
 const DEFAULT_MAX_EXECUTIONS = 1_000;
 const NATIVE_SERVER_ID = "qyl.mcp/native";
 const MAX_PROTOCOL_PAYLOAD_CHARACTERS = 64_000;
@@ -34,17 +40,11 @@ const MAX_PROTOCOL_PAYLOAD_CHARACTERS = 64_000;
 const IdentifierSchema = z.string().min(1).max(256);
 const IsoDateSchema = z.string().datetime({ offset: true });
 const JsonRpcRequestIdSchema = z.union([z.string().max(2_048), z.number().finite()]);
-const TokenUsageSchema = z.object({
-  inputTokens: z.number().int().nonnegative().optional(),
-  outputTokens: z.number().int().nonnegative().optional(),
-  totalTokens: z.number().int().nonnegative().optional(),
-  estimated: z.boolean(),
-}).strict();
-const CostSchema = z.object({
-  amount_usd: z.number().finite().nonnegative(),
-  estimated: z.boolean(),
-  source: z.string().min(1).max(256).optional(),
-}).strict();
+// Usage and cost evidence is the published contract's own shape, so the
+// persisted record validates against the generated schema rather than a local
+// copy that can drift from it.
+const TokenUsageSchema = WorkbenchExecutionTokenUsageSchema;
+const CostSchema = WorkbenchExecutionCostSchema;
 const ProtocolEventSchema = z.object({
   sequence: z.number().int().positive(),
   timestamp: IsoDateSchema,

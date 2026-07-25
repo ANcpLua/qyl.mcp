@@ -199,6 +199,23 @@ const zodCompatibleContractJsonSchema = adaptPublishedSchemaForZod(
   contractJsonSchema,
 ) as typeof contractJsonSchema;
 
+/**
+ * A published contract type as it looks *before* validation: branded identity
+ * scalars are still plain strings and arrays may be readonly, because branding
+ * is what `parse` produces rather than what a caller can construct.
+ *
+ * Annotating a projection with `satisfies ContractInput<T>` moves the wire-name
+ * check from a runtime `parse` throw to a compile error, so a property spelled
+ * in the internal camelCase instead of the contract's snake_case cannot reach a
+ * response at all.
+ */
+export type ContractInput<TContract> =
+  TContract extends { readonly __brand: string } ? string
+    : TContract extends readonly (infer TElement)[] ? readonly ContractInput<TElement>[]
+      : TContract extends (...args: never[]) => unknown ? TContract
+        : TContract extends object ? { readonly [K in keyof TContract]: ContractInput<TContract[K]> }
+          : TContract;
+
 const publishedContractSchemas = new Map<string, z.ZodType<unknown>>();
 
 /** Build a strict runtime validator from the published TypeSpec-owned JSON Schema. */
