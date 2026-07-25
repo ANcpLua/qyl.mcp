@@ -108,7 +108,7 @@ function spanFlavor(span: QylSpan): Flavor {
 }
 
 function serviceName(span: QylSpan): string {
-  const v = span.resource?.["service.name"];
+  const v = span.resource?.service_name;
   return typeof v === "string" && v ? v : "unknown";
 }
 

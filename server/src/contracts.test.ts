@@ -15,13 +15,13 @@ import {
   ListSessionsOutputSchema,
   ListTracesInputSchema,
   ListTracesOutputSchema,
-  RunnerMcpEvaluationExportRequestSchema,
-  RunnerMcpEvaluationRunRequestSchema,
-  RunnerMcpExecutionRequestSchema,
-  RunnerMcpServerCreateRequestSchema,
-  RunnerMcpTestAssertionSchema,
-  RunnerMcpTestCaseCreateRequestSchema,
-  RunnerMcpWorkspaceCreateRequestSchema,
+  WorkbenchEvaluationExportRequestSchema,
+  WorkbenchEvaluationRunRequestSchema,
+  WorkbenchExecutionRequestSchema,
+  WorkbenchServerCreateRequestSchema,
+  WorkbenchTestAssertionSchema,
+  WorkbenchTestCaseCreateRequestSchema,
+  WorkbenchWorkspaceCreateRequestSchema,
   SearchLogsInputSchema,
   SearchLogsOutputSchema,
   SpanSchema,
@@ -37,11 +37,11 @@ import {
 import { getDemo } from "./demo.js";
 import { fetchMcpStats } from "./data.js";
 
-test("every published Runner.Mcp definition has a runtime validator", () => {
+test("every published Workbench definition has a runtime validator", () => {
   const exportedSchemas = ContractSchemas as Record<string, unknown>;
   const missing = Object.keys(contractJsonSchema.$defs)
-    .filter((name) => name.startsWith("Runner.Mcp."))
-    .map((name) => `${name.slice("Runner.Mcp.".length)}Schema`)
+    .filter((name) => name.startsWith("Workbench."))
+    .map((name) => `${name.slice("Workbench.".length)}Schema`)
     .filter((name) => exportedSchemas[name] === undefined);
 
   assert.deepEqual(missing, []);
@@ -135,61 +135,61 @@ test("TypeSpec record dictionaries retain their value contract at runtime", () =
 });
 
 test("published workbench request schemas own strictness, defaults, and opaque SDK payloads", () => {
-  assert.deepEqual(RunnerMcpWorkspaceCreateRequestSchema.parse({ name: "Local lab" }), {
+  assert.deepEqual(WorkbenchWorkspaceCreateRequestSchema.parse({ name: "Local lab" }), {
     name: "Local lab",
   });
-  assert(!RunnerMcpWorkspaceCreateRequestSchema.safeParse({ name: "Local lab", public: true }).success);
+  assert(!WorkbenchWorkspaceCreateRequestSchema.safeParse({ name: "Local lab", public: true }).success);
 
   assert.deepEqual(
-    RunnerMcpServerCreateRequestSchema.parse({
+    WorkbenchServerCreateRequestSchema.parse({
       name: "Fixture",
       configuration: { transport: "stdio", command: "node" },
     }),
     {
       name: "Fixture",
       configuration: { transport: "stdio", command: "node" },
-      autoConnect: false,
+      auto_connect: false,
     },
   );
   assert(
-    !RunnerMcpServerCreateRequestSchema.safeParse({
+    !WorkbenchServerCreateRequestSchema.safeParse({
       name: "Fixture",
       configuration: { transport: "stdio", command: "node", token: "plaintext-secret" },
     }).success,
   );
 
   assert.deepEqual(
-    RunnerMcpExecutionRequestSchema.parse({
-      toolName: "fixture.echo",
+    WorkbenchExecutionRequestSchema.parse({
+      tool_name: "fixture.echo",
       arguments: { nested: [true, 2, "three"] },
-      idempotencyKey: "execution-1",
+      idempotency_key: "execution-1",
     }),
     {
-      toolName: "fixture.echo",
+      tool_name: "fixture.echo",
       arguments: { nested: [true, 2, "three"] },
-      timeoutMs: 30_000,
-      idempotencyKey: "execution-1",
+      timeout_ms: 30_000,
+      idempotency_key: "execution-1",
     },
   );
 });
 
 test("published workbench assertion, evaluation, and export unions reject local variants", () => {
   assert(
-    RunnerMcpTestAssertionSchema.safeParse({
+    WorkbenchTestAssertionSchema.safeParse({
       id: "status-1",
       kind: "status",
       expected: ["succeeded"],
     }).success,
   );
   assert(
-    !RunnerMcpTestAssertionSchema.safeParse({
+    !WorkbenchTestAssertionSchema.safeParse({
       id: "semantic-1",
       kind: "semantic",
       expected: "similar",
     }).success,
   );
   assert(
-    !RunnerMcpTestAssertionSchema.safeParse({
+    !WorkbenchTestAssertionSchema.safeParse({
       id: "legacy-1",
       type: "exact",
       pointer: "/answer",
@@ -197,34 +197,34 @@ test("published workbench assertion, evaluation, and export unions reject local 
     }).success,
   );
 
-  const testCase = RunnerMcpTestCaseCreateRequestSchema.parse({
-    serverId: "server-1",
+  const testCase = WorkbenchTestCaseCreateRequestSchema.parse({
+    server_id: "server-1",
     name: "Echo succeeds",
-    toolName: "fixture.echo",
+    tool_name: "fixture.echo",
     assertions: [{ id: "status-1", kind: "status", expected: ["succeeded"] }],
   });
-  assert.equal(testCase.timeoutMs, 30_000);
+  assert.equal(testCase.timeout_ms, 30_000);
 
   assert.deepEqual(
-    RunnerMcpEvaluationRunRequestSchema.parse({ idempotencyKey: "evaluation-1" }),
-    { idempotencyKey: "evaluation-1", concurrency: 1, failFast: false },
+    WorkbenchEvaluationRunRequestSchema.parse({ idempotency_key: "evaluation-1" }),
+    { idempotency_key: "evaluation-1", concurrency: 1, fail_fast: false },
   );
   assert.deepEqual(
-    RunnerMcpEvaluationExportRequestSchema.parse({
+    WorkbenchEvaluationExportRequestSchema.parse({
       format: "json",
-      idempotencyKey: "export-1",
+      idempotency_key: "export-1",
     }),
     {
       format: "json",
-      includeProtocolEvents: true,
-      includeTelemetry: true,
-      idempotencyKey: "export-1",
+      include_protocol_events: true,
+      include_telemetry: true,
+      idempotency_key: "export-1",
     },
   );
   assert(
-    !RunnerMcpEvaluationExportRequestSchema.safeParse({
+    !WorkbenchEvaluationExportRequestSchema.safeParse({
       format: "csv",
-      idempotencyKey: "export-1",
+      idempotency_key: "export-1",
     }).success,
   );
 });

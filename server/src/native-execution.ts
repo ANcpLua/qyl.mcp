@@ -1,6 +1,6 @@
 import type {
-  RunnerMcpExecutionCost,
-  RunnerMcpExecutionTokenUsage,
+  WorkbenchExecutionCost,
+  WorkbenchExecutionTokenUsage,
 } from "@ancplua/qyl-api-schema/types";
 import { CallToolRequestSchema, CallToolResultSchema } from "@modelcontextprotocol/core";
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
@@ -41,7 +41,7 @@ const TokenUsageSchema = z.object({
   estimated: z.boolean(),
 }).strict();
 const CostSchema = z.object({
-  amountUsd: z.number().finite().nonnegative(),
+  amount_usd: z.number().finite().nonnegative(),
   estimated: z.boolean(),
   source: z.string().min(1).max(256).optional(),
 }).strict();
@@ -609,8 +609,8 @@ function boundPayload(value: unknown): unknown {
 }
 
 function evidenceFields(evidence: {
-  tokenUsage?: RunnerMcpExecutionTokenUsage;
-  cost?: RunnerMcpExecutionCost;
+  tokenUsage?: WorkbenchExecutionTokenUsage;
+  cost?: WorkbenchExecutionCost;
 }, redactor: SecretRedactor): Pick<NativeExecutionRecord, "tokenUsage" | "cost"> {
   const source = evidence.cost?.source === undefined
     ? undefined
@@ -618,7 +618,7 @@ function evidenceFields(evidence: {
   const cost = evidence.cost === undefined
     ? undefined
     : {
-        amountUsd: evidence.cost.amountUsd,
+        amount_usd: evidence.cost.amount_usd,
         estimated: evidence.cost.estimated,
         ...(source === undefined || source.length === 0 ? {} : { source }),
       };

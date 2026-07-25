@@ -1,0 +1,39 @@
+{
+  "name": "qyl-mcp-workbench",
+  "private": true,
+  "version": "1.0.0-beta.4",
+  "type": "module",
+  "description": "Authenticated local MCP workbench with connection inspection, evaluation, and in-process qyl telemetry tools",
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && tsc",
+    "test": "npm run build && node --test dist/src/*.test.js",
+    "smoke": "node smoke.mjs",
+    "start": "node dist/main.js",
+    "smoke:otlp": "node telemetry-smoke.mjs"
+  },
+  "dependencies": {
+    "@ancplua/qyl-api-schema": "2.0.0",
+    "@modelcontextprotocol/client": "2.0.0-beta.5",
+    "@modelcontextprotocol/core": "2.0.0-beta.5",
+    "@modelcontextprotocol/express": "2.0.0-beta.5",
+    "@modelcontextprotocol/node": "2.0.0-beta.5",
+    "@modelcontextprotocol/server": "2.0.0-beta.5",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/sdk-trace-base": "^2.10.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
+    "express": "^5.2.1",
+    "qyl-mcp-server": "1.0.0-beta.4",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@opentelemetry/sdk-logs": "^0.221.0",
+    "@types/express": "5.0.6",
+    "@types/node": "24.13.3",
+    "typescript": "7.0.2",
+    "vite": "8.1.5"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -7,13 +7,14 @@ import {
   generateKeyPair,
 } from "jose";
 import {
+  QYL_MCP_ISSUER,
   QYL_MCP_SCOPE,
   createJwtTokenVerifier,
   loadHostedOAuth,
 } from "./oauth.js";
 
 const resource = new URL("https://mcp.qyl.at/mcp");
-const issuer = "https://qyl.eu.auth0.com/";
+const issuer = QYL_MCP_ISSUER;
 
 test("hosted OAuth fails closed when no issuer is configured", async () => {
   await assert.rejects(
@@ -22,19 +23,22 @@ test("hosted OAuth fails closed when no issuer is configured", async () => {
   );
 });
 
-test("hosted OAuth rejects an invalid issuer URL", async () => {
-  await assert.rejects(
-    () => loadHostedOAuth(resource, { MCP_OAUTH_ISSUER: "http://auth.example.com" }),
-    /MCP_OAUTH_ISSUER must use HTTPS/u,
-  );
-  await assert.rejects(
-    () => loadHostedOAuth(resource, { MCP_OAUTH_ISSUER: "auth.example.com" }),
-    /MCP_OAUTH_ISSUER must be an absolute URL/u,
-  );
-  await assert.rejects(
-    () => loadHostedOAuth(resource, { MCP_OAUTH_ISSUER: "https://user:secret@auth.example.com" }),
-    /must not contain credentials/u,
-  );
+test("hosted OAuth accepts only the pinned qyl issuer", async () => {
+  for (const configured of [
+    "http://auth.example.com",
+    "auth.example.com",
+    "https://user:secret@auth.example.com",
+    // A look-alike host is refused for the same reason as an obviously wrong one:
+    // the issuer is pinned to a single value, not merely validated for shape.
+    "https://qyl.eu.auth0.com/",
+    `${QYL_MCP_ISSUER}extra/`,
+  ]) {
+    await assert.rejects(
+      () => loadHostedOAuth(resource, { MCP_OAUTH_ISSUER: configured }),
+      /MCP_OAUTH_ISSUER must be exactly/u,
+      `expected ${configured} to be refused`,
+    );
+  }
 });
 
 test("hosted OAuth loads matching metadata and requires the qyl read scope", async () => {
@@ -46,7 +50,7 @@ test("hosted OAuth loads matching metadata and requires the qyl read scope", asy
 });
 
 test("hosted OAuth rejects an insecure JWKS endpoint", async () => {
-  await withMockFetch(authMetadata({ jwks_uri: "http://qyl.eu.auth0.com/.well-known/jwks.json" }), async () => {
+  await withMockFetch(authMetadata({ jwks_uri: `http://${new URL(QYL_MCP_ISSUER).host}/.well-known/jwks.json` }), async () => {
     await assert.rejects(
       () => loadHostedOAuth(resource, { MCP_OAUTH_ISSUER: issuer }),
       /must advertise an HTTPS jwks_uri/u,

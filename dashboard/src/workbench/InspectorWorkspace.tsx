@@ -2,17 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Tool, ToolAnnotations } from "@modelcontextprotocol/server";
 import { CallToolResultSchema, ToolSchema } from "@modelcontextprotocol/core";
 import type {
-  RunnerMcpDiscoveryCollection as DiscoveryCollection,
-  RunnerMcpDiscoverySnapshot as DiscoverySnapshot,
-  RunnerMcpError as RunnerError,
-  RunnerMcpErrorCategory as ErrorCategory,
-  RunnerMcpExecutionRecord as ExecutionRecord,
-  RunnerMcpExecutionRequest as ExecutionRequest,
-  RunnerMcpExecutionTelemetryResponse as ExecutionTelemetry,
-  RunnerMcpProtocolEvent as ProtocolEvent,
-  RunnerMcpServer as McpServer,
-  RunnerMcpWorkspacePreferences as WorkspacePreferences,
-  RunnerMcpWorkspacePreferencesUpdateRequest as WorkspacePreferencesUpdateRequest,
+  WorkbenchDiscoveryCollection as DiscoveryCollection,
+  WorkbenchDiscoverySnapshot as DiscoverySnapshot,
+  WorkbenchError as RunnerError,
+  WorkbenchErrorCategory as ErrorCategory,
+  WorkbenchExecutionRecord as ExecutionRecord,
+  WorkbenchExecutionRequest as ExecutionRequest,
+  WorkbenchExecutionTelemetryResponse as ExecutionTelemetry,
+  WorkbenchProtocolEvent as ProtocolEvent,
+  WorkbenchServer as McpServer,
+  WorkbenchWorkspacePreferences as WorkspacePreferences,
+  WorkbenchWorkspacePreferencesUpdateRequest as WorkspacePreferencesUpdateRequest,
 } from "@ancplua/qyl-api-schema/types";
 import { connectionSafetyReview } from "./connection-safety.js";
 import {
@@ -119,7 +119,7 @@ function collectionFor(tab: DiscoveryTab, discovery: DiscoverySnapshot | null): 
   switch (tab) {
     case "tools": return discovery.tools;
     case "resources": return discovery.resources;
-    case "templates": return discovery.resourceTemplates;
+    case "templates": return discovery.resource_templates;
     case "prompts": return discovery.prompts;
     case "capabilities":
     case "initialize": return null;
@@ -157,7 +157,7 @@ function ErrorPanel({ error }: { error: RunnerError }) {
       </div>
       <p>{error.message}</p>
       <p className="muted-copy">{copy.guidance}</p>
-      <div className="meta-line"><code>{error.code}</code><span>{formatTimestamp(error.occurredAt)}</span></div>
+      <div className="meta-line"><code>{error.code}</code><span>{formatTimestamp(error.occurred_at)}</span></div>
       {error.details !== undefined ? <JsonCodeView value={error.details} label="Error details" onCopy={copyText} /> : null}
     </section>
   );
@@ -175,7 +175,7 @@ function ResultPanel({ execution }: { execution: ExecutionRecord }) {
 }
 
 function ProtocolTimeline({ events, executionId }: { events: ProtocolEvent[]; executionId?: string }) {
-  const relevant = executionId ? events.filter((event) => event.executionId === executionId) : events;
+  const relevant = executionId ? events.filter((event) => event.execution_id === executionId) : events;
   const [selectedEventId, setSelectedEventId] = useState("");
   const selected = relevant.find((event) => event.id === selectedEventId) ?? relevant.at(-1);
   return (
@@ -190,7 +190,7 @@ function ProtocolTimeline({ events, executionId }: { events: ProtocolEvent[]; ex
           >
             <span className={`direction direction-${event.direction}`}>{event.direction === "client_to_server" ? "→" : event.direction === "server_to_client" ? "←" : "•"}</span>
             <span><strong>{event.method ?? event.kind}</strong><small>{event.kind} · {formatTimestamp(event.timestamp)}</small></span>
-            <span>{event.durationMs === undefined ? "" : formatDuration(event.durationMs)}</span>
+            <span>{event.duration_ms === undefined ? "" : formatDuration(event.duration_ms)}</span>
           </button>
         ))}
         {relevant.length === 0 ? <p className="empty-note">No protocol events recorded for this selection.</p> : null}
@@ -201,8 +201,8 @@ function ProtocolTimeline({ events, executionId }: { events: ProtocolEvent[]; ex
             <dl className="detail-grid">
               <div><dt>Direction</dt><dd>{selected.direction}</dd></div>
               <div><dt>Kind</dt><dd>{selected.kind}</dd></div>
-              <div><dt>Request id</dt><dd>{selected.requestId === undefined ? "—" : String(selected.requestId)}</dd></div>
-              <div><dt>Redacted</dt><dd>{selected.redactionApplied ? "yes" : "no"}</dd></div>
+              <div><dt>Request id</dt><dd>{selected.request_id === undefined ? "—" : String(selected.request_id)}</dd></div>
+              <div><dt>Redacted</dt><dd>{selected.redaction_applied ? "yes" : "no"}</dd></div>
             </dl>
             <JsonCodeView value={selected.payload} label="Protocol payload" onCopy={copyText} />
           </>
@@ -227,14 +227,14 @@ export function TelemetryPanel({ telemetry, error, loading, onRefresh }: { telem
             {signals.map(([name, signal]) => (
               <article key={name} className={`signal-card signal-${signal.status}`}>
                 <span>{name.replace(/([A-Z])/gu, " $1")}</span>
-                <strong>{signal.itemCount}</strong>
-                <small>{signal.status}{signal.unavailableReason ? ` · ${signal.unavailableReason}` : ""}</small>
+                <strong>{signal.item_count}</strong>
+                <small>{signal.status}{signal.unavailable_reason ? ` · ${signal.unavailable_reason}` : ""}</small>
               </article>
             ))}
           </div>
           <div className="correlation-strip">
-            <span>Trace ids <code>{telemetry.correlation.traceIds.join(", ") || "—"}</code></span>
-            <span>Span ids <code>{telemetry.correlation.spanIds.join(", ") || "—"}</code></span>
+            <span>Trace ids <code>{telemetry.correlation.trace_ids.join(", ") || "—"}</code></span>
+            <span>Span ids <code>{telemetry.correlation.span_ids.join(", ") || "—"}</code></span>
             <span className="safe-marker">Self-export suppressed</span>
           </div>
           <details><summary>Traces ({telemetry.traces.length})</summary><JsonCodeView value={telemetry.traces} label="Correlated traces" onCopy={copyText} /></details>
@@ -297,14 +297,14 @@ export function InspectorWorkspace({
   const selectedCollectionItem = collection?.items[selectedItemIndex];
 
   useEffect(() => {
-    const preferred = preferences?.selectedToolName;
+    const preferred = preferences?.selected_tool_name;
     const next = tools.some((tool) => tool.name === selectedToolName)
       ? selectedToolName
       : tools.some((tool) => tool.name === preferred)
         ? preferred ?? ""
         : tools[0]?.name ?? "";
     setSelectedToolName(next);
-  }, [tools, preferences?.selectedToolName, selectedToolName]);
+  }, [tools, preferences?.selected_tool_name, selectedToolName]);
 
   useEffect(() => {
     if (!selectedExecutionId && executions[0]) setSelectedExecutionId(executions[0].id);
@@ -330,10 +330,10 @@ export function InspectorWorkspace({
   const input = toolInput?.toolName === selectedToolName ? toolInput.snapshot : null;
 
   const requestPreview: ExecutionRequest | null = selectedTool && input ? {
-    toolName: selectedTool.name,
+    tool_name: selectedTool.name,
     arguments: input.value,
-    timeoutMs,
-    idempotencyKey,
+    timeout_ms: timeoutMs,
+    idempotency_key: idempotencyKey,
   } : null;
 
   async function submitExecution(confirmed = false) {
@@ -376,7 +376,7 @@ export function InspectorWorkspace({
 
   function selectTool(tool: ToolItem) {
     setSelectedToolName(tool.name);
-    void onUpdatePreference({ selectedToolName: tool.name });
+    void onUpdatePreference({ selected_tool_name: tool.name });
   }
 
   const connection = server.connection;
@@ -393,8 +393,8 @@ export function InspectorWorkspace({
         </div>
         <dl className="server-facts">
           <div><dt>Status</dt><dd>{connection.status}</dd></div>
-          <div><dt>Protocol</dt><dd>{connection.initialization?.protocolVersion ?? "not initialized"}</dd></div>
-          <div><dt>Changed</dt><dd>{formatTimestamp(connection.changedAt)}</dd></div>
+          <div><dt>Protocol</dt><dd>{connection.initialization?.protocol_version ?? "not initialized"}</dd></div>
+          <div><dt>Changed</dt><dd>{formatTimestamp(connection.changed_at)}</dd></div>
         </dl>
         <div className="server-actions">
           <button className="primary-button" disabled={!connectionCanStart || busy.has("server:connect")} onClick={() => void requestConnectionAction("connect")}>Connect</button>
@@ -404,7 +404,7 @@ export function InspectorWorkspace({
             if (window.confirm(`Delete the saved server configuration “${server.name}”?`)) void onDeleteServer(server.id);
           }}>Delete</button>
         </div>
-        {connection.recentError ? <ErrorPanel error={connection.recentError} /> : null}
+        {connection.recent_error ? <ErrorPanel error={connection.recent_error} /> : null}
       </section>
 
       <section className="workbench-grid panel-surface">
@@ -453,7 +453,7 @@ export function InspectorWorkspace({
                   ) : selectedCollectionItem !== undefined ? <JsonCodeView value={selectedCollectionItem} label={`${discoveryTab} detail`} onCopy={copyText} /> : null}
                 </div>
               </div>
-              <div className="collection-foot"><span>{collection.count} items</span><span>{collection.complete ? "complete" : `partial · next cursor ${collection.nextCursor ?? "unknown"}`}</span><span>{formatTimestamp(collection.discoveredAt)}</span></div>
+              <div className="collection-foot"><span>{collection.count} items</span><span>{collection.complete ? "complete" : `partial · next cursor ${collection.next_cursor ?? "unknown"}`}</span><span>{formatTimestamp(collection.discovered_at)}</span></div>
             </>
           ) : discoveryTab === "capabilities" ? (
             <JsonCodeView value={connection.initialization?.capabilities ?? null} label="Negotiated capabilities" onCopy={copyText} />
@@ -471,8 +471,8 @@ export function InspectorWorkspace({
                 key={selectedTool.name}
                 schema={selectedTool.inputSchema}
                 onChange={handleInputChange}
-                mode={preferences?.inputMode === "json" ? "raw" : "form"}
-                onModeChange={(mode) => void onUpdatePreference({ inputMode: mode === "raw" ? "json" : "form" })}
+                mode={preferences?.input_mode === "json" ? "raw" : "form"}
+                onModeChange={(mode) => void onUpdatePreference({ input_mode: mode === "raw" ? "json" : "form" })}
                 idPrefix={`tool-${selectedTool.name}`}
                 disabled={busy.has("execute")}
               />
@@ -493,9 +493,9 @@ export function InspectorWorkspace({
           <div className="panel-title"><span className="section-kicker">History</span><h3>Executions</h3></div>
           {executions.map((execution) => (
             <button type="button" key={execution.id} className={`execution-row${selectedExecution?.id === execution.id ? " is-selected" : ""}`} onClick={() => setSelectedExecutionId(execution.id)}>
-              <span><strong>{execution.request.toolName}</strong><small>{formatTimestamp(execution.createdAt)}</small></span>
+              <span><strong>{execution.request.tool_name}</strong><small>{formatTimestamp(execution.created_at)}</small></span>
               <StatusBadge status={execution.status} />
-              <span className="duration-cell">{formatDuration(execution.durationMs)}</span>
+              <span className="duration-cell">{formatDuration(execution.duration_ms)}</span>
             </button>
           ))}
           {executions.length === 0 ? <p className="empty-note">No persisted executions for this server.</p> : null}
@@ -504,7 +504,7 @@ export function InspectorWorkspace({
           {selectedExecution ? (
             <>
               <div className="execution-detail-head">
-                <div><span className="section-kicker">Execution {selectedExecution.id.slice(0, 8)}</span><h3>{selectedExecution.request.toolName}</h3></div>
+                <div><span className="section-kicker">Execution {selectedExecution.id.slice(0, 8)}</span><h3>{selectedExecution.request.tool_name}</h3></div>
                 <div className="button-row">
                   <StatusBadge status={selectedExecution.status} />
                   {(["queued", "running", "cancelling"] as const).includes(selectedExecution.status as "queued" | "running" | "cancelling") ? (
@@ -513,11 +513,11 @@ export function InspectorWorkspace({
                 </div>
               </div>
               <dl className="execution-facts">
-                <div><dt>Started</dt><dd>{formatTimestamp(selectedExecution.startedAt)}</dd></div>
-                <div><dt>Duration</dt><dd>{formatDuration(selectedExecution.durationMs)}</dd></div>
-                <div><dt>Attempts</dt><dd>{selectedExecution.attemptCount} ({selectedExecution.retryCount} retries)</dd></div>
+                <div><dt>Started</dt><dd>{formatTimestamp(selectedExecution.started_at)}</dd></div>
+                <div><dt>Duration</dt><dd>{formatDuration(selectedExecution.duration_ms)}</dd></div>
+                <div><dt>Attempts</dt><dd>{selectedExecution.attempt_count} ({selectedExecution.retry_count} retries)</dd></div>
                 <div><dt>Effect</dt><dd>{selectedExecution.effect.replaceAll("_", " ")}</dd></div>
-                <div><dt>Cancellation</dt><dd>{selectedExecution.cancelledAt ? `cancelled ${formatTimestamp(selectedExecution.cancelledAt)}` : selectedExecution.cancelRequestedAt ? `requested ${formatTimestamp(selectedExecution.cancelRequestedAt)}` : "not requested"}</dd></div>
+                <div><dt>Cancellation</dt><dd>{selectedExecution.cancelled_at ? `cancelled ${formatTimestamp(selectedExecution.cancelled_at)}` : selectedExecution.cancel_requested_at ? `requested ${formatTimestamp(selectedExecution.cancel_requested_at)}` : "not requested"}</dd></div>
               </dl>
               <div className="tab-list execution-tabs" role="tablist" aria-label="Execution evidence">
                 {(["result", "request", "protocol", "observability"] as const).map((tab) => <button key={tab} type="button" role="tab" aria-selected={executionTab === tab} onClick={() => setExecutionTab(tab)}>{tab}</button>)}

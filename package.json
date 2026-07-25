@@ -1,21 +1,21 @@
 {
   "name": "qyl.mcp",
   "private": true,
-  "version": "1.0.0-beta.3",
+  "version": "1.0.0-beta.4",
   "type": "module",
   "description": "qyl MCP host, telemetry tools, MCP Apps viewers, and local resource dashboard",
   "workspaces": [
     "server",
-    "runner",
+    "workbench",
     "dashboard"
   ],
   "scripts": {
-    "build": "npm run build --workspace server && npm run build --workspace runner && npm run build --workspace dashboard",
-    "test": "npm run test --workspace server && npm run test --workspace runner && npm run test --workspace dashboard",
+    "build": "npm run build --workspace server && npm run build --workspace workbench && npm run build --workspace dashboard",
+    "test": "npm run test --workspace server && npm run test --workspace workbench && npm run test --workspace dashboard",
     "start": "node server/dist/main.js",
-    "start:runner": "node runner/dist/main.js",
-    "smoke": "npm run smoke --workspace server && npm run smoke --workspace runner",
-    "smoke:otlp": "npm run smoke:otlp --workspace runner",
+    "start:workbench": "node workbench/dist/main.js",
+    "smoke": "npm run smoke --workspace server && npm run smoke --workspace workbench",
+    "smoke:otlp": "npm run smoke:otlp --workspace workbench",
     "dev": "npm run build --workspace server && npm run dev --workspace dashboard"
   },
   "engines": {

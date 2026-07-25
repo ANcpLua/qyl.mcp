@@ -1,8 +1,8 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type {
-  RunnerMcpServer as McpServer,
-  RunnerMcpServerConfiguration as ServerConfiguration,
-  RunnerMcpWorkspace as Workspace,
+  WorkbenchServer as McpServer,
+  WorkbenchServerConfiguration as ServerConfiguration,
+  WorkbenchWorkspace as Workspace,
 } from "@ancplua/qyl-api-schema/types";
 import {
   connectionSafetyReview,
@@ -59,7 +59,7 @@ function parseArguments(value: string): string[] | undefined {
   return entries.length > 0 ? entries : undefined;
 }
 
-function parseEnvironment(value: string): Array<{ name: string; secret: { source: "environment"; environmentVariable: string } }> | undefined {
+function parseEnvironment(value: string): Array<{ name: string; secret: { source: "environment"; environment_variable: string } }> | undefined {
   const result = value.split("\n").map((entry) => entry.trim()).filter(Boolean).map((entry) => {
     const separator = entry.indexOf("=");
     if (separator < 1) throw new Error(`Environment reference “${entry}” must use NAME=ENV_VAR.`);
@@ -68,14 +68,14 @@ function parseEnvironment(value: string): Array<{ name: string; secret: { source
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(name) || !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(environmentVariable)) {
       throw new Error(`Environment reference “${entry}” contains an invalid variable name.`);
     }
-    return { name, secret: { source: "environment" as const, environmentVariable } };
+    return { name, secret: { source: "environment" as const, environment_variable: environmentVariable } };
   });
   return result.length > 0 ? result : undefined;
 }
 
 function parseHeaders(value: string): Array<{
   name: string;
-  secret: { source: "environment"; environmentVariable: string };
+  secret: { source: "environment"; environment_variable: string };
   scheme?: "bearer" | "basic";
 }> | undefined {
   const seen = new Set<string>();
@@ -95,7 +95,7 @@ function parseHeaders(value: string): Array<{
     }
     return {
       name,
-      secret: { source: "environment" as const, environmentVariable },
+      secret: { source: "environment" as const, environment_variable: environmentVariable },
       scheme: rawScheme as "bearer" | "basic" | undefined,
     };
   });
@@ -104,13 +104,13 @@ function parseHeaders(value: string): Array<{
 
 function formatEnvironment(configuration: Extract<ServerConfiguration, { transport: "stdio" }>): string {
   return (configuration.environment ?? [])
-    .map((reference) => `${reference.name}=${reference.secret.environmentVariable}`)
+    .map((reference) => `${reference.name}=${reference.secret.environment_variable}`)
     .join("\n");
 }
 
 function formatHeaders(configuration: Extract<ServerConfiguration, { transport: "streamable_http" }>): string {
   return (configuration.headers ?? [])
-    .map((reference) => `${reference.name}=${reference.secret.environmentVariable}${reference.scheme ? `|${reference.scheme}` : ""}`)
+    .map((reference) => `${reference.name}=${reference.secret.environment_variable}${reference.scheme ? `|${reference.scheme}` : ""}`)
     .join("\n");
 }
 
@@ -225,7 +225,7 @@ export function WorkbenchSidebar({
     setHeadersText(configuration.transport === "streamable_http" ? formatHeaders(configuration) : "");
     setCommand(configuration.transport === "stdio" ? configuration.command : "");
     setArgumentsText(configuration.transport === "stdio" ? (configuration.arguments ?? []).join("\n") : "");
-    setWorkingDirectory(configuration.transport === "stdio" ? configuration.workingDirectory ?? "" : "");
+    setWorkingDirectory(configuration.transport === "stdio" ? configuration.working_directory ?? "" : "");
     setEnvironmentText(configuration.transport === "stdio" ? formatEnvironment(configuration) : "");
     setConnectionReviewed(false);
     setFormError(null);
@@ -239,7 +239,7 @@ export function WorkbenchSidebar({
           transport,
           command: command.trim(),
           arguments: parseArguments(argumentsText),
-          workingDirectory: workingDirectory.trim() || undefined,
+          working_directory: workingDirectory.trim() || undefined,
           environment: parseEnvironment(environmentText),
         };
       case "streamable_http":

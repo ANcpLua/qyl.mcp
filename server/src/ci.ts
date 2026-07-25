@@ -79,7 +79,7 @@ function spanLeg(span: QylSpan): string {
   const attribute = span.attributes?.find((entry) => entry.key === "ci.leg");
   return typeof attribute?.value === "string"
     ? attribute.value
-    : span.resource["service.name"];
+    : span.resource.service_name;
 }
 
 /** Flatten a run's traces into per-leg phases, failures first. */
@@ -169,7 +169,7 @@ export function registerCiTools(server: McpServer): void {
         const runs = filterCiSessions(sessions)
           .slice(0, args.limit ?? 10)
           .map((session): CiRunSummary => ({
-            run_id: session["session.id"],
+            run_id: session["session_id"],
             state: session.state,
             start_time: session.start_time,
             ...(session.duration_ms === undefined ? {} : { duration_ms: session.duration_ms }),

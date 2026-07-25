@@ -33,7 +33,7 @@ export function rootSpanName(trace: QylTrace): string {
 }
 
 function serviceOf(span: QylSpan): string {
-  return String(span.resource?.["service.name"] ?? "unknown");
+  return String(span.resource?.service_name ?? "unknown");
 }
 
 function modeNote(mode: Mode): string {
@@ -106,7 +106,7 @@ export function summarizeSessions(sessions: QylSession[], mode: Mode): string {
         `${session.genai_usage.total_input_tokens}/${session.genai_usage.total_output_tokens} tok`
       : "—";
     lines.push(
-      `| ${session["session.id"]} | ${session.state} | ${session.trace_count} | ` +
+      `| ${session["session_id"]} | ${session.state} | ${session.trace_count} | ` +
         `${session.span_count} | ${session.error_count} | ${duration} | ${genai} |`,
     );
   }
@@ -128,7 +128,7 @@ export function summarizeLogs(logs: QylLogRecord[], mode: Mode): string {
     const correlation = record.trace_id
       ? ` (trace ${shortId(record.trace_id)})`
       : "";
-    return `- ${time} ${severity} [${String(record.resource["service.name"] ?? "unknown")}] ${body}${correlation}`;
+    return `- ${time} ${severity} [${String(record.resource.service_name ?? "unknown")}] ${body}${correlation}`;
   });
   return `Logs (${logs.length})${modeNote(mode)}\n${lines.join("\n")}`;
 }

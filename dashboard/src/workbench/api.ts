@@ -186,59 +186,59 @@ export class WorkbenchApi {
     return this.request(path, { method, body: JSON.stringify(body) });
   }
 
-  getSession(): Promise<QylContracts.RunnerMcpWorkbenchSession> {
-    return this.request("/runner/session")
-      .then((value) => parsePublished((contracts) => contracts.RunnerMcpWorkbenchSessionSchema, value, "Session"));
+  getSession(): Promise<QylContracts.WorkbenchSession> {
+    return this.request("/workbench/session")
+      .then((value) => parsePublished((contracts) => contracts.WorkbenchSessionSchema, value, "Session"));
   }
 
-  bootstrapSession(): Promise<QylContracts.RunnerMcpSessionBootstrapResponse> {
-    return this.request("/runner/session", { method: "POST" })
-      .then((value) => parsePublished((contracts) => contracts.RunnerMcpSessionBootstrapResponseSchema, value, "Session bootstrap"));
+  bootstrapSession(): Promise<QylContracts.WorkbenchSessionBootstrapResponse> {
+    return this.request("/workbench/session", { method: "POST" })
+      .then((value) => parsePublished((contracts) => contracts.WorkbenchSessionBootstrapResponseSchema, value, "Session bootstrap"));
   }
 
-  listWorkspaces(): Promise<QylContracts.RunnerMcpWorkspace[]> {
-    return this.request("/runner/workspaces")
+  listWorkspaces(): Promise<QylContracts.WorkbenchWorkspace[]> {
+    return this.request("/workbench/workspaces")
       .then(async (value) => (await parsePublished(
-        (contracts) => contracts.RunnerMcpWorkspaceListResponseSchema,
+        (contracts) => contracts.WorkbenchWorkspaceListResponseSchema,
         value,
         "Workspace list",
       )).workspaces);
   }
 
-  createWorkspace(body: QylContracts.RunnerMcpWorkspaceCreateRequest): Promise<QylContracts.RunnerMcpWorkspace> {
-    return this.json("/runner/workspaces", "POST", body)
-      .then((value) => parsePublished((contracts) => contracts.RunnerMcpWorkspaceSchema, value, "Workspace"));
+  createWorkspace(body: QylContracts.WorkbenchWorkspaceCreateRequest): Promise<QylContracts.WorkbenchWorkspace> {
+    return this.json("/workbench/workspaces", "POST", body)
+      .then((value) => parsePublished((contracts) => contracts.WorkbenchWorkspaceSchema, value, "Workspace"));
   }
 
   updateWorkspace(
     workspaceId: string,
-    body: QylContracts.RunnerMcpWorkspaceUpdateRequest,
-  ): Promise<QylContracts.RunnerMcpWorkspace> {
+    body: QylContracts.WorkbenchWorkspaceUpdateRequest,
+  ): Promise<QylContracts.WorkbenchWorkspace> {
     return parsePublished(
-      (contracts) => contracts.RunnerMcpWorkspaceUpdateRequestSchema,
+      (contracts) => contracts.WorkbenchWorkspaceUpdateRequestSchema,
       body,
       "Workspace update request",
-    ).then((request) => this.json(`/runner/workspaces/${pathPart(workspaceId)}`, "PATCH", request))
-      .then((value) => parsePublished((contracts) => contracts.RunnerMcpWorkspaceSchema, value, "Workspace"));
+    ).then((request) => this.json(`/workbench/workspaces/${pathPart(workspaceId)}`, "PATCH", request))
+      .then((value) => parsePublished((contracts) => contracts.WorkbenchWorkspaceSchema, value, "Workspace"));
   }
 
-  getPreferences(workspaceId: string): Promise<QylContracts.RunnerMcpWorkspacePreferences> {
-    return this.request(`/runner/workspaces/${pathPart(workspaceId)}/preferences`)
-      .then((value) => parsePublished((contracts) => contracts.RunnerMcpWorkspacePreferencesSchema, value, "Workspace preferences"));
+  getPreferences(workspaceId: string): Promise<QylContracts.WorkbenchWorkspacePreferences> {
+    return this.request(`/workbench/workspaces/${pathPart(workspaceId)}/preferences`)
+      .then((value) => parsePublished((contracts) => contracts.WorkbenchWorkspacePreferencesSchema, value, "Workspace preferences"));
   }
 
   updatePreferences(
     workspaceId: string,
-    body: QylContracts.RunnerMcpWorkspacePreferencesUpdateRequest,
-  ): Promise<QylContracts.RunnerMcpWorkspacePreferences> {
-    return this.json(`/runner/workspaces/${pathPart(workspaceId)}/preferences`, "PUT", body)
-      .then((value) => parsePublished((contracts) => contracts.RunnerMcpWorkspacePreferencesSchema, value, "Workspace preferences"));
+    body: QylContracts.WorkbenchWorkspacePreferencesUpdateRequest,
+  ): Promise<QylContracts.WorkbenchWorkspacePreferences> {
+    return this.json(`/workbench/workspaces/${pathPart(workspaceId)}/preferences`, "PUT", body)
+      .then((value) => parsePublished((contracts) => contracts.WorkbenchWorkspacePreferencesSchema, value, "Workspace preferences"));
   }
 
-  listServers(workspaceId: string): Promise<QylContracts.RunnerMcpServer[]> {
-    return this.request(`/runner/workspaces/${pathPart(workspaceId)}/servers`)
+  listServers(workspaceId: string): Promise<QylContracts.WorkbenchServer[]> {
+    return this.request(`/workbench/workspaces/${pathPart(workspaceId)}/servers`)
       .then(async (value) => (await parsePublished(
-        (contracts) => contracts.RunnerMcpServerListResponseSchema,
+        (contracts) => contracts.WorkbenchServerListResponseSchema,
         value,
         "Server list",
       )).servers);
@@ -246,30 +246,30 @@ export class WorkbenchApi {
 
   createServer(
     workspaceId: string,
-    body: QylContracts.RunnerMcpServerCreateRequest,
-  ): Promise<QylContracts.RunnerMcpServer> {
-    return this.json(`/runner/workspaces/${pathPart(workspaceId)}/servers`, "POST", body)
-      .then((value) => parsePublished((contracts) => contracts.RunnerMcpServerSchema, value, "Server"));
+    body: QylContracts.WorkbenchServerCreateRequest,
+  ): Promise<QylContracts.WorkbenchServer> {
+    return this.json(`/workbench/workspaces/${pathPart(workspaceId)}/servers`, "POST", body)
+      .then((value) => parsePublished((contracts) => contracts.WorkbenchServerSchema, value, "Server"));
   }
 
   updateServer(
     workspaceId: string,
     serverId: string,
-    body: QylContracts.RunnerMcpServerUpdateRequest,
-  ): Promise<QylContracts.RunnerMcpServer> {
+    body: QylContracts.WorkbenchServerUpdateRequest,
+  ): Promise<QylContracts.WorkbenchServer> {
     return parsePublished(
-      (contracts) => contracts.RunnerMcpServerUpdateRequestSchema,
+      (contracts) => contracts.WorkbenchServerUpdateRequestSchema,
       body,
       "Server update request",
     ).then((request) => this.json(
-      `/runner/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}`,
+      `/workbench/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}`,
       "PATCH",
       request,
-    )).then((value) => parsePublished((contracts) => contracts.RunnerMcpServerSchema, value, "Server"));
+    )).then((value) => parsePublished((contracts) => contracts.WorkbenchServerSchema, value, "Server"));
   }
 
   deleteServer(workspaceId: string, serverId: string): Promise<void> {
-    return this.request(`/runner/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}`, {
+    return this.request(`/workbench/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}`, {
       method: "DELETE",
     }).then(() => undefined);
   }
@@ -278,38 +278,38 @@ export class WorkbenchApi {
     workspaceId: string,
     serverId: string,
     action: "connect" | "disconnect" | "reconnect",
-  ): Promise<QylContracts.RunnerMcpServer> {
+  ): Promise<QylContracts.WorkbenchServer> {
     return this.request(
-      `/runner/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}/${action}`,
+      `/workbench/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}/${action}`,
       { method: "POST" },
     ).then(async (value) => (await parsePublished(
-      (contracts) => contracts.RunnerMcpServerActionAcceptedSchema,
+      (contracts) => contracts.WorkbenchServerActionAcceptedSchema,
       value,
       "Server action",
     )).server);
   }
 
-  discovery(workspaceId: string, serverId: string): Promise<QylContracts.RunnerMcpDiscoverySnapshot> {
-    return this.request(`/runner/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}/discovery`)
-      .then((value) => parsePublished((contracts) => contracts.RunnerMcpDiscoverySnapshotSchema, value, "Discovery snapshot"));
+  discovery(workspaceId: string, serverId: string): Promise<QylContracts.WorkbenchDiscoverySnapshot> {
+    return this.request(`/workbench/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}/discovery`)
+      .then((value) => parsePublished((contracts) => contracts.WorkbenchDiscoverySnapshotSchema, value, "Discovery snapshot"));
   }
 
-  refreshDiscovery(workspaceId: string, serverId: string): Promise<QylContracts.RunnerMcpDiscoverySnapshot> {
+  refreshDiscovery(workspaceId: string, serverId: string): Promise<QylContracts.WorkbenchDiscoverySnapshot> {
     return this.request(
-      `/runner/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}/discovery/refresh`,
+      `/workbench/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}/discovery/refresh`,
       { method: "POST" },
-    ).then((value) => parsePublished((contracts) => contracts.RunnerMcpDiscoverySnapshotSchema, value, "Discovery snapshot"));
+    ).then((value) => parsePublished((contracts) => contracts.WorkbenchDiscoverySnapshotSchema, value, "Discovery snapshot"));
   }
 
   protocolEvents(
     workspaceId: string,
     serverId: string,
     limit = 200,
-  ): Promise<QylContracts.RunnerMcpProtocolEvent[]> {
+  ): Promise<QylContracts.WorkbenchProtocolEvent[]> {
     return this.request(
-      `/runner/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}/protocol${query({ limit })}`,
+      `/workbench/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}/protocol${query({ limit })}`,
     ).then(async (value) => (await parsePublished(
-      (contracts) => contracts.RunnerMcpProtocolEventPageSchema,
+      (contracts) => contracts.WorkbenchProtocolEventPageSchema,
       value,
       "Protocol event page",
     )).events);
@@ -319,11 +319,11 @@ export class WorkbenchApi {
     workspaceId: string,
     serverId: string,
     limit = 100,
-  ): Promise<QylContracts.RunnerMcpExecutionRecord[]> {
+  ): Promise<QylContracts.WorkbenchExecutionRecord[]> {
     return this.request(
-      `/runner/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}/executions${query({ limit })}`,
+      `/workbench/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}/executions${query({ limit })}`,
     ).then(async (value) => (await parsePublished(
-      (contracts) => contracts.RunnerMcpExecutionPageSchema,
+      (contracts) => contracts.WorkbenchExecutionPageSchema,
       value,
       "Execution page",
     )).executions);
@@ -332,14 +332,14 @@ export class WorkbenchApi {
   startExecution(
     workspaceId: string,
     serverId: string,
-    body: QylContracts.RunnerMcpExecutionRequest,
-  ): Promise<QylContracts.RunnerMcpExecutionRecord> {
+    body: QylContracts.WorkbenchExecutionRequest,
+  ): Promise<QylContracts.WorkbenchExecutionRecord> {
     return this.json(
-      `/runner/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}/executions`,
+      `/workbench/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}/executions`,
       "POST",
       body,
     ).then(async (value) => (await parsePublished(
-      (contracts) => contracts.RunnerMcpExecutionAcceptedSchema,
+      (contracts) => contracts.WorkbenchExecutionAcceptedSchema,
       value,
       "Execution acceptance",
     )).execution);
@@ -350,17 +350,17 @@ export class WorkbenchApi {
     serverId: string,
     executionId: string,
     reason: string,
-  ): Promise<QylContracts.RunnerMcpExecutionRecord> {
-    const body: QylContracts.RunnerMcpExecutionCancelRequest = {
+  ): Promise<QylContracts.WorkbenchExecutionRecord> {
+    const body: QylContracts.WorkbenchExecutionCancelRequest = {
       reason,
-      idempotencyKey: crypto.randomUUID(),
+      idempotency_key: crypto.randomUUID(),
     };
     return this.json(
-      `/runner/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}/executions/${pathPart(executionId)}/cancel`,
+      `/workbench/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}/executions/${pathPart(executionId)}/cancel`,
       "POST",
       body,
     ).then(async (value) => (await parsePublished(
-      (contracts) => contracts.RunnerMcpExecutionAcceptedSchema,
+      (contracts) => contracts.WorkbenchExecutionAcceptedSchema,
       value,
       "Execution cancellation",
     )).execution);
@@ -370,51 +370,51 @@ export class WorkbenchApi {
     workspaceId: string,
     serverId: string,
     executionId: string,
-  ): Promise<QylContracts.RunnerMcpExecutionTelemetryResponse> {
+  ): Promise<QylContracts.WorkbenchExecutionTelemetryResponse> {
     return this.request(
-      `/runner/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}/executions/${pathPart(executionId)}/telemetry`,
+      `/workbench/workspaces/${pathPart(workspaceId)}/servers/${pathPart(serverId)}/executions/${pathPart(executionId)}/telemetry`,
     ).then((value) => parsePublished(
-      (contracts) => contracts.RunnerMcpExecutionTelemetryResponseSchema,
+      (contracts) => contracts.WorkbenchExecutionTelemetryResponseSchema,
       value,
       "Execution telemetry",
     ));
   }
 
-  listTestCases(workspaceId: string): Promise<QylContracts.RunnerMcpTestCase[]> {
-    return this.request(`/runner/workspaces/${pathPart(workspaceId)}/test-cases${query({ limit: 1000 })}`)
+  listTestCases(workspaceId: string): Promise<QylContracts.WorkbenchTestCase[]> {
+    return this.request(`/workbench/workspaces/${pathPart(workspaceId)}/test-cases${query({ limit: 1000 })}`)
       .then(async (value) => (await parsePublished(
-        (contracts) => contracts.RunnerMcpTestCasePageSchema,
+        (contracts) => contracts.WorkbenchTestCasePageSchema,
         value,
         "Test case page",
-      )).testCases);
+      )).test_cases);
   }
 
   createTestCase(
     workspaceId: string,
-    body: QylContracts.RunnerMcpTestCaseCreateRequest,
-  ): Promise<QylContracts.RunnerMcpTestCase> {
-    return this.json(`/runner/workspaces/${pathPart(workspaceId)}/test-cases`, "POST", body)
-      .then((value) => parsePublished((contracts) => contracts.RunnerMcpTestCaseSchema, value, "Test case"));
+    body: QylContracts.WorkbenchTestCaseCreateRequest,
+  ): Promise<QylContracts.WorkbenchTestCase> {
+    return this.json(`/workbench/workspaces/${pathPart(workspaceId)}/test-cases`, "POST", body)
+      .then((value) => parsePublished((contracts) => contracts.WorkbenchTestCaseSchema, value, "Test case"));
   }
 
   updateTestCase(
     workspaceId: string,
     testCaseId: string,
-    body: QylContracts.RunnerMcpTestCaseUpdateRequest,
-  ): Promise<QylContracts.RunnerMcpTestCase> {
+    body: QylContracts.WorkbenchTestCaseUpdateRequest,
+  ): Promise<QylContracts.WorkbenchTestCase> {
     return parsePublished(
-      (contracts) => contracts.RunnerMcpTestCaseUpdateRequestSchema,
+      (contracts) => contracts.WorkbenchTestCaseUpdateRequestSchema,
       body,
       "Test case update request",
     ).then((request) => this.json(
-      `/runner/workspaces/${pathPart(workspaceId)}/test-cases/${pathPart(testCaseId)}`,
+      `/workbench/workspaces/${pathPart(workspaceId)}/test-cases/${pathPart(testCaseId)}`,
       "PATCH",
       request,
-    )).then((value) => parsePublished((contracts) => contracts.RunnerMcpTestCaseSchema, value, "Test case"));
+    )).then((value) => parsePublished((contracts) => contracts.WorkbenchTestCaseSchema, value, "Test case"));
   }
 
   deleteTestCase(workspaceId: string, testCaseId: string): Promise<void> {
-    return this.request(`/runner/workspaces/${pathPart(workspaceId)}/test-cases/${pathPart(testCaseId)}`, {
+    return this.request(`/workbench/workspaces/${pathPart(workspaceId)}/test-cases/${pathPart(testCaseId)}`, {
       method: "DELETE",
     }).then(() => undefined);
   }
@@ -422,27 +422,27 @@ export class WorkbenchApi {
   runTestCase(
     workspaceId: string,
     testCaseId: string,
-    confirmation?: QylContracts.RunnerMcpExecutionConfirmationRequest,
-  ): Promise<QylContracts.RunnerMcpEvaluationRun> {
-    const body: QylContracts.RunnerMcpTestCaseRunRequest = {
-      idempotencyKey: crypto.randomUUID(),
+    confirmation?: QylContracts.WorkbenchExecutionConfirmationRequest,
+  ): Promise<QylContracts.WorkbenchEvaluationRun> {
+    const body: QylContracts.WorkbenchTestCaseRunRequest = {
+      idempotency_key: crypto.randomUUID(),
       ...(confirmation === undefined ? {} : { confirmation }),
     };
     return this.json(
-      `/runner/workspaces/${pathPart(workspaceId)}/test-cases/${pathPart(testCaseId)}/run`,
+      `/workbench/workspaces/${pathPart(workspaceId)}/test-cases/${pathPart(testCaseId)}/run`,
       "POST",
       body,
     ).then(async (value) => (await parsePublished(
-      (contracts) => contracts.RunnerMcpEvaluationRunAcceptedSchema,
+      (contracts) => contracts.WorkbenchEvaluationRunAcceptedSchema,
       value,
       "Evaluation acceptance",
     )).run);
   }
 
-  listSuites(workspaceId: string): Promise<QylContracts.RunnerMcpTestSuite[]> {
-    return this.request(`/runner/workspaces/${pathPart(workspaceId)}/suites${query({ limit: 1000 })}`)
+  listSuites(workspaceId: string): Promise<QylContracts.WorkbenchTestSuite[]> {
+    return this.request(`/workbench/workspaces/${pathPart(workspaceId)}/suites${query({ limit: 1000 })}`)
       .then(async (value) => (await parsePublished(
-        (contracts) => contracts.RunnerMcpTestSuitePageSchema,
+        (contracts) => contracts.WorkbenchTestSuitePageSchema,
         value,
         "Suite page",
       )).suites);
@@ -450,30 +450,30 @@ export class WorkbenchApi {
 
   createSuite(
     workspaceId: string,
-    body: QylContracts.RunnerMcpTestSuiteCreateRequest,
-  ): Promise<QylContracts.RunnerMcpTestSuite> {
-    return this.json(`/runner/workspaces/${pathPart(workspaceId)}/suites`, "POST", body)
-      .then((value) => parsePublished((contracts) => contracts.RunnerMcpTestSuiteSchema, value, "Suite"));
+    body: QylContracts.WorkbenchTestSuiteCreateRequest,
+  ): Promise<QylContracts.WorkbenchTestSuite> {
+    return this.json(`/workbench/workspaces/${pathPart(workspaceId)}/suites`, "POST", body)
+      .then((value) => parsePublished((contracts) => contracts.WorkbenchTestSuiteSchema, value, "Suite"));
   }
 
   updateSuite(
     workspaceId: string,
     suiteId: string,
-    body: QylContracts.RunnerMcpTestSuiteUpdateRequest,
-  ): Promise<QylContracts.RunnerMcpTestSuite> {
+    body: QylContracts.WorkbenchTestSuiteUpdateRequest,
+  ): Promise<QylContracts.WorkbenchTestSuite> {
     return parsePublished(
-      (contracts) => contracts.RunnerMcpTestSuiteUpdateRequestSchema,
+      (contracts) => contracts.WorkbenchTestSuiteUpdateRequestSchema,
       body,
       "Suite update request",
     ).then((request) => this.json(
-      `/runner/workspaces/${pathPart(workspaceId)}/suites/${pathPart(suiteId)}`,
+      `/workbench/workspaces/${pathPart(workspaceId)}/suites/${pathPart(suiteId)}`,
       "PATCH",
       request,
-    )).then((value) => parsePublished((contracts) => contracts.RunnerMcpTestSuiteSchema, value, "Suite"));
+    )).then((value) => parsePublished((contracts) => contracts.WorkbenchTestSuiteSchema, value, "Suite"));
   }
 
   deleteSuite(workspaceId: string, suiteId: string): Promise<void> {
-    return this.request(`/runner/workspaces/${pathPart(workspaceId)}/suites/${pathPart(suiteId)}`, {
+    return this.request(`/workbench/workspaces/${pathPart(workspaceId)}/suites/${pathPart(suiteId)}`, {
       method: "DELETE",
     }).then(() => undefined);
   }
@@ -481,27 +481,27 @@ export class WorkbenchApi {
   runSuite(
     workspaceId: string,
     suiteId: string,
-    confirmation?: QylContracts.RunnerMcpExecutionConfirmationRequest,
-  ): Promise<QylContracts.RunnerMcpEvaluationRun> {
-    const body: QylContracts.RunnerMcpSuiteRunRequest = {
-      idempotencyKey: crypto.randomUUID(),
+    confirmation?: QylContracts.WorkbenchExecutionConfirmationRequest,
+  ): Promise<QylContracts.WorkbenchEvaluationRun> {
+    const body: QylContracts.WorkbenchSuiteRunRequest = {
+      idempotency_key: crypto.randomUUID(),
       ...(confirmation === undefined ? {} : { confirmation }),
     };
     return this.json(
-      `/runner/workspaces/${pathPart(workspaceId)}/suites/${pathPart(suiteId)}/run`,
+      `/workbench/workspaces/${pathPart(workspaceId)}/suites/${pathPart(suiteId)}/run`,
       "POST",
       body,
     ).then(async (value) => (await parsePublished(
-      (contracts) => contracts.RunnerMcpEvaluationRunAcceptedSchema,
+      (contracts) => contracts.WorkbenchEvaluationRunAcceptedSchema,
       value,
       "Evaluation acceptance",
     )).run);
   }
 
-  listEvaluationRuns(workspaceId: string): Promise<QylContracts.RunnerMcpEvaluationRun[]> {
-    return this.request(`/runner/workspaces/${pathPart(workspaceId)}/evaluation-runs${query({ limit: 1000 })}`)
+  listEvaluationRuns(workspaceId: string): Promise<QylContracts.WorkbenchEvaluationRun[]> {
+    return this.request(`/workbench/workspaces/${pathPart(workspaceId)}/evaluation-runs${query({ limit: 1000 })}`)
       .then(async (value) => (await parsePublished(
-        (contracts) => contracts.RunnerMcpEvaluationRunPageSchema,
+        (contracts) => contracts.WorkbenchEvaluationRunPageSchema,
         value,
         "Evaluation page",
       )).runs);
@@ -511,22 +511,22 @@ export class WorkbenchApi {
     workspaceId: string,
     baselineRunId: string,
     candidateRunId: string,
-  ): Promise<QylContracts.RunnerMcpEvaluationRunComparison> {
+  ): Promise<QylContracts.WorkbenchEvaluationRunComparison> {
     const body = {
       baselineRunId,
       candidateRunId,
     };
     return parsePublished(
-      (contracts) => contracts.RunnerMcpEvaluationComparisonRequestSchema,
+      (contracts) => contracts.WorkbenchEvaluationComparisonRequestSchema,
       body,
       "Evaluation comparison request",
     ).then((request) => this.json(
-      `/runner/workspaces/${pathPart(workspaceId)}/evaluation-runs/compare`,
+      `/workbench/workspaces/${pathPart(workspaceId)}/evaluation-runs/compare`,
       "POST",
       request,
     ))
       .then((value) => parsePublished(
-        (contracts) => contracts.RunnerMcpEvaluationRunComparisonSchema,
+        (contracts) => contracts.WorkbenchEvaluationRunComparisonSchema,
         value,
         "Evaluation comparison",
       ));
@@ -535,20 +535,20 @@ export class WorkbenchApi {
   requestExport(
     workspaceId: string,
     runId: string,
-    format: QylContracts.RunnerMcpEvaluationExportFormat,
-  ): Promise<QylContracts.RunnerMcpEvaluationExport> {
-    const body: QylContracts.RunnerMcpEvaluationExportRequest = {
+    format: QylContracts.WorkbenchEvaluationExportFormat,
+  ): Promise<QylContracts.WorkbenchEvaluationExport> {
+    const body: QylContracts.WorkbenchEvaluationExportRequest = {
       format,
-      includeProtocolEvents: true,
-      includeTelemetry: true,
-      idempotencyKey: crypto.randomUUID(),
+      include_protocol_events: true,
+      include_telemetry: true,
+      idempotency_key: crypto.randomUUID(),
     };
     return this.json(
-      `/runner/workspaces/${pathPart(workspaceId)}/evaluation-runs/${pathPart(runId)}/export`,
+      `/workbench/workspaces/${pathPart(workspaceId)}/evaluation-runs/${pathPart(runId)}/export`,
       "POST",
       body,
     ).then(async (value) => (await parsePublished(
-      (contracts) => contracts.RunnerMcpEvaluationExportAcceptedSchema,
+      (contracts) => contracts.WorkbenchEvaluationExportAcceptedSchema,
       value,
       "Export acceptance",
     )).export);
@@ -558,11 +558,11 @@ export class WorkbenchApi {
     workspaceId: string,
     runId: string,
     exportId: string,
-  ): Promise<QylContracts.RunnerMcpEvaluationExport> {
+  ): Promise<QylContracts.WorkbenchEvaluationExport> {
     return this.request(
-      `/runner/workspaces/${pathPart(workspaceId)}/evaluation-runs/${pathPart(runId)}/exports/${pathPart(exportId)}`,
+      `/workbench/workspaces/${pathPart(workspaceId)}/evaluation-runs/${pathPart(runId)}/exports/${pathPart(exportId)}`,
     ).then((value) => parsePublished(
-      (contracts) => contracts.RunnerMcpEvaluationExportSchema,
+      (contracts) => contracts.WorkbenchEvaluationExportSchema,
       value,
       "Evaluation export",
     ));
@@ -572,11 +572,11 @@ export class WorkbenchApi {
     workspaceId: string,
     runId: string,
     exportId: string,
-  ): Promise<QylContracts.RunnerMcpEvaluationExportArtifact> {
+  ): Promise<QylContracts.WorkbenchEvaluationExportArtifact> {
     return this.request(
-      `/runner/workspaces/${pathPart(workspaceId)}/evaluation-runs/${pathPart(runId)}/exports/${pathPart(exportId)}/content`,
+      `/workbench/workspaces/${pathPart(workspaceId)}/evaluation-runs/${pathPart(runId)}/exports/${pathPart(exportId)}/content`,
     ).then((value) => parsePublished(
-      (contracts) => contracts.RunnerMcpEvaluationExportArtifactSchema,
+      (contracts) => contracts.WorkbenchEvaluationExportArtifactSchema,
       value,
       "Evaluation export artifact",
     ));

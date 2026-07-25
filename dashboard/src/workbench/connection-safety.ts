@@ -1,4 +1,4 @@
-import type { RunnerMcpServerConfiguration as ServerConfiguration } from "@ancplua/qyl-api-schema/types";
+import type { WorkbenchServerConfiguration as ServerConfiguration } from "@ancplua/qyl-api-schema/types";
 
 export interface ConnectionSafetyReview {
   title: string;
@@ -26,8 +26,8 @@ export function normalizeRemoteEndpoint(value: string): string {
 export function connectionSafetyReview(configuration: ServerConfiguration): ConnectionSafetyReview | null {
   if (configuration.transport === "stdio") {
     const command = [configuration.command, ...(configuration.arguments ?? [])].join(" ");
-    const workingDirectory = configuration.workingDirectory
-      ? ` in ${configuration.workingDirectory}`
+    const workingDirectory = configuration.working_directory
+      ? ` in ${configuration.working_directory}`
       : "";
     return {
       title: "Start a local MCP process?",

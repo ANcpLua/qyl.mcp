@@ -10,74 +10,74 @@ import {
   isUserConfigurableServer,
 } from "./WorkbenchSidebar.js";
 import {
-  RunnerMcpEvaluationRunSchema,
-  RunnerMcpExecutionTelemetryResponseSchema,
-  RunnerMcpServerSchema,
-  RunnerMcpTestCaseSchema,
-  RunnerMcpTestSuiteSchema,
-  RunnerMcpWorkspaceSchema,
+  WorkbenchEvaluationRunSchema,
+  WorkbenchExecutionTelemetryResponseSchema,
+  WorkbenchServerSchema,
+  WorkbenchTestCaseSchema,
+  WorkbenchTestSuiteSchema,
+  WorkbenchWorkspaceSchema,
 } from "qyl-mcp-server/contract-validation";
 
 const timestamp = "2026-07-15T10:00:00.000Z";
 
-const server = RunnerMcpServerSchema.parse({
+const server = WorkbenchServerSchema.parse({
   id: "server-1",
-  workspaceId: "workspace-1",
+  workspace_id: "workspace-1",
   name: "Fixture server",
   configuration: { transport: "builtin", name: "fixture" },
-  connection: { status: "connected", changedAt: timestamp },
-  createdAt: timestamp,
-  updatedAt: timestamp,
+  connection: { status: "connected", changed_at: timestamp },
+  created_at: timestamp,
+  updated_at: timestamp,
 });
 
-const userServer = RunnerMcpServerSchema.parse({
+const userServer = WorkbenchServerSchema.parse({
   id: "server-user",
-  workspaceId: "workspace-1",
+  workspace_id: "workspace-1",
   name: "Remote user server",
   configuration: {
     transport: "streamable_http",
     endpoint: "https://mcp.example.test/mcp",
-    headers: [{ name: "Authorization", secret: { source: "environment", environmentVariable: "MCP_TOKEN" }, scheme: "bearer" }],
+    headers: [{ name: "Authorization", secret: { source: "environment", environment_variable: "MCP_TOKEN" }, scheme: "bearer" }],
   },
-  connection: { status: "disconnected", changedAt: timestamp },
-  createdAt: timestamp,
-  updatedAt: timestamp,
+  connection: { status: "disconnected", changed_at: timestamp },
+  created_at: timestamp,
+  updated_at: timestamp,
 });
 
-const testCase = RunnerMcpTestCaseSchema.parse({
+const testCase = WorkbenchTestCaseSchema.parse({
   id: "test-1",
-  workspaceId: "workspace-1",
-  serverId: server.id,
+  workspace_id: "workspace-1",
+  server_id: server.id,
   name: "Echo remains stable",
-  toolName: "echo",
+  tool_name: "echo",
   arguments: { text: "hello" },
-  timeoutMs: 1_000,
+  timeout_ms: 1_000,
   assertions: [{ id: "assertion-1", kind: "status", expected: ["succeeded"] }],
   tags: ["smoke"],
-  createdAt: timestamp,
-  updatedAt: timestamp,
+  created_at: timestamp,
+  updated_at: timestamp,
 });
 
-const suite = RunnerMcpTestSuiteSchema.parse({
+const suite = WorkbenchTestSuiteSchema.parse({
   id: "suite-1",
-  workspaceId: "workspace-1",
+  workspace_id: "workspace-1",
   name: "Smoke suite",
-  testCaseIds: [testCase.id],
+  test_case_ids: [testCase.id],
   tags: ["smoke"],
-  createdAt: timestamp,
-  updatedAt: timestamp,
+  created_at: timestamp,
+  updated_at: timestamp,
 });
 
 test("the workbench sidebar limits creation to routable transports and retains internal server display", () => {
   assert.deepEqual(SERVER_TRANSPORT_OPTIONS.map((option) => option.value), ["streamable_http", "stdio"]);
   assert.equal(isUserConfigurableServer(server), false);
   assert.equal(isUserConfigurableServer(userServer), true);
-  const workspaces = [RunnerMcpWorkspaceSchema.parse({
+  const workspaces = [WorkbenchWorkspaceSchema.parse({
     id: "workspace-1",
-    ownerId: "local",
+    owner_id: "local",
     name: "Local workspace",
-    createdAt: timestamp,
-    updatedAt: timestamp,
+    created_at: timestamp,
+    updated_at: timestamp,
   })];
   const html = renderToStaticMarkup(<WorkbenchSidebar
     workspaces={workspaces}
@@ -157,43 +157,43 @@ test("test and evaluation surfaces retain real execution evidence, comparison, a
   assert.match(suitesHtml, /Smoke suite/u);
   assert.match(suitesHtml, />Edit</u);
 
-  const run = RunnerMcpEvaluationRunSchema.parse({
+  const run = WorkbenchEvaluationRunSchema.parse({
     id: "run-1",
-    workspaceId: "workspace-1",
-    suite: { id: suite.id, name: suite.name, testCaseIds: suite.testCaseIds, tags: suite.tags },
-    testCases: [{
+    workspace_id: "workspace-1",
+    suite: { id: suite.id, name: suite.name, test_case_ids: suite.test_case_ids, tags: suite.tags },
+    test_cases: [{
       id: testCase.id,
-      serverId: testCase.serverId,
+      server_id: testCase.server_id,
       name: testCase.name,
-      toolName: testCase.toolName,
+      tool_name: testCase.tool_name,
       arguments: testCase.arguments,
-      timeoutMs: testCase.timeoutMs,
+      timeout_ms: testCase.timeout_ms,
       assertions: testCase.assertions,
       tags: testCase.tags,
     }],
     status: "completed",
-    createdAt: timestamp,
-    startedAt: timestamp,
-    completedAt: timestamp,
+    created_at: timestamp,
+    started_at: timestamp,
+    completed_at: timestamp,
     confirmation: {
       acknowledged: true,
       acknowledgement: "Reviewed persisted targets and approved their external effects",
-      confirmedAt: timestamp,
+      confirmed_at: timestamp,
     },
     results: [{
-      testCase: {
+      test_case: {
         id: testCase.id,
-        serverId: testCase.serverId,
+        server_id: testCase.server_id,
         name: testCase.name,
-        toolName: testCase.toolName,
+        tool_name: testCase.tool_name,
         arguments: testCase.arguments,
-        timeoutMs: testCase.timeoutMs,
+        timeout_ms: testCase.timeout_ms,
         assertions: testCase.assertions,
         tags: testCase.tags,
       },
       status: "passed",
-      durationMs: 12,
-      assertions: [{ assertionId: "assertion-1", kind: "status", status: "passed" }],
+      duration_ms: 12,
+      assertions: [{ assertion_id: "assertion-1", kind: "status", status: "passed" }],
     }],
     summary: {
       total: 1,
@@ -201,9 +201,9 @@ test("test and evaluation surfaces retain real execution evidence, comparison, a
       failed: 0,
       errors: 0,
       skipped: 0,
-      successRate: 1,
+      success_rate: 1,
       reliability: 1,
-      p95DurationMs: 12,
+      p95_duration_ms: 12,
     },
   });
   const evaluationsHtml = renderToStaticMarkup(<EvaluationsWorkspace
@@ -224,22 +224,22 @@ test("test and evaluation surfaces retain real execution evidence, comparison, a
 });
 
 test("Qyl observability renders available, partial, and unavailable states without inventing evidence", () => {
-  const telemetry = RunnerMcpExecutionTelemetryResponseSchema.parse({
+  const telemetry = WorkbenchExecutionTelemetryResponseSchema.parse({
     signals: {
-      traces: { status: "available", itemCount: 1 },
-      logs: { status: "partial", itemCount: 2, unavailableReason: "retention window" },
-      exceptions: { status: "unavailable", itemCount: 0, unavailableReason: "<script>collector disabled</script>" },
-      toolCallEvents: { status: "available", itemCount: 1 },
+      traces: { status: "available", item_count: 1 },
+      logs: { status: "partial", item_count: 2, unavailable_reason: "retention window" },
+      exceptions: { status: "unavailable", item_count: 0, unavailable_reason: "<script>collector disabled</script>" },
+      tool_call_events: { status: "available", item_count: 1 },
     },
     correlation: {
-      executionId: "execution-1",
-      traceIds: ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
-      spanIds: ["bbbbbbbbbbbbbbbb"],
+      execution_id: "execution-1",
+      trace_ids: ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+      span_ids: ["bbbbbbbbbbbbbbbb"],
     },
     traces: [],
     logs: [],
-    queriedAt: timestamp,
-    selfExportSuppressed: true,
+    queried_at: timestamp,
+    self_export_suppressed: true,
   });
   const html = renderToStaticMarkup(<TelemetryPanel telemetry={telemetry} error={null} loading={false} onRefresh={() => undefined} />);
   assert.match(html, /signal-available/u);

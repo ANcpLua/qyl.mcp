@@ -217,8 +217,8 @@ export function publishedContractSchema<TContract>(definitionName: string): z.Zo
   return schema;
 }
 
-function runnerContractSchema<TContract>(name: string): z.ZodType<TContract> {
-  return publishedContractSchema<TContract>(`Runner.Mcp.${name}`);
+function workbenchContractSchema<TContract>(name: string): z.ZodType<TContract> {
+  return publishedContractSchema<TContract>(`Workbench.${name}`);
 }
 
 // Qyl telemetry and installable MCP server contracts.
@@ -321,338 +321,345 @@ export const RunnerLogLineSchema = publishedContractSchema<QylContracts.RunnerLo
 );
 
 // Workbench identity, session, and workspace boundaries.
-export const RunnerMcpSessionIdSchema = runnerContractSchema<QylContracts.RunnerMcpSessionId>(
-  "RunnerMcpSessionId",
+export const WorkbenchSessionIdSchema = workbenchContractSchema<QylContracts.WorkbenchSessionId>(
+  "WorkbenchSessionId",
 );
-export const RunnerMcpWorkspaceIdSchema = runnerContractSchema<QylContracts.RunnerMcpWorkspaceId>(
-  "RunnerMcpWorkspaceId",
+export const WorkbenchWorkspaceIdSchema = workbenchContractSchema<QylContracts.WorkbenchWorkspaceId>(
+  "WorkbenchWorkspaceId",
 );
-export const RunnerMcpServerIdSchema = runnerContractSchema<QylContracts.RunnerMcpServerId>(
-  "RunnerMcpServerId",
+export const WorkbenchServerIdSchema = workbenchContractSchema<QylContracts.WorkbenchServerId>(
+  "WorkbenchServerId",
 );
-export const RunnerMcpExecutionIdSchema = runnerContractSchema<QylContracts.RunnerMcpExecutionId>(
-  "RunnerMcpExecutionId",
+export const WorkbenchExecutionIdSchema = workbenchContractSchema<QylContracts.WorkbenchExecutionId>(
+  "WorkbenchExecutionId",
 );
-export const RunnerMcpEvaluationRunIdSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationRunId>("RunnerMcpEvaluationRunId");
-export const RunnerMcpTestCaseIdSchema = runnerContractSchema<QylContracts.RunnerMcpTestCaseId>(
-  "RunnerMcpTestCaseId",
+export const WorkbenchEvaluationRunIdSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationRunId>("WorkbenchEvaluationRunId");
+export const WorkbenchTestCaseIdSchema = workbenchContractSchema<QylContracts.WorkbenchTestCaseId>(
+  "WorkbenchTestCaseId",
 );
-export const RunnerMcpSuiteIdSchema = runnerContractSchema<QylContracts.RunnerMcpSuiteId>(
-  "RunnerMcpSuiteId",
+export const WorkbenchSuiteIdSchema = workbenchContractSchema<QylContracts.WorkbenchSuiteId>(
+  "WorkbenchSuiteId",
 );
-export const RunnerMcpEvaluationExportIdSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationExportId>(
-    "RunnerMcpEvaluationExportId",
+export const WorkbenchEvaluationExportIdSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationExportId>(
+    "WorkbenchEvaluationExportId",
   );
-export const RunnerMcpPrincipalIdentitySchema =
-  runnerContractSchema<QylContracts.RunnerMcpPrincipalIdentity>("RunnerMcpPrincipalIdentity");
-export const RunnerMcpWorkbenchSessionSchema =
-  runnerContractSchema<QylContracts.RunnerMcpWorkbenchSession>("RunnerMcpWorkbenchSession");
-export const RunnerMcpSessionBootstrapResponseSchema =
-  runnerContractSchema<QylContracts.RunnerMcpSessionBootstrapResponse>(
-    "RunnerMcpSessionBootstrapResponse",
+export const WorkbenchPrincipalIdentitySchema =
+  workbenchContractSchema<QylContracts.WorkbenchPrincipalIdentity>("WorkbenchPrincipalIdentity");
+export const WorkbenchSessionSchema =
+  workbenchContractSchema<QylContracts.WorkbenchSession>("WorkbenchSession");
+export const WorkbenchSessionBootstrapResponseSchema =
+  workbenchContractSchema<QylContracts.WorkbenchSessionBootstrapResponse>(
+    "WorkbenchSessionBootstrapResponse",
   );
-export const RunnerMcpWorkspaceSchema = runnerContractSchema<QylContracts.RunnerMcpWorkspace>(
-  "RunnerMcpWorkspace",
+export const WorkbenchWorkspaceSchema = workbenchContractSchema<QylContracts.WorkbenchWorkspace>(
+  "WorkbenchWorkspace",
 );
-export const RunnerMcpWorkspaceCreateRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpWorkspaceCreateRequest>(
-    "RunnerMcpWorkspaceCreateRequest",
+export const WorkbenchWorkspaceCreateRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchWorkspaceCreateRequest>(
+    "WorkbenchWorkspaceCreateRequest",
   );
-export const RunnerMcpWorkspaceUpdateRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpWorkspaceUpdateRequest>(
-    "RunnerMcpWorkspaceUpdateRequest",
+export const WorkbenchWorkspaceUpdateRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchWorkspaceUpdateRequest>(
+    "WorkbenchWorkspaceUpdateRequest",
   );
-export const RunnerMcpWorkspaceListResponseSchema =
-  runnerContractSchema<QylContracts.RunnerMcpWorkspaceListResponse>(
-    "RunnerMcpWorkspaceListResponse",
+export const WorkbenchWorkspaceListResponseSchema =
+  workbenchContractSchema<QylContracts.WorkbenchWorkspaceListResponse>(
+    "WorkbenchWorkspaceListResponse",
   );
-export const RunnerMcpToolInputModeSchema =
-  runnerContractSchema<QylContracts.RunnerMcpToolInputMode>("RunnerMcpToolInputMode");
-export const RunnerMcpWorkspacePreferencesSchema =
-  runnerContractSchema<QylContracts.RunnerMcpWorkspacePreferences>(
-    "RunnerMcpWorkspacePreferences",
+export const WorkbenchToolInputModeSchema =
+  workbenchContractSchema<QylContracts.WorkbenchToolInputMode>("WorkbenchToolInputMode");
+export const WorkbenchWorkspacePreferencesSchema =
+  workbenchContractSchema<QylContracts.WorkbenchWorkspacePreferences>(
+    "WorkbenchWorkspacePreferences",
   );
-export const RunnerMcpWorkspacePreferencesUpdateRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpWorkspacePreferencesUpdateRequest>(
-    "RunnerMcpWorkspacePreferencesUpdateRequest",
+export const WorkbenchWorkspacePreferencesUpdateRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchWorkspacePreferencesUpdateRequest>(
+    "WorkbenchWorkspacePreferencesUpdateRequest",
   );
 
 // Sanitized transport configuration and connection lifecycle.
-export const RunnerMcpTransportKindSchema =
-  runnerContractSchema<QylContracts.RunnerMcpTransportKind>("RunnerMcpTransportKind");
-export const RunnerMcpHeaderSecretSchemeSchema =
-  runnerContractSchema<QylContracts.RunnerMcpHeaderSecretScheme>(
-    "RunnerMcpHeaderSecretScheme",
+export const WorkbenchTransportKindSchema =
+  workbenchContractSchema<QylContracts.WorkbenchTransportKind>("WorkbenchTransportKind");
+export const WorkbenchHeaderSecretSchemeSchema =
+  workbenchContractSchema<QylContracts.WorkbenchHeaderSecretScheme>(
+    "WorkbenchHeaderSecretScheme",
   );
-export const RunnerMcpSecretReferenceSchema =
-  runnerContractSchema<QylContracts.RunnerMcpSecretReference>("RunnerMcpSecretReference");
-export const RunnerMcpEnvironmentSecretReferenceSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEnvironmentSecretReference>(
-    "RunnerMcpEnvironmentSecretReference",
+export const WorkbenchSecretReferenceSchema =
+  workbenchContractSchema<QylContracts.WorkbenchSecretReference>("WorkbenchSecretReference");
+export const WorkbenchEnvironmentSecretReferenceSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEnvironmentSecretReference>(
+    "WorkbenchEnvironmentSecretReference",
   );
-export const RunnerMcpHeaderSecretReferenceSchema =
-  runnerContractSchema<QylContracts.RunnerMcpHeaderSecretReference>(
-    "RunnerMcpHeaderSecretReference",
+export const WorkbenchHeaderSecretReferenceSchema =
+  workbenchContractSchema<QylContracts.WorkbenchHeaderSecretReference>(
+    "WorkbenchHeaderSecretReference",
   );
-export const RunnerMcpStdioServerConfigurationSchema =
-  runnerContractSchema<QylContracts.RunnerMcpStdioServerConfiguration>(
-    "RunnerMcpStdioServerConfiguration",
+export const WorkbenchStdioServerConfigurationSchema =
+  workbenchContractSchema<QylContracts.WorkbenchStdioServerConfiguration>(
+    "WorkbenchStdioServerConfiguration",
   );
-export const RunnerMcpStreamableHttpServerConfigurationSchema =
-  runnerContractSchema<QylContracts.RunnerMcpStreamableHttpServerConfiguration>(
-    "RunnerMcpStreamableHttpServerConfiguration",
+export const WorkbenchStreamableHttpServerConfigurationSchema =
+  workbenchContractSchema<QylContracts.WorkbenchStreamableHttpServerConfiguration>(
+    "WorkbenchStreamableHttpServerConfiguration",
   );
-export const RunnerMcpBuiltinServerConfigurationSchema =
-  runnerContractSchema<QylContracts.RunnerMcpBuiltinServerConfiguration>(
-    "RunnerMcpBuiltinServerConfiguration",
+export const WorkbenchBuiltinServerConfigurationSchema =
+  workbenchContractSchema<QylContracts.WorkbenchBuiltinServerConfiguration>(
+    "WorkbenchBuiltinServerConfiguration",
   );
-export const RunnerMcpServerConfigurationSchema =
-  runnerContractSchema<QylContracts.RunnerMcpServerConfiguration>(
-    "RunnerMcpServerConfiguration",
+export const WorkbenchServerConfigurationSchema =
+  workbenchContractSchema<QylContracts.WorkbenchServerConfiguration>(
+    "WorkbenchServerConfiguration",
   );
-export const RunnerMcpErrorCategorySchema =
-  runnerContractSchema<QylContracts.RunnerMcpErrorCategory>("RunnerMcpErrorCategory");
-export const RunnerMcpErrorSchema = runnerContractSchema<QylContracts.RunnerMcpError>(
-  "RunnerMcpError",
+export const WorkbenchErrorCategorySchema =
+  workbenchContractSchema<QylContracts.WorkbenchErrorCategory>("WorkbenchErrorCategory");
+export const WorkbenchErrorSchema = workbenchContractSchema<QylContracts.WorkbenchError>(
+  "WorkbenchError",
 );
-export const RunnerMcpInitializationSnapshotSchema =
-  runnerContractSchema<QylContracts.RunnerMcpInitializationSnapshot>(
-    "RunnerMcpInitializationSnapshot",
+export const WorkbenchInitializationSnapshotSchema =
+  workbenchContractSchema<QylContracts.WorkbenchInitializationSnapshot>(
+    "WorkbenchInitializationSnapshot",
   );
-export const RunnerMcpConnectionStatusSchema =
-  runnerContractSchema<QylContracts.RunnerMcpConnectionStatus>("RunnerMcpConnectionStatus");
-export const RunnerMcpConnectionSnapshotSchema =
-  runnerContractSchema<QylContracts.RunnerMcpConnectionSnapshot>(
-    "RunnerMcpConnectionSnapshot",
+export const WorkbenchConnectionStatusSchema =
+  workbenchContractSchema<QylContracts.WorkbenchConnectionStatus>("WorkbenchConnectionStatus");
+export const WorkbenchConnectionSnapshotSchema =
+  workbenchContractSchema<QylContracts.WorkbenchConnectionSnapshot>(
+    "WorkbenchConnectionSnapshot",
   );
-export const RunnerMcpServerSchema = runnerContractSchema<QylContracts.RunnerMcpServer>(
-  "RunnerMcpServer",
+export const WorkbenchServerSchema = workbenchContractSchema<QylContracts.WorkbenchServer>(
+  "WorkbenchServer",
 );
-export const RunnerMcpServerCreateRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpServerCreateRequest>(
-    "RunnerMcpServerCreateRequest",
+export const WorkbenchServerCreateRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchServerCreateRequest>(
+    "WorkbenchServerCreateRequest",
   );
-export const RunnerMcpServerUpdateRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpServerUpdateRequest>(
-    "RunnerMcpServerUpdateRequest",
+export const WorkbenchServerUpdateRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchServerUpdateRequest>(
+    "WorkbenchServerUpdateRequest",
   );
-export const RunnerMcpServerListResponseSchema =
-  runnerContractSchema<QylContracts.RunnerMcpServerListResponse>(
-    "RunnerMcpServerListResponse",
+export const WorkbenchServerListResponseSchema =
+  workbenchContractSchema<QylContracts.WorkbenchServerListResponse>(
+    "WorkbenchServerListResponse",
   );
-export const RunnerMcpServerActionAcceptedSchema =
-  runnerContractSchema<QylContracts.RunnerMcpServerActionAccepted>(
-    "RunnerMcpServerActionAccepted",
+export const WorkbenchServerActionAcceptedSchema =
+  workbenchContractSchema<QylContracts.WorkbenchServerActionAccepted>(
+    "WorkbenchServerActionAccepted",
   );
 
 // MCP discovery and redacted protocol evidence. SDK payloads remain unknown.
-export const RunnerMcpDiscoveryCollectionSchema =
-  runnerContractSchema<QylContracts.RunnerMcpDiscoveryCollection>(
-    "RunnerMcpDiscoveryCollection",
+export const WorkbenchDiscoveryCollectionSchema =
+  workbenchContractSchema<QylContracts.WorkbenchDiscoveryCollection>(
+    "WorkbenchDiscoveryCollection",
   );
-export const RunnerMcpDiscoverySnapshotSchema =
-  runnerContractSchema<QylContracts.RunnerMcpDiscoverySnapshot>("RunnerMcpDiscoverySnapshot");
-export const RunnerMcpProtocolDirectionSchema =
-  runnerContractSchema<QylContracts.RunnerMcpProtocolDirection>(
-    "RunnerMcpProtocolDirection",
+export const WorkbenchDiscoverySnapshotSchema =
+  workbenchContractSchema<QylContracts.WorkbenchDiscoverySnapshot>("WorkbenchDiscoverySnapshot");
+export const WorkbenchProtocolDirectionSchema =
+  workbenchContractSchema<QylContracts.WorkbenchProtocolDirection>(
+    "WorkbenchProtocolDirection",
   );
-export const RunnerMcpProtocolEventKindSchema =
-  runnerContractSchema<QylContracts.RunnerMcpProtocolEventKind>("RunnerMcpProtocolEventKind");
-export const RunnerMcpProtocolEventSchema =
-  runnerContractSchema<QylContracts.RunnerMcpProtocolEvent>("RunnerMcpProtocolEvent");
-export const RunnerMcpProtocolEventPageSchema =
-  runnerContractSchema<QylContracts.RunnerMcpProtocolEventPage>("RunnerMcpProtocolEventPage");
+export const WorkbenchProtocolEventKindSchema =
+  workbenchContractSchema<QylContracts.WorkbenchProtocolEventKind>("WorkbenchProtocolEventKind");
+export const WorkbenchProtocolEventSchema =
+  workbenchContractSchema<QylContracts.WorkbenchProtocolEvent>("WorkbenchProtocolEvent");
+export const WorkbenchProtocolEventPageSchema =
+  workbenchContractSchema<QylContracts.WorkbenchProtocolEventPage>("WorkbenchProtocolEventPage");
+// SSE event envelopes published alongside the page contracts they stream.
+export const WorkbenchProtocolEventsSchema =
+  workbenchContractSchema<QylContracts.WorkbenchProtocolEvents>("WorkbenchProtocolEvents");
 
 // Asynchronous execution and correlated Qyl observability evidence.
-export const RunnerMcpExecutionEffectSchema =
-  runnerContractSchema<QylContracts.RunnerMcpExecutionEffect>("RunnerMcpExecutionEffect");
-export const RunnerMcpExecutionStatusSchema =
-  runnerContractSchema<QylContracts.RunnerMcpExecutionStatus>("RunnerMcpExecutionStatus");
-export const RunnerMcpExecutionConfirmationRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpExecutionConfirmationRequest>(
-    "RunnerMcpExecutionConfirmationRequest",
+export const WorkbenchExecutionEffectSchema =
+  workbenchContractSchema<QylContracts.WorkbenchExecutionEffect>("WorkbenchExecutionEffect");
+export const WorkbenchExecutionStatusSchema =
+  workbenchContractSchema<QylContracts.WorkbenchExecutionStatus>("WorkbenchExecutionStatus");
+export const WorkbenchExecutionConfirmationRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchExecutionConfirmationRequest>(
+    "WorkbenchExecutionConfirmationRequest",
   );
-export const RunnerMcpExecutionConfirmationEvidenceSchema =
-  runnerContractSchema<QylContracts.RunnerMcpExecutionConfirmationEvidence>(
-    "RunnerMcpExecutionConfirmationEvidence",
+export const WorkbenchExecutionConfirmationEvidenceSchema =
+  workbenchContractSchema<QylContracts.WorkbenchExecutionConfirmationEvidence>(
+    "WorkbenchExecutionConfirmationEvidence",
   );
-export const RunnerMcpExecutionRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpExecutionRequest>("RunnerMcpExecutionRequest");
-export const RunnerMcpExecutionTokenUsageSchema =
-  runnerContractSchema<QylContracts.RunnerMcpExecutionTokenUsage>(
-    "RunnerMcpExecutionTokenUsage",
+export const WorkbenchExecutionRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchExecutionRequest>("WorkbenchExecutionRequest");
+export const WorkbenchExecutionTokenUsageSchema =
+  workbenchContractSchema<QylContracts.WorkbenchExecutionTokenUsage>(
+    "WorkbenchExecutionTokenUsage",
   );
-export const RunnerMcpExecutionCostSchema =
-  runnerContractSchema<QylContracts.RunnerMcpExecutionCost>("RunnerMcpExecutionCost");
-export const RunnerMcpTelemetryCorrelationSchema =
-  runnerContractSchema<QylContracts.RunnerMcpTelemetryCorrelation>(
-    "RunnerMcpTelemetryCorrelation",
+export const WorkbenchExecutionCostSchema =
+  workbenchContractSchema<QylContracts.WorkbenchExecutionCost>("WorkbenchExecutionCost");
+export const WorkbenchTelemetryCorrelationSchema =
+  workbenchContractSchema<QylContracts.WorkbenchTelemetryCorrelation>(
+    "WorkbenchTelemetryCorrelation",
   );
-export const RunnerMcpExecutionRecordSchema =
-  runnerContractSchema<QylContracts.RunnerMcpExecutionRecord>("RunnerMcpExecutionRecord");
-export const RunnerMcpExecutionAcceptedSchema =
-  runnerContractSchema<QylContracts.RunnerMcpExecutionAccepted>("RunnerMcpExecutionAccepted");
-export const RunnerMcpExecutionCancelRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpExecutionCancelRequest>(
-    "RunnerMcpExecutionCancelRequest",
+export const WorkbenchExecutionUpdateEventsSchema =
+  workbenchContractSchema<QylContracts.WorkbenchExecutionUpdateEvents>(
+    "WorkbenchExecutionUpdateEvents",
   );
-export const RunnerMcpExecutionPageSchema =
-  runnerContractSchema<QylContracts.RunnerMcpExecutionPage>("RunnerMcpExecutionPage");
-export const RunnerMcpTelemetryAvailabilitySchema =
-  runnerContractSchema<QylContracts.RunnerMcpTelemetryAvailability>(
-    "RunnerMcpTelemetryAvailability",
+export const WorkbenchExecutionRecordSchema =
+  workbenchContractSchema<QylContracts.WorkbenchExecutionRecord>("WorkbenchExecutionRecord");
+export const WorkbenchExecutionAcceptedSchema =
+  workbenchContractSchema<QylContracts.WorkbenchExecutionAccepted>("WorkbenchExecutionAccepted");
+export const WorkbenchExecutionCancelRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchExecutionCancelRequest>(
+    "WorkbenchExecutionCancelRequest",
   );
-export const RunnerMcpTelemetrySignalAvailabilitySchema =
-  runnerContractSchema<QylContracts.RunnerMcpTelemetrySignalAvailability>(
-    "RunnerMcpTelemetrySignalAvailability",
+export const WorkbenchExecutionPageSchema =
+  workbenchContractSchema<QylContracts.WorkbenchExecutionPage>("WorkbenchExecutionPage");
+export const WorkbenchTelemetryAvailabilitySchema =
+  workbenchContractSchema<QylContracts.WorkbenchTelemetryAvailability>(
+    "WorkbenchTelemetryAvailability",
   );
-export const RunnerMcpTelemetrySignalSummarySchema =
-  runnerContractSchema<QylContracts.RunnerMcpTelemetrySignalSummary>(
-    "RunnerMcpTelemetrySignalSummary",
+export const WorkbenchTelemetrySignalAvailabilitySchema =
+  workbenchContractSchema<QylContracts.WorkbenchTelemetrySignalAvailability>(
+    "WorkbenchTelemetrySignalAvailability",
   );
-export const RunnerMcpExecutionTelemetryResponseSchema =
-  runnerContractSchema<QylContracts.RunnerMcpExecutionTelemetryResponse>(
-    "RunnerMcpExecutionTelemetryResponse",
+export const WorkbenchTelemetrySignalSummarySchema =
+  workbenchContractSchema<QylContracts.WorkbenchTelemetrySignalSummary>(
+    "WorkbenchTelemetrySignalSummary",
+  );
+export const WorkbenchExecutionTelemetryResponseSchema =
+  workbenchContractSchema<QylContracts.WorkbenchExecutionTelemetryResponse>(
+    "WorkbenchExecutionTelemetryResponse",
   );
 
 // Reusable test cases, assertions, and suites.
-export const RunnerMcpAssertionStatusSchema =
-  runnerContractSchema<QylContracts.RunnerMcpAssertionStatus>("RunnerMcpAssertionStatus");
-export const RunnerMcpStatusAssertionSchema =
-  runnerContractSchema<QylContracts.RunnerMcpStatusAssertion>("RunnerMcpStatusAssertion");
-export const RunnerMcpExactAssertionSchema =
-  runnerContractSchema<QylContracts.RunnerMcpExactAssertion>("RunnerMcpExactAssertion");
-export const RunnerMcpPartialAssertionSchema =
-  runnerContractSchema<QylContracts.RunnerMcpPartialAssertion>("RunnerMcpPartialAssertion");
-export const RunnerMcpSchemaAssertionSchema =
-  runnerContractSchema<QylContracts.RunnerMcpSchemaAssertion>("RunnerMcpSchemaAssertion");
-export const RunnerMcpPatternAssertionSchema =
-  runnerContractSchema<QylContracts.RunnerMcpPatternAssertion>("RunnerMcpPatternAssertion");
-export const RunnerMcpLatencyAssertionSchema =
-  runnerContractSchema<QylContracts.RunnerMcpLatencyAssertion>("RunnerMcpLatencyAssertion");
-export const RunnerMcpTestAssertionSchema =
-  runnerContractSchema<QylContracts.RunnerMcpTestAssertion>("RunnerMcpTestAssertion");
-export const RunnerMcpTestCaseSchema = runnerContractSchema<QylContracts.RunnerMcpTestCase>(
-  "RunnerMcpTestCase",
+export const WorkbenchAssertionStatusSchema =
+  workbenchContractSchema<QylContracts.WorkbenchAssertionStatus>("WorkbenchAssertionStatus");
+export const WorkbenchStatusAssertionSchema =
+  workbenchContractSchema<QylContracts.WorkbenchStatusAssertion>("WorkbenchStatusAssertion");
+export const WorkbenchExactAssertionSchema =
+  workbenchContractSchema<QylContracts.WorkbenchExactAssertion>("WorkbenchExactAssertion");
+export const WorkbenchPartialAssertionSchema =
+  workbenchContractSchema<QylContracts.WorkbenchPartialAssertion>("WorkbenchPartialAssertion");
+export const WorkbenchSchemaAssertionSchema =
+  workbenchContractSchema<QylContracts.WorkbenchSchemaAssertion>("WorkbenchSchemaAssertion");
+export const WorkbenchPatternAssertionSchema =
+  workbenchContractSchema<QylContracts.WorkbenchPatternAssertion>("WorkbenchPatternAssertion");
+export const WorkbenchLatencyAssertionSchema =
+  workbenchContractSchema<QylContracts.WorkbenchLatencyAssertion>("WorkbenchLatencyAssertion");
+export const WorkbenchTestAssertionSchema =
+  workbenchContractSchema<QylContracts.WorkbenchTestAssertion>("WorkbenchTestAssertion");
+export const WorkbenchTestCaseSchema = workbenchContractSchema<QylContracts.WorkbenchTestCase>(
+  "WorkbenchTestCase",
 );
-export const RunnerMcpTestCaseCreateRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpTestCaseCreateRequest>(
-    "RunnerMcpTestCaseCreateRequest",
+export const WorkbenchTestCaseCreateRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchTestCaseCreateRequest>(
+    "WorkbenchTestCaseCreateRequest",
   );
-export const RunnerMcpTestCaseUpdateRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpTestCaseUpdateRequest>(
-    "RunnerMcpTestCaseUpdateRequest",
+export const WorkbenchTestCaseUpdateRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchTestCaseUpdateRequest>(
+    "WorkbenchTestCaseUpdateRequest",
   );
-export const RunnerMcpTestCasePageSchema =
-  runnerContractSchema<QylContracts.RunnerMcpTestCasePage>("RunnerMcpTestCasePage");
-export const RunnerMcpTestSuiteSchema = runnerContractSchema<QylContracts.RunnerMcpTestSuite>(
-  "RunnerMcpTestSuite",
+export const WorkbenchTestCasePageSchema =
+  workbenchContractSchema<QylContracts.WorkbenchTestCasePage>("WorkbenchTestCasePage");
+export const WorkbenchTestSuiteSchema = workbenchContractSchema<QylContracts.WorkbenchTestSuite>(
+  "WorkbenchTestSuite",
 );
-export const RunnerMcpTestSuiteCreateRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpTestSuiteCreateRequest>(
-    "RunnerMcpTestSuiteCreateRequest",
+export const WorkbenchTestSuiteCreateRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchTestSuiteCreateRequest>(
+    "WorkbenchTestSuiteCreateRequest",
   );
-export const RunnerMcpTestSuiteUpdateRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpTestSuiteUpdateRequest>(
-    "RunnerMcpTestSuiteUpdateRequest",
+export const WorkbenchTestSuiteUpdateRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchTestSuiteUpdateRequest>(
+    "WorkbenchTestSuiteUpdateRequest",
   );
-export const RunnerMcpTestSuitePageSchema =
-  runnerContractSchema<QylContracts.RunnerMcpTestSuitePage>("RunnerMcpTestSuitePage");
+export const WorkbenchTestSuitePageSchema =
+  workbenchContractSchema<QylContracts.WorkbenchTestSuitePage>("WorkbenchTestSuitePage");
 
 // Evaluation runs, comparisons, and export artifacts.
-export const RunnerMcpEvaluationResultStatusSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationResultStatus>(
-    "RunnerMcpEvaluationResultStatus",
+export const WorkbenchEvaluationResultStatusSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationResultStatus>(
+    "WorkbenchEvaluationResultStatus",
   );
-export const RunnerMcpEvaluationRunStatusSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationRunStatus>(
-    "RunnerMcpEvaluationRunStatus",
+export const WorkbenchEvaluationRunStatusSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationRunStatus>(
+    "WorkbenchEvaluationRunStatus",
   );
-export const RunnerMcpRegressionStatusSchema =
-  runnerContractSchema<QylContracts.RunnerMcpRegressionStatus>("RunnerMcpRegressionStatus");
-export const RunnerMcpEvaluationRunRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationRunRequest>(
-    "RunnerMcpEvaluationRunRequest",
+export const WorkbenchRegressionStatusSchema =
+  workbenchContractSchema<QylContracts.WorkbenchRegressionStatus>("WorkbenchRegressionStatus");
+export const WorkbenchEvaluationRunRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationRunRequest>(
+    "WorkbenchEvaluationRunRequest",
   );
-export const RunnerMcpTestCaseRunRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpTestCaseRunRequest>(
-    "RunnerMcpTestCaseRunRequest",
+export const WorkbenchTestCaseRunRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchTestCaseRunRequest>(
+    "WorkbenchTestCaseRunRequest",
   );
-export const RunnerMcpSuiteRunRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpSuiteRunRequest>("RunnerMcpSuiteRunRequest");
-export const RunnerMcpAssertionResultSchema =
-  runnerContractSchema<QylContracts.RunnerMcpAssertionResult>("RunnerMcpAssertionResult");
-export const RunnerMcpEvaluationTestCaseSnapshotSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationTestCaseSnapshot>(
-    "RunnerMcpEvaluationTestCaseSnapshot",
+export const WorkbenchSuiteRunRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchSuiteRunRequest>("WorkbenchSuiteRunRequest");
+export const WorkbenchAssertionResultSchema =
+  workbenchContractSchema<QylContracts.WorkbenchAssertionResult>("WorkbenchAssertionResult");
+export const WorkbenchEvaluationTestCaseSnapshotSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationTestCaseSnapshot>(
+    "WorkbenchEvaluationTestCaseSnapshot",
   );
-export const RunnerMcpEvaluationSuiteSnapshotSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationSuiteSnapshot>(
-    "RunnerMcpEvaluationSuiteSnapshot",
+export const WorkbenchEvaluationSuiteSnapshotSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationSuiteSnapshot>(
+    "WorkbenchEvaluationSuiteSnapshot",
   );
-export const RunnerMcpEvaluationTestResultSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationTestResult>(
-    "RunnerMcpEvaluationTestResult",
+export const WorkbenchEvaluationTestResultSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationTestResult>(
+    "WorkbenchEvaluationTestResult",
   );
-export const RunnerMcpEvaluationSummarySchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationSummary>("RunnerMcpEvaluationSummary");
-export const RunnerMcpEvaluationRunSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationRun>("RunnerMcpEvaluationRun");
-export const RunnerMcpEvaluationRunAcceptedSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationRunAccepted>(
-    "RunnerMcpEvaluationRunAccepted",
+export const WorkbenchEvaluationSummarySchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationSummary>("WorkbenchEvaluationSummary");
+export const WorkbenchEvaluationRunSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationRun>("WorkbenchEvaluationRun");
+export const WorkbenchEvaluationRunAcceptedSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationRunAccepted>(
+    "WorkbenchEvaluationRunAccepted",
   );
-export const RunnerMcpEvaluationRunPageSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationRunPage>(
-    "RunnerMcpEvaluationRunPage",
+export const WorkbenchEvaluationRunPageSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationRunPage>(
+    "WorkbenchEvaluationRunPage",
   );
-export const RunnerMcpEvaluationComparisonRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationComparisonRequest>(
-    "RunnerMcpEvaluationComparisonRequest",
+export const WorkbenchEvaluationComparisonRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationComparisonRequest>(
+    "WorkbenchEvaluationComparisonRequest",
   );
-export const RunnerMcpEvaluationTestComparisonSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationTestComparison>(
-    "RunnerMcpEvaluationTestComparison",
+export const WorkbenchEvaluationTestComparisonSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationTestComparison>(
+    "WorkbenchEvaluationTestComparison",
   );
-export const RunnerMcpEvaluationRunComparisonSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationRunComparison>(
-    "RunnerMcpEvaluationRunComparison",
+export const WorkbenchEvaluationRunComparisonSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationRunComparison>(
+    "WorkbenchEvaluationRunComparison",
   );
-export const RunnerMcpEvaluationExportFormatSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationExportFormat>(
-    "RunnerMcpEvaluationExportFormat",
+export const WorkbenchEvaluationExportFormatSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationExportFormat>(
+    "WorkbenchEvaluationExportFormat",
   );
-export const RunnerMcpEvaluationExportStatusSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationExportStatus>(
-    "RunnerMcpEvaluationExportStatus",
+export const WorkbenchEvaluationExportStatusSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationExportStatus>(
+    "WorkbenchEvaluationExportStatus",
   );
-export const RunnerMcpEvaluationExportRequestSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationExportRequest>(
-    "RunnerMcpEvaluationExportRequest",
+export const WorkbenchEvaluationExportRequestSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationExportRequest>(
+    "WorkbenchEvaluationExportRequest",
   );
-export const RunnerMcpEvaluationExportSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationExport>("RunnerMcpEvaluationExport");
-export const RunnerMcpEvaluationJsonExportPayloadSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationJsonExportPayload>(
-    "RunnerMcpEvaluationJsonExportPayload",
+export const WorkbenchEvaluationExportSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationExport>("WorkbenchEvaluationExport");
+export const WorkbenchEvaluationJsonExportPayloadSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationJsonExportPayload>(
+    "WorkbenchEvaluationJsonExportPayload",
   );
-export const RunnerMcpEvaluationReportExportPayloadSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationReportExportPayload>(
-    "RunnerMcpEvaluationReportExportPayload",
+export const WorkbenchEvaluationReportExportPayloadSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationReportExportPayload>(
+    "WorkbenchEvaluationReportExportPayload",
   );
-export const RunnerMcpEvaluationExportPayloadSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationExportPayload>(
-    "RunnerMcpEvaluationExportPayload",
+export const WorkbenchEvaluationExportPayloadSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationExportPayload>(
+    "WorkbenchEvaluationExportPayload",
   );
-export const RunnerMcpEvaluationExportArtifactSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationExportArtifact>(
-    "RunnerMcpEvaluationExportArtifact",
+export const WorkbenchEvaluationExportArtifactSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationExportArtifact>(
+    "WorkbenchEvaluationExportArtifact",
   );
-export const RunnerMcpEvaluationExportAcceptedSchema =
-  runnerContractSchema<QylContracts.RunnerMcpEvaluationExportAccepted>(
-    "RunnerMcpEvaluationExportAccepted",
+export const WorkbenchEvaluationExportAcceptedSchema =
+  workbenchContractSchema<QylContracts.WorkbenchEvaluationExportAccepted>(
+    "WorkbenchEvaluationExportAccepted",
   );
 
 // Generated Problem Details variants used by both workbench and Qyl tools.

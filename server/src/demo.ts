@@ -51,20 +51,20 @@ const intAttribute = (value: number): AttributeValue => ({
 /** Per-service OTel resources shared by demo spans and logs. */
 const DEMO_RESOURCES: Record<string, Resource> = {
   "qyl-collector": {
-    "service.name": "qyl-collector",
-    "service.version": "0.4.2",
-    "telemetry.sdk.language": "dotnet",
+    "service_name": "qyl-collector",
+    "service_version": "0.4.2",
+    "telemetry_sdk_language": "dotnet",
   },
   "checkout-api": {
-    "service.name": "checkout-api",
-    "service.version": "2.11.0",
-    "telemetry.sdk.language": "dotnet",
-    "deployment.environment.name": "staging",
+    "service_name": "checkout-api",
+    "service_version": "2.11.0",
+    "telemetry_sdk_language": "dotnet",
+    "deployment_environment": "staging",
   },
   "agent-worker": {
-    "service.name": "agent-worker",
-    "service.version": "1.3.7",
-    "telemetry.sdk.language": "python",
+    "service_name": "agent-worker",
+    "service_version": "1.3.7",
+    "telemetry_sdk_language": "python",
   },
 };
 
@@ -125,7 +125,7 @@ function buildDemoTrace(
   const startNano = Math.min(...spans.map((s) => s.start_time_unix_nano));
   const endNano = Math.max(...spans.map((s) => s.end_time_unix_nano));
   const services = [
-    ...new Set(spans.map((s) => String(s.resource["service.name"]))),
+    ...new Set(spans.map((s) => String(s.resource.service_name))),
   ];
 
   return {
@@ -746,8 +746,8 @@ function buildDemoData(): DemoData {
     );
     const active = state === "active";
     return {
-      "session.id": id as SessionId,
-      ...(userId ? { "user.id": userId as UserId } : {}),
+      "session_id": id as SessionId,
+      ...(userId ? { user_id: userId as UserId } : {}),
       start_time: new Date(startMs).toISOString(),
       ...(active ? {} : { end_time: new Date(endMs).toISOString(), duration_ms: endMs - startMs }),
       trace_count: sessionTraceList.length,
@@ -846,9 +846,9 @@ function mulberry32(seed: number): () => number {
 }
 
 const QYL_MCP_RESOURCE: Resource = {
-  "service.name": "qyl.mcp",
-  "service.version": packageMetadata.version,
-  "telemetry.sdk.language": "nodejs",
+  "service_name": "qyl.mcp",
+  "service_version": packageMetadata.version,
+  "telemetry_sdk_language": "nodejs",
 };
 
 /** Per-tool traffic profile: pick weight, log-normal duration, error rate. */

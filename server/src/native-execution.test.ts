@@ -128,7 +128,7 @@ test("native tools/call automatically persists validated, redacted, correlated e
       estimated: false,
     });
     assert.deepEqual(persisted.cost, {
-      amountUsd: 0.025,
+      amount_usd: 0.025,
       estimated: false,
       source: "[REDACTED]",
     });

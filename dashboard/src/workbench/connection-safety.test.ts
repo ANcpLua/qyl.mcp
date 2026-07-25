@@ -18,8 +18,8 @@ test("local executable connection modes require an exact safety review", () => {
     transport: "stdio",
     command: "node",
     arguments: ["server.mjs", "--write"],
-    workingDirectory: "/workspace",
-    environment: [{ name: "TOKEN", secret: { source: "environment", environmentVariable: "MCP_TOKEN" } }],
+    working_directory: "/workspace",
+    environment: [{ name: "TOKEN", secret: { source: "environment", environment_variable: "MCP_TOKEN" } }],
   });
   assert.match(stdio?.body ?? "", /node server\.mjs --write/u);
   assert.match(stdio?.body ?? "", /\/workspace/u);

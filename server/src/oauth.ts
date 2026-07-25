@@ -14,6 +14,8 @@ import {
 } from "@modelcontextprotocol/server";
 
 const DISCOVERY_TIMEOUT_MS = 10_000;
+export const QYL_MCP_ISSUER = "https://qyl-eu.eu.auth0.com/";
+export const QYL_MCP_RESOURCE = "https://mcp.qyl.at/mcp";
 export const QYL_MCP_SCOPE = "qyl:read";
 
 export interface HostedOAuth {
@@ -23,28 +25,14 @@ export interface HostedOAuth {
 }
 
 function readIssuer(environment: NodeJS.ProcessEnv): URL {
-  const configured = environment.MCP_OAUTH_ISSUER?.trim();
+  const configured = environment.MCP_OAUTH_ISSUER;
   if (!configured) {
     throw new Error("MCP_OAUTH_ISSUER must name the external HTTPS OAuth issuer");
   }
-
-  let issuer: URL;
-  try {
-    issuer = new URL(configured);
-  } catch {
-    throw new Error("MCP_OAUTH_ISSUER must be an absolute URL");
+  if (configured !== QYL_MCP_ISSUER) {
+    throw new Error(`MCP_OAUTH_ISSUER must be exactly ${QYL_MCP_ISSUER}`);
   }
-  if (issuer.protocol !== "https:") {
-    throw new Error("MCP_OAUTH_ISSUER must use HTTPS");
-  }
-  if (issuer.username || issuer.password || issuer.search || issuer.hash) {
-    throw new Error("MCP_OAUTH_ISSUER must not contain credentials, a query, or a fragment");
-  }
-  return issuer;
-}
-
-function normalizeIssuer(value: string): string {
-  return value.replace(/\/$/u, "");
+  return new URL(QYL_MCP_ISSUER);
 }
 
 async function fetchAuthorizationServerMetadata(issuer: URL): Promise<OAuthMetadata> {
@@ -70,7 +58,7 @@ async function fetchAuthorizationServerMetadata(issuer: URL): Promise<OAuthMetad
         failures.push(`${candidate.href}: invalid metadata`);
         continue;
       }
-      if (normalizeIssuer(parsed.data.issuer) !== normalizeIssuer(issuer.href)) {
+      if (parsed.data.issuer !== issuer.href) {
         failures.push(`${candidate.href}: issuer mismatch`);
         continue;
       }
@@ -96,12 +84,20 @@ async function verifyJwt(
   audience: string,
 ): Promise<JWTPayload> {
   try {
-    const { payload } = await jwtVerify(token, key, {
+    const { payload, protectedHeader } = await jwtVerify(token, key, {
       issuer,
       audience,
       algorithms: ["RS256"],
       typ: "at+jwt",
     });
+    if (
+      protectedHeader.alg !== "RS256"
+      || protectedHeader.typ !== "at+jwt"
+      || payload.iss !== issuer
+      || payload.aud !== audience
+    ) {
+      throw invalidToken();
+    }
     return payload;
   } catch {
     throw invalidToken();

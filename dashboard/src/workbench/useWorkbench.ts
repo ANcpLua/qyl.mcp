@@ -5,33 +5,33 @@ import {
   describeApiError,
 } from "./api.js";
 import type {
-  RunnerMcpDiscoverySnapshot as DiscoverySnapshot,
-  RunnerMcpEvaluationExport as EvaluationExport,
-  RunnerMcpEvaluationExportArtifact as EvaluationExportArtifact,
-  RunnerMcpEvaluationRun as EvaluationRun,
-  RunnerMcpEvaluationRunComparison as EvaluationComparison,
-  RunnerMcpExecutionConfirmationRequest as ExecutionConfirmationRequest,
-  RunnerMcpExecutionRecord as ExecutionRecord,
-  RunnerMcpExecutionRequest as ExecutionRequest,
-  RunnerMcpExecutionTelemetryResponse as ExecutionTelemetry,
-  RunnerMcpProtocolEvent as ProtocolEvent,
-  RunnerMcpServer as McpServer,
-  RunnerMcpServerConfiguration as ServerConfiguration,
-  RunnerMcpServerId as ServerId,
-  RunnerMcpServerUpdateRequest as ServerUpdateRequest,
-  RunnerMcpTestAssertion as TestAssertion,
-  RunnerMcpTestCase as TestCase,
-  RunnerMcpTestCaseCreateRequest as TestCaseCreateRequest,
-  RunnerMcpTestCaseId as TestCaseId,
-  RunnerMcpTestCaseUpdateRequest as TestCaseUpdateRequest,
-  RunnerMcpTestSuite as TestSuite,
-  RunnerMcpTestSuiteCreateRequest as TestSuiteCreateRequest,
-  RunnerMcpTestSuiteUpdateRequest as TestSuiteUpdateRequest,
-  RunnerMcpWorkbenchSession as WorkbenchSession,
-  RunnerMcpWorkspace as Workspace,
-  RunnerMcpWorkspaceUpdateRequest as WorkspaceUpdateRequest,
-  RunnerMcpWorkspacePreferences as WorkspacePreferences,
-  RunnerMcpWorkspacePreferencesUpdateRequest as WorkspacePreferencesUpdateRequest,
+  WorkbenchDiscoverySnapshot as DiscoverySnapshot,
+  WorkbenchEvaluationExport as EvaluationExport,
+  WorkbenchEvaluationExportArtifact as EvaluationExportArtifact,
+  WorkbenchEvaluationRun as EvaluationRun,
+  WorkbenchEvaluationRunComparison as EvaluationComparison,
+  WorkbenchExecutionConfirmationRequest as ExecutionConfirmationRequest,
+  WorkbenchExecutionRecord as ExecutionRecord,
+  WorkbenchExecutionRequest as ExecutionRequest,
+  WorkbenchExecutionTelemetryResponse as ExecutionTelemetry,
+  WorkbenchProtocolEvent as ProtocolEvent,
+  WorkbenchServer as McpServer,
+  WorkbenchServerConfiguration as ServerConfiguration,
+  WorkbenchServerId as ServerId,
+  WorkbenchServerUpdateRequest as ServerUpdateRequest,
+  WorkbenchTestAssertion as TestAssertion,
+  WorkbenchTestCase as TestCase,
+  WorkbenchTestCaseCreateRequest as TestCaseCreateRequest,
+  WorkbenchTestCaseId as TestCaseId,
+  WorkbenchTestCaseUpdateRequest as TestCaseUpdateRequest,
+  WorkbenchTestSuite as TestSuite,
+  WorkbenchTestSuiteCreateRequest as TestSuiteCreateRequest,
+  WorkbenchTestSuiteUpdateRequest as TestSuiteUpdateRequest,
+  WorkbenchSession as WorkbenchSession,
+  WorkbenchWorkspace as Workspace,
+  WorkbenchWorkspaceUpdateRequest as WorkspaceUpdateRequest,
+  WorkbenchWorkspacePreferences as WorkspacePreferences,
+  WorkbenchWorkspacePreferencesUpdateRequest as WorkspacePreferencesUpdateRequest,
 } from "@ancplua/qyl-api-schema/types";
 
 const api = new WorkbenchApi();
@@ -245,7 +245,7 @@ export function useWorkbench() {
     setTestCases(nextTests);
     setSuites(nextSuites);
     setEvaluationRuns(nextRuns);
-    const preferredServer = nextPreferences.selectedServerId;
+    const preferredServer = nextPreferences.selected_server_id;
     const currentServer = serverIdRef.current;
     const nextServerId = nextServers.some((server) => server.id === currentServer)
       ? currentServer
@@ -332,8 +332,8 @@ export function useWorkbench() {
         if (!active) return;
         setSession(nextSession);
         setWorkspaces(nextWorkspaces);
-        const initialWorkspace = nextWorkspaces.some((workspace) => workspace.id === nextSession.activeWorkspaceId)
-          ? nextSession.activeWorkspaceId ?? ""
+        const initialWorkspace = nextWorkspaces.some((workspace) => workspace.id === nextSession.active_workspace_id)
+          ? nextSession.active_workspace_id ?? ""
           : nextWorkspaces[0]?.id ?? "";
         setWorkspaceId(initialWorkspace);
         setPhase("ready");
@@ -445,7 +445,7 @@ export function useWorkbench() {
   const selectServer = useCallback((nextServerId: string) => {
     setServerId(nextServerId);
     void updatePreference({
-      selectedServerId: nextServerId ? nextServerId as ServerId : undefined,
+      selected_server_id: nextServerId ? nextServerId as ServerId : undefined,
     });
   }, [updatePreference, setServerId]);
 
@@ -572,8 +572,13 @@ export function useWorkbench() {
   const createTestCase = useCallback((draft: TestCaseDraft) => runBusy("create-test", async () => {
     if (!workspaceIdRef.current) throw new Error("Select a workspace first.");
     const request: TestCaseCreateRequest = {
-      ...draft,
-      serverId: draft.serverId as ServerId,
+      name: draft.name,
+      server_id: draft.serverId as ServerId,
+      tool_name: draft.toolName,
+      arguments: draft.arguments,
+      timeout_ms: draft.timeoutMs,
+      assertions: draft.assertions,
+      tags: draft.tags,
       description: draft.description || undefined,
     };
     const created = await api.createTestCase(workspaceIdRef.current, request);
@@ -589,7 +594,7 @@ export function useWorkbench() {
     if (!workspaceIdRef.current) throw new Error("Select a workspace first.");
     const request: TestCaseUpdateRequest = {
       ...draft,
-      serverId: draft.serverId as ServerId,
+      server_id: draft.serverId as ServerId,
       description: draft.description ?? "",
     };
     const updated = await api.updateTestCase(workspaceIdRef.current, testCaseId, request);
@@ -622,7 +627,7 @@ export function useWorkbench() {
     if (!workspaceIdRef.current) throw new Error("Select a workspace first.");
     const request: TestSuiteCreateRequest = {
       ...draft,
-      testCaseIds: draft.testCaseIds.map((id) => id as TestCaseId),
+      test_case_ids: draft.testCaseIds.map((id) => id as TestCaseId),
       description: draft.description || undefined,
     };
     const created = await api.createSuite(workspaceIdRef.current, request);
@@ -638,7 +643,7 @@ export function useWorkbench() {
     if (!workspaceIdRef.current) throw new Error("Select a workspace first.");
     const request: TestSuiteUpdateRequest = {
       ...draft,
-      testCaseIds: draft.testCaseIds.map((id) => id as TestCaseId),
+      test_case_ids: draft.testCaseIds.map((id) => id as TestCaseId),
       description: draft.description ?? "",
     };
     const updated = await api.updateSuite(workspaceIdRef.current, suiteId, request);
@@ -682,10 +687,10 @@ export function useWorkbench() {
 
   const refreshExport = useCallback(() => runBusy("export-refresh", async () => {
     if (!workspaceIdRef.current || !activeExport) return;
-    const next = await api.getExport(workspaceIdRef.current, activeExport.runId, activeExport.id);
+    const next = await api.getExport(workspaceIdRef.current, activeExport.run_id, activeExport.id);
     setActiveExport(next);
     if (next.status === "ready") {
-      setExportArtifact(await api.getExportContent(workspaceIdRef.current, next.runId, next.id));
+      setExportArtifact(await api.getExportContent(workspaceIdRef.current, next.run_id, next.id));
     }
   }).catch((error) => notify("error", describeApiError(error))), [runBusy, activeExport, notify]);
 

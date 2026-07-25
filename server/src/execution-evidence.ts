@@ -1,11 +1,11 @@
 import type {
-  RunnerMcpExecutionCost,
-  RunnerMcpExecutionTokenUsage,
+  WorkbenchExecutionCost,
+  WorkbenchExecutionTokenUsage,
 } from "@ancplua/qyl-api-schema/types";
 
 export interface ExecutionEvidenceMetadata {
-  tokenUsage?: RunnerMcpExecutionTokenUsage;
-  cost?: RunnerMcpExecutionCost;
+  tokenUsage?: WorkbenchExecutionTokenUsage;
+  cost?: WorkbenchExecutionCost;
 }
 
 /**
@@ -20,8 +20,8 @@ export function extractExecutionEvidence(result: unknown): ExecutionEvidenceMeta
 
   const roots = [result.structuredContent, result._meta]
     .filter(isRecord);
-  let tokenUsage: RunnerMcpExecutionTokenUsage | undefined;
-  let cost: RunnerMcpExecutionCost | undefined;
+  let tokenUsage: WorkbenchExecutionTokenUsage | undefined;
+  let cost: WorkbenchExecutionCost | undefined;
   for (const root of roots) {
     tokenUsage ??= parseTokenUsage(
       root.tokenUsage
@@ -36,7 +36,7 @@ export function extractExecutionEvidence(result: unknown): ExecutionEvidenceMeta
   };
 }
 
-function parseTokenUsage(value: unknown): RunnerMcpExecutionTokenUsage | undefined {
+function parseTokenUsage(value: unknown): WorkbenchExecutionTokenUsage | undefined {
   if (!isRecord(value)) return undefined;
   const inputTokens = nonNegativeInteger(value.inputTokens ?? value.input_tokens);
   const outputTokens = nonNegativeInteger(value.outputTokens ?? value.output_tokens);
@@ -54,20 +54,20 @@ function parseTokenUsage(value: unknown): RunnerMcpExecutionTokenUsage | undefin
   };
 }
 
-function parseCost(value: unknown): RunnerMcpExecutionCost | undefined {
+function parseCost(value: unknown): WorkbenchExecutionCost | undefined {
   if (typeof value === "number") {
     return nonNegativeNumber(value) === undefined
       ? undefined
-      : { amountUsd: value, estimated: false };
+      : { amount_usd: value, estimated: false };
   }
   if (!isRecord(value)) return undefined;
-  const amountUsd = nonNegativeNumber(value.amountUsd ?? value.amount_usd);
-  if (amountUsd === undefined) return undefined;
+  const amount_usd = nonNegativeNumber(value.amount_usd ?? value.amount_usd);
+  if (amount_usd === undefined) return undefined;
   const source = typeof value.source === "string" && value.source.trim().length > 0
     ? value.source.trim().slice(0, 256)
     : undefined;
   return {
-    amountUsd,
+    amount_usd,
     estimated: value.estimated === true,
     ...(source === undefined ? {} : { source }),
   };

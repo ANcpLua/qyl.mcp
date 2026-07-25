@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type {
-  RunnerMcpExecutionConfirmationRequest as ExecutionConfirmationRequest,
-  RunnerMcpExecutionRecord as ExecutionRecord,
-  RunnerMcpServer as McpServer,
-  RunnerMcpTestAssertion as TestAssertion,
-  RunnerMcpTestCase as TestCase,
-  RunnerMcpTestSuite as TestSuite,
+  WorkbenchExecutionConfirmationRequest as ExecutionConfirmationRequest,
+  WorkbenchExecutionRecord as ExecutionRecord,
+  WorkbenchServer as McpServer,
+  WorkbenchTestAssertion as TestAssertion,
+  WorkbenchTestCase as TestCase,
+  WorkbenchTestSuite as TestSuite,
 } from "@ancplua/qyl-api-schema/types";
 import type { SuiteDraft, TestCaseDraft } from "./useWorkbench.js";
 import { JsonCodeView } from "./JsonCodeView.js";
@@ -53,7 +53,7 @@ function splitTags(value: string): string[] {
 function assertionSummary(assertion: TestAssertion): string {
   switch (assertion.kind) {
     case "status": return `status in ${assertion.expected.join(", ")}`;
-    case "latency": return `duration ≤ ${assertion.maxDurationMs} ms`;
+    case "latency": return `duration ≤ ${assertion.max_duration_ms} ms`;
     case "pattern": return `${assertion.path ?? "/"} matches /${assertion.pattern}/${assertion.flags ?? ""}`;
     case "schema": return `${assertion.path ?? "/"} matches schema`;
     case "exact": return `${assertion.path ?? "/"} exactly equals expected value`;
@@ -67,9 +67,9 @@ function groupedTests(testCases: TestCase[], mode: GroupMode, servers: McpServer
   const groups = new Map<string, TestCase[]>();
   for (const testCase of testCases) {
     const keys = mode === "server"
-      ? [serverNames.get(testCase.serverId) ?? testCase.serverId]
+      ? [serverNames.get(testCase.server_id) ?? testCase.server_id]
       : mode === "tool"
-        ? [testCase.toolName]
+        ? [testCase.tool_name]
         : testCase.tags.length > 0 ? testCase.tags : ["untagged"];
     for (const key of keys) groups.set(key, [...(groups.get(key) ?? []), testCase]);
   }
@@ -99,7 +99,7 @@ function AssertionBuilder({ assertions, onChange }: { assertions: TestAssertion[
           next = { id, kind, expected: expectedStatuses };
           break;
         }
-        case "latency": next = { id, kind, maxDurationMs }; break;
+        case "latency": next = { id, kind, max_duration_ms: maxDurationMs }; break;
         case "pattern":
           if (!pattern) throw new Error("A pattern is required.");
           next = { id, kind, path: path || undefined, pattern, flags: flags || undefined };
@@ -190,17 +190,17 @@ export function TestsWorkspace({
   const sourceExecution = executions.find((execution) => execution.id === sourceExecutionId);
   const groups = useMemo(() => groupedTests(testCases, groupMode, servers), [testCases, groupMode, servers]);
   const editingSuite = suites.find((suite) => suite.id === editingSuiteId);
-  const unresolvedEditingSuiteIds = editingSuite?.testCaseIds.filter(
+  const unresolvedEditingSuiteIds = editingSuite?.test_case_ids.filter(
     (id) => !testCases.some((testCase) => testCase.id === id),
   ) ?? [];
 
   useEffect(() => {
     if (!sourceExecution) return;
-    setServerId(sourceExecution.serverId);
-    setToolName(sourceExecution.request.toolName);
+    setServerId(sourceExecution.server_id);
+    setToolName(sourceExecution.request.tool_name);
     setArgumentsJson(JSON.stringify(sourceExecution.request.arguments ?? {}, null, 2));
-    setTimeoutMs(sourceExecution.request.timeoutMs);
-    if (!name) setName(`${sourceExecution.request.toolName} regression`);
+    setTimeoutMs(sourceExecution.request.timeout_ms);
+    if (!name) setName(`${sourceExecution.request.tool_name} regression`);
   }, [sourceExecution, name]);
 
   useEffect(() => {
@@ -231,10 +231,10 @@ export function TestsWorkspace({
     setEditingTestCaseId(testCase.id);
     setName(testCase.name);
     setDescription(testCase.description ?? "");
-    setServerId(testCase.serverId);
-    setToolName(testCase.toolName);
+    setServerId(testCase.server_id);
+    setToolName(testCase.tool_name);
     setArgumentsJson(JSON.stringify(testCase.arguments ?? {}, null, 2));
-    setTimeoutMs(testCase.timeoutMs);
+    setTimeoutMs(testCase.timeout_ms);
     setTags(testCase.tags.join(", "));
     setSourceExecutionId("");
     setAssertions(structuredClone(testCase.assertions));
@@ -257,7 +257,7 @@ export function TestsWorkspace({
     setSuiteDescription(suite.description ?? "");
     setSuiteTags(suite.tags.join(", "));
     const availableIds = new Set(testCases.map((testCase) => testCase.id));
-    setSuiteTests(new Set(suite.testCaseIds.filter((id) => availableIds.has(id))));
+    setSuiteTests(new Set(suite.test_case_ids.filter((id) => availableIds.has(id))));
     setSuiteError(null);
   }
 
@@ -309,7 +309,7 @@ export function TestsWorkspace({
   }
 
   function reviewSuiteRun(suite: TestSuite) {
-    const selected = suite.testCaseIds
+    const selected = suite.test_case_ids
       .map((id) => testCases.find((testCase) => testCase.id === id))
       .filter((testCase): testCase is TestCase => testCase !== undefined);
     const selectedIds = new Set(selected.map((testCase) => testCase.id));
@@ -320,7 +320,7 @@ export function TestsWorkspace({
       id: suite.id,
       name: suite.name,
       testCases: selected,
-      unresolvedTestCaseIds: suite.testCaseIds.filter((id) => !selectedIds.has(id)),
+      unresolvedTestCaseIds: suite.test_case_ids.filter((id) => !selectedIds.has(id)),
     });
   }
 
@@ -372,7 +372,7 @@ export function TestsWorkspace({
               <label>Source invocation
                 <select value={sourceExecutionId} onChange={(event) => setSourceExecutionId(event.target.value)}>
                   <option value="">Enter request manually</option>
-                  {executions.map((execution) => <option key={execution.id} value={execution.id}>{execution.request.toolName} · {execution.id.slice(0, 8)} · {execution.status}</option>)}
+                  {executions.map((execution) => <option key={execution.id} value={execution.id}>{execution.request.tool_name} · {execution.id.slice(0, 8)} · {execution.status}</option>)}
                 </select>
               </label>
               <div className="form-grid">
@@ -398,7 +398,7 @@ export function TestsWorkspace({
               <section className="panel-surface test-group" key={group}>
                 <div className="section-heading-row"><h3>{group}</h3><span className="count-label">{tests.length}</span></div>
                 <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Name</th><th>Tool</th><th>Assertions</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
-                  {tests.map((testCase) => <tr key={testCase.id}><td><strong>{testCase.name}</strong>{testCase.description ? <small>{testCase.description}</small> : null}</td><td><code>{testCase.toolName}</code><small>{testCase.tags.join(", ") || "untagged"}</small></td><td>{testCase.assertions.length}<details><summary>Inspect</summary><JsonCodeView value={testCase.assertions} label="Assertions" /></details></td><td>{formatTimestamp(testCase.updatedAt)}</td><td><div className="button-row"><button className="small-button" disabled={busy.has(`run-test:${testCase.id}`)} onClick={() => reviewTestRun(testCase)}>Run</button><button className="small-button" disabled={busy.has(`update-test:${testCase.id}`)} onClick={() => beginEditTestCase(testCase)}>Edit</button><button className="danger-button" disabled={busy.has(`delete-test:${testCase.id}`)} onClick={() => {
+                  {tests.map((testCase) => <tr key={testCase.id}><td><strong>{testCase.name}</strong>{testCase.description ? <small>{testCase.description}</small> : null}</td><td><code>{testCase.tool_name}</code><small>{testCase.tags.join(", ") || "untagged"}</small></td><td>{testCase.assertions.length}<details><summary>Inspect</summary><JsonCodeView value={testCase.assertions} label="Assertions" /></details></td><td>{formatTimestamp(testCase.updated_at)}</td><td><div className="button-row"><button className="small-button" disabled={busy.has(`run-test:${testCase.id}`)} onClick={() => reviewTestRun(testCase)}>Run</button><button className="small-button" disabled={busy.has(`update-test:${testCase.id}`)} onClick={() => beginEditTestCase(testCase)}>Edit</button><button className="danger-button" disabled={busy.has(`delete-test:${testCase.id}`)} onClick={() => {
                     if (window.confirm(`Delete test case “${testCase.name}”?`)) void onDeleteTestCase(testCase.id);
                   }}>Delete</button></div></td></tr>)}
                 </tbody></table></div>
@@ -418,7 +418,7 @@ export function TestsWorkspace({
               const next = new Set(current);
               if (event.target.checked) next.add(testCase.id); else next.delete(testCase.id);
               return next;
-            })} /><span><strong>{testCase.name}</strong><small>{testCase.toolName}</small></span></label>)}</fieldset>
+            })} /><span><strong>{testCase.name}</strong><small>{testCase.tool_name}</small></span></label>)}</fieldset>
             {unresolvedEditingSuiteIds.length > 0 ? <p className="form-help">Saving removes {unresolvedEditingSuiteIds.length} unavailable test-case reference{unresolvedEditingSuiteIds.length === 1 ? "" : "s"} from this suite.</p> : null}
             {suiteError ? <p className="field-error" role="alert">{suiteError}</p> : null}
             <div className="button-row">
@@ -427,7 +427,7 @@ export function TestsWorkspace({
             </div>
           </form>
           <section className="panel-surface suite-list"><div className="section-heading-row"><div><span className="section-kicker">Persisted suites</span><h3>Evaluation groups</h3></div><span className="count-label">{suites.length}</span></div>
-            {suites.map((suite) => <article className="suite-card" key={suite.id}><div><h4>{suite.name}</h4><p>{suite.description ?? "No description"}</p><span>{suite.testCaseIds.length} tests · {suite.tags.join(", ") || "untagged"}</span></div><div className="button-row"><button className="primary-button" disabled={busy.has(`run-suite:${suite.id}`)} onClick={() => reviewSuiteRun(suite)}>Run suite</button><button className="small-button" disabled={busy.has(`update-suite:${suite.id}`)} onClick={() => beginEditSuite(suite)}>Edit</button><button className="danger-button" disabled={busy.has(`delete-suite:${suite.id}`)} onClick={() => {
+            {suites.map((suite) => <article className="suite-card" key={suite.id}><div><h4>{suite.name}</h4><p>{suite.description ?? "No description"}</p><span>{suite.test_case_ids.length} tests · {suite.tags.join(", ") || "untagged"}</span></div><div className="button-row"><button className="primary-button" disabled={busy.has(`run-suite:${suite.id}`)} onClick={() => reviewSuiteRun(suite)}>Run suite</button><button className="small-button" disabled={busy.has(`update-suite:${suite.id}`)} onClick={() => beginEditSuite(suite)}>Edit</button><button className="danger-button" disabled={busy.has(`delete-suite:${suite.id}`)} onClick={() => {
               if (window.confirm(`Delete evaluation suite “${suite.name}”?`)) void onDeleteSuite(suite.id);
             }}>Delete</button></div></article>)}
             {suites.length === 0 ? <p className="empty-note">No suites saved.</p> : null}
@@ -446,8 +446,8 @@ export function TestsWorkspace({
             <div className="assertion-list">
               {pendingEvaluation.testCases.map((testCase) => (
                 <details key={testCase.id}>
-                  <summary><strong>{testCase.name}</strong> · <code>{testCase.toolName}</code></summary>
-                  <JsonCodeView value={{ serverId: testCase.serverId, toolName: testCase.toolName, arguments: testCase.arguments, timeoutMs: testCase.timeoutMs }} label={`${testCase.name} invocation`} />
+                  <summary><strong>{testCase.name}</strong> · <code>{testCase.tool_name}</code></summary>
+                  <JsonCodeView value={{ serverId: testCase.server_id, toolName: testCase.tool_name, arguments: testCase.arguments, timeoutMs: testCase.timeout_ms }} label={`${testCase.name} invocation`} />
                 </details>
               ))}
             </div>

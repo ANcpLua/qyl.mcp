@@ -10,7 +10,7 @@ import {
 
 function session(id: string, services: string[]): QylSession {
   return {
-    "session.id": id,
+    "session_id": id,
     start_time: "2026-07-17T00:00:00Z",
     trace_count: 1,
     span_count: 3,
@@ -23,7 +23,7 @@ function session(id: string, services: string[]): QylSession {
 function ciTrace(): QylTrace {
   const base = {
     trace_id: "0af7651916cd43dd8448eb211c80319c",
-    resource: { "service.name": "qyl-ci-smoke" },
+    resource: { "service_name": "qyl-ci-smoke" },
     kind: 1,
     start_time_unix_nano: 1_000_000_000,
   };
@@ -69,7 +69,7 @@ test("filterCiSessions keeps only qyl-ci sessions", () => {
     session("nuget-publish-1", ["qyl-ci-smoke"]),
     session("user-app", ["checkout", "payments"]),
   ]);
-  assert.deepEqual(kept.map((entry) => entry["session.id"]), ["nuget-publish-1"]);
+  assert.deepEqual(kept.map((entry) => entry["session_id"]), ["nuget-publish-1"]);
 });
 
 test("collectCiPhases sorts failures first and reads ci.leg", () => {

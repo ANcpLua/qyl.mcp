@@ -2,7 +2,7 @@
  * Shared configuration: UI resource URIs and collector endpoint resolution.
  *
  * The collector URL is resolved lazily (per call, not at module load) so the
- * embedding host — the qyl.mcp runner hosting this server in-process — controls
+ * embedding host — the qyl.mcp workbench hosting this server in-process — controls
  * it through its own environment.
  */
 

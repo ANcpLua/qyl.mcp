@@ -16,14 +16,14 @@ export default function App() {
   const [activePanel, setActivePanel] = useState<ActivePanel>("inspect");
 
   useEffect(() => {
-    if (isActivePanel(workbench.preferences?.activePanel)) {
-      setActivePanel(workbench.preferences.activePanel);
+    if (isActivePanel(workbench.preferences?.active_panel)) {
+      setActivePanel(workbench.preferences.active_panel);
     }
-  }, [workbench.preferences?.activePanel]);
+  }, [workbench.preferences?.active_panel]);
 
   function selectPanel(panel: ActivePanel) {
     setActivePanel(panel);
-    void workbench.updatePreference({ activePanel: panel });
+    void workbench.updatePreference({ active_panel: panel });
   }
 
   if (workbench.phase === "loading") {
@@ -37,7 +37,7 @@ export default function App() {
   }
 
   return (
-    <div className={`application${workbench.preferences?.compactMode ? " compact-mode" : ""}`}>
+    <div className={`application${workbench.preferences?.compact_mode ? " compact-mode" : ""}`}>
       <header className="app-header">
         <div className="brand-block">
           <div className="brand-mark">qyl<span>.mcp</span></div>
@@ -51,7 +51,7 @@ export default function App() {
         <div className="header-context">
           <div className="session-principal">
             <span className="status-dot tone-positive" />
-            <span><strong>{workbench.session?.principal.displayName ?? workbench.session?.principal.id ?? "local user"}</strong><small>loopback session</small></span>
+            <span><strong>{workbench.session?.principal.display_name ?? workbench.session?.principal.id ?? "local user"}</strong><small>loopback session</small></span>
           </div>
           <button
             type="button"
@@ -65,9 +65,9 @@ export default function App() {
           <button
             type="button"
             className="compact-toggle"
-            aria-pressed={workbench.preferences?.compactMode ?? false}
+            aria-pressed={workbench.preferences?.compact_mode ?? false}
             disabled={!workbench.workspaceId}
-            onClick={() => void workbench.updatePreference({ compactMode: !(workbench.preferences?.compactMode ?? false) })}
+            onClick={() => void workbench.updatePreference({ compact_mode: !(workbench.preferences?.compact_mode ?? false) })}
           >
             Density
           </button>
@@ -101,7 +101,7 @@ export default function App() {
         <main className="workspace-content">
           {workbench.phase === "failed" ? (
             <section className="empty-state panel-surface critical-state">
-              <strong>The local runner is unavailable</strong>
+              <strong>The local workbench is unavailable</strong>
               <span>Session bootstrap failed. Start qyl.mcp on the loopback interface, then reload this page.</span>
               <button type="button" className="primary-button" onClick={() => window.location.reload()}>Reload</button>
             </section>
@@ -133,7 +133,7 @@ export default function App() {
             ) : (
               <section className="empty-state panel-surface">
                 <strong>Add an MCP server</strong>
-                <span>Add Streamable HTTP or local stdio. Runner-registered internal servers appear automatically; credentials remain server-side environment references.</span>
+                <span>Add Streamable HTTP or local stdio. Workbench-registered internal servers appear automatically; credentials remain server-side environment references.</span>
               </section>
             )
           ) : activePanel === "tests" ? (

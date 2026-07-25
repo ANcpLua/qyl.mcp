@@ -114,7 +114,7 @@ export async function fetchSessions(
   }
   const body = await collectorGet("/api/v1/sessions", {
     limit,
-    isActive: activeOnly ? true : undefined,
+    is_active: activeOnly ? true : undefined,
   });
   return redactTelemetry({
     sessions: parseCollectorPage(
@@ -144,7 +144,7 @@ export async function fetchLogs(
     if (filters.trace_id) logs = logs.filter((l) => l.trace_id === filters.trace_id);
     if (filters.service_name) {
       logs = logs.filter(
-        (l) => String(l.resource["service.name"]) === filters.service_name,
+        (l) => String(l.resource.service_name) === filters.service_name,
       );
     }
     const severityMin = filters.severity_min;
@@ -158,9 +158,9 @@ export async function fetchLogs(
     return redactTelemetry({ logs: logs.slice(0, filters.limit), mode });
   }
   const body = await collectorGet("/api/v1/logs", {
-    traceId: filters.trace_id,
-    serviceName: filters.service_name,
-    severityMin: filters.severity_min,
+    trace_id: filters.trace_id,
+    service_name: filters.service_name,
+    severity_min: filters.severity_min,
     query: filters.query,
     limit: filters.limit,
   });
