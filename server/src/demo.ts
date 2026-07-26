@@ -184,7 +184,7 @@ function buildDemoData(): DemoData {
       service: "agent-worker",
       start: 15,
       end: 70,
-      attrs: { "qyl.agent.step": "plan" },
+      attrs: { "gen_ai.operation.name": "invoke_agent" },
     },
     {
       parent: 0,
@@ -208,7 +208,7 @@ function buildDemoData(): DemoData {
       service: "agent-worker",
       start: 2400,
       end: 2900,
-      attrs: { "qyl.tool.name": "search_docs" },
+      attrs: { "gen_ai.tool.name": "search_docs" },
     },
     {
       parent: 3,
@@ -335,7 +335,7 @@ function buildDemoData(): DemoData {
       service: "checkout-api",
       start: 5,
       end: 35,
-      attrs: { "qyl.cart.items": intAttribute(3) },
+      attrs: { "db.operation.name": "SELECT" },
     },
     {
       parent: 0,
@@ -488,7 +488,7 @@ function buildDemoData(): DemoData {
       service: "agent-worker",
       start: 65,
       end: 100,
-      attrs: { "qyl.notification.channel": "email" },
+      attrs: { "messaging.destination.name": "email" },
     },
   ]);
 
@@ -502,7 +502,7 @@ function buildDemoData(): DemoData {
       start: 0,
       end: 8600,
       status: { code: 1 },
-      attrs: { "qyl.pipeline.name": "nightly-eval" },
+      attrs: { "gen_ai.operation.name": "invoke_agent" },
     },
     { parent: 0, name: "stage.collect", kind: 1, service: "agent-worker", start: 20, end: 2100 },
     {
@@ -586,7 +586,7 @@ function buildDemoData(): DemoData {
       service: "qyl-collector",
       start: 2,
       end: 9,
-      attrs: { "qyl.otlp.spans": intAttribute(142) },
+      attrs: { "rpc.method": "Export" },
     },
     {
       parent: 0,
