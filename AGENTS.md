@@ -173,21 +173,30 @@ locally and never add a registry credential to CI: the workflow gates on build,
 every workspace test, the server smoke, and a clean `npx` consumer handshake
 against the indexed package before a release is complete.
 
-**A release must not be marked pre-release while the beta line is the product.**
-The workflow derives the npm dist-tag from that flag — `prerelease: true → next`,
-otherwise `→ latest`. npm never moves `latest` onto a prerelease by itself, which
-is how `latest` sat on the pre-beta `0.1.1` until 2026-07-26 while three betas
-shipped: every `npm install qyl-mcp-server` served code from before the beta line
-existed. Marking a release pre-release parks `latest` again.
+**The release's pre-release flag chooses the npm dist-tag** — `prerelease: true → next`,
+otherwise `→ latest` — and npm never moves `latest` onto a prerelease on its own. So the
+question at every release is what a bare `npm install qyl-mcp-server` should return, and
+that flag is the whole answer. Getting it wrong is silent: `latest` sat on the pre-beta
+`0.1.1` until 2026-07-26 across three beta releases, each correctly marked a prerelease,
+with nothing left to advance `latest` — so every plain install served code from before the
+beta line existed.
 
-The package deliberately has **only a `latest` dist-tag**. `next` was removed once
-nothing referenced it, because each normal release advances `latest` and leaves any
-second pointer to rot. Do not re-add one.
+Like the "breaking changes are free" clause above, the tactic that follows expires at
+launch. While the beta line *is* the product, ship releases unmarked so `latest` tracks
+them, despite the `-beta.N` in the version. Once 1.0.0 is out and previews sit genuinely
+ahead of a stable line, the ordinary meaning returns: mark previews as prereleases and let
+them land on `next`. Decide from what `latest` should serve, never from the habit of the
+previous phase.
 
-The `release` GitHub environment must keep a `tag: v*` deployment policy alongside
-`main`. Release events run on the tag ref, so a `main`-only policy rejects the
-deployment before any step runs — a two-second failure with zero steps, which reads
-like a broken workflow rather than a settings gate.
+A dist-tag is a promise to keep it current. The package carries only `latest` today because
+`next` had no consumer and no release that advanced it, so it quietly aged into pointing at
+older code than `latest`. Add a second tag when a line genuinely needs one, together with
+whatever moves it; adding one as decoration recreates the same trap.
+
+If a release-triggered publish fails within seconds having run no steps, read the `release`
+environment's deployment policy before suspecting the workflow. Release events run on the
+tag ref, so a policy limited to `main` rejects the deployment before any step starts; a
+`tag: v*` entry alongside `main` is what permits it.
 
 Registry writes that trusted publishing cannot perform — moving or deleting a
 dist-tag, deprecating a version — have no OIDC path, since npm authorizes only
