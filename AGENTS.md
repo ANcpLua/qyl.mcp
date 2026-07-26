@@ -164,3 +164,33 @@ The explicit-demo smoke test is a local behavior check. `smoke:otlp` uses the
 real sibling collector as an official protocol receiver. Other contract changes
 also require live collector and runner integration proving the generated wire
 contract before completion.
+
+## Publishing
+
+`qyl-mcp-server` publishes to npmjs.org from `publish.yml` by OIDC trusted
+publishing, on a published GitHub release or a manual dispatch. Never publish
+locally and never add a registry credential to CI: the workflow gates on build,
+every workspace test, the server smoke, and a clean `npx` consumer handshake
+against the indexed package before a release is complete.
+
+**A release must not be marked pre-release while the beta line is the product.**
+The workflow derives the npm dist-tag from that flag — `prerelease: true → next`,
+otherwise `→ latest`. npm never moves `latest` onto a prerelease by itself, which
+is how `latest` sat on the pre-beta `0.1.1` until 2026-07-26 while three betas
+shipped: every `npm install qyl-mcp-server` served code from before the beta line
+existed. Marking a release pre-release parks `latest` again.
+
+The package deliberately has **only a `latest` dist-tag**. `next` was removed once
+nothing referenced it, because each normal release advances `latest` and leaves any
+second pointer to rot. Do not re-add one.
+
+The `release` GitHub environment must keep a `tag: v*` deployment policy alongside
+`main`. Release events run on the tag ref, so a `main`-only policy rejects the
+deployment before any step runs — a two-second failure with zero steps, which reads
+like a broken workflow rather than a settings gate.
+
+Registry writes that trusted publishing cannot perform — moving or deleting a
+dist-tag, deprecating a version — have no OIDC path, since npm authorizes only
+`npm publish`. Use `~/.claude/bin/npm-authed <npm args...>`, which injects a
+keychain-held granular token for one command. It is for repairing already-published
+state, never for publishing, and the release path must never depend on it.
