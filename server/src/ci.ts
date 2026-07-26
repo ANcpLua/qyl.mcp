@@ -91,7 +91,9 @@ export function collectCiPhases(traces: QylTrace[]): CiPhase[] {
       status: span.status.code === 2 ? "error" : span.status.code === 1 ? "ok" : "unset",
       duration_ms: Math.max(
         0,
-        Math.round((span.end_time_unix_nano - span.start_time_unix_nano) / 1_000_000),
+        Math.round(
+          Number(BigInt(span.end_time_unix_nano) - BigInt(span.start_time_unix_nano)) / 1_000_000,
+        ),
       ),
       ...(span.status.message ? { message: span.status.message } : {}),
     }))

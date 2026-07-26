@@ -70,11 +70,13 @@ export function aggregateMcpStats(
   windowEnd: number,
   bucketMs: number,
 ): Omit<McpDashboardStats, "mode" | "truncated"> {
-  const startNano = windowStart * 1e6;
-  const endNano = windowEnd * 1e6;
+  // Window bounds compared in BigInt: absolute epoch-ns exceeds Number.MAX_SAFE_INTEGER.
+  const startNano = BigInt(Math.round(windowStart)) * 1_000_000n;
+  const endNano = BigInt(Math.round(windowEnd)) * 1_000_000n;
   const mcpSpans: Array<{ span: QylSpan; cls: NonNullable<ReturnType<typeof classifyMcpSpan>> }> = [];
   for (const s of spans) {
-    if (s.start_time_unix_nano < startNano || s.start_time_unix_nano > endNano) continue;
+    const spanStart = BigInt(s.start_time_unix_nano);
+    if (spanStart < startNano || spanStart > endNano) continue;
     const cls = classifyMcpSpan(s);
     if (cls) mcpSpans.push({ span: s, cls });
   }
@@ -111,9 +113,10 @@ export function aggregateMcpStats(
   for (const { span, cls } of mcpSpans) {
     const error = span.status.code === 2;
     if (error) totalErrors++;
-    const ms = (span.end_time_unix_nano - span.start_time_unix_nano) / 1e6;
+    const ms =
+      Number(BigInt(span.end_time_unix_nano) - BigInt(span.start_time_unix_nano)) / 1e6;
 
-    const startMs = span.start_time_unix_nano / 1e6;
+    const startMs = Number(BigInt(span.start_time_unix_nano) / 1_000n) / 1_000;
     const index = Math.min(
       bucketCount - 1,
       Math.max(0, Math.floor((startMs - windowStart) / bucketMs)),

@@ -106,10 +106,17 @@ test("published output schemas accept the programmatically generated demo datase
   }
 });
 
-test("64-bit JSON integers keep the published integer rule without a safe-integer ceiling", () => {
+test("64-bit nanosecond timestamps survive the wire exactly, above the safe-integer ceiling", () => {
   const span = getDemo().traces[0].spans[0];
-  const unixNanos = 1_742_000_000_123_456_789;
-  assert(SpanSchema.safeParse({ ...span, start_time_unix_nano: unixNanos }).success);
+  // Past Number.MAX_SAFE_INTEGER: as a JS number literal this value silently becomes
+  // ...456_800, which is the precision loss the decimal-string encoding exists to remove.
+  const unixNanos = "1742000000123456789";
+  const parsed = SpanSchema.safeParse({ ...span, start_time_unix_nano: unixNanos });
+  assert(parsed.success);
+  assert.equal(parsed.data.start_time_unix_nano, unixNanos);
+  assert.equal(BigInt(parsed.data.start_time_unix_nano), 1742000000123456789n);
+
+  assert(!SpanSchema.safeParse({ ...span, start_time_unix_nano: "1.5" }).success);
   assert(!SpanSchema.safeParse({ ...span, start_time_unix_nano: 1.5 }).success);
 });
 

@@ -12,11 +12,35 @@ import type {
 } from "./wire.js";
 import { logBodyText } from "./log-body.js";
 
-/** Humanize a nanosecond duration: "1.24 s" / "87 ms" / "640 µs". */
-export function humanizeNs(ns: number): string {
-  if (ns >= 1e9) return `${(ns / 1e9).toFixed(2)} s`;
-  if (ns >= 1e6) return `${Math.round(ns / 1e6)} ms`;
-  return `${Math.round(ns / 1e3)} µs`;
+/**
+ * Humanize a nanosecond duration: "1.24 s" / "87 ms" / "640 µs".
+ *
+ * Durations arrive as decimal strings but are safe to narrow: a duration only
+ * reaches Number.MAX_SAFE_INTEGER at ~104 days. Absolute timestamps are not —
+ * those go through nsToBigInt and are subtracted before ever becoming a Number.
+ */
+export function humanizeNs(ns: string): string {
+  const value = Number(ns);
+  if (value >= 1e9) return `${(value / 1e9).toFixed(2)} s`;
+  if (value >= 1e6) return `${Math.round(value / 1e6)} ms`;
+  return `${Math.round(value / 1e3)} µs`;
+}
+
+/** Absolute nanosecond timestamps exceed Number.MAX_SAFE_INTEGER; never parse one with Number. */
+export function nsToBigInt(ns: string): bigint {
+  return BigInt(ns);
+}
+
+/** Comparator for sorting by an absolute nanosecond timestamp, exact at ns resolution. */
+export function compareNs(a: string, b: string): number {
+  const left = BigInt(a);
+  const right = BigInt(b);
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+/** ISO-8601 for an absolute nanosecond timestamp, via BigInt so the ms floor is exact. */
+export function nsToIso(ns: string): string {
+  return new Date(Number(BigInt(ns) / 1_000_000n)).toISOString();
 }
 
 export function shortId(id: string): string {
@@ -26,8 +50,8 @@ export function shortId(id: string): string {
 /** Root span name, or the earliest span when no root is identified. */
 export function rootSpanName(trace: QylTrace): string {
   if (trace.root_span?.name) return trace.root_span.name;
-  const earliest = [...(trace.spans ?? [])].sort(
-    (a, b) => a.start_time_unix_nano - b.start_time_unix_nano,
+  const earliest = [...(trace.spans ?? [])].sort((a, b) =>
+    compareNs(a.start_time_unix_nano, b.start_time_unix_nano),
   )[0];
   return earliest?.name ?? "unknown";
 }
@@ -99,7 +123,7 @@ export function summarizeSessions(sessions: QylSession[], mode: Mode): string {
   for (const session of sessions) {
     const duration =
       session.duration_ms !== undefined
-        ? humanizeNs(session.duration_ms * 1e6)
+        ? humanizeNs(String(Math.round(session.duration_ms * 1e6)))
         : "—";
     const genai = session.genai_usage
       ? `${session.genai_usage.request_count} req, ` +
@@ -116,9 +140,7 @@ export function summarizeSessions(sessions: QylSession[], mode: Mode): string {
 export function summarizeLogs(logs: QylLogRecord[], mode: Mode): string {
   if (logs.length === 0) return `No logs matched${modeNote(mode)}.`;
   const lines = logs.map((record) => {
-    const time = new Date(record.time_unix_nano / 1e6)
-      .toISOString()
-      .slice(11, 23);
+    const time = nsToIso(record.time_unix_nano).slice(11, 23);
     const severity = record.severity_text ?? String(record.severity_number);
     const renderedBody = logBodyText(record.body).replace(/\s+/g, " ");
     const body =

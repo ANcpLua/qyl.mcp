@@ -138,6 +138,16 @@ function sigFig(v: number): string {
   return s.replace(/\.?0+$/, "");
 }
 
+/**
+ * Exact nanosecond delta between two absolute wire timestamps.
+ *
+ * Absolute epoch-ns values are decimal strings past Number.MAX_SAFE_INTEGER, so the
+ * subtraction happens in BigInt; the result is a duration and safe as a number.
+ */
+function nsDelta(fromNs: string, toNs: string): number {
+  return Number(BigInt(toNs) - BigInt(fromNs));
+}
+
 function formatNs(ns: number): string {
   if (!Number.isFinite(ns) || ns < 0) return "—";
   if (ns < 1e3) return `${Math.round(ns)} ns`;
@@ -150,9 +160,10 @@ function shortId(id: string): string {
   return id.length > 8 ? id.slice(0, 8) : id;
 }
 
-function formatLogTime(ns: number): string {
-  if (!Number.isFinite(ns) || ns <= 0) return "—";
-  const date = new Date(ns / 1e6);
+function formatLogTime(ns: string): string {
+  const value = BigInt(ns);
+  if (value <= 0n) return "—";
+  const date = new Date(Number(value / 1_000_000n));
   const hh = String(date.getHours()).padStart(2, "0");
   const mm = String(date.getMinutes()).padStart(2, "0");
   const ss = String(date.getSeconds()).padStart(2, "0");
@@ -386,7 +397,7 @@ function createTraceRow(trace: QylTrace): HTMLElement {
   top.appendChild(name);
   const duration = document.createElement("span");
   duration.className = "trace-row-duration mono";
-  duration.textContent = formatNs(trace.duration_ns);
+  duration.textContent = formatNs(Number(trace.duration_ns));
   top.appendChild(duration);
   row.appendChild(top);
 
@@ -440,7 +451,7 @@ function renderTraceView() {
   traceStatusBadgeEl.textContent = trace.has_error ? "Error" : "OK";
   traceStatusBadgeEl.className = `trace-status-badge ${trace.has_error ? "error" : "ok"}`;
   traceIdLabelEl.textContent = trace.trace_id;
-  traceDurationLabelEl.textContent = formatNs(trace.duration_ns);
+  traceDurationLabelEl.textContent = formatNs(Number(trace.duration_ns));
   traceSpanCountLabelEl.textContent = `${trace.span_count} span${trace.span_count === 1 ? "" : "s"}`;
   const chips = document.createDocumentFragment();
   for (const service of trace.services) chips.appendChild(createServiceChip(service));
@@ -485,7 +496,7 @@ function renderTimeRuler(totalNs: number) {
   }
 }
 
-function createSpanRow(row: WaterfallRow<QylSpan>, traceStartNs: number): HTMLElement {
+function createSpanRow(row: WaterfallRow<QylSpan>, traceStartNs: string): HTMLElement {
   const { span, depth } = row;
   const flavor = spanFlavor(span);
   const isError = span.status?.code === 2;
@@ -497,7 +508,7 @@ function createSpanRow(row: WaterfallRow<QylSpan>, traceStartNs: number): HTMLEl
   el.dataset.spanId = span.span_id;
   el.tabIndex = 0;
   el.setAttribute("role", "button");
-  el.setAttribute("aria-label", `Span ${span.name}, ${formatNs(span.end_time_unix_nano - span.start_time_unix_nano)}`);
+  el.setAttribute("aria-label", `Span ${span.name}, ${formatNs(nsDelta(span.start_time_unix_nano, span.end_time_unix_nano))}`);
 
   const nameCol = document.createElement("div");
   nameCol.className = "span-name-col";
@@ -537,7 +548,7 @@ function createSpanRow(row: WaterfallRow<QylSpan>, traceStartNs: number): HTMLEl
     durationLabel.classList.add("inside");
     durationLabel.style.right = `${Math.max(0.6, 100 - barEnd + 0.6)}%`;
   }
-  durationLabel.textContent = formatNs(span.end_time_unix_nano - span.start_time_unix_nano);
+  durationLabel.textContent = formatNs(nsDelta(span.start_time_unix_nano, span.end_time_unix_nano));
   barCol.appendChild(durationLabel);
   el.appendChild(barCol);
 
@@ -611,7 +622,7 @@ function attributeRows(container: HTMLElement, attrs: Array<{ key: string; value
   container.appendChild(table);
 }
 
-function renderEvent(event: QylSpanEvent, spanStartNs: number): HTMLElement {
+function renderEvent(event: QylSpanEvent, spanStartNs: string): HTMLElement {
   const card = document.createElement("div");
   card.className = "event-card";
   const isException = event.name === "exception";
@@ -625,7 +636,7 @@ function renderEvent(event: QylSpanEvent, spanStartNs: number): HTMLElement {
   head.appendChild(name);
   const time = document.createElement("span");
   time.className = "mono dim";
-  time.textContent = `+${formatNs(Math.max(0, event.time_unix_nano - spanStartNs))}`;
+  time.textContent = `+${formatNs(Math.max(0, nsDelta(spanStartNs, event.time_unix_nano)))}`;
   head.appendChild(time);
   card.appendChild(head);
 
@@ -657,7 +668,7 @@ function renderEvent(event: QylSpanEvent, spanStartNs: number): HTMLElement {
   return card;
 }
 
-function openDetail(span: QylSpan, traceStartNs: number) {
+function openDetail(span: QylSpan, traceStartNs: string) {
   state.selectedSpanId = span.span_id;
   for (const row of spanRowsEl.querySelectorAll<HTMLElement>(".span-row")) {
     row.classList.toggle("selected", row.dataset.spanId === span.span_id);
@@ -671,10 +682,10 @@ function openDetail(span: QylSpan, traceStartNs: number) {
   stats.appendChild(detailStat("Service", serviceName(span)));
   stats.appendChild(detailStat("Kind", KIND_LABELS[span.kind] ?? String(span.kind)));
   stats.appendChild(
-    detailStat("Duration", formatNs(span.end_time_unix_nano - span.start_time_unix_nano)),
+    detailStat("Duration", formatNs(nsDelta(span.start_time_unix_nano, span.end_time_unix_nano))),
   );
   stats.appendChild(
-    detailStat("Offset", `+${formatNs(Math.max(0, span.start_time_unix_nano - traceStartNs))}`),
+    detailStat("Offset", `+${formatNs(Math.max(0, nsDelta(traceStartNs, span.start_time_unix_nano)))}`),
   );
   const statusCode = span.status?.code ?? 0;
   const statusLabel = statusCode === 2 ? "Error" : statusCode === 1 ? "OK" : "Unset";
@@ -765,7 +776,9 @@ function renderLogs(logs: QylLogRecord[]) {
     logsStateEl.textContent = "No logs recorded for this trace.";
   }
   const fragment = document.createDocumentFragment();
-  const sorted = [...logs].sort((a, b) => a.time_unix_nano - b.time_unix_nano);
+  const sorted = [...logs].sort((a, b) =>
+    nsDelta(b.time_unix_nano, a.time_unix_nano),
+  );
   for (const log of sorted) {
     const { label, cls } = severityInfo(log);
     const row = document.createElement("div");

@@ -36,8 +36,8 @@ function json(body: unknown, status = 200): Response {
 
 function logRecord(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     return {
-        time_unix_nano: 1,
-        observed_time_unix_nano: 1,
+        time_unix_nano: '1',
+        observed_time_unix_nano: '1',
         severity_number: 9,
         body: { string_value: "fixture log" },
         resource: { service_name: "fixture" },

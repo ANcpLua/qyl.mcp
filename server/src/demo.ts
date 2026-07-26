@@ -42,7 +42,10 @@ function hexId(seed: number, length: number): string {
 /** The "now" every demo timestamp offsets from; refreshed by refreshDemo(). */
 let demoAnchorMs = 0;
 const minutesAgoMs = (minutes: number) => demoAnchorMs - minutes * 60_000;
-const toNano = (absoluteMs: number) => Math.round(absoluteMs * 1e6);
+// Absolute nanosecond timestamps are decimal strings on the wire: an epoch-ns value
+// is ~1.79e18, past Number.MAX_SAFE_INTEGER, so it is built in BigInt and never
+// round-trips through a JS number.
+const toNano = (absoluteMs: number) => (BigInt(Math.round(absoluteMs)) * 1_000_000n).toString();
 const intAttribute = (value: number): AttributeValue => ({
   type: "int",
   value: String(value),
@@ -122,8 +125,12 @@ function buildDemoTrace(
     }
   });
 
-  const startNano = Math.min(...spans.map((s) => s.start_time_unix_nano));
-  const endNano = Math.max(...spans.map((s) => s.end_time_unix_nano));
+  const startNano = spans
+    .map((s) => BigInt(s.start_time_unix_nano))
+    .reduce((min, v) => (v < min ? v : min));
+  const endNano = spans
+    .map((s) => BigInt(s.end_time_unix_nano))
+    .reduce((max, v) => (v > max ? v : max));
   const services = [
     ...new Set(spans.map((s) => String(s.resource.service_name))),
   ];
@@ -133,9 +140,9 @@ function buildDemoTrace(
     spans,
     root_span: spans.find((s) => !s.parent_span_id),
     span_count: spans.length,
-    duration_ns: endNano - startNano,
-    start_time: new Date(startNano / 1e6).toISOString(),
-    end_time: new Date(endNano / 1e6).toISOString(),
+    duration_ns: (endNano - startNano).toString(),
+    start_time: new Date(Number(startNano / 1_000_000n)).toISOString(),
+    end_time: new Date(Number(endNano / 1_000_000n)).toISOString(),
     services,
     has_error: spans.some((s) => s.status.code === 2),
   };
@@ -657,7 +664,9 @@ function buildDemoData(): DemoData {
     attrs?: Record<string, AttributeValue>,
   ): QylLogRecord => {
     const span = trace.spans[spanIndex];
-    const timeUnixNano = span.start_time_unix_nano + Math.round(offsetMs * 1e6);
+    const timeUnixNano = (
+      BigInt(span.start_time_unix_nano) + BigInt(Math.round(offsetMs)) * 1_000_000n
+    ).toString();
     return {
       time_unix_nano: timeUnixNano,
       observed_time_unix_nano: timeUnixNano,
@@ -728,7 +737,9 @@ function buildDemoData(): DemoData {
     // quickChat (1 min)
     log(quickChat, 0, 2, 9, "INFO", "chat request received (1 message)"),
     log(quickChat, 1, 1290, 5, "DEBUG", "claude-sonnet-5 responded: 154 in / 89 out tokens"),
-  ].sort((a, b) => a.time_unix_nano - b.time_unix_nano);
+  ].sort((a, b) =>
+    Number(BigInt(a.time_unix_nano) - BigInt(b.time_unix_nano)),
+  );
 
   // --- 3 sessions grouping the traces.
   const makeSession = (
