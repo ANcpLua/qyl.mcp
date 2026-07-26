@@ -33,12 +33,12 @@ test("repository persists sanitized workspace configuration across reopen", asyn
         const server = await fixture.repository.createServer("default", {
             name: "remote",
             configuration: {
-                kind: "streamable_http",
+                transport: "streamable_http",
                 endpoint: "https://mcp.example.test/mcp",
                 headers: [{
-                    header: "Authorization",
+                    name: "Authorization",
                     scheme: "bearer",
-                    secret: { source: "environment", environmentVariable: "MCP_ACCESS_TOKEN" },
+                    secret: { source: "environment", environment_variable: "MCP_ACCESS_TOKEN" },
                 }],
             },
             autoConnect: true,
@@ -66,7 +66,7 @@ test("repository rejects credentials embedded in endpoints and stdio arguments",
             fixture.repository.createServer("default", {
                 name: "credential-url",
                 configuration: {
-                    kind: "streamable_http",
+                    transport: "streamable_http",
                     endpoint: "https://user:secret@mcp.example.test/mcp",
                     headers: [],
                 },
@@ -78,9 +78,9 @@ test("repository rejects credentials embedded in endpoints and stdio arguments",
             fixture.repository.createServer("default", {
                 name: "secret-argument",
                 configuration: {
-                    kind: "stdio",
+                    transport: "stdio",
                     command: "mcp-server",
-                    args: ["--token=plaintext"],
+                    arguments: ["--token=plaintext"],
                     environment: [],
                 },
                 autoConnect: false,
@@ -98,7 +98,7 @@ test("repository redacts secret values before durable test evidence is written",
     try {
         const server = await fixture.repository.createServer("default", {
             name: "fixture",
-            configuration: { kind: "builtin", builtin: "fixture" },
+            configuration: { transport: "builtin", name: "fixture" },
             autoConnect: false,
         });
         await fixture.repository.saveTestCase({
@@ -128,7 +128,7 @@ test("repository enforces workspace scope and referential integrity", async () =
         const second = await fixture.repository.createWorkspace({ name: "Second" });
         const server = await fixture.repository.createServer(second.id, {
             name: "fixture",
-            configuration: { kind: "builtin", builtin: "fixture" },
+            configuration: { transport: "builtin", name: "fixture" },
             autoConnect: false,
         });
 
@@ -156,7 +156,7 @@ test("repository refuses to delete workspaces with active executions or evaluati
         const executionWorkspace = await fixture.repository.createWorkspace({ name: "Active execution" });
         const server = await fixture.repository.createServer(executionWorkspace.id, {
             name: "fixture",
-            configuration: { kind: "builtin", builtin: "fixture" },
+            configuration: { transport: "builtin", name: "fixture" },
             autoConnect: false,
         });
         await fixture.repository.saveExecution({
@@ -208,7 +208,7 @@ test("repository rejects deleting referenced servers and test cases", async () =
     try {
         const server = await fixture.repository.createServer("default", {
             name: "fixture",
-            configuration: { kind: "builtin", builtin: "fixture" },
+            configuration: { transport: "builtin", name: "fixture" },
             autoConnect: false,
         });
         await fixture.repository.saveTestCase({
@@ -250,7 +250,7 @@ test("server deletion preflight preserves active work and cascades terminal exec
     try {
         const server = await fixture.repository.createServer("default", {
             name: "execution-owner",
-            configuration: { kind: "builtin", builtin: "fixture" },
+            configuration: { transport: "builtin", name: "fixture" },
             autoConnect: false,
         });
         await fixture.repository.savePreferences("default", {
@@ -309,7 +309,7 @@ test("server deletion preserves self-contained historical evaluation evidence", 
     try {
         const server = await fixture.repository.createServer("default", {
             name: "evaluated-server",
-            configuration: { kind: "builtin", builtin: "fixture" },
+            configuration: { transport: "builtin", name: "fixture" },
             autoConnect: false,
         });
         await fixture.repository.saveEvaluationRun({
@@ -366,7 +366,7 @@ test("repository atomically reconciles orphaned active work after a crash", asyn
     try {
         const server = await fixture.repository.createServer("default", {
             name: "fixture",
-            configuration: { kind: "builtin", builtin: "fixture" },
+            configuration: { transport: "builtin", name: "fixture" },
             autoConnect: false,
         });
         for (const [index, status] of ["queued", "running", "cancelling"].entries()) {

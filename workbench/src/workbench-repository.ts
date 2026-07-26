@@ -8,6 +8,7 @@ import type {
     WorkbenchEvaluationExportPayload,
     WorkbenchHeaderSecretReference,
     WorkbenchSecretReference,
+    WorkbenchServerConfiguration,
     WorkbenchStdioServerConfiguration,
     WorkbenchStreamableHttpServerConfiguration,
     WorkbenchWorkspace,
@@ -29,45 +30,54 @@ import type { ExecutionRecord } from "./execution-service.js";
 import { AtomicJsonStore } from "./atomic-json-store.js";
 import { SecretRedactor } from "./secret-redactor.js";
 
-const STATE_VERSION = 4 as const;
+// 5: persisted connection configuration adopted the contract vocabulary
+// (kind -> transport, args -> arguments, cwd -> working_directory,
+// variable|header|builtin -> name, environmentVariable -> environment_variable).
+// A version-4 state file fails loudly rather than half-parsing.
+const STATE_VERSION = 5 as const;
 const DEFAULT_WORKSPACE_NAME = "Local workbench";
 
 const IdentifierSchema = z.string().min(1).max(128);
 const IsoDateSchema = z.string().datetime({ offset: true });
 const JsonObjectSchema = z.record(z.string(), z.unknown());
 
+// The persisted connection vocabulary is the contract vocabulary: same property
+// names, same discriminator, so nothing translates between disk and wire. What
+// remains local is bounds — the contract states shape, persistence additionally
+// caps length and materializes empty arrays. Both narrow rather than widen, so
+// the persisted shape stays a subtype of the contract, asserted below.
 const SecretReferenceSchema = z.object({
     source: z.literal("environment"),
-    environmentVariable: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/u),
+    environment_variable: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/u),
 }).strict();
 
 const EnvironmentReferenceSchema = z.object({
-    variable: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/u),
+    name: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/u),
     secret: SecretReferenceSchema,
 }).strict();
 
 const HeaderReferenceSchema = z.object({
-    header: z.string().min(1).max(256),
+    name: z.string().min(1).max(256),
     secret: SecretReferenceSchema,
     scheme: z.enum(["bearer", "basic"]).optional(),
 }).strict();
 
-export const PersistedConnectionDefinitionSchema = z.discriminatedUnion("kind", [
+export const PersistedConnectionDefinitionSchema = z.discriminatedUnion("transport", [
     z.object({
-        kind: z.literal("stdio"),
+        transport: z.literal("stdio"),
         command: z.string().min(1).max(4_096),
-        args: z.array(z.string().max(16_384)).max(256).default([]),
-        cwd: z.string().min(1).max(4_096).optional(),
+        arguments: z.array(z.string().max(16_384)).max(256).default([]),
+        working_directory: z.string().min(1).max(4_096).optional(),
         environment: z.array(EnvironmentReferenceSchema).max(128).default([]),
     }).strict(),
     z.object({
-        kind: z.literal("streamable_http"),
+        transport: z.literal("streamable_http"),
         endpoint: z.string().url().max(8_192),
         headers: z.array(HeaderReferenceSchema).max(128).default([]),
     }).strict(),
     z.object({
-        kind: z.literal("builtin"),
-        builtin: z.string().min(1).max(256),
+        transport: z.literal("builtin"),
+        name: z.string().min(1).max(256),
     }).strict(),
 ]);
 
@@ -75,85 +85,37 @@ export type PersistedConnectionDefinition = z.infer<typeof PersistedConnectionDe
 
 export type PersistedSecretReference = z.infer<typeof SecretReferenceSchema>;
 
-// The schemas above are the persisted vocabulary, not a second copy of the wire
-// contract: the state file spells these `kind`/`args`/`cwd`/`variable`/`header`/
-// `builtin` and caps their lengths, where the contract spells them `transport`/
-// `arguments`/`working_directory`/`name` and caps nothing. Both spellings are
-// deliberate, and toPersistedConfiguration/externalConfiguration in workbench-api
-// translate between them by hand.
-//
-// What was missing is any link between the two. A contract property renamed,
-// added, or dropped changed nothing here and surfaced as a runtime parse failure.
-// The tables below name the persisted spelling of every contract property, and
-// the mapped types index the contract by `keyof`, so an unnamed property is a
-// compile error. SameKeys closes the other direction, where the contract drops a
-// property the persisted schema still carries.
-//
-// This is a type-level binding only — no schema, disk format, or STATE_VERSION
-// changes. Aligning the two vocabularies outright would delete the translation
-// entirely, but it rewrites every persisted server record and is its own change.
 type Assert<T extends true> = T;
 type SameKeys<A, B> = [keyof A] extends [keyof B]
     ? ([keyof B] extends [keyof A] ? true : false)
     : false;
 
-type ContractShaped<TContract, TRename extends Record<keyof TContract, string>> = {
-    [K in keyof TContract as TRename[K]]: TContract[K];
-};
-
 /**
- * Compile-time only, no runtime representation. Every entry is `true` while the
- * persisted schema still names each property of its contract model; a rename,
- * addition, or removal on either side fails to satisfy `Assert<true>` here.
+ * Compile-time only, no runtime representation. There is no rename table to keep
+ * honest any more — the check is that the two vocabularies stay identical. Each
+ * entry pairs a persisted shape with its contract model and holds while their
+ * property sets match exactly, so a contract rename, addition, or removal fails
+ * `Assert<true>` here instead of surfacing as a parse failure against a state
+ * file. The subtype assertions carry the value types the key check cannot.
  */
-export type PersistedVocabularyTracksContract = [
+export type PersistedVocabularyMatchesContract = [
+    Assert<SameKeys<PersistedSecretReference, WorkbenchSecretReference>>,
+    Assert<SameKeys<z.infer<typeof EnvironmentReferenceSchema>, WorkbenchEnvironmentSecretReference>>,
+    Assert<SameKeys<z.infer<typeof HeaderReferenceSchema>, WorkbenchHeaderSecretReference>>,
     Assert<SameKeys<
-        PersistedSecretReference,
-        ContractShaped<WorkbenchSecretReference, {
-            source: "source";
-            environment_variable: "environmentVariable";
-        }>
+        Extract<PersistedConnectionDefinition, { transport: "stdio" }>,
+        WorkbenchStdioServerConfiguration
     >>,
     Assert<SameKeys<
-        z.infer<typeof EnvironmentReferenceSchema>,
-        ContractShaped<WorkbenchEnvironmentSecretReference, {
-            name: "variable";
-            secret: "secret";
-        }>
+        Extract<PersistedConnectionDefinition, { transport: "streamable_http" }>,
+        WorkbenchStreamableHttpServerConfiguration
     >>,
     Assert<SameKeys<
-        z.infer<typeof HeaderReferenceSchema>,
-        ContractShaped<WorkbenchHeaderSecretReference, {
-            name: "header";
-            secret: "secret";
-            scheme: "scheme";
-        }>
+        Extract<PersistedConnectionDefinition, { transport: "builtin" }>,
+        WorkbenchBuiltinServerConfiguration
     >>,
-    Assert<SameKeys<
-        Extract<PersistedConnectionDefinition, { kind: "stdio" }>,
-        ContractShaped<WorkbenchStdioServerConfiguration, {
-            transport: "kind";
-            command: "command";
-            arguments: "args";
-            working_directory: "cwd";
-            environment: "environment";
-        }>
-    >>,
-    Assert<SameKeys<
-        Extract<PersistedConnectionDefinition, { kind: "streamable_http" }>,
-        ContractShaped<WorkbenchStreamableHttpServerConfiguration, {
-            transport: "kind";
-            endpoint: "endpoint";
-            headers: "headers";
-        }>
-    >>,
-    Assert<SameKeys<
-        Extract<PersistedConnectionDefinition, { kind: "builtin" }>,
-        ContractShaped<WorkbenchBuiltinServerConfiguration, {
-            transport: "kind";
-            name: "builtin";
-        }>
-    >>,
+    Assert<PersistedConnectionDefinition extends WorkbenchServerConfiguration ? true : false>,
+    Assert<PersistedSecretReference extends WorkbenchSecretReference ? true : false>,
 ];
 
 export type WorkspaceRecord = WorkbenchWorkspace;
@@ -839,10 +801,10 @@ export class WorkbenchRepository {
     }
 
     private registerConnectionSecrets(configuration: PersistedConnectionDefinition): void {
-        const names = configuration.kind === "stdio"
-            ? configuration.environment.map((reference) => reference.secret.environmentVariable)
-            : configuration.kind === "streamable_http"
-              ? configuration.headers.map((reference) => reference.secret.environmentVariable)
+        const names = configuration.transport === "stdio"
+            ? configuration.environment.map((reference) => reference.secret.environment_variable)
+            : configuration.transport === "streamable_http"
+              ? configuration.headers.map((reference) => reference.secret.environment_variable)
               : [];
         this.redactor.registerSecretValues(names.flatMap((name) => {
             const value = this.environment[name];
@@ -1024,17 +986,17 @@ function redactConnection(
     configuration: PersistedConnectionDefinition,
     redactor: SecretRedactor,
 ): PersistedConnectionDefinition {
-    if (configuration.kind === "builtin") {
-        return { ...configuration, builtin: redactor.redactText(configuration.builtin) };
+    if (configuration.transport === "builtin") {
+        return { ...configuration, name: redactor.redactText(configuration.name) };
     }
-    if (configuration.kind === "stdio") {
+    if (configuration.transport === "stdio") {
         return {
             ...configuration,
             command: redactor.redactText(configuration.command),
-            args: configuration.args.map((argument) => redactor.redactText(argument)),
-            ...(configuration.cwd === undefined
+            arguments: configuration.arguments.map((argument) => redactor.redactText(argument)),
+            ...(configuration.working_directory === undefined
                 ? {}
-                : { cwd: redactor.redactText(configuration.cwd) }),
+                : { working_directory: redactor.redactText(configuration.working_directory) }),
             environment: configuration.environment.map((reference) => structuredClone(reference)),
         };
     }
@@ -1046,7 +1008,7 @@ function redactConnection(
 }
 
 function validateConnection(configuration: PersistedConnectionDefinition): void {
-    if (configuration.kind === "streamable_http") {
+    if (configuration.transport === "streamable_http") {
         const endpoint = new URL(configuration.endpoint);
         if (endpoint.protocol !== "http:" && endpoint.protocol !== "https:") {
             throw new Error("Remote MCP endpoints must use HTTP or HTTPS.");
@@ -1055,14 +1017,14 @@ function validateConnection(configuration: PersistedConnectionDefinition): void 
             throw new Error("Remote MCP endpoints cannot embed credentials, query values, or fragments.");
         }
         for (const header of configuration.headers) {
-            if (/^(cookie|set-cookie)$/iu.test(header.header)) {
+            if (/^(cookie|set-cookie)$/iu.test(header.name)) {
                 throw new Error("Persistent Cookie header configuration is not supported.");
             }
         }
         return;
     }
-    if (configuration.kind === "stdio") {
-        const serialized = [configuration.command, ...configuration.args].join(" ");
+    if (configuration.transport === "stdio") {
+        const serialized = [configuration.command, ...configuration.arguments].join(" ");
         if (/(?:^|\s)--?(?:api[-_]?key|authorization|password|secret|token)(?:=|\s|$)|\bbearer\s+\S+/iu.test(serialized)) {
             throw new Error("Stdio commands cannot contain plaintext credential arguments; use environment references.");
         }

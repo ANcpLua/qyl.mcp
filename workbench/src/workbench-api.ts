@@ -70,11 +70,11 @@ import { McpTelemetry } from "./telemetry.js";
 import { MAX_PERSISTED_RESULT_CHARACTERS } from "qyl-mcp-server/execution-result";
 import { SecretRedactor } from "./secret-redactor.js";
 import {
+    PersistedConnectionDefinitionSchema,
     RepositoryConflictError,
     RepositoryNotFoundError,
     WorkbenchRepository,
     type PersistedConnectionDefinition,
-    type PersistedSecretReference,
     type PersistedSuite,
     type PersistedTestCase,
     type ServerRecord,
@@ -88,8 +88,6 @@ import {
     sendUnauthorized,
     sendValidationProblem,
 } from "./problems.js";
-
-type ExternalServerConfiguration = QylContracts.WorkbenchServerConfiguration;
 
 /** Keyed by the contract's path-parameter names, which is what Express binds. */
 const ContractIdSchemas: Readonly<Record<string, z.ZodType<string>>> = {
@@ -286,8 +284,8 @@ export class WorkbenchApi {
         const existing = await this.repository.listServers(defaultWorkspace.id);
         for (const builtin of this.builtins) {
             const configuration: PersistedConnectionDefinition = {
-                kind: "builtin",
-                builtin: builtin.name,
+                transport: "builtin",
+                name: builtin.name,
             };
             const matches = existing.filter((server) => server.name === builtin.name);
             if (matches.length > 1) {
@@ -297,8 +295,8 @@ export class WorkbenchApi {
             }
             const persisted = matches[0];
             if (persisted !== undefined) {
-                if (persisted.configuration.kind !== "builtin"
-                    || persisted.configuration.builtin !== builtin.name) {
+                if (persisted.configuration.transport !== "builtin"
+                    || persisted.configuration.name !== builtin.name) {
                     throw new RepositoryConflictError(
                         `Built-in MCP server '${builtin.name}' conflicts with a persisted server that has different configuration.`,
                     );
@@ -485,7 +483,7 @@ export class WorkbenchApi {
             const server = await this.repository.createServer(workspaceId, {
                 name: body.name,
                 ...(body.description === undefined ? {} : { description: body.description }),
-                configuration: toPersistedConfiguration(body.configuration),
+                configuration: PersistedConnectionDefinitionSchema.parse(body.configuration),
                 autoConnect: body.auto_connect ?? false,
             });
             this.connections.register(toConnectionDefinition(server));
@@ -513,7 +511,7 @@ export class WorkbenchApi {
             const updated = await this.repository.updateServer(workspaceId, serverId, {
                 ...(body.name === undefined ? {} : { name: body.name }),
                 ...(body.description === undefined ? {} : { description: body.description }),
-                ...(body.configuration === undefined ? {} : { configuration: toPersistedConfiguration(body.configuration) }),
+                ...(body.configuration === undefined ? {} : { configuration: PersistedConnectionDefinitionSchema.parse(body.configuration) }),
             });
             if (body.configuration !== undefined) {
                 const wasConnected = this.connections.has(serverId)
@@ -1066,7 +1064,7 @@ export class WorkbenchApi {
             workspace_id: server.workspaceId,
             name: server.name,
             ...(server.description === undefined ? {} : { description: server.description }),
-            configuration: externalConfiguration(server.configuration),
+            configuration: WorkbenchServerConfigurationSchema.parse(server.configuration),
             connection: connectionResponse(this.connections.get(server.id), this.changedAt.get(server.id) ?? server.updatedAt),
             created_at: server.createdAt,
             updated_at: server.updatedAt,
@@ -1473,75 +1471,21 @@ function requireNonEmptyPatch(value: object): void {
     if (Object.keys(value).length === 0) throw new RequestValidationError("body", "At least one field must be supplied.");
 }
 
-function toPersistedConfiguration(configuration: ExternalServerConfiguration): PersistedConnectionDefinition {
-    switch (configuration.transport) {
-        case "stdio":
-            return {
-                kind: "stdio",
-                command: configuration.command,
-                args: configuration.arguments ?? [],
-                ...(configuration.working_directory === undefined ? {} : { cwd: configuration.working_directory }),
-                environment: (configuration.environment ?? []).map((reference) => ({
-                    variable: reference.name,
-                    secret: fromSecretReference(reference.secret),
-                })),
-            };
-        case "streamable_http":
-            return {
-                kind: configuration.transport,
-                endpoint: configuration.endpoint,
-                headers: (configuration.headers ?? []).map((reference) => ({
-                    header: reference.name,
-                    secret: fromSecretReference(reference.secret),
-                    ...(reference.scheme === undefined ? {} : { scheme: reference.scheme }),
-                })),
-            };
-        case "builtin":
-            return { kind: "builtin", builtin: configuration.name };
-    }
-}
-
-function externalConfiguration(configuration: PersistedConnectionDefinition): QylContracts.WorkbenchServerConfiguration {
-    switch (configuration.kind) {
-        case "stdio":
-            return WorkbenchServerConfigurationSchema.parse({
-                transport: "stdio",
-                command: configuration.command,
-                arguments: configuration.args,
-                ...(configuration.cwd === undefined ? {} : { working_directory: configuration.cwd }),
-                environment: configuration.environment.map((reference) => ({
-                    name: reference.variable,
-                    secret: toSecretReference(reference.secret),
-                })),
-            } satisfies ContractInput<QylContracts.WorkbenchServerConfiguration>);
-        case "streamable_http":
-            return WorkbenchServerConfigurationSchema.parse({
-                transport: configuration.kind,
-                endpoint: configuration.endpoint,
-                headers: configuration.headers.map((reference) => ({
-                    name: reference.header,
-                    secret: toSecretReference(reference.secret),
-                    ...(reference.scheme === undefined ? {} : { scheme: reference.scheme }),
-                })),
-            } satisfies ContractInput<QylContracts.WorkbenchServerConfiguration>);
-        case "builtin":
-            return WorkbenchServerConfigurationSchema.parse({ transport: "builtin", name: configuration.builtin } satisfies ContractInput<QylContracts.WorkbenchServerConfiguration>);
-    }
-}
-
 function toConnectionDefinition(server: ServerRecord): ConnectionDefinition {
     const configuration = server.configuration;
-    switch (configuration.kind) {
+    switch (configuration.transport) {
         case "stdio":
             return {
                 id: server.id,
                 kind: "stdio",
                 command: configuration.command,
-                args: configuration.args,
-                ...(configuration.cwd === undefined ? {} : { cwd: configuration.cwd }),
+                args: configuration.arguments,
+                ...(configuration.working_directory === undefined
+                    ? {}
+                    : { cwd: configuration.working_directory }),
                 environment: configuration.environment.map((reference) => ({
-                    variable: reference.variable,
-                    environmentVariable: reference.secret.environmentVariable,
+                    variable: reference.name,
+                    environmentVariable: reference.secret.environment_variable,
                 })),
             };
         case "streamable_http":
@@ -1550,13 +1494,13 @@ function toConnectionDefinition(server: ServerRecord): ConnectionDefinition {
                 kind: "streamable-http",
                 endpoint: configuration.endpoint,
                 headers: configuration.headers.map((reference) => ({
-                    header: reference.header,
-                    environmentVariable: reference.secret.environmentVariable,
+                    header: reference.name,
+                    environmentVariable: reference.secret.environment_variable,
                     ...(reference.scheme === undefined ? {} : { scheme: reference.scheme }),
                 })),
             };
         case "builtin":
-            return { id: server.id, kind: "builtin", builtin: configuration.builtin };
+            return { id: server.id, kind: "builtin", builtin: configuration.name };
     }
 }
 
@@ -1742,16 +1686,6 @@ function fromPreferencesUpdateRequest(
         ...(body.active_panel === undefined ? {} : { activePanel: body.active_panel }),
         ...(body.compact_mode === undefined ? {} : { compactMode: body.compact_mode }),
     };
-}
-
-/** The contract's snake_case secret reference as the internal persisted shape. */
-function fromSecretReference(secret: QylContracts.WorkbenchSecretReference): PersistedSecretReference {
-    return { source: secret.source, environmentVariable: secret.environment_variable };
-}
-
-/** The persisted secret reference as the contract's snake_case wire shape. */
-function toSecretReference(secret: PersistedSecretReference): QylContracts.WorkbenchSecretReference {
-    return { source: secret.source, environment_variable: secret.environmentVariable };
 }
 
 /** The contract's snake_case create request as the internal test-case shape. */

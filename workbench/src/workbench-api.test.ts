@@ -380,7 +380,7 @@ test("server configuration persistence failure preserves the connected runtime",
         assert.equal(harness.workbench.connections.get(serverId).lifecycle, "connected");
         assert.deepEqual(
             (await harness.workbench.repository.getServer("default", serverId)).configuration,
-            { kind: "builtin", builtin: fixtureResource.name },
+            { transport: "builtin", name: fixtureResource.name },
         );
     } finally {
         await harness.close();
