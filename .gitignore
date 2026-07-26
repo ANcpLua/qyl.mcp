@@ -5,3 +5,7 @@ dist-sandbox
 *.log
 *.duckdb
 *.duckdb.wal
+
+# Local AI agent overlays (skills, settings). Mirrors qyl/.gitignore so an
+# identical overlay file behaves the same in both repos.
+.claude/
