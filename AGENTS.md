@@ -22,6 +22,57 @@ inside an installable plugin is executable product content, not an engineering
 authority. Do not add design diaries, handoff prompts, comparison ledgers, or a
 second rules file.
 
+## 1.0.0 target — three surfaces, two planes
+
+This repository holds **both** MCP-plane components of the platform plus one
+product-plane UI. Only 2 of the platform's 9 components are on the MCP plane at
+all, and both live here — the entire closed/open asymmetry of qyl is these two
+nodes.
+
+| Surface | Plane | Protocol role | Packaging |
+| --- | --- | --- | --- |
+| `qyl.mcp/server` | **MCP** | MCP **server** — *closed world* | Node `qyl-mcp` · Railway · `mcp.qyl.at` · npm `qyl-mcp-server` |
+| `qyl.mcp/workbench` | **MCP** | MCP **client** — *open world* | Node loopback process · `:18888` |
+| `qyl.mcp/dashboard` | product | HTTP UI | Vite bundle + MCP-App HTML, served by the server |
+
+**Closed world** means the server exposes a fixed, generatable tool and
+resource surface over stored telemetry — a *projection* of the collector's
+data, never a second source of truth. **Open world** means the workbench talks
+to servers it did not write, so it validates schemas at runtime with no shared
+static contract. Do not let one surface's type discipline leak into the other.
+
+`qyl.mcp/dashboard` is **not** an MCP endpoint. A browser cannot be an MCP
+stdio client. Its *subject* is MCP; its *protocol* is HTTP. This is the same
+split the MCP Inspector makes, and it is why the UI and the client are separate
+deployables rather than one.
+
+The full ledger and the boundary law live in `qyl-workspace/AGENTS.md` — that
+file is binding and this one does not restate it.
+
+### The "breaking changes are free" clause expires at launch
+
+The opening paragraph of this file grants free breaking changes, no
+compatibility shims, and no migration layers. That is correct **today** and
+becomes wrong the moment qyl leaves beta. From launch onward, every
+public-facing change needs backwards compatibility, a shim, or a PR, and force
+pushes to `main` stop. Read that paragraph as scoped to the pre-launch window,
+not as a standing property of the repo.
+
+### TypeScript floor
+
+`server/tsconfig.json` runs beyond `strict`: `noUncheckedIndexedAccess`,
+`exactOptionalPropertyTypes`, `noImplicitOverride`. Keep them on and keep the
+tree at zero errors. `noPropertyAccessFromIndexSignature` is deliberately off —
+it flagged 48 purely stylistic sites and no defects.
+
+Prefer narrowing on the **value** over narrowing on a length or count, because
+the compiler can follow the former and not the latter:
+
+```ts
+const [first] = items;
+if (!first) return empty;   // `first` is now narrowed; items[0] never is
+```
+
 ## Role and ownership
 
 qyl.mcp owns MCP runtime behavior, local orchestration, and presentation. It is
