@@ -2,8 +2,14 @@ import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type {
+    WorkbenchBuiltinServerConfiguration,
+    WorkbenchEnvironmentSecretReference,
     WorkbenchEvaluationExport,
     WorkbenchEvaluationExportPayload,
+    WorkbenchHeaderSecretReference,
+    WorkbenchSecretReference,
+    WorkbenchStdioServerConfiguration,
+    WorkbenchStreamableHttpServerConfiguration,
     WorkbenchWorkspace,
 } from "@ancplua/qyl-api-schema/types";
 import {
@@ -68,6 +74,87 @@ export const PersistedConnectionDefinitionSchema = z.discriminatedUnion("kind", 
 export type PersistedConnectionDefinition = z.infer<typeof PersistedConnectionDefinitionSchema>;
 
 export type PersistedSecretReference = z.infer<typeof SecretReferenceSchema>;
+
+// The schemas above are the persisted vocabulary, not a second copy of the wire
+// contract: the state file spells these `kind`/`args`/`cwd`/`variable`/`header`/
+// `builtin` and caps their lengths, where the contract spells them `transport`/
+// `arguments`/`working_directory`/`name` and caps nothing. Both spellings are
+// deliberate, and toPersistedConfiguration/externalConfiguration in workbench-api
+// translate between them by hand.
+//
+// What was missing is any link between the two. A contract property renamed,
+// added, or dropped changed nothing here and surfaced as a runtime parse failure.
+// The tables below name the persisted spelling of every contract property, and
+// the mapped types index the contract by `keyof`, so an unnamed property is a
+// compile error. SameKeys closes the other direction, where the contract drops a
+// property the persisted schema still carries.
+//
+// This is a type-level binding only — no schema, disk format, or STATE_VERSION
+// changes. Aligning the two vocabularies outright would delete the translation
+// entirely, but it rewrites every persisted server record and is its own change.
+type Assert<T extends true> = T;
+type SameKeys<A, B> = [keyof A] extends [keyof B]
+    ? ([keyof B] extends [keyof A] ? true : false)
+    : false;
+
+type ContractShaped<TContract, TRename extends Record<keyof TContract, string>> = {
+    [K in keyof TContract as TRename[K]]: TContract[K];
+};
+
+/**
+ * Compile-time only, no runtime representation. Every entry is `true` while the
+ * persisted schema still names each property of its contract model; a rename,
+ * addition, or removal on either side fails to satisfy `Assert<true>` here.
+ */
+export type PersistedVocabularyTracksContract = [
+    Assert<SameKeys<
+        PersistedSecretReference,
+        ContractShaped<WorkbenchSecretReference, {
+            source: "source";
+            environment_variable: "environmentVariable";
+        }>
+    >>,
+    Assert<SameKeys<
+        z.infer<typeof EnvironmentReferenceSchema>,
+        ContractShaped<WorkbenchEnvironmentSecretReference, {
+            name: "variable";
+            secret: "secret";
+        }>
+    >>,
+    Assert<SameKeys<
+        z.infer<typeof HeaderReferenceSchema>,
+        ContractShaped<WorkbenchHeaderSecretReference, {
+            name: "header";
+            secret: "secret";
+            scheme: "scheme";
+        }>
+    >>,
+    Assert<SameKeys<
+        Extract<PersistedConnectionDefinition, { kind: "stdio" }>,
+        ContractShaped<WorkbenchStdioServerConfiguration, {
+            transport: "kind";
+            command: "command";
+            arguments: "args";
+            working_directory: "cwd";
+            environment: "environment";
+        }>
+    >>,
+    Assert<SameKeys<
+        Extract<PersistedConnectionDefinition, { kind: "streamable_http" }>,
+        ContractShaped<WorkbenchStreamableHttpServerConfiguration, {
+            transport: "kind";
+            endpoint: "endpoint";
+            headers: "headers";
+        }>
+    >>,
+    Assert<SameKeys<
+        Extract<PersistedConnectionDefinition, { kind: "builtin" }>,
+        ContractShaped<WorkbenchBuiltinServerConfiguration, {
+            transport: "kind";
+            name: "builtin";
+        }>
+    >>,
+];
 
 export type WorkspaceRecord = WorkbenchWorkspace;
 
