@@ -20,7 +20,7 @@ function jsonResponse(value: unknown, init: ResponseInit = {}): Response {
 
 test("API requests retain loopback cookie authentication and validate envelopes", async () => {
   const originalFetch = globalThis.fetch;
-  let request: { input: string | URL | Request; init?: RequestInit } | undefined;
+  let request: { input: string | URL | Request; init?: RequestInit | undefined } | undefined;
   globalThis.fetch = (input, init) => {
     request = { input, init };
     return Promise.resolve(jsonResponse({
@@ -44,7 +44,7 @@ test("API requests retain loopback cookie authentication and validate envelopes"
 
 test("API paths encode workspace identifiers and never synthesize secret values", async () => {
   const originalFetch = globalThis.fetch;
-  let request: { input: string | URL | Request; init?: RequestInit } | undefined;
+  let request: { input: string | URL | Request; init?: RequestInit | undefined } | undefined;
   globalThis.fetch = (input, init) => {
     request = { input, init };
     return Promise.resolve(jsonResponse({

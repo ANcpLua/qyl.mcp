@@ -16,7 +16,15 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    // Matches server/tsconfig.json. exactOptionalPropertyTypes is what keeps
+    // the boundary with @ancplua/qyl-api-schema honest: a generated request
+    // type says `description?: string`, and sending an explicit undefined is
+    // now a compile error rather than a silently dropped key.
+    "verbatimModuleSyntax": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true
   },
   "include": ["src"]
 }

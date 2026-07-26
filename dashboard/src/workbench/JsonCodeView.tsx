@@ -1,12 +1,17 @@
 import { useState, type ReactNode } from "react";
 import { formatJson, type JsonSchema } from "./schema.js";
 
+// Props are widened to `| undefined` rather than left bare-optional: under
+// exactOptionalPropertyTypes a caller passing an explicitly-undefined prop is a
+// different type from one omitting it, and for React props both are the same
+// thing. Types that cross the wire are handled the opposite way — see the
+// callers of @ancplua/qyl-api-schema, which omit rather than pass undefined.
 export interface JsonCodeViewProps {
   value: unknown;
-  label?: string;
-  className?: string;
-  copyLabel?: string;
-  onCopy?: (formattedJson: string) => void | Promise<void>;
+  label?: string | undefined;
+  className?: string | undefined;
+  copyLabel?: string | undefined;
+  onCopy?: ((formattedJson: string) => void | Promise<void>) | undefined;
 }
 
 function highlightedJson(formatted: string): ReactNode[] {

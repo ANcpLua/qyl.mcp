@@ -43,7 +43,11 @@ export interface Waterfall<S extends WaterfallSpan> {
  * bar full-width instead of dividing by zero.
  */
 export function computeWaterfall<S extends WaterfallSpan>(spans: S[]): Waterfall<S> {
-  if (spans.length === 0) return { rows: [], traceStartNs: "0", totalNs: 0 };
+  // Narrow on the value rather than the length: `spans.length === 0` guards the
+  // same case but leaves `spans[0]` typed as possibly-undefined, so the compiler
+  // cannot verify the seed reads below.
+  const [firstSpan] = spans;
+  if (!firstSpan) return { rows: [], traceStartNs: "0", totalNs: 0 };
 
   const byId = new Map<string, S>();
   for (const span of spans) byId.set(span.span_id, span);
@@ -69,8 +73,8 @@ export function computeWaterfall<S extends WaterfallSpan>(spans: S[]): Waterfall
   roots.sort(byStart);
   for (const list of children.values()) list.sort(byStart);
 
-  let traceStart = BigInt(spans[0].start_time_unix_nano);
-  let traceEnd = BigInt(spans[0].end_time_unix_nano);
+  let traceStart = BigInt(firstSpan.start_time_unix_nano);
+  let traceEnd = BigInt(firstSpan.end_time_unix_nano);
   for (const span of spans) {
     const start = BigInt(span.start_time_unix_nano);
     const end = BigInt(span.end_time_unix_nano);

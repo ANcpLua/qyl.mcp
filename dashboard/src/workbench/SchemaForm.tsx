@@ -103,7 +103,7 @@ function FieldMessages({
   descriptionId,
   errorId,
 }: {
-  description?: string;
+  description?: string | undefined;
   fieldIssues: readonly SchemaValidationIssue[];
   descriptionId: string;
   errorId: string;

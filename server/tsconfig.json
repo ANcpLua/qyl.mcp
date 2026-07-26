@@ -13,7 +13,15 @@
     "skipLibCheck": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    // Beyond `strict`. These are the flags that catch what `strict` alone does
+    // not: indexed reads that can be undefined, and the difference between an
+    // absent property and one explicitly set to undefined.
+    // Deliberately NOT enabled: noPropertyAccessFromIndexSignature — it flagged
+    // 48 purely stylistic sites and no defects.
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true
   },
   "include": ["ui"]
 }

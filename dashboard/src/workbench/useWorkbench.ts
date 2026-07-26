@@ -44,9 +44,13 @@ export interface Notice {
   key?: string;
 }
 
+// Drafts are local UI state, not wire types: an untouched description field is
+// the same thing as an absent one, so they accept explicit undefined. The
+// request types these are mapped into come from @ancplua/qyl-api-schema and
+// stay strict — the mapping omits the key instead of sending undefined.
 export interface TestCaseDraft {
   name: string;
-  description?: string;
+  description?: string | undefined;
   serverId: string;
   toolName: string;
   arguments?: unknown;
@@ -57,14 +61,14 @@ export interface TestCaseDraft {
 
 export interface SuiteDraft {
   name: string;
-  description?: string;
+  description?: string | undefined;
   testCaseIds: string[];
   tags: string[];
 }
 
 export interface ServerDraft {
   name: string;
-  description?: string;
+  description?: string | undefined;
   configuration: ServerConfiguration;
 }
 
@@ -444,13 +448,17 @@ export function useWorkbench() {
 
   const selectServer = useCallback((nextServerId: string) => {
     setServerId(nextServerId);
-    void updatePreference({
-      selected_server_id: nextServerId ? nextServerId as ServerId : undefined,
-    });
+    // Omit rather than send undefined: the request types are generated from
+    // @ancplua/qyl-api-schema, where an absent key and an explicitly-undefined
+    // one are different types. Behaviour is unchanged — JSON.stringify already
+    // dropped the undefined, so the server never saw the key either way.
+    void updatePreference(
+      nextServerId ? { selected_server_id: nextServerId as ServerId } : {},
+    );
   }, [updatePreference, setServerId]);
 
   const createWorkspace = useCallback((name: string, description?: string) => runBusy("create-workspace", async () => {
-    const created = await api.createWorkspace({ name, description: description || undefined });
+    const created = await api.createWorkspace({ name, ...(description ? { description } : {}) });
     await refreshWorkspaceList();
     setWorkspaceId(created.id);
     notify("success", `Workspace “${created.name}” created.`);
@@ -473,7 +481,11 @@ export function useWorkbench() {
 
   const createServer = useCallback((draft: ServerDraft & { autoConnect: boolean }) => runBusy("create-server", async () => {
     if (!workspaceIdRef.current) throw new Error("Select a workspace first.");
-    const created = await api.createServer(workspaceIdRef.current, draft);
+    const { description, ...serverRest } = draft;
+    const created = await api.createServer(workspaceIdRef.current, {
+      ...serverRest,
+      ...(description ? { description } : {}),
+    });
     await refreshWorkspace(workspaceIdRef.current);
     setServerId(created.id);
     notify("success", `Server “${created.name}” saved${draft.autoConnect ? " and connection started" : ""}.`);
@@ -579,7 +591,7 @@ export function useWorkbench() {
       timeout_ms: draft.timeoutMs,
       assertions: draft.assertions,
       tags: draft.tags,
-      description: draft.description || undefined,
+      ...(draft.description ? { description: draft.description } : {}),
     };
     const created = await api.createTestCase(workspaceIdRef.current, request);
     setTestCases((current) => [created, ...current]);
@@ -625,10 +637,11 @@ export function useWorkbench() {
 
   const createSuite = useCallback((draft: SuiteDraft) => runBusy("create-suite", async () => {
     if (!workspaceIdRef.current) throw new Error("Select a workspace first.");
+    const { description: suiteDescription, ...suiteRest } = draft;
     const request: TestSuiteCreateRequest = {
-      ...draft,
+      ...suiteRest,
       test_case_ids: draft.testCaseIds.map((id) => id as TestCaseId),
-      description: draft.description || undefined,
+      ...(suiteDescription ? { description: suiteDescription } : {}),
     };
     const created = await api.createSuite(workspaceIdRef.current, request);
     setSuites((current) => [created, ...current]);

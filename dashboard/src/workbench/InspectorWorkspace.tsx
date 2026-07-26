@@ -50,10 +50,17 @@ interface InspectorWorkspaceProps {
   onLoadTelemetry: (executionId: string) => Promise<void>;
 }
 
-type ToolItem = Omit<Tool, "inputSchema"> & {
+// The optional members of the generated `Tool` are re-declared as accepting
+// explicit undefined: this is a local view built by spreading a zod parse
+// result, which produces `T | undefined` for every optional. The generated type
+// itself stays untouched.
+type ToolItem = {
+  [K in keyof Omit<Tool, "inputSchema">]: Omit<Tool, "inputSchema">[K] | undefined;
+} & {
+  name: string;
   source: Record<string, unknown>;
   inputSchema: JsonSchema;
-  annotations?: ToolAnnotations;
+  annotations?: ToolAnnotations | undefined;
 };
 
 interface ToolInputState {
@@ -346,9 +353,14 @@ export function InspectorWorkspace({
     }
     const request: ExecutionRequest = {
       ...requestPreview,
-      confirmation: risk.requiresConfirmation
-        ? { acknowledged: true, acknowledgement: `Reviewed exact arguments and confirmed ${selectedTool.name}` }
-        : undefined,
+      ...(risk.requiresConfirmation
+        ? {
+            confirmation: {
+              acknowledged: true as const,
+              acknowledgement: `Reviewed exact arguments and confirmed ${selectedTool.name}`,
+            },
+          }
+        : {}),
     };
     try {
       const execution = await onStartExecution(request);

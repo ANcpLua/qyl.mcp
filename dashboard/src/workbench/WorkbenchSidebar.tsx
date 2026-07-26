@@ -93,10 +93,11 @@ function parseHeaders(value: string): Array<{
     if (rawScheme !== undefined && rawScheme !== "bearer" && rawScheme !== "basic") {
       throw new Error(`Header scheme “${rawScheme}” must be bearer or basic.`);
     }
+    const scheme = rawScheme as "bearer" | "basic" | undefined;
     return {
       name,
       secret: { source: "environment" as const, environment_variable: environmentVariable },
-      scheme: rawScheme as "bearer" | "basic" | undefined,
+      ...(scheme ? { scheme } : {}),
     };
   });
   return result.length > 0 ? result : undefined;
@@ -234,16 +235,30 @@ export function WorkbenchSidebar({
 
   function serverConfiguration(): ServerConfiguration {
     switch (transport) {
-      case "stdio":
+      case "stdio": {
+        // Each optional field is omitted rather than set to undefined: the
+        // parse* helpers return undefined for "nothing entered", and the
+        // generated config type treats an absent key and an undefined one as
+        // different. The emitted JSON is identical either way.
+        const args = parseArguments(argumentsText);
+        const workingDir = workingDirectory.trim();
+        const environment = parseEnvironment(environmentText);
         return {
           transport,
           command: command.trim(),
-          arguments: parseArguments(argumentsText),
-          working_directory: workingDirectory.trim() || undefined,
-          environment: parseEnvironment(environmentText),
+          ...(args ? { arguments: args } : {}),
+          ...(workingDir ? { working_directory: workingDir } : {}),
+          ...(environment ? { environment } : {}),
         };
-      case "streamable_http":
-        return { transport, endpoint: normalizeRemoteEndpoint(endpoint), headers: parseHeaders(headersText) };
+      }
+      case "streamable_http": {
+        const headers = parseHeaders(headersText);
+        return {
+          transport,
+          endpoint: normalizeRemoteEndpoint(endpoint),
+          ...(headers ? { headers } : {}),
+        };
+      }
     }
   }
 
@@ -271,7 +286,12 @@ export function WorkbenchSidebar({
       if (localProcessStartsOnSave && connectionSafetyReview(configuration) && !connectionReviewed) {
         throw new Error("Review and acknowledge the local executable connection before connecting.");
       }
-      const draft = { name: name.trim(), description: description.trim() || undefined, configuration };
+      const trimmedDescription = description.trim();
+      const draft = {
+        name: name.trim(),
+        ...(trimmedDescription ? { description: trimmedDescription } : {}),
+        configuration,
+      };
       if (editingServerId) await onUpdateServer(editingServerId, draft);
       else await onCreateServer({ ...draft, autoConnect });
       resetServerForm();

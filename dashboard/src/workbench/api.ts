@@ -128,7 +128,9 @@ export class WorkbenchApi {
     try {
       response = await fetch(`${this.baseUrl}${path}`, {
         ...init,
-        body,
+        // A GET has no body at all; `body: undefined` is a different RequestInit
+        // than one without the key once exactOptionalPropertyTypes is on.
+        ...(body === undefined ? {} : { body }),
         headers,
         credentials: "same-origin",
       });

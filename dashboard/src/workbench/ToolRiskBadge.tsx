@@ -2,8 +2,8 @@ import type { ToolAnnotations } from "@modelcontextprotocol/server";
 import { assessToolRisk } from "./risk.js";
 
 export interface ToolRiskBadgeProps {
-  annotations?: ToolAnnotations | null;
-  className?: string;
+  annotations?: ToolAnnotations | null | undefined;
+  className?: string | undefined;
 }
 
 export function ToolRiskBadge({ annotations, className }: ToolRiskBadgeProps) {

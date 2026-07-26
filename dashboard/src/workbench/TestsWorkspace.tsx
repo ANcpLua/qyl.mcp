@@ -100,13 +100,16 @@ function AssertionBuilder({ assertions, onChange }: { assertions: TestAssertion[
           break;
         }
         case "latency": next = { id, kind, max_duration_ms: maxDurationMs }; break;
+        // `path` and `flags` are omitted when empty rather than set to
+        // undefined — WorkbenchTestAssertion is generated and distinguishes the
+        // two under exactOptionalPropertyTypes.
         case "pattern":
           if (!pattern) throw new Error("A pattern is required.");
-          next = { id, kind, path: path || undefined, pattern, flags: flags || undefined };
+          next = { id, kind, ...(path ? { path } : {}), pattern, ...(flags ? { flags } : {}) };
           break;
-        case "schema": next = { id, kind, path: path || undefined, schema: parseJson(expected, "Schema") }; break;
+        case "schema": next = { id, kind, ...(path ? { path } : {}), schema: parseJson(expected, "Schema") }; break;
         case "exact":
-        case "partial": next = { id, kind, path: path || undefined, expected: parseJson(expected, "Expected value") }; break;
+        case "partial": next = { id, kind, ...(path ? { path } : {}), expected: parseJson(expected, "Expected value") }; break;
       }
       onChange([...assertions, next]);
     } catch (builderError) {
