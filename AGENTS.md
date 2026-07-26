@@ -46,8 +46,8 @@ stdio client. Its *subject* is MCP; its *protocol* is HTTP. This is the same
 split the MCP Inspector makes, and it is why the UI and the client are separate
 deployables rather than one.
 
-The full ledger and the boundary law live in `qyl-workspace/AGENTS.md` — that
-file is binding and this one does not restate it.
+The full ledger and the boundary law live in `qyl/ARCHITECTURE-1.0.0.md` — that
+document is normative and this one does not restate it.
 
 ### The "breaking changes are free" clause expires at launch
 
