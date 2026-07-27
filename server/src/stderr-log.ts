@@ -14,3 +14,7 @@
 export function logInfo(message: string): void {
   process.stderr.write(`${JSON.stringify({ level: "info", message })}\n`);
 }
+
+export function logWarning(message: string): void {
+  process.stderr.write(`${JSON.stringify({ level: "warn", message })}\n`);
+}
