@@ -165,6 +165,17 @@ real sibling collector as an official protocol receiver. Other contract changes
 also require live collector and runner integration proving the generated wire
 contract before completion.
 
+`npm test` in `server` starts with `verify:shapes`, the G10a verifier: no
+`z.object(` outside its two documented exemptions, and no module registering a
+tool without importing the generated validators. Its exemption list is
+self-policing — an entry whose file no longer declares a shape fails as a stale
+exemption, so the list shrinks by itself rather than outliving its reason.
+
+`server/tool-manifest.snapshot.json` is the G10b artifact: the full tool surface
+an agent sees, plus the contract revision it was generated from. Regenerate it
+deliberately with `npm run snapshot:tools` and read the diff — never to make a
+red test green.
+
 ## Publishing
 
 `qyl-mcp-server` publishes to npmjs.org from `publish.yml` by OIDC trusted

@@ -9,10 +9,14 @@
  *   - one span per phase, named after the phase, carrying a `ci.leg` string
  *     attribute (e.g. "macos-latest"); a failed phase sets span status error.
  *
- * The input/output schemas are deliberately inline zod, not
- * publishedContractSchema: this is an operational view over already-published
- * OTel contract data, not a new wire contract. If it graduates, it moves to
- * qyl-api-schema first.
+ * The input/output shapes have graduated: they are authored in qyl-api-schema
+ * as Mcp.Tools.CiLogInput/CiRunSummary/CiPhase/CiLogOutput. The inline zod below
+ * is what remains until the @ancplua/qyl-api-schema pin moves past 3.0.0, which
+ * is the first release whose JSON Schema carries those definitions —
+ * publishedContractSchema throws at module load on a definition the installed
+ * package does not have. On that bump, delete these schemas, take the four
+ * validators from contract-validation.ts, and drop the ci.ts entries from
+ * verify-generated-shapes.mjs.
  */
 import type { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";

@@ -17,6 +17,7 @@ import type { Server as HttpServer } from "node:http";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createServer } from "./server.js";
+import { assertCollectorContractRevision } from "./contract-handshake.js";
 import { requireBearerAuth } from "@modelcontextprotocol/express";
 import { createMcpApp, isLoopbackBindHost } from "./http-security.js";
 import { loadHostedOAuth } from "./oauth.js";
@@ -266,6 +267,11 @@ export function startStdioServer(serverFactory: () => McpServer): StdioServerHan
 }
 
 async function main(): Promise<void> {
+  // Before either transport accepts a connection: a server that answers tool
+  // calls against a contract the collector does not serve is worse than one that
+  // refuses to start.
+  await assertCollectorContractRevision();
+
   if (process.argv.includes("--stdio")) {
     startStdioServer(() => createServer({ transport: "stdio" }));
     return;
