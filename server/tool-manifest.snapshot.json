@@ -1,5 +1,5 @@
 {
-  "contract_revision": null,
+  "contract_revision": "sha256:9ba787d0bd3269a9",
   "tools": [
     {
       "name": "ci_log",
