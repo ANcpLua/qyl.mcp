@@ -16,6 +16,7 @@
 import * as generatedContract from "@ancplua/qyl-api-schema/types";
 import { collectorGet, resolveMode } from "./collector.js";
 import { collectorUrl } from "./config.js";
+import { logInfo } from "./stderr-log.js";
 
 // Read rather than imported: the pinned @ancplua/qyl-api-schema predates the
 // revision export, and a named import would not compile against the pin — the
@@ -75,7 +76,7 @@ export async function assertCollectorContractRevision(): Promise<void> {
 
   const expected = generatedContractRevision();
   if (expected === undefined) {
-    console.error(
+    logInfo(
       "contract-revision handshake inert: the pinned @ancplua/qyl-api-schema exports no " +
         "CONTRACT_REVISION, so this server cannot know its own revision. The gate activates " +
         "on the next @ancplua/qyl-api-schema publish and pin bump.",
@@ -87,5 +88,5 @@ export async function assertCollectorContractRevision(): Promise<void> {
     expected,
     fetchHealth: () => collectorGet("/health"),
   });
-  console.error(`contract revision ${advertised} matched at ${collectorUrl()}`);
+  logInfo(`contract revision ${advertised} matched at ${collectorUrl()}`);
 }
