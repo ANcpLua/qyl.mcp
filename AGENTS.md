@@ -112,6 +112,38 @@ namespace, even when an operator allowlists a matching header name. Any future
 argument-content capture belongs at an MCP-owned boundary, is disabled by
 default, and requires its own explicit policy and sanitization.
 
+## Untrusted execution and release integrity
+
+This hardening contract is reconciled through
+[`maf-doctor` v1.14.0](https://github.com/joslat/maf-doctor/releases/tag/v1.14.0).
+That upstream checkout is design evidence only; qyl.mcp never consumes it at
+build time or runtime.
+
+- A configured stdio MCP server is an untrusted child process. Launch an
+  executable with an argument vector and no shell; keep the SDK's minimal
+  default environment plus only the environment references explicitly declared
+  for that server. Never spread the qyl host's `process.env` into the child.
+  Bound connection and shutdown time, drain stdout and stderr concurrently,
+  cap retained output, and never persist raw stderr.
+- Any future subprocess path follows the same boundary. If qyl ever invokes
+  `git` inside a user-selected repository, disable repository-controlled hooks,
+  fsmonitor, pagers, and external protocols, ignore system git configuration,
+  and remove host credentials from the child environment.
+- CI that checks fork-controlled code has read-only permissions and no
+  credentials capable of comments, pushes, deployments, or publication.
+  Effectful follow-up belongs in a separate trusted-context job that consumes a
+  bounded, validated result rather than executing the fork checkout.
+- GitHub event text and manual inputs reach shell steps through explicit
+  environment variables and strict shape validation, never direct expression
+  interpolation into `run:`. A scanner or smoke gate must prove it inspected
+  the expected non-zero tool/protocol surface; an empty scan is a failure, not
+  a clean result.
+- A release must match the committed package version, identify reviewed
+  `main` history, publish through OIDC trusted publishing with provenance, and
+  pass the immutable-version commit check plus a clean external-consumer
+  handshake. Local publication and arbitrary-ref manual publication are not
+  release paths.
+
 ## Telemetry and protocol-era discipline
 
 qyl.mcp emits MCP telemetry, and the 2026-07-28 revision changes what several
