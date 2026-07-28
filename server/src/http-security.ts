@@ -1,21 +1,32 @@
-import { createMcpExpressApp } from "@modelcontextprotocol/express";
-
-export interface McpAppOptions {
-  bindHost: string;
-  allowedHosts?: readonly string[];
-  allowedOrigins?: readonly string[];
-}
+import {
+  hostHeaderValidationResponse,
+  localhostAllowedHostnames,
+  localhostAllowedOrigins,
+  originValidationResponse,
+} from "@modelcontextprotocol/server";
 
 function unique(values: readonly string[]): string[] {
   return [...new Set(values)];
 }
 
-export function createMcpApp({ bindHost, allowedHosts, allowedOrigins }: McpAppOptions) {
-  return createMcpExpressApp({
-    host: bindHost,
-    allowedHosts: allowedHosts === undefined ? undefined : unique([...allowedHosts]),
-    allowedOrigins: allowedOrigins === undefined ? undefined : unique([...allowedOrigins]),
-  });
+/**
+ * DNS-rebinding protection in front of the MCP handler, which validates
+ * neither header itself. Without explicit allowlists this is a loopback
+ * process, and the SDK's localhost sets are the correct answer — the same
+ * default the framework app factories arm.
+ */
+export function dnsRebindingResponse(
+  request: Request,
+  allowedHosts?: readonly string[],
+  allowedOrigins?: readonly string[],
+): Response | undefined {
+  return hostHeaderValidationResponse(
+    request,
+    unique(allowedHosts ?? localhostAllowedHostnames()),
+  ) ?? originValidationResponse(
+    request,
+    unique(allowedOrigins ?? localhostAllowedOrigins()),
+  );
 }
 
 export function isLoopbackBindHost(host: string): boolean {

@@ -1,136 +1,74 @@
 import assert from "node:assert/strict";
-import { once } from "node:events";
-import { createServer, request, type Server } from "node:http";
 import test from "node:test";
-import { createMcpApp } from "./http-security.js";
+import { dnsRebindingResponse, isLoopbackBindHost } from "./http-security.js";
 
-interface TestResponse {
-  status: number;
-  body: string;
-  headers: Record<string, string | string[] | undefined>;
+interface Envelope {
+  jsonrpc: string;
+  id: unknown;
+  error: { code: number; message: string };
 }
 
-// The subject is the Host/Origin guard in front of the routes, not what the
-// routes answer: every assertion below reads a 403 the guard produced or a
-// success it let through. Both routes therefore answer 204 — mounting an MCP
-// handler here would only prove the SDK still serves `initialize`.
-async function listen(): Promise<{ server: Server; port: number }> {
-  const app = createMcpApp({ bindHost: "127.0.0.1" });
-  app.get("/probe", (_request, response) => response.status(204).end());
-  app.all("/mcp", (_request, response) => response.status(204).end());
-  const server = createServer(app);
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const address = server.address();
-  assert(address && typeof address === "object");
-  return { server, port: address.port };
-}
-
-function postMcp(port: number, origin?: string): Promise<TestResponse> {
-  const headers: Record<string, string> = {
-    host: "127.0.0.1:3001",
-    accept: "application/json, text/event-stream",
-    "content-type": "application/json",
-    "content-length": "2",
-  };
-  if (origin !== undefined) headers.origin = origin;
-
-  return new Promise((resolve, reject) => {
-    const outgoing = request(
-      {
-        hostname: "127.0.0.1",
-        port,
-        path: "/mcp",
-        method: "POST",
-        headers,
-      },
-      (response) => {
-        response.setEncoding("utf8");
-        let body = "";
-        response.on("data", (chunk) => (body += chunk));
-        response.on("end", () => resolve({
-          status: response.statusCode ?? 0,
-          body,
-          headers: response.headers,
-        }));
-      },
-    );
-    outgoing.on("error", reject);
-    outgoing.end("{}");
-  });
-}
-
-function get(
-  port: number,
-  headers: Readonly<Record<string, string>> = {},
-  setHost = true,
-  path = "/probe",
-): Promise<TestResponse> {
-  return new Promise((resolve, reject) => {
-    const outgoing = request(
-      {
-        hostname: "127.0.0.1",
-        port,
-        path,
-        method: "GET",
-        headers,
-        setHost,
-      },
-      (response) => {
-        response.setEncoding("utf8");
-        let body = "";
-        response.on("data", (chunk) => (body += chunk));
-        response.on("end", () => resolve({
-          status: response.statusCode ?? 0,
-          body,
-          headers: response.headers,
-        }));
-      },
-    );
-    outgoing.on("error", reject);
-    outgoing.end();
-  });
-}
-
-test("standalone MCP app accepts loopback Host and local or absent Origin", async (context) => {
-  const { server, port } = await listen();
-  context.after(() => server.close());
-
-  assert.equal((await get(port)).status, 204);
-  assert.equal(
-    (await get(port, { host: `localhost:${port}`, origin: "http://localhost:3001" })).status,
-    204,
+function probe(
+  headers: Readonly<Record<string, string>>,
+  allowedHosts?: readonly string[],
+  allowedOrigins?: readonly string[],
+): Response | undefined {
+  return dnsRebindingResponse(
+    new Request("http://127.0.0.1:3001/mcp", { method: "POST", headers }),
+    allowedHosts,
+    allowedOrigins,
   );
-  assert.notEqual((await postMcp(port)).status, 403);
-  assert.notEqual((await postMcp(port, "http://localhost:3001")).status, 403);
+}
+
+async function envelope(response: Response): Promise<Envelope> {
+  return await response.json() as Envelope;
+}
+
+test("the loopback default accepts loopback Host and local or absent Origin", () => {
+  assert.equal(probe({ host: "127.0.0.1:3001" }), undefined);
+  assert.equal(probe({ host: `localhost:3001`, origin: "http://localhost:3001" }), undefined);
+  assert.equal(probe({ host: "127.0.0.1:9999", origin: "http://localhost:9999" }), undefined);
 });
 
-test("standalone MCP app rejects missing and rebound Host", async (context) => {
-  const { server, port } = await listen();
-  context.after(() => server.close());
+test("the guard rejects a missing and a rebound Host", async () => {
+  const missing = probe({});
+  assert(missing);
+  assert.equal(missing.status, 403);
+  assert.equal((await envelope(missing)).error.code, -32000);
 
-  // Node may reject a Host-less HTTP/1.1 request before Express; it must not
-  // reach the route in either case.
-  assert.notEqual((await get(port, {}, false)).status, 204);
-
-  const response = await get(port, { host: `attacker.example:${port}` });
-  assert.equal(response.status, 403);
-  assert.equal(JSON.parse(response.body).error.code, -32000);
+  const rebound = probe({ host: "attacker.example:3001" });
+  assert(rebound);
+  assert.equal(rebound.status, 403);
+  assert.equal((await envelope(rebound)).error.code, -32000);
 });
 
-test("standalone MCP app accepts loopback origins on any port and rejects other hosts", async (context) => {
-  const { server, port } = await listen();
-  context.after(() => server.close());
-
-  assert.notEqual((await postMcp(port, "http://localhost:9999")).status, 403);
-
+test("the guard rejects foreign and opaque Origins", async () => {
   for (const origin of ["https://attacker.example", "null"]) {
-    const response = await postMcp(port, origin);
+    const response = probe({ host: "127.0.0.1:3001", origin });
+    assert(response);
     assert.equal(response.status, 403);
-    const envelope = JSON.parse(response.body);
-    assert.equal(envelope.jsonrpc, "2.0");
-    assert.equal(envelope.error.code, -32000);
-    assert.match(envelope.error.message, /^Invalid Origin(?: header)?:/);
-    assert.equal(envelope.id, null);
+    const body = await envelope(response);
+    assert.equal(body.jsonrpc, "2.0");
+    assert.equal(body.error.code, -32000);
+    assert.match(body.error.message, /^Invalid Origin(?: header)?:/u);
+    assert.equal(body.id, null);
   }
+});
+
+test("explicit allowlists replace the loopback default", async () => {
+  const hosts = ["mcp.qyl.at", "healthcheck.railway.app"];
+  assert.equal(probe({ host: "mcp.qyl.at" }, hosts, hosts), undefined);
+  assert.equal(probe({ host: "healthcheck.railway.app" }, hosts, hosts), undefined);
+
+  const loopbackNowRejected = probe({ host: "127.0.0.1:3001" }, hosts, hosts);
+  assert(loopbackNowRejected);
+  assert.equal(loopbackNowRejected.status, 403);
+  assert.equal((await envelope(loopbackNowRejected)).error.code, -32000);
+});
+
+test("loopback bind hosts are named exactly", () => {
+  assert.equal(isLoopbackBindHost("127.0.0.1"), true);
+  assert.equal(isLoopbackBindHost("localhost"), true);
+  assert.equal(isLoopbackBindHost("::1"), true);
+  assert.equal(isLoopbackBindHost("0.0.0.0"), false);
 });

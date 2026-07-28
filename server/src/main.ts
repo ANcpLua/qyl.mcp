@@ -1,25 +1,22 @@
 #!/usr/bin/env node
 import {
-  buildOAuthProtectedResourceMetadata,
   createMcpHandler,
   getOAuthProtectedResourceMetadataUrl,
-  OAuthError,
-  OAuthErrorCode,
+  oauthMetadataResponse,
+  requireBearerAuth,
+  type AuthInfo,
   type AuthMetadataOptions,
+  type McpHttpHandler,
   type McpServer,
 } from "@modelcontextprotocol/server";
 import { serveStdio, type StdioServerHandle } from "@modelcontextprotocol/server/stdio";
-import { toNodeHandler } from "@modelcontextprotocol/node";
-import type { Express, Request, Response } from "express";
 import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import type { Server as HttpServer } from "node:http";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createServer } from "./server.js";
 import { assertCollectorContractRevision } from "./contract-handshake.js";
-import { requireBearerAuth } from "@modelcontextprotocol/express";
-import { createMcpApp, isLoopbackBindHost } from "./http-security.js";
+import { dnsRebindingResponse, isLoopbackBindHost } from "./http-security.js";
 import { loadHostedOAuth } from "./oauth.js";
 import { closeDefaultNativeExecutionRuntime } from "./native-execution.js";
 
@@ -32,12 +29,6 @@ function reportError(scope: string, error: unknown): void {
   console.error(
     `${scope} failed (${sanitizedErrorType(error)}); secret details omitted`,
   );
-}
-
-export function closeHttpListener(server: HttpServer): Promise<void> {
-  return new Promise((resolveClose, rejectClose) => {
-    server.close((error) => (error ? rejectClose(error) : resolveClose()));
-  });
 }
 
 export interface StreamableHTTPServerConfig {
@@ -120,129 +111,139 @@ function urlHost(host: string): string {
   return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
 }
 
-export function mountProtectedResourceMetadata(
-  app: Express,
-  options: AuthMetadataOptions,
-): string {
-  const metadataUrl = getOAuthProtectedResourceMetadataUrl(options.resourceServerUrl);
-  const metadataPath = new URL(metadataUrl).pathname;
-  const metadata = buildOAuthProtectedResourceMetadata(options);
+export interface HostedAuth {
+  gate: (request: Request) => Promise<AuthInfo | Response>;
+  metadata: AuthMetadataOptions;
+}
 
-  app.all(metadataPath, (request, response) => {
-    response.set("Access-Control-Allow-Origin", "*");
-    if (request.method === "OPTIONS") {
-      response.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-      const requestedHeaders = request.get("Access-Control-Request-Headers");
-      if (requestedHeaders !== undefined) {
-        response.set("Access-Control-Allow-Headers", requestedHeaders);
-        response.vary("Access-Control-Request-Headers");
-      }
-      response.status(204).end();
-      return;
-    }
-    if (request.method === "GET") {
-      response.status(200).json(metadata);
-      return;
-    }
-    if (request.method === "HEAD") {
-      response.status(200).end();
-      return;
-    }
+export interface McpFetchOptions {
+  handler: McpHttpHandler;
+  landingPage: string;
+  allowedHosts?: readonly string[] | undefined;
+  allowedOrigins?: readonly string[] | undefined;
+  auth?: HostedAuth | undefined;
+}
 
-    const error = new OAuthError(
-      OAuthErrorCode.MethodNotAllowed,
-      `The method ${request.method} is not allowed for this endpoint`,
+function landingResponse(request: Request, html: string): Response {
+  if (request.method !== "GET" && request.method !== "HEAD") return notFound();
+  return new Response(request.method === "HEAD" ? null : html, {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "public, max-age=300",
+    },
+  });
+}
+
+function healthResponse(request: Request): Response {
+  if (request.method !== "GET" && request.method !== "HEAD") return notFound();
+  return Response.json({ status: "ok" });
+}
+
+function notFound(): Response {
+  return new Response("Not Found", {
+    status: 404,
+    headers: { "content-type": "text/plain; charset=utf-8" },
+  });
+}
+
+/**
+ * The endpoint as one web-standard function. The order is the contract: the
+ * discovery documents answer before the gate, or an unauthenticated client
+ * has no way to learn where its token comes from; the rebinding guards answer
+ * before any route, because the handler validates no header; the gate resolves
+ * to verified `AuthInfo` or to a finished challenge, and only the first of
+ * those reaches the handler.
+ */
+export function createFetch(options: McpFetchOptions): (request: Request) => Promise<Response> {
+  return async (request: Request): Promise<Response> => {
+    const discovery = options.auth === undefined
+      ? undefined
+      : oauthMetadataResponse(request, options.auth.metadata);
+    if (discovery !== undefined) return discovery;
+
+    const rejected = dnsRebindingResponse(
+      request,
+      options.allowedHosts,
+      options.allowedOrigins,
     );
-    response
-      .set("Allow", "GET, HEAD, OPTIONS")
-      .status(405)
-      .json(error.toResponseObject());
-  });
-  return metadataUrl;
-}
+    if (rejected !== undefined) return rejected;
 
-export function mountLandingPage(app: Express, html: string): void {
-  app.get("/", (_request, response) => {
-    response
-      .set("Cache-Control", "public, max-age=300")
-      .status(200)
-      .type("html")
-      .send(html);
-  });
-}
+    const { pathname } = new URL(request.url);
+    if (pathname === "/healthz") return healthResponse(request);
+    if (pathname === "/") return landingResponse(request, options.landingPage);
+    if (pathname !== "/mcp") return notFound();
 
-export async function startStreamableHTTPServer(
-  serverFactory: () => McpServer,
-): Promise<void> {
-  const config = readStreamableHTTPConfig();
-  const handler = createMcpHandler(serverFactory, {
-    legacy: "reject",
-    onerror: (error) => reportError("Standalone MCP request", error),
-  });
-  const nodeHandler = toNodeHandler(handler, {
-    onerror: (error) => reportError("Standalone MCP adapter", error),
-  });
-  const app = createMcpApp({
-    bindHost: config.bindHost,
-    allowedHosts: config.allowedHosts,
-    allowedOrigins: config.allowedOrigins,
-  });
+    if (options.auth === undefined) return options.handler.fetch(request);
 
-  app.get("/healthz", (_request, response) => {
-    response.status(200).json({ status: "ok" });
-  });
-  mountLandingPage(
-    app,
-    await readFile(new URL("./mcp-home.html", import.meta.url), "utf8"),
-  );
-
-  const handleMcpRequest = async (request: Request, response: Response): Promise<void> => {
-    await nodeHandler(request, response, request.body);
+    const authInfo = await options.auth.gate(request);
+    if (authInfo instanceof Response) return authInfo;
+    return options.handler.fetch(request, { authInfo });
   };
+}
 
-  if (config.publicUrl !== undefined) {
-    const resourceServerUrl = new URL("/mcp", config.publicUrl);
-    const oauth = await loadHostedOAuth(resourceServerUrl);
-    const resourceMetadataUrl = mountProtectedResourceMetadata(app, {
+async function hostedAuth(publicUrl: URL): Promise<HostedAuth> {
+  const resourceServerUrl = new URL("/mcp", publicUrl);
+  const oauth = await loadHostedOAuth(resourceServerUrl);
+  return {
+    gate: requireBearerAuth({
+      verifier: oauth.verifier,
+      requiredScopes: oauth.requiredScopes,
+      resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resourceServerUrl),
+    }),
+    metadata: {
       oauthMetadata: oauth.oauthMetadata,
       resourceServerUrl,
       scopesSupported: oauth.scopesSupported,
-    });
-    const requireAuth = requireBearerAuth({
-      verifier: oauth.verifier,
-      requiredScopes: oauth.requiredScopes,
-      resourceMetadataUrl,
-    });
-    app.all("/mcp", requireAuth, handleMcpRequest);
-  } else {
-    app.all("/mcp", handleMcpRequest);
-  }
+    },
+  };
+}
 
-  const httpServer = app.listen(config.port, config.bindHost);
-  await new Promise<void>((resolveListening, rejectListening) => {
-    httpServer.once("listening", resolveListening);
-    httpServer.once("error", rejectListening);
-  });
-  const endpoint = config.publicUrl
-    ? new URL("/mcp", config.publicUrl).href
-    : `http://${urlHost(config.bindHost)}:${config.port}/mcp`;
-  console.log(`MCP server listening on ${endpoint}`);
+export interface ServeOptions {
+  port: number;
+  hostname: string;
+  fetch: (request: Request) => Promise<Response>;
+}
+
+async function createHostedRuntime(
+  config: StreamableHTTPServerConfig,
+): Promise<ServeOptions> {
+  // No `legacy` option: the default stateless posture serves 2026-07-28 and
+  // 2025-era clients from this one factory, and most clients shipping today
+  // are still 2025-era.
+  const handler = createMcpHandler(
+    () => createServer({ transport: "streamable_http" }),
+    { onerror: (error) => reportError("Standalone MCP request", error) },
+  );
+
+  const options: McpFetchOptions = {
+    handler,
+    landingPage: await readFile(new URL("./mcp-home.html", import.meta.url), "utf8"),
+    ...(config.allowedHosts === undefined ? {} : { allowedHosts: config.allowedHosts }),
+    ...(config.allowedOrigins === undefined ? {} : { allowedOrigins: config.allowedOrigins }),
+    ...(config.publicUrl === undefined ? {} : { auth: await hostedAuth(config.publicUrl) }),
+  };
 
   let shuttingDown = false;
-  const shutdown = () => {
+  const shutdown = (): void => {
     if (shuttingDown) return;
     shuttingDown = true;
     void handler.close()
-      .then(() => closeHttpListener(httpServer))
       .then(closeDefaultNativeExecutionRuntime)
       .catch((error: unknown) => {
         reportError("Standalone MCP HTTP shutdown cleanup", error);
         process.exitCode = 1;
       });
   };
-
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
+
+  const endpoint = config.publicUrl
+    ? new URL("/mcp", config.publicUrl).href
+    : `http://${urlHost(config.bindHost)}:${config.port}/mcp`;
+  console.log(`MCP server serving ${endpoint}`);
+
+  return { port: config.port, hostname: config.bindHost, fetch: createFetch(options) };
 }
 
 export function startStdioServer(serverFactory: () => McpServer): StdioServerHandle {
@@ -266,19 +267,6 @@ export function startStdioServer(serverFactory: () => McpServer): StdioServerHan
   return handle;
 }
 
-async function main(): Promise<void> {
-  // Before either transport accepts a connection: a server that answers tool
-  // calls against a contract the collector does not serve is worse than one that
-  // refuses to start.
-  await assertCollectorContractRevision();
-
-  if (process.argv.includes("--stdio")) {
-    startStdioServer(() => createServer({ transport: "stdio" }));
-    return;
-  }
-  await startStreamableHTTPServer(() => createServer({ transport: "streamable_http" }));
-}
-
 function toRealEntryHref(entryPoint: string): string {
   const resolved = resolve(entryPoint);
   try {
@@ -288,11 +276,40 @@ function toRealEntryHref(entryPoint: string): string {
   }
 }
 
-const entryPoint = process.argv[1];
-const entryHref = entryPoint === undefined ? undefined : toRealEntryHref(entryPoint);
-if (entryHref === import.meta.url) {
-  void main().catch((error: unknown) => {
+function isEntryPoint(): boolean {
+  const entryPoint = process.argv[1];
+  return entryPoint !== undefined && toRealEntryHref(entryPoint) === import.meta.url;
+}
+
+async function bootstrap(): Promise<ServeOptions | undefined> {
+  if (!isEntryPoint()) return undefined;
+
+  try {
+    // Before either transport accepts a connection: a server that answers tool
+    // calls against a contract the collector does not serve is worse than one
+    // that refuses to start.
+    await assertCollectorContractRevision();
+
+    if (process.argv.includes("--stdio")) {
+      startStdioServer(() => createServer({ transport: "stdio" }));
+      return undefined;
+    }
+
+    if (typeof (globalThis as { Bun?: unknown }).Bun === "undefined") {
+      console.error(
+        "The HTTP entry is a web-standard fetch handler served by its default export; " +
+          "run it with Bun. Node serves the stdio entry only (--stdio).",
+      );
+      process.exitCode = 1;
+      return undefined;
+    }
+
+    return await createHostedRuntime(readStreamableHTTPConfig());
+  } catch (error) {
     reportError("Standalone MCP startup", error);
     process.exitCode = 1;
-  });
+    return undefined;
+  }
 }
+
+export default await bootstrap();

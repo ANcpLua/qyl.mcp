@@ -12,7 +12,7 @@
   "scripts": {
     "build": "npm run build --workspace server && npm run build --workspace workbench && npm run build --workspace dashboard",
     "test": "npm run test --workspace server && npm run test --workspace workbench && npm run test --workspace dashboard",
-    "start": "node server/dist/main.js",
+    "start": "bun server/dist/main.js",
     "start:workbench": "node workbench/dist/main.js",
     "smoke": "npm run smoke --workspace server && npm run smoke --workspace workbench",
     "smoke:otlp": "npm run smoke:otlp --workspace workbench",
@@ -32,5 +32,6 @@
   "optionalDependencies": {
     "@typescript/typescript-darwin-arm64": "7.0.2",
     "@typescript/typescript-linux-x64": "7.0.2"
-  }
+  },
+  "packageManager": "bun@1.3.13"
 }

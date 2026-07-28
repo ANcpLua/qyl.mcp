@@ -1,34 +1,122 @@
 import assert from "node:assert/strict";
-import { once } from "node:events";
 import test from "node:test";
-import type { OAuthMetadata } from "@modelcontextprotocol/server";
-import { createMcpApp } from "./http-security.js";
+import { Client, StreamableHTTPClientTransport, type FetchLike } from "@modelcontextprotocol/client";
 import {
-  closeHttpListener,
-  mountLandingPage,
-  mountProtectedResourceMetadata,
+  createMcpHandler,
+  getOAuthProtectedResourceMetadataUrl,
+  McpServer,
+  OAuthError,
+  OAuthErrorCode,
+  requireBearerAuth,
+  type AuthInfo,
+  type McpHttpHandler,
+  type OAuthMetadata,
+  type OAuthTokenVerifier,
+} from "@modelcontextprotocol/server";
+import { z } from "zod";
+import {
+  createFetch,
   readStreamableHTTPConfig,
   sanitizedErrorType,
 } from "./main.js";
+import { QYL_MCP_RESOURCE, QYL_MCP_SCOPE } from "./oauth.js";
+
+const resourceServerUrl = new URL(QYL_MCP_RESOURCE);
+const origin = resourceServerUrl.origin;
+const landingPage = "<!doctype html><title>qyl MCP</title><main>ready</main>";
+
+const oauthMetadata: OAuthMetadata = {
+  issuer: "https://qyl-eu.eu.auth0.com/",
+  authorization_endpoint: "https://qyl-eu.eu.auth0.com/authorize",
+  token_endpoint: "https://qyl-eu.eu.auth0.com/oauth/token",
+  jwks_uri: "https://qyl-eu.eu.auth0.com/.well-known/jwks.json",
+  registration_endpoint: "https://qyl-eu.eu.auth0.com/oidc/register",
+  response_types_supported: ["code"],
+  token_endpoint_auth_methods_supported: ["none"],
+  code_challenge_methods_supported: ["S256"],
+};
+
+interface Endpoint {
+  fetch: (request: Request) => Promise<Response>;
+  handler: McpHttpHandler;
+}
+
+// The endpoint as main.ts assembles it for a hosted deployment. Tests drive
+// this function, not `handler.fetch` — going straight to the handler would
+// skip discovery, the rebinding guards, and the gate, which is most of what
+// the serving layer is.
+function hostedEndpoint(options: { authenticated?: boolean } = {}): Endpoint {
+  const handler = createMcpHandler(() => {
+    const server = new McpServer({ name: "qyl-serving-test", version: "1.0.0" });
+    server.registerTool(
+      "auth_context",
+      { description: "Read verified authentication context.", inputSchema: z.object({}) },
+      async (_arguments, requestContext) => ({
+        content: [{
+          type: "text",
+          text: requestContext.http?.authInfo?.clientId ?? "anonymous",
+        }],
+      }),
+    );
+    return server;
+  });
+
+  return {
+    handler,
+    fetch: createFetch({
+      handler,
+      landingPage,
+      allowedHosts: [resourceServerUrl.hostname],
+      allowedOrigins: [resourceServerUrl.hostname],
+      ...(options.authenticated === false ? {} : {
+        auth: {
+          gate: requireBearerAuth({
+            verifier: testVerifier(),
+            requiredScopes: [QYL_MCP_SCOPE],
+            resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resourceServerUrl),
+          }),
+          metadata: {
+            oauthMetadata,
+            resourceServerUrl,
+            scopesSupported: [QYL_MCP_SCOPE],
+          },
+        },
+      }),
+    }),
+  };
+}
+
+function hosted(path: string, init: RequestInit = {}): Request {
+  return new Request(`${origin}${path}`, {
+    ...init,
+    headers: { ...headerRecord(init.headers), host: resourceServerUrl.host },
+  });
+}
+
+function headerRecord(headers: RequestInit["headers"]): Record<string, string> {
+  return Object.fromEntries(new Headers(headers));
+}
+
+// The in-process wiring from the migration guide's "In-process testing", with
+// the endpoint's own fetch in place of the handler's: the URL is never dialed.
+function transportFetch(endpoint: Endpoint): FetchLike {
+  return (url, init) => endpoint.fetch(new Request(url, {
+    ...init,
+    headers: { ...headerRecord(init?.headers), host: resourceServerUrl.host },
+  }));
+}
 
 test("the public root serves the qyl MCP landing page", async (context) => {
-  const app = createMcpApp({ bindHost: "127.0.0.1" });
-  mountLandingPage(app, "<!doctype html><title>qyl MCP</title><main>ready</main>");
-  const listener = app.listen(0, "127.0.0.1");
-  await once(listener, "listening");
-  context.after(() => closeHttpListener(listener));
-  const address = listener.address();
-  assert(address && typeof address === "object");
+  const endpoint = hostedEndpoint();
+  context.after(() => endpoint.handler.close());
 
-  const response = await fetch(`http://127.0.0.1:${address.port}/`);
+  const response = await endpoint.fetch(hosted("/"));
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "text/html; charset=utf-8");
   assert.equal(response.headers.get("cache-control"), "public, max-age=300");
   assert.match(await response.text(), /<main>ready<\/main>/u);
-  assert.equal(
-    (await fetch(`http://127.0.0.1:${address.port}/`, { method: "POST" })).status,
-    404,
-  );
+  assert.equal((await endpoint.fetch(hosted("/", { method: "POST" }))).status, 404);
+  assert.equal((await endpoint.fetch(hosted("/healthz"))).status, 200);
 });
 
 test("sanitized errors expose only a safe error class", () => {
@@ -86,50 +174,103 @@ test("the hosted resource identity is an HTTPS origin", () => {
   );
 });
 
-test("hosted OAuth serves only path-aware protected-resource metadata", async (context) => {
-  const app = createMcpApp({ bindHost: "127.0.0.1" });
-  const resourceServerUrl = new URL("https://mcp.qyl.at/mcp");
-  const oauthMetadata: OAuthMetadata = {
-    issuer: "https://qyl.eu.auth0.com/",
-    authorization_endpoint: "https://qyl.eu.auth0.com/authorize",
-    token_endpoint: "https://qyl.eu.auth0.com/oauth/token",
-    jwks_uri: "https://qyl.eu.auth0.com/.well-known/jwks.json",
-    response_types_supported: ["code"],
-    token_endpoint_auth_methods_supported: ["none"],
-    code_challenge_methods_supported: ["S256"],
-  };
-  const metadataUrl = mountProtectedResourceMetadata(app, {
-    oauthMetadata,
-    resourceServerUrl,
-    scopesSupported: ["qyl:read"],
-  });
-  const listener = app.listen(0, "127.0.0.1");
-  await once(listener, "listening");
-  context.after(() => closeHttpListener(listener));
-  const address = listener.address();
-  assert(address && typeof address === "object");
-  const origin = `http://127.0.0.1:${address.port}`;
+test("the discovery chain is closed for a client that arrives with nothing", async (context) => {
+  const endpoint = hostedEndpoint();
+  context.after(() => endpoint.handler.close());
 
-  assert.equal(
-    metadataUrl,
-    "https://mcp.qyl.at/.well-known/oauth-protected-resource/mcp",
+  const unauthorized = await endpoint.fetch(hosted("/mcp", {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+  }));
+  assert.equal(unauthorized.status, 401);
+  const challenge = unauthorized.headers.get("www-authenticate") ?? "";
+  assert.match(challenge, /^Bearer/u);
+  assert.match(
+    challenge,
+    /resource_metadata="https:\/\/mcp\.qyl\.at\/\.well-known\/oauth-protected-resource\/mcp"/u,
   );
-  const response = await fetch(`${origin}/.well-known/oauth-protected-resource/mcp`);
-  assert.equal(response.status, 200);
-  assert.equal(response.headers.get("access-control-allow-origin"), "*");
-  assert.deepEqual(await response.json(), {
+
+  // The document the challenge points at answers before the gate, or the
+  // discovery path is a circle.
+  const metadata = await endpoint.fetch(hosted("/.well-known/oauth-protected-resource/mcp"));
+  assert.equal(metadata.status, 200);
+  assert.equal(metadata.headers.get("access-control-allow-origin"), "*");
+  assert.deepEqual(await metadata.json(), {
     resource: resourceServerUrl.href,
     authorization_servers: [oauthMetadata.issuer],
-    scopes_supported: ["qyl:read"],
+    scopes_supported: [QYL_MCP_SCOPE],
   });
+
+  // Clients that probe the origin directly get the AS mirror rather than a 404.
+  const mirror = await endpoint.fetch(hosted("/.well-known/oauth-authorization-server"));
+  assert.equal(mirror.status, 200);
+  assert.equal((await mirror.json() as OAuthMetadata).issuer, oauthMetadata.issuer);
   assert.equal(
-    (await fetch(`${origin}/.well-known/oauth-authorization-server`)).status,
-    404,
+    ((await (await endpoint.fetch(hosted("/.well-known/oauth-authorization-server")))
+      .json()) as OAuthMetadata).registration_endpoint,
+    oauthMetadata.registration_endpoint,
   );
-  const rejected = await fetch(
-    `${origin}/.well-known/oauth-protected-resource/mcp`,
-    { method: "POST" },
-  );
+
+  const rejected = await endpoint.fetch(hosted("/.well-known/oauth-protected-resource/mcp", {
+    method: "POST",
+  }));
   assert.equal(rejected.status, 405);
   assert.equal(rejected.headers.get("allow"), "GET, HEAD, OPTIONS");
 });
+
+test("a modern client reaches the tools through the whole pipeline", async (context) => {
+  const endpoint = hostedEndpoint();
+  const client = new Client(
+    { name: "modern-pipeline-client", version: "1.0.0" },
+    { versionNegotiation: { mode: "auto" } },
+  );
+  context.after(async () => {
+    await client.close().catch(() => undefined);
+    await endpoint.handler.close();
+  });
+
+  await client.connect(new StreamableHTTPClientTransport(resourceServerUrl, {
+    fetch: transportFetch(endpoint),
+    requestInit: { headers: { authorization: "Bearer good" } },
+  }));
+
+  assert.equal(client.getProtocolEra(), "modern");
+  assert.deepEqual((await client.listTools()).tools.map((tool) => tool.name), ["auth_context"]);
+  const result = await client.callTool({ name: "auth_context", arguments: {} });
+  assert.deepEqual(result.content, [{ type: "text", text: "strict-dcr-client" }]);
+});
+
+test("a 2025-era client lists the same tools from the same factory", async (context) => {
+  const endpoint = hostedEndpoint();
+  const client = new Client({ name: "legacy-pipeline-client", version: "1.0.0" });
+  context.after(async () => {
+    await client.close().catch(() => undefined);
+    await endpoint.handler.close();
+  });
+
+  await client.connect(new StreamableHTTPClientTransport(resourceServerUrl, {
+    fetch: transportFetch(endpoint),
+    requestInit: { headers: { authorization: "Bearer good" } },
+  }));
+
+  assert.equal(client.getProtocolEra(), "legacy");
+  assert.deepEqual((await client.listTools()).tools.map((tool) => tool.name), ["auth_context"]);
+});
+
+function testVerifier(): OAuthTokenVerifier {
+  return {
+    async verifyAccessToken(token: string): Promise<AuthInfo> {
+      if (token !== "good") {
+        throw new OAuthError(OAuthErrorCode.InvalidToken, "Access token verification failed");
+      }
+      return {
+        token,
+        clientId: "strict-dcr-client",
+        scopes: [QYL_MCP_SCOPE],
+        expiresAt: Math.floor(Date.now() / 1_000) + 300,
+        resource: resourceServerUrl,
+      };
+    },
+  };
+}
