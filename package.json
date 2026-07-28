@@ -16,7 +16,8 @@
     "start:workbench": "node workbench/dist/main.js",
     "smoke": "npm run smoke --workspace server && npm run smoke --workspace workbench",
     "smoke:otlp": "npm run smoke:otlp --workspace workbench",
-    "dev": "npm run build --workspace server && npm run dev --workspace dashboard"
+    "dev": "npm run build --workspace server && npm run dev --workspace dashboard",
+    "verify:pins": "node verify-contract-pins.mjs"
   },
   "engines": {
     "node": "24.x"

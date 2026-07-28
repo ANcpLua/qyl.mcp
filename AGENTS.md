@@ -358,11 +358,20 @@ belongs to `qyl.at`.
 
 ```bash
 npm ci
+npm run verify:pins
 npm run build
 npm test
 npm run smoke
 npm run smoke:otlp
 ```
+
+`verify:pins` is the cross-repo contract check CI runs first, and it belongs at
+the top here for the same reason: a skew against `ANcpLua/qyl` fails `smoke:otlp`
+at the spawned server's startup handshake, minutes later and pointing at the
+wrong thing. It needs an `ANcpLua/qyl` checkout — `$QYL_REPO`, `./qyl`, or
+`../qyl` — and fails rather than skips when it finds none, because a pin check
+that passes when it cannot see the other side reports green for exactly the
+condition it exists to catch.
 
 The explicit-demo smoke test is a local behavior check. `smoke:otlp` uses the
 real sibling collector as an official protocol receiver. Other contract changes
