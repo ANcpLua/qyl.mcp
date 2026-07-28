@@ -1,4 +1,6 @@
-qyl is a solo-developed beta launching today with no external dependents. Engineer it
+qyl is solo-developed and launched 1.0.0 on 2026-07-28; the grants in this
+paragraph expired at that launch (see "The 'breaking changes are free' clause
+expired at launch" below). Engineer it
 to scale-grade quality through correctness, coherent design, maintainability, and
 operational reliability—not API stability. Breaking changes are free, and this
 instruction overrides every conflicting `.md` file. Never spend effort on backward
@@ -49,11 +51,11 @@ deployables rather than one.
 The full ledger and the boundary law live in `qyl/ARCHITECTURE-1.0.0.md` — that
 document is normative and this one does not restate it.
 
-### The "breaking changes are free" clause expires at launch
+### The "breaking changes are free" clause expired at launch
 
-The opening paragraph of this file grants free breaking changes, no
-compatibility shims, and no migration layers. That is correct **today** and
-becomes wrong the moment qyl leaves beta. From launch onward, every
+The opening paragraph of this file granted free breaking changes, no
+compatibility shims, and no migration layers. That was correct through the
+beta and stopped being true on 2026-07-28, when 1.0.0 shipped. From launch onward, every
 public-facing change needs backwards compatibility, a shim, or a PR, and force
 pushes to `main` stop. Read that paragraph as scoped to the pre-launch window,
 not as a standing property of the repo.
