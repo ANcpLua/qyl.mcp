@@ -21,6 +21,20 @@ jobs:
           repository: ANcpLua/qyl
           path: qyl
 
+      # The two repos ride the same contract by lockstep bumps, not by a pinned
+      # ref — so name a cross-repo skew before the long build does, instead of
+      # letting smoke:otlp fail at the spawned server's startup handshake on a
+      # push that changed nothing here.
+      - name: Cross-repo contract pins must agree
+        run: |
+          mcp_pin="$(node -p "require('./server/package.json').dependencies['@ancplua/qyl-api-schema']")"
+          qyl_pin="$(sed -n 's:.*<QylApiContractsVersion[^>]*>\([^<]*\)</QylApiContractsVersion>.*:\1:p' qyl/Version.props)"
+          if [ "$mcp_pin" != "$qyl_pin" ]; then
+            echo "::error::cross-repo contract skew: this repo pins @ancplua/qyl-api-schema $mcp_pin, ANcpLua/qyl main pins Qyl.Api.Contracts $qyl_pin — smoke:otlp would fail its startup handshake. Land the lockstep bump on the lagging side first."
+            exit 1
+          fi
+          echo "contract pins agree: $mcp_pin"
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24

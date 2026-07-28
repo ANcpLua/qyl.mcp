@@ -11380,5 +11380,28 @@
         }
       }
     }
+  ],
+  "resources": [
+    {
+      "uri": "ui://qyl-explorer/mcp-app.html",
+      "name": "ui://qyl-explorer/mcp-app.html",
+      "title": null,
+      "description": null,
+      "mimeType": "text/html;profile=mcp-app"
+    },
+    {
+      "uri": "ui://qyl-explorer/mcp-dashboard.html",
+      "name": "ui://qyl-explorer/mcp-dashboard.html",
+      "title": null,
+      "description": null,
+      "mimeType": "text/html;profile=mcp-app"
+    },
+    {
+      "uri": "ui://qyl-explorer/observe-graph.html",
+      "name": "ui://qyl-explorer/observe-graph.html",
+      "title": null,
+      "description": null,
+      "mimeType": "text/html;profile=mcp-app"
+    }
   ]
 }

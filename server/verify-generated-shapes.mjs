@@ -6,7 +6,7 @@
  * contract-validation.ts. The check is textual on purpose — it is the same
  * check a reviewer would run, it cannot be satisfied by a type that merely
  * looks right, and it fails on the construct that starts a shadow contract
- * (`z.object(`) rather than on its consequences.
+ * (any zod object constructor) rather than on its consequences.
  *
  * The workbench is deliberately out of scope: it is the open-world client and
  * validates servers it did not write, at runtime, by design.
@@ -18,9 +18,20 @@ import { fileURLToPath } from "node:url";
 
 const sourceRoot = new URL("src/", import.meta.url);
 
+// z.object(, z.strictObject(, and z.looseObject( all declare a wire shape; the
+// two stricter spellings must not walk past a check aimed at the loose one.
+const shapePattern = /\bz\.(?:object|strictObject|looseObject)\s*\(/u;
+
+// A module anywhere under src/ imports the generated validators through a
+// relative path of whatever depth; matching only "./" would false-accuse every
+// correctly-written module in a subdirectory.
+const generatedImportPattern = /from "(?:\.\.?\/)+contract-validation\.js"/u;
+
 // Each exemption states why the file may declare a shape, and is itself
 // verified: an entry whose file no longer declares one is a stale exemption and
-// fails, so the list shrinks when the reason disappears.
+// fails, so the list shrinks when the reason disappears. Keys are paths
+// relative to src/, so a same-named file in a subdirectory cannot inherit an
+// exemption written for another.
 const shapeExemptions = {
   "native-execution.ts":
     "durable local execution evidence — persisted process state that never crosses an " +
@@ -31,50 +42,53 @@ const shapeExemptions = {
 // shapes came from somewhere else.
 const registrationExemptions = {};
 
-async function sourceFiles(directory) {
+async function sourceFiles(directory, prefix = "") {
   const found = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const child = new URL(entry.name + (entry.isDirectory() ? "/" : ""), directory);
-    if (entry.isDirectory()) found.push(...await sourceFiles(child));
+    if (entry.isDirectory()) found.push(...await sourceFiles(child, `${prefix}${entry.name}/`));
     else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
-      found.push([entry.name, child]);
+      found.push([`${prefix}${entry.name}`, child]);
     }
   }
   return found;
 }
 
 const violations = [];
-const staleExemptions = new Set([
-  ...Object.keys(shapeExemptions),
-  ...Object.keys(registrationExemptions),
-]);
+// Staleness is tracked per list: one file exempted in both lists must justify
+// both entries, not let either ride on the other's reason.
+const staleShapeExemptions = new Set(Object.keys(shapeExemptions));
+const staleRegistrationExemptions = new Set(Object.keys(registrationExemptions));
 
 for (const [name, url] of await sourceFiles(sourceRoot)) {
   const source = await readFile(url, "utf8");
-  const declaresShape = source.includes("z.object(");
+  const declaresShape = shapePattern.test(source);
   const registersTool = source.includes("registerTool(");
-  const importsGeneratedShapes = source.includes('from "./contract-validation.js"');
+  const importsGeneratedShapes = generatedImportPattern.test(source);
 
   if (declaresShape && !(name in shapeExemptions)) {
     violations.push(
-      `${name}: declares a shape with z.object( — tool and API shapes come from the ` +
-        "generated contract through contract-validation.ts",
+      `${name}: declares a shape with a zod object constructor — tool and API shapes come ` +
+        "from the generated contract through contract-validation.ts",
     );
   }
   if (registersTool && !importsGeneratedShapes && !(name in registrationExemptions)) {
     violations.push(
-      `${name}: registers a tool without importing generated schemas from ./contract-validation.js`,
+      `${name}: registers a tool without importing generated schemas from contract-validation.js`,
     );
   }
 
-  if (declaresShape && name in shapeExemptions) staleExemptions.delete(name);
+  if (declaresShape && name in shapeExemptions) staleShapeExemptions.delete(name);
   if (registersTool && !importsGeneratedShapes && name in registrationExemptions) {
-    staleExemptions.delete(name);
+    staleRegistrationExemptions.delete(name);
   }
 }
 
-for (const name of staleExemptions) {
-  violations.push(`${name}: exempted but no longer needs the exemption — delete the entry`);
+for (const name of staleShapeExemptions) {
+  violations.push(`${name}: shape-exempted but no longer declares one — delete the entry`);
+}
+for (const name of staleRegistrationExemptions) {
+  violations.push(`${name}: registration-exempted but no longer needs it — delete the entry`);
 }
 
 if (violations.length > 0) {
