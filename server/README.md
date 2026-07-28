@@ -24,7 +24,8 @@ It is an OAuth 2.1 resource server, so an unauthenticated request answers `401`
 with an RFC 9728 protected-resource document that a stock MCP client follows on
 its own.
 
-Both accept only protocol revision `2026-07-28`, on MCP TypeScript SDK 2.0.0.
+Both accept only protocol revision `2026-07-28`, on MCP TypeScript SDK 2.0.0 —
+Streamable HTTP through `createMcpHandler`, stdio through `serveStdio`.
 The HTTP server serves a product page at `/`; `/mcp` is the only protocol
 endpoint.
 

@@ -114,7 +114,12 @@ Regenerate the tool manifest whenever a tool or resource changes:
 npm run snapshot:tools --workspace server
 ```
 
-Read that diff rather than regenerating to make a red test green.
+Read that diff rather than regenerating to make a red test green. The plugin has
+its own gate:
+
+```bash
+python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugins/observe-graph
+```
 
 ## The workbench
 
@@ -128,6 +133,11 @@ npm run start:workbench
 ```
 
 Open <http://127.0.0.1:18888>. Set `QYL_MCP_WORKBENCH_PORT` for another port.
+
+The dashboard bootstraps an opaque `HttpOnly`, `SameSite=Strict` loopback
+session. Tokens are hashed in memory, never returned in API payloads, and do not
+survive a restart. Host and browser-origin checks protect the loopback API from
+DNS rebinding and cross-origin requests.
 
 **Connecting a server.** Choose *Add server*. Streamable HTTP takes a
 credential-free endpoint plus header references like
@@ -154,11 +164,19 @@ pass through credential and URI redaction.
 **What persists.** State defaults to `~/.qyl/mcp-workbench.json`
 (`QYL_MCP_STATE_PATH` overrides). Workspaces, server definitions, executions,
 protocol evidence, tests, suites, evaluation runs, and exports are written by
-atomic replacement with mode `0600`. Work interrupted by a restart is restored as
-explicit failure evidence, not silently dropped.
+atomic replacement with mode `0600`; a directory the app creates gets `0700`,
+while an existing parent you supply is left alone. Work interrupted by a restart
+is restored as explicit failure evidence, not silently dropped.
+
+The invocation composer keeps a generated form and a raw JSON view in sync,
+validates input in a deadline-bounded worker, applies an execution timeout, and
+sends an idempotency key. JSON Schema and pattern assertions run on that same
+isolated path — the browser never compiles a server-supplied regular expression.
 
 Each execution retains its request, result or typed error, lifecycle, duration,
 attempts, cancellation state, redacted JSON-RPC timeline, and trace correlation.
+Live protocol and execution streams use resumable event identifiers, and
+cancelling aborts the in-flight SDK request.
 The tests workspace persists real invocations with status, exact, partial, JSON
 Schema, pattern, and latency assertions; suites run with bounded concurrency and
 export as contract-validated JSON or Markdown with SHA-256 artifact evidence.
@@ -166,7 +184,9 @@ export as contract-validated JSON or Markdown with SHA-256 artifact evidence.
 The server also records inbound `tools/call` requests natively — including over
 plain stdio, with no workbench involved — to
 `~/.qyl/mcp-native-executions.json` (`QYL_MCP_NATIVE_STATE_PATH` overrides),
-newest 1,000 retained. Token usage and cost are kept only when a tool reports
+newest 1,000 retained. Results under two million serialized characters are kept
+in full after redaction; larger ones are replaced by an explicit truncation
+result rather than silently trimmed. Token usage and cost are kept only when a tool reports
 explicit structured evidence; qyl.mcp never infers them from prose, latency, or
 payload size.
 
@@ -205,8 +225,9 @@ every supported transport. An inbound server span parents off that remote contex
 and links any ambient transport span. HTTP propagation stays a separate concern
 and is never replaced by the MCP carrier.
 
-Reads of qyl's own telemetry run under async self-export suppression, so
-inspecting evidence does not generate recursive MCP telemetry.
+The built-in `qyl-telemetry` server reads real traces, logs, and sessions from
+`QYL_COLLECTOR_URL`. Those reads run under async self-export suppression, so
+inspecting qyl evidence does not generate recursive MCP telemetry.
 
 Signal-specific `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT` take
 precedence; otherwise the base order is `QYL_OTLP_ENDPOINT`,
