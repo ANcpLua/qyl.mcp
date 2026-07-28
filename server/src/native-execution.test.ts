@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { CallToolResultSchema } from "@modelcontextprotocol/core";
-import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import type { CallToolResult } from "@modelcontextprotocol/client";
 import { z } from "zod";
 import {
@@ -17,6 +16,7 @@ import {
 } from "./native-execution.js";
 import { SecretRedactor } from "./secret-redactor.js";
 import { MAX_PERSISTED_RESULT_CHARACTERS } from "./execution-result.js";
+import { connectModernTestClient } from "./modern-test-client.test-helper.js";
 import { createServer } from "./server.js";
 
 const TRACE_ID = "0123456789abcdef0123456789abcdef";
@@ -71,36 +71,38 @@ test("native tools/call automatically persists validated, redacted, correlated e
     now: () => now,
     id: () => "native-execution-1",
   });
-  const server = createServer({ nativeExecution: runtime, transport: "stdio" });
-  assert.equal(hasNativeExecutionTelemetry(server), true);
-  server.registerTool(
-    "fixture.evidence",
-    { inputSchema: z.object({ authorization: z.string() }) },
-    async (): Promise<CallToolResult> => {
-      now += 37;
-      return {
-        content: [{ type: "text", text: `result token=${secret}` }],
-        structuredContent: {
-          usage: {
-            input_tokens: 10,
-            output_tokens: 4,
-            total_tokens: 14,
-          },
-          cost_usd: {
-            amount_usd: 0.025,
-            source: secret,
-          },
+  const connection = await connectModernTestClient(
+    { name: "native-evidence-test", version: "1.0.0" },
+    () => {
+      const server = createServer({ nativeExecution: runtime, transport: "stdio" });
+      assert.equal(hasNativeExecutionTelemetry(server), true);
+      server.registerTool(
+        "fixture.evidence",
+        { inputSchema: z.object({ authorization: z.string() }) },
+        async (): Promise<CallToolResult> => {
+          now += 37;
+          return {
+            content: [{ type: "text", text: `result token=${secret}` }],
+            structuredContent: {
+              usage: {
+                input_tokens: 10,
+                output_tokens: 4,
+                total_tokens: 14,
+              },
+              cost_usd: {
+                amount_usd: 0.025,
+                source: secret,
+              },
+            },
+          };
         },
-      };
+      );
+      return server;
     },
   );
-  const client = new Client({ name: "native-evidence-test", version: "1.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
   try {
-    await server.connect(serverTransport);
-    await client.connect(clientTransport);
-    const result = await client.callTool({
+    const result = await connection.client.callTool({
       name: "fixture.evidence",
       arguments: { authorization: `Bearer ${secret}` },
       _meta: { traceparent: `00-${TRACE_ID}-${SPAN_ID}-01` },
@@ -158,8 +160,7 @@ test("native tools/call automatically persists validated, redacted, correlated e
     assert.doesNotMatch(JSON.stringify(completion), /NATIVE_EXECUTION_SECRET/u);
     assert.match(JSON.stringify(completion.responseBody), /\[REDACTED\]/u);
   } finally {
-    await client.close().catch(() => undefined);
-    await server.close().catch(() => undefined);
+    await connection.close();
   }
 });
 
@@ -170,36 +171,38 @@ test("native evidence records validation failure and bounds only the durable lar
     now: () => Date.parse("2026-07-17T13:00:00.000Z") + sequence++,
     id: () => `native-execution-${sequence}`,
   });
-  const server = createServer({ nativeExecution: runtime, transport: "inproc" });
-  assert.equal(hasNativeExecutionTelemetry(server), false);
   const completeText = "c".repeat(100_000);
   const largeText = "x".repeat(2_000_100);
-  server.registerTool(
-    "fixture.complete",
-    {},
-    async (): Promise<CallToolResult> => ({
-      content: [{ type: "text", text: completeText }],
-    }),
+  const connection = await connectModernTestClient(
+    { name: "native-validation-test", version: "1.0.0" },
+    () => {
+      const server = createServer({ nativeExecution: runtime, transport: "inproc" });
+      assert.equal(hasNativeExecutionTelemetry(server), false);
+      server.registerTool(
+        "fixture.complete",
+        {},
+        async (): Promise<CallToolResult> => ({
+          content: [{ type: "text", text: completeText }],
+        }),
+      );
+      server.registerTool(
+        "fixture.large",
+        {},
+        async (): Promise<CallToolResult> => ({
+          content: [{ type: "text", text: largeText }],
+        }),
+      );
+      server.registerTool(
+        "fixture.invalid",
+        {},
+        async () => ({ content: "not-an-array" }) as unknown as CallToolResult,
+      );
+      return server;
+    },
   );
-  server.registerTool(
-    "fixture.large",
-    {},
-    async (): Promise<CallToolResult> => ({
-      content: [{ type: "text", text: largeText }],
-    }),
-  );
-  server.registerTool(
-    "fixture.invalid",
-    {},
-    async () => ({ content: "not-an-array" }) as unknown as CallToolResult,
-  );
-  const client = new Client({ name: "native-validation-test", version: "1.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
   try {
-    await server.connect(serverTransport);
-    await client.connect(clientTransport);
-    await client.callTool({ name: "fixture.complete", arguments: {} });
+    await connection.client.callTool({ name: "fixture.complete", arguments: {} });
     const completeRecord = repository.final();
     assert.equal(completeRecord.status, "succeeded");
     const completeResult = CallToolResultSchema.parse(completeRecord.result);
@@ -217,7 +220,7 @@ test("native evidence records validation failure and bounds only the durable lar
     assert.equal(completeRecord.cost, undefined);
 
     const large = CallToolResultSchema.parse(
-      await client.callTool({ name: "fixture.large", arguments: {} }),
+      await connection.client.callTool({ name: "fixture.large", arguments: {} }),
     );
     assert.equal(large.content[0]?.type, "text");
     assert.equal(large.content[0]?.type === "text" ? large.content[0].text.length : 0, largeText.length);
@@ -227,7 +230,7 @@ test("native evidence records validation failure and bounds only the durable lar
     assert.doesNotMatch(JSON.stringify(largeRecord.result), /x{1000}/u);
 
     await assert.rejects(
-      client.callTool({ name: "fixture.invalid", arguments: {} }),
+      connection.client.callTool({ name: "fixture.invalid", arguments: {} }),
       /expected array|invalid_type/u,
     );
     const invalidRecord = repository.final();
@@ -235,8 +238,7 @@ test("native evidence records validation failure and bounds only the durable lar
     assert.equal(invalidRecord.protocolEvents[1]?.messageKind, "error");
     assert.equal(invalidRecord.result, undefined);
   } finally {
-    await client.close().catch(() => undefined);
-    await server.close().catch(() => undefined);
+    await connection.close();
   }
 });
 
@@ -257,28 +259,31 @@ test("native telemetry reports terminal evidence persistence failures", async ()
     now: () => Date.parse("2026-07-17T13:30:00.000Z"),
     id: () => "native-persistence-failure",
   });
-  const server = createServer({ nativeExecution: runtime, transport: "inproc" });
-  server.registerTool(
-    "fixture.persistence-failure",
-    {},
-    async (): Promise<CallToolResult> => ({ content: [{ type: "text", text: "valid" }] }),
+  const connection = await connectModernTestClient(
+    { name: "native-persistence-test", version: "1.0.0" },
+    () => {
+      const server = createServer({ nativeExecution: runtime, transport: "inproc" });
+      server.registerTool(
+        "fixture.persistence-failure",
+        {},
+        async (): Promise<CallToolResult> => ({
+          content: [{ type: "text", text: "valid" }],
+        }),
+      );
+      return server;
+    },
   );
-  const client = new Client({ name: "native-persistence-test", version: "1.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
   try {
-    await server.connect(serverTransport);
-    await client.connect(clientTransport);
     await assert.rejects(
-      client.callTool({ name: "fixture.persistence-failure", arguments: {} }),
+      connection.client.callTool({ name: "fixture.persistence-failure", arguments: {} }),
     );
     assert.equal(writes, 2);
     assert.equal(starts.length, 1);
     assert.equal(completions.length, 1);
     assert.equal(completions[0]?.errorType, "evidence_persistence_failed");
   } finally {
-    await client.close().catch(() => undefined);
-    await server.close().catch(() => undefined);
+    await connection.close();
   }
 });
 
@@ -290,19 +295,26 @@ test("file native repository uses atomic private persistence", async () => {
     now: () => Date.parse("2026-07-17T14:00:00.000Z"),
     id: () => "native-file-execution",
   });
-  const server = createServer({ nativeExecution: runtime, transport: "streamable_http" });
-  server.registerTool(
-    "fixture.persist",
-    {},
-    async (): Promise<CallToolResult> => ({ content: [{ type: "text", text: "persisted" }] }),
+  const connection = await connectModernTestClient(
+    { name: "native-file-test", version: "1.0.0" },
+    () => {
+      const server = createServer({
+        nativeExecution: runtime,
+        transport: "streamable_http",
+      });
+      server.registerTool(
+        "fixture.persist",
+        {},
+        async (): Promise<CallToolResult> => ({
+          content: [{ type: "text", text: "persisted" }],
+        }),
+      );
+      return server;
+    },
   );
-  const client = new Client({ name: "native-file-test", version: "1.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
   try {
-    await server.connect(serverTransport);
-    await client.connect(clientTransport);
-    await client.callTool({ name: "fixture.persist", arguments: {} });
+    await connection.client.callTool({ name: "fixture.persist", arguments: {} });
     const state = JSON.parse(await readFile(filePath, "utf8")) as {
       version: number;
       executions: NativeExecutionRecord[];
@@ -313,8 +325,7 @@ test("file native repository uses atomic private persistence", async () => {
     assert.equal(state.executions[0]?.request.transport, "streamable_http");
     assert.equal((await stat(filePath)).mode & 0o777, 0o600);
   } finally {
-    await client.close().catch(() => undefined);
-    await server.close().catch(() => undefined);
+    await connection.close();
     await rm(directory, { recursive: true, force: true });
   }
 });

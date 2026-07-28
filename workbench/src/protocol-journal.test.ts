@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { InMemoryTransport } from "@modelcontextprotocol/server";
 import type { Transport, JSONRPCMessage } from "@modelcontextprotocol/server";
 import {
     JournaledTransport,
@@ -9,6 +8,43 @@ import {
     type ProtocolMessageEntry,
 } from "./protocol-journal.js";
 import { SecretRedactor } from "./secret-redactor.js";
+
+class LinkedTestTransport implements Transport {
+    onclose?: () => void;
+    onerror?: (error: Error) => void;
+    onmessage?: (message: JSONRPCMessage) => void;
+    private peer?: LinkedTestTransport;
+    private closed = false;
+
+    static pair(): [LinkedTestTransport, LinkedTestTransport] {
+        const left = new LinkedTestTransport();
+        const right = new LinkedTestTransport();
+        left.peer = right;
+        right.peer = left;
+        return [left, right];
+    }
+
+    async start(): Promise<void> {}
+
+    async send(message: JSONRPCMessage): Promise<void> {
+        if (this.closed || this.peer === undefined) {
+            throw new Error("Linked test transport is closed.");
+        }
+        this.peer.onmessage?.(message);
+    }
+
+    async close(): Promise<void> {
+        if (this.closed) return;
+        this.closed = true;
+        const peer = this.peer;
+        this.peer = undefined;
+        this.onclose?.();
+        if (peer !== undefined) {
+            peer.peer = undefined;
+            await peer.close();
+        }
+    }
+}
 
 test("protocol journal is metadata-only by default for arbitrary tool-defined content", () => {
     let now = 1_000;
@@ -226,7 +262,7 @@ test("pending-map eviction completes an operation without a live span observer",
 });
 
 test("journaled transport transparently records SDK messages and close", async () => {
-    const [inner, peer] = InMemoryTransport.createLinkedPair();
+    const [inner, peer] = LinkedTestTransport.pair();
     const journal = new ProtocolJournal();
     const transport = new JournaledTransport(inner, journal, {
         correlation: () => ({ executionId: "execution-transport" }),
@@ -276,8 +312,8 @@ test("journaled transport transparently records SDK messages and close", async (
     await peer.send(response);
     assert.deepEqual(await inbound, response);
 
-    transport.setProtocolVersion("2025-11-25");
-    assert.equal(transport.protocolVersion, "2025-11-25");
+    transport.setProtocolVersion("2026-07-28");
+    assert.equal(transport.protocolVersion, "2026-07-28");
     await transport.close();
     await transport.close();
 
@@ -674,7 +710,7 @@ test("journaled transport records sanitized transport failures", async () => {
 test("journaled transport times notification send and receive acknowledgements", async () => {
     let now = 20_000;
     const operations: CompletedProtocolOperation[] = [];
-    const [inner, peer] = InMemoryTransport.createLinkedPair();
+    const [inner, peer] = LinkedTestTransport.pair();
     const journal = new ProtocolJournal({
         now: () => now,
         onOperation: (operation) => operations.push(operation),

@@ -37,7 +37,7 @@ function nearestRankP95(sortedAsc: number[]): number {
 }
 
 const MCP_METHOD_NAME_RE =
-  /^(initialize|ping|tools\/(?:call|list)|resources\/(?:read|list|templates\/list|subscribe|unsubscribe)|prompts\/(?:get|list)|completion\/complete|logging\/setLevel|notifications\/[\w/]+)(?:\s+(.+))?$/;
+  /^(server\/discover|ping|tools\/(?:call|list)|resources\/(?:read|list|templates\/list|subscribe|unsubscribe)|prompts\/(?:get|list)|completion\/complete|logging\/setLevel|subscriptions\/listen|notifications\/[\w/]+)(?:\s+(.+))?$/;
 
 /**
  * Classify a span as MCP traffic. Attributes win (full-fidelity emitters); the

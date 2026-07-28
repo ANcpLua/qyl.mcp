@@ -4,7 +4,7 @@ import {
   applyHostFonts,
   applyHostStyleVariables,
   type McpUiHostContext,
-} from "@modelcontextprotocol/ext-apps";
+} from "./mcp-app-client.ts";
 import type {
   ControlWorkflowRunOutput,
   DisplayWorkflowGraphOutput,
@@ -1132,7 +1132,12 @@ if (visualFixtureMode) {
         context.displayMode !== "fullscreen"
         && context.availableDisplayModes?.includes("fullscreen")
       ) {
-        await app.requestDisplayMode({ mode: "fullscreen" }).catch(() => undefined);
+        try {
+          await app.requestDisplayMode({ mode: "fullscreen" });
+        } catch (error) {
+          liveAnnouncerEl.textContent =
+            `Fullscreen unavailable: ${error instanceof Error ? error.message : String(error)}`;
+        }
       }
     }
   }).catch((error: unknown) => {

@@ -5,7 +5,7 @@ import {
   applyHostFonts,
   applyHostStyleVariables,
   type McpUiHostContext,
-} from "@modelcontextprotocol/ext-apps";
+} from "./mcp-app-client.ts";
 import type {
   DisplayTracesOutput,
   FetchTelemetryOutput,
@@ -898,4 +898,6 @@ app.connect().then(() => {
   if (ctx) {
     handleHostContextChanged(ctx);
   }
+}).catch((error: unknown) => {
+  showError(error instanceof Error ? error.message : String(error));
 });

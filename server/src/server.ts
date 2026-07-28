@@ -21,7 +21,6 @@ import type {
   FetchTelemetryInput,
   FetchTelemetryOutput,
 } from "@ancplua/qyl-api-schema/types";
-import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/server";
 import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/server";
 import fs from "node:fs/promises";
@@ -68,6 +67,8 @@ import {
   installNativeExecutionRecording,
   type NativeExecutionRuntime,
 } from "./native-execution.js";
+
+const RESOURCE_MIME_TYPE = "text/html;profile=mcp-app";
 
 export {
   closeDefaultNativeExecutionRuntime,

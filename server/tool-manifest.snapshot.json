@@ -13,6 +13,7 @@
       },
       "meta": null,
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "run_id": {
@@ -31,11 +32,11 @@
             "maximum": 50
           }
         },
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Input for ci_log."
       },
       "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "runs": {
@@ -160,7 +161,6 @@
         "required": [
           "mode"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Structured output for ci_log: recent runs, or one run's phases."
       }
@@ -177,6 +177,7 @@
       },
       "meta": null,
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "run_id": {
@@ -209,11 +210,11 @@
           "action",
           "idempotency_key"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Input for control_workflow_run."
       },
       "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "command": {
@@ -292,7 +293,6 @@
         "required": [
           "command"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Structured output for control_workflow_run."
       }
@@ -313,6 +313,7 @@
         }
       },
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "hours": {
@@ -322,11 +323,11 @@
             "maximum": 168
           }
         },
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Input for display_mcp_dashboard."
       },
       "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "stats": {
@@ -551,7 +552,6 @@
         "required": [
           "stats"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Structured output for display_mcp_dashboard."
       }
@@ -572,6 +572,7 @@
         }
       },
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "trace_id": {
@@ -601,11 +602,11 @@
             "maximum": 100
           }
         },
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Input for display_traces."
       },
       "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "traces": {
@@ -2053,7 +2054,6 @@
           "traces",
           "mode"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Structured output for display_traces.",
         "$defs": {
@@ -2193,6 +2193,7 @@
         }
       },
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "run_id": {
@@ -2220,11 +2221,11 @@
             "maximum": 2000
           }
         },
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Input for display_workflow_graph. Omit run_id to select the most recent run."
       },
       "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "graph": {
@@ -2610,7 +2611,6 @@
           "live_controls_available",
           "mode"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Structured output for display_workflow_graph."
       }
@@ -2633,6 +2633,7 @@
         }
       },
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "view": {
@@ -2682,11 +2683,11 @@
         "required": [
           "view"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Input for the app-only fetch_telemetry tool."
       },
       "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "traces": {
@@ -6415,7 +6416,6 @@
         "required": [
           "mode"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Structured output for the app-only fetch_telemetry tool.",
         "$defs": {
@@ -6557,6 +6557,7 @@
         }
       },
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "run_id": {
@@ -6613,11 +6614,11 @@
           "run_id",
           "after_sequence"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Input for the app-only fetch_workflow_graph_updates tool."
       },
       "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "page": {
@@ -7211,7 +7212,6 @@
           "page",
           "mode"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Structured output for the app-only fetch_workflow_graph_updates tool."
       }
@@ -7228,6 +7228,7 @@
       },
       "meta": null,
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "trace_id": {
@@ -7246,11 +7247,11 @@
         "required": [
           "trace_id"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Input for get_trace."
       },
       "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "trace": {
@@ -8683,7 +8684,6 @@
           "trace",
           "mode"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Structured output for get_trace.",
         "$defs": {
@@ -8819,6 +8819,7 @@
       },
       "meta": null,
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "run_id": {
@@ -8849,11 +8850,11 @@
         "required": [
           "run_id"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Input for get_workflow_graph."
       },
       "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "graph": {
@@ -9235,7 +9236,6 @@
           "graph",
           "mode"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Structured output for get_workflow_graph."
       }
@@ -9252,6 +9252,7 @@
       },
       "meta": null,
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "limit": {
@@ -9264,11 +9265,11 @@
             "type": "boolean"
           }
         },
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Input for list_sessions."
       },
       "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "sessions": {
@@ -9494,7 +9495,6 @@
           "sessions",
           "mode"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Structured output for list_sessions."
       }
@@ -9511,6 +9511,7 @@
       },
       "meta": null,
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "limit": {
@@ -9520,11 +9521,11 @@
             "maximum": 100
           }
         },
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Input for list_traces."
       },
       "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "traces": {
@@ -10280,7 +10281,6 @@
           "traces",
           "mode"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Structured output for list_traces.",
         "$defs": {
@@ -10416,6 +10416,7 @@
       },
       "meta": null,
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "status": {
@@ -10438,11 +10439,11 @@
             "maximum": 100
           }
         },
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Input for list_workflow_runs."
       },
       "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "runs": {
@@ -10528,7 +10529,6 @@
           "has_more",
           "mode"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Structured output for list_workflow_runs."
       }
@@ -10545,6 +10545,7 @@
       },
       "meta": null,
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "trace_id": {
@@ -10577,11 +10578,11 @@
             "maximum": 200
           }
         },
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Input for search_logs."
       },
       "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "logs": {
@@ -11256,7 +11257,6 @@
           "logs",
           "mode"
         ],
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Structured output for search_logs.",
         "$defs": {

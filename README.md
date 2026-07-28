@@ -82,15 +82,13 @@ because it launches code with the current user's permissions.
 
 The runner uses the MCP v2 split packages. Every user-configured stdio and
 Streamable HTTP connection pins protocol revision `2026-07-28` and fails when a
-peer cannot negotiate it; there is no fallback or negotiation setting. The
-built-in Qyl server uses the SDK's legacy-only in-memory transport internally,
-which is not a user-configurable or network-facing connection. A Streamable
-HTTP conformance test verifies `server/discover`, modern-era identity, and the
-absence of `initialize`.
+peer cannot negotiate it; there is no fallback or negotiation setting.
+In-process and built-in connections use the same fetch-native, modern-only
+server entry and `server/discover` exchange.
 
 ## Workbench workflow
 
-After initialization, the workbench retains the negotiated protocol version,
+After discovery, the workbench retains the negotiated protocol version,
 server identity, capabilities, instructions, and session information. Discovery
 collects paginated tools, resources, resource templates, and prompts; it can be
 refreshed without replacing the last useful snapshot on failure.

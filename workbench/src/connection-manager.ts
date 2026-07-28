@@ -1,11 +1,11 @@
 import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import {
     Client,
-    InMemoryTransport,
     StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
 import type {
     Implementation,
+    JSONRPCMessage,
     Prompt,
     Resource,
     ResourceTemplateType,
@@ -13,6 +13,11 @@ import type {
     Tool,
     Transport,
 } from "@modelcontextprotocol/client";
+import { JSONRPCMessageSchema } from "@modelcontextprotocol/core";
+import {
+    createMcpHandler,
+    type McpServer,
+} from "@modelcontextprotocol/server";
 import { hasNativeExecutionTelemetry } from "qyl-mcp-server";
 import {
     JournaledTransport,
@@ -85,12 +90,7 @@ export interface StreamableHttpConnectionDefinition extends RemoteConnectionDefi
     kind: "streamable-http";
 }
 
-export interface InProcessMcpServer {
-    connect(transport: Transport): Promise<void>;
-    close(): Promise<void>;
-}
-
-export type InProcessMcpServerFactory = () => InProcessMcpServer | Promise<InProcessMcpServer>;
+export type InProcessMcpServerFactory = () => McpServer | Promise<McpServer>;
 
 export interface InProcessConnectionDefinition extends ConnectionDefinitionBase {
     kind: "inproc";
@@ -216,7 +216,7 @@ export class ConnectionManagerError extends Error {
 interface ActiveConnection {
     client: Client;
     transport: JournaledTransport;
-    server?: InProcessMcpServer;
+    server?: { close(): Promise<void> };
 }
 
 interface ConnectionEntry {
@@ -235,7 +235,7 @@ interface ConnectionEntry {
 
 interface CreatedTransport {
     transport: Transport;
-    server?: InProcessMcpServer;
+    server?: { close(): Promise<void> };
 }
 
 /** Resolve HTTP header values exclusively from server-side environment keys. */
@@ -464,14 +464,12 @@ export class ConnectionManager {
         this.transition(entry, "connecting");
 
         let client: Client | undefined;
-        let server: InProcessMcpServer | undefined;
+        let server: { close(): Promise<void> } | undefined;
         try {
             const created = await this.createTransport(
                 entry.definition,
-                deadline,
                 journal,
                 serverJournal,
-                options.signal,
             );
             server = created.server;
             const transport = new JournaledTransport(created.transport, journal, {
@@ -482,16 +480,14 @@ export class ConnectionManager {
             client = new Client(this.clientInfo, {
                 listMaxPages: this.maxDiscoveryPages,
                 versionNegotiation: {
-                    mode: entry.definition.kind === "inproc" || entry.definition.kind === "builtin"
-                        ? "legacy"
-                        : { pin: MODERN_PROTOCOL_REVISION },
+                    mode: { pin: MODERN_PROTOCOL_REVISION },
                 },
             });
             client.onclose = () => this.handleUnexpectedClose(entry, client!, journal);
             await withTimeout(
                 client.connect(transport, requestOptions(deadline, this.now, options.signal)),
                 remaining(deadline, this.now),
-                `MCP initialization for '${connectionId}' timed out.`,
+                `MCP connection for '${connectionId}' timed out.`,
                 options.signal,
             );
 
@@ -666,10 +662,8 @@ export class ConnectionManager {
 
     private async createTransport(
         definition: ConnectionDefinition,
-        deadline: number,
         journal: ProtocolJournal,
         serverJournal: ProtocolJournal,
-        signal?: AbortSignal,
     ): Promise<CreatedTransport> {
         switch (definition.kind) {
             case "stdio": {
@@ -706,10 +700,7 @@ export class ConnectionManager {
                 return this.createInProcessTransport(
                     definition.id,
                     definition.serverFactory,
-                    deadline,
-                    journal,
                     serverJournal,
-                    signal,
                 );
             case "builtin": {
                 const factory = this.builtins.get(definition.builtin);
@@ -719,10 +710,7 @@ export class ConnectionManager {
                 return this.createInProcessTransport(
                     definition.id,
                     factory,
-                    deadline,
-                    journal,
                     serverJournal,
-                    signal,
                 );
             }
         }
@@ -731,53 +719,77 @@ export class ConnectionManager {
     private async createInProcessTransport(
         connectionId: string,
         factory: InProcessMcpServerFactory,
-        deadline: number,
-        journal: ProtocolJournal,
         serverJournal: ProtocolJournal,
-        signal?: AbortSignal,
     ): Promise<CreatedTransport> {
-        const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-        const factoryPromise = Promise.resolve().then(factory);
-        let server: InProcessMcpServer;
-        try {
-            server = await withTimeout(
-                factoryPromise,
-                remaining(deadline, this.now),
-                "In-process MCP server factory timed out.",
-                signal,
-            );
-        } catch (error) {
-            if (isTimeoutError(error) || isAbortError(error)) {
-                void factoryPromise
-                    .then((lateServer) => lateServer.close())
-                    .catch((cleanupError: unknown) => journal.recordTransportError(cleanupError));
+        let closed = false;
+        const handler = createMcpHandler(async () => {
+            const server = await factory();
+            if (closed) {
+                await server.close();
+                throw new Error("In-process MCP handler is closed.");
             }
-            throw error;
+            return server;
+        }, {
+            legacy: "reject",
+            onerror: (error) => serverJournal.recordTransportError(
+                error,
+                this.correlation?.(connectionId),
+            ),
+        });
+        const transport = new StreamableHTTPClientTransport(
+            new URL(`http://qyl-inproc.invalid/${encodeURIComponent(connectionId)}/mcp`),
+            {
+                fetch: (url, init) => this.fetchInProcess(
+                    handler.fetch,
+                    new Request(url, init),
+                    serverJournal,
+                    connectionId,
+                ),
+            },
+        );
+        return {
+            transport,
+            server: {
+                close: async () => {
+                    closed = true;
+                    await handler.close();
+                },
+            },
+        };
+    }
+
+    private async fetchInProcess(
+        fetchHandler: (request: Request) => Promise<Response>,
+        request: Request,
+        journal: ProtocolJournal,
+        connectionId: string,
+    ): Promise<Response> {
+        const correlation = this.correlation?.(connectionId);
+        const requestMessage = await parseJsonRpcMessage(request.clone());
+        const activeOperation = requestMessage === undefined
+            ? undefined
+            : journal.startOperation("inbound", requestMessage, correlation);
+        if (requestMessage !== undefined) {
+            journal.recordMessage(
+                "inbound",
+                requestMessage,
+                correlation,
+                activeOperation === undefined ? {} : { activeOperation },
+            );
         }
+
         try {
-            await withTimeout(
-                server.connect(new JournaledTransport(serverTransport, serverJournal, {
-                    correlation: () => this.correlation?.(connectionId),
-                    propagation: currentMcpPropagation,
-                })),
-                remaining(deadline, this.now),
-                "In-process MCP server connection timed out.",
-                signal,
+            const response = await (
+                activeOperation?.run(() => fetchHandler(request))
+                ?? fetchHandler(request)
             );
-            return { transport: clientTransport, server };
-        } catch (error) {
-            try {
-                await withTimeout(
-                    server.close(),
-                    this.disconnectTimeoutMs,
-                    "In-process MCP server cleanup timed out.",
-                );
-            } catch (cleanupError) {
-                throw new AggregateError(
-                    [error, cleanupError],
-                    `In-process MCP server connection failed: ${errorMessage(error)}; cleanup failed: ${errorMessage(cleanupError)}`,
-                );
+            const responseMessage = await parseJsonRpcMessage(response.clone());
+            if (responseMessage !== undefined) {
+                journal.recordMessage("outbound", responseMessage, correlation);
             }
+            return response;
+        } catch (error) {
+            journal.recordTransportError(error, correlation);
             throw error;
         }
     }
@@ -801,7 +813,7 @@ export class ConnectionManager {
 
     private async cleanupFailedConnection(
         client: Client | undefined,
-        server: InProcessMcpServer | undefined,
+        server: { close(): Promise<void> } | undefined,
         journal: ProtocolJournal,
     ): Promise<void> {
         const cleanup = Promise.allSettled([
@@ -881,13 +893,7 @@ export class ConnectionManager {
             connectionId: entry.definition.id,
             transport: entry.definition.kind,
         };
-        if ("protocolVersion" in operation
-            && operation.protocolVersion !== undefined
-            && entry.negotiatedProtocolVersion === undefined) {
-            entry.negotiatedProtocolVersion = operation.protocolVersion;
-        }
-        const protocolVersion = ("protocolVersion" in operation ? operation.protocolVersion : undefined)
-            ?? entry.initialization?.protocolVersion
+        const protocolVersion = entry.initialization?.protocolVersion
             ?? entry.negotiatedProtocolVersion
             ?? entry.connectingTransport?.protocolVersion;
         if (protocolVersion !== undefined) enriched.protocolVersion = protocolVersion;
@@ -1041,6 +1047,18 @@ function httpEndpoint(value: string): URL {
     return url;
 }
 
+async function parseJsonRpcMessage(
+    input: Request | Response,
+): Promise<JSONRPCMessage | undefined> {
+    if (!input.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
+        return undefined;
+    }
+    const text = await input.text();
+    if (text.length === 0) return undefined;
+    const decoded: unknown = JSON.parse(text);
+    return JSONRPCMessageSchema.parse(decoded);
+}
+
 function requestOptions(
     deadline: number,
     now: () => number,
@@ -1109,10 +1127,6 @@ function isTimeoutError(error: unknown): boolean {
         error.message.toLowerCase().includes("timed out") ||
         error.message.toLowerCase().includes("timeout")
     );
-}
-
-function isAbortError(error: unknown): boolean {
-    return error instanceof Error && error.name === "AbortError";
 }
 
 function errorMessage(error: unknown): string {

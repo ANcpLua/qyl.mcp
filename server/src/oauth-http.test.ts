@@ -62,7 +62,6 @@ test("verified SDK AuthInfo reaches the modern tool request context", async (con
   const handler = createMcpHandler(() => {
     const server = new McpServer(
       { name: "auth-context-test", version: "1.0.0" },
-      { inputRequired: { legacyShim: false } },
     );
     server.registerTool(
       "auth_context",

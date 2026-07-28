@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { createServer as createHttpServer, type Server as HttpServer } from "node:http";
 import test from "node:test";
 import { CallToolResultSchema } from "@modelcontextprotocol/core";
-import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { getDemo } from "./demo.js";
+import { connectModernTestClient } from "./modern-test-client.test-helper.js";
 import { createServer } from "./server.js";
 
 const TraceAuthorizationSecret = "TRACE_AUTHORIZATION_SENTINEL";
@@ -74,15 +74,13 @@ test("telemetry tools redact secrets before model text and structured content", 
   process.env.QYL_API_KEY = EnvironmentSecret;
   delete process.env.QYL_DEMO;
 
-  const mcpServer = createServer({ nativeExecution: false });
-  const client = new Client({ name: "redaction-test", version: "1.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const connection = await connectModernTestClient(
+    { name: "redaction-test", version: "1.0.0" },
+    () => createServer({ nativeExecution: false }),
+  );
 
   try {
-    await mcpServer.connect(serverTransport);
-    await client.connect(clientTransport);
-
-    const traceResult = CallToolResultSchema.parse(await client.callTool({
+    const traceResult = CallToolResultSchema.parse(await connection.client.callTool({
       name: "get_trace",
       arguments: { trace_id: trace.trace_id },
     }));
@@ -98,7 +96,7 @@ test("telemetry tools redact secrets before model text and structured content", 
     assert.match(serializedTrace, /gen_ai\.usage\.input_tokens/u);
     assert.match(serializedTrace, /"type":"int","value":"42"/u);
 
-    const logsResult = CallToolResultSchema.parse(await client.callTool({
+    const logsResult = CallToolResultSchema.parse(await connection.client.callTool({
       name: "search_logs",
       arguments: {},
     }));
@@ -114,8 +112,7 @@ test("telemetry tools redact secrets before model text and structured content", 
     assert.match(serializedLogs, /gen_ai\.usage\.output_tokens/u);
     assert.match(serializedLogs, /"type":"int","value":"17"/u);
   } finally {
-    await client.close().catch(() => undefined);
-    await mcpServer.close().catch(() => undefined);
+    await connection.close();
     restoreEnvironment("QYL_COLLECTOR_URL", previousCollectorUrl);
     restoreEnvironment("QYL_DEMO", previousDemo);
     restoreEnvironment("QYL_API_KEY", previousApiKey);

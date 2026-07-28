@@ -72,7 +72,7 @@ test("connection manager initializes an in-process SDK client and discovers ever
         connected.initialization?.instructions,
         "Use fixture capabilities for connection tests.",
     );
-    assert.equal(typeof connected.initialization?.protocolVersion, "string");
+    assert.equal(connected.initialization?.protocolVersion, "2026-07-28");
     assert.deepEqual(
         connected.initialization?.discovery.tools.map((tool) => tool.name),
         ["probe"],
@@ -99,7 +99,8 @@ test("connection manager initializes an in-process SDK client and discovers ever
     const journal = manager.getJournal("local");
     assert(journal);
     const messageEntries = journal.snapshot().filter((entry) => entry.kind === "message");
-    assert(messageEntries.some((entry) => entry.method === "initialize"));
+    assert(messageEntries.some((entry) => entry.method === "server/discover"));
+    assert.equal(messageEntries.some((entry) => entry.method === "initialize"), false);
     assert(messageEntries.some((entry) => entry.method === "tools/list"));
     assert(messageEntries.some((entry) => entry.method === "resources/list"));
     assert(messageEntries.some((entry) => entry.method === "resources/templates/list"));
@@ -117,16 +118,16 @@ test("connection manager initializes an in-process SDK client and discovers ever
         "disconnecting",
     ]);
     assert.equal(lifecycles.at(-1), "disconnected");
-    assert(operations.some((operation) => operation.method === "initialize" && operation.role === "client"));
-    assert(operations.some((operation) => operation.method === "initialize" && operation.role === "server"));
-    const initializeOperations = operations.filter((operation) => operation.method === "initialize");
-    const initializedOperations = operations.filter(
-        (operation) => operation.method === "notifications/initialized",
+    assert(operations.some(
+        (operation) => operation.method === "server/discover" && operation.role === "client",
+    ));
+    assert(operations.some(
+        (operation) => operation.method === "server/discover" && operation.role === "server",
+    ));
+    const discoverOperations = operations.filter(
+        (operation) => operation.method === "server/discover",
     );
-    assert.equal(initializeOperations.length, 2);
-    assert.equal(initializedOperations.length, 2);
-    assert(initializeOperations.every((operation) => typeof operation.protocolVersion === "string"));
-    assert(initializedOperations.every((operation) => typeof operation.protocolVersion === "string"));
+    assert.equal(discoverOperations.length, 2);
     assert(operations.some((operation) => operation.method === "tools/call"
         && operation.role === "client" && operation.toolName === "probe"));
     assert(operations.some((operation) => operation.method === "tools/call"
@@ -137,24 +138,29 @@ test("connection manager supports builtin registration and reconnects with a fre
     let factoryCalls = 0;
     const manager = new ConnectionManager();
     manager.registerBuiltin("fixture", () => {
-        factoryCalls += 1;
-        const server = new McpServer({ name: "builtin", version: String(factoryCalls) });
+        const instance = ++factoryCalls;
+        const server = new McpServer({ name: "builtin", version: String(instance) });
         server.registerTool(
             "probe",
             {},
-            async () => ({ content: [{ type: "text", text: String(factoryCalls) }] }),
+            async () => ({ content: [{ type: "text", text: String(instance) }] }),
         );
         return server;
     });
     manager.register({ id: "builtin-connection", kind: "builtin", builtin: "fixture" });
 
     const first = await manager.connect("builtin-connection");
-    assert.equal(first.initialization?.serverInfo?.version, "1");
+    assert.equal(first.initialization?.protocolVersion, "2026-07-28");
+    const firstVersion = Number(first.initialization?.serverInfo?.version);
+    assert(Number.isSafeInteger(firstVersion));
+    const callsAfterFirstConnection = factoryCalls;
     const firstJournal = manager.getJournal("builtin-connection");
     assert(firstJournal);
     const second = await manager.reconnect("builtin-connection");
-    assert.equal(second.initialization?.serverInfo?.version, "2");
-    assert.equal(factoryCalls, 2);
+    assert.equal(second.initialization?.protocolVersion, "2026-07-28");
+    const secondVersion = Number(second.initialization?.serverInfo?.version);
+    assert(secondVersion > firstVersion);
+    assert(factoryCalls > callsAfterFirstConnection);
     const secondJournal = manager.getJournal("builtin-connection");
     assert(secondJournal);
     assert.notEqual(secondJournal, firstJournal);
@@ -219,26 +225,7 @@ test("remote headers resolve only environment references and endpoint credential
 });
 
 test("connection timeout and failures leave a sanitized failed snapshot", async () => {
-    let closeCalls = 0;
     const manager = new ConnectionManager({ connectTimeoutMs: 20 });
-    manager.register({
-        id: "timeout",
-        kind: "inproc",
-        serverFactory: () => ({
-            connect: () => new Promise<void>(() => {}),
-            close: async () => {
-                closeCalls += 1;
-            },
-        }),
-    });
-
-    await assert.rejects(
-        manager.connect("timeout"),
-        (error: unknown) => error instanceof ConnectionManagerError && error.code === "timeout",
-    );
-    assert.equal(manager.get("timeout").lifecycle, "failed");
-    assert(closeCalls >= 1);
-
     manager.register({
         id: "factory-timeout",
         kind: "inproc",
@@ -319,7 +306,11 @@ test("throwing connection observers are isolated and retained as sanitized diagn
 });
 
 test("an aborted late in-process factory is closed when it eventually resolves", async () => {
-    let resolveFactory: ((server: { connect(): Promise<void>; close(): Promise<void> }) => void) | undefined;
+    let resolveFactory: ((server: McpServer) => void) | undefined;
+    let signalFactoryStarted: (() => void) | undefined;
+    const factoryStarted = new Promise<void>((resolve) => {
+        signalFactoryStarted = resolve;
+    });
     let closeCalls = 0;
     const manager = new ConnectionManager();
     manager.register({
@@ -327,20 +318,23 @@ test("an aborted late in-process factory is closed when it eventually resolves",
         kind: "inproc",
         serverFactory: () => new Promise((resolve) => {
             resolveFactory = resolve;
+            signalFactoryStarted?.();
         }),
     });
     const controller = new AbortController();
     const connecting = manager.connect("aborted-factory", { signal: controller.signal });
+    await factoryStarted;
     controller.abort();
     await assert.rejects(connecting, /cancelled/u);
 
     assert(resolveFactory);
-    resolveFactory({
-        async connect() {},
-        async close() {
-            closeCalls += 1;
-        },
-    });
+    const lateServer = new McpServer({ name: "late", version: "2.0.0" });
+    const closeLateServer = lateServer.close.bind(lateServer);
+    lateServer.close = async () => {
+        closeCalls += 1;
+        await closeLateServer();
+    };
+    resolveFactory(lateServer);
     await new Promise<void>((resolve) => setImmediate(resolve));
     assert.equal(closeCalls, 1);
 });

@@ -105,7 +105,7 @@ export interface CompletedProtocolOperation extends StartedProtocolOperation {
     errorMessage?: string;
     rpcResponseStatusCode?: string;
     responseBody?: unknown;
-    /** Negotiated version extracted from a successful initialize result. */
+    /** Negotiated protocol revision supplied by the connected transport. */
     protocolVersion?: string;
 }
 
@@ -262,9 +262,6 @@ export class ProtocolJournal {
                         ?? (resultIsToolError(parsed.data.result) ? "tool_error" : undefined),
                     undefined,
                     undefined,
-                    matched.method === "initialize"
-                        ? resultProtocolVersion(parsed.data.result)
-                        : undefined,
                     this.captureContent ? this.contentPayload(parsed.data) : undefined,
                 );
             }
@@ -288,7 +285,6 @@ export class ProtocolJournal {
                         options.responseSendErrorType ?? statusCode,
                         statusCode,
                         this.redactor.redactText(parsed.data.error.message),
-                        undefined,
                         this.captureContent ? this.contentPayload(parsed.data) : undefined,
                     );
                 }
@@ -816,7 +812,6 @@ function completedFromResponse(
     errorType?: string,
     rpcResponseStatusCode?: string,
     errorMessage?: string,
-    protocolVersion?: string,
     responseBody?: unknown,
 ): CompletedProtocolOperation {
     const requestDirection = opposite(responseDirection);
@@ -836,7 +831,6 @@ function completedFromResponse(
         ...(errorType === undefined ? {} : { errorType }),
         ...(errorMessage === undefined ? {} : { errorMessage }),
         ...(rpcResponseStatusCode === undefined ? {} : { rpcResponseStatusCode }),
-        ...(protocolVersion === undefined ? {} : { protocolVersion }),
         ...(responseBody === undefined ? {} : { responseBody }),
     };
 }
@@ -1001,12 +995,6 @@ function operationTarget(method: string, params: unknown): ProtocolOperationTarg
 function resultIsToolError(result: unknown): boolean {
     return typeof result === "object" && result !== null && !Array.isArray(result)
         && (result as Record<string, unknown>).isError === true;
-}
-
-function resultProtocolVersion(result: unknown): string | undefined {
-    if (typeof result !== "object" || result === null || Array.isArray(result)) return undefined;
-    const value = (result as Record<string, unknown>).protocolVersion;
-    return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function positiveInteger(value: number, name: string): number {

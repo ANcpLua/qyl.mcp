@@ -53,14 +53,18 @@ function itemId(uri: URL): string {
   return decodeURIComponent(uri.pathname.replace(/^\//, ""));
 }
 
-export function createFixtureMcpServer(): FixtureMcpServer {
-  const state: FixtureServerState = {
+export function createFixtureServerState(): FixtureServerState {
+  return {
     deletedRecordIds: [],
     delayedStarted: 0,
     delayedCompleted: 0,
     delayedCancelled: 0,
   };
+}
 
+export function createFixtureMcpServer(
+  state: FixtureServerState = createFixtureServerState(),
+): FixtureMcpServer {
   const server = new McpServer(
     {
       name: "qyl-mcp-conformance-fixture",

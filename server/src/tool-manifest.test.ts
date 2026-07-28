@@ -14,21 +14,20 @@
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import test from "node:test";
-import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { generatedContractRevision } from "./contract-handshake.js";
+import { connectModernTestClient } from "./modern-test-client.test-helper.js";
 import { createServer } from "./server.js";
 
 const snapshotUrl = new URL("../tool-manifest.snapshot.json", import.meta.url);
 
 async function toolManifest(): Promise<unknown> {
-  const server = createServer({ nativeExecution: false });
-  const client = new Client({ name: "tool-manifest-snapshot", version: "1.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const connection = await connectModernTestClient(
+    { name: "tool-manifest-snapshot", version: "1.0.0" },
+    () => createServer({ nativeExecution: false }),
+  );
 
   try {
-    await server.connect(serverTransport);
-    await client.connect(clientTransport);
-    const { tools } = await client.listTools();
+    const { tools } = await connection.client.listTools();
 
     return {
       // Null until the pinned @ancplua/qyl-api-schema carries the revision
@@ -47,8 +46,7 @@ async function toolManifest(): Promise<unknown> {
         })),
     };
   } finally {
-    await client.close().catch(() => undefined);
-    await server.close().catch(() => undefined);
+    await connection.close();
   }
 }
 

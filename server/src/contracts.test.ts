@@ -266,7 +266,7 @@ test("published workbench assertion, evaluation, and export unions reject local 
   );
   assert(
     !WorkbenchTestAssertionSchema.safeParse({
-      id: "legacy-1",
+      id: "obsolete-shape-1",
       type: "exact",
       pointer: "/answer",
       expected: 42,

@@ -68,7 +68,6 @@
     "@ancplua/qyl-api-schema": "5.0.0",
     "@modelcontextprotocol/core": "2.0.0",
     "@modelcontextprotocol/express": "2.0.0",
-    "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/node": "2.0.0",
     "@modelcontextprotocol/server": "2.0.0",
     "@opentelemetry/api": "^1.9.1",

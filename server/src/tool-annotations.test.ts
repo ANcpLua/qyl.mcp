@@ -2,24 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   Client,
-  InMemoryTransport,
   StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
 import { createMcpHandler } from "@modelcontextprotocol/server";
+import { connectModernTestClient } from "./modern-test-client.test-helper.js";
 import { createServer } from "./server.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS } from "./tools.js";
 import { CONTROL_WORKFLOW_TOOL_ANNOTATIONS } from "./workflow-tools.js";
 
 test("qyl tools publish explicit read versus control safety annotations", async () => {
-  const server = createServer({ nativeExecution: false });
-  const client = new Client({ name: "tool-annotations-test", version: "1.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const connection = await connectModernTestClient(
+    { name: "tool-annotations-test", version: "1.0.0" },
+    () => createServer({ nativeExecution: false }),
+  );
 
   try {
-    await server.connect(serverTransport);
-    await client.connect(clientTransport);
-
-    const { tools } = await client.listTools();
+    const { tools } = await connection.client.listTools();
     assert.deepEqual(
       tools.map((tool) => tool.name).sort(),
       [
@@ -48,8 +46,7 @@ test("qyl tools publish explicit read versus control safety annotations", async 
       );
     }
   } finally {
-    await client.close().catch(() => undefined);
-    await server.close().catch(() => undefined);
+    await connection.close();
   }
 });
 

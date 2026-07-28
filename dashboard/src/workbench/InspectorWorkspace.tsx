@@ -28,7 +28,7 @@ import {
   type SynchronizedSchemaInputSnapshot,
 } from "./index.js";
 
-type DiscoveryTab = "tools" | "resources" | "templates" | "prompts" | "capabilities" | "initialize";
+type DiscoveryTab = "tools" | "resources" | "templates" | "prompts" | "capabilities" | "connection";
 type ExecutionTab = "result" | "request" | "protocol" | "observability";
 
 interface InspectorWorkspaceProps {
@@ -71,7 +71,7 @@ interface ToolInputState {
 const ERROR_COPY: Readonly<Record<ErrorCategory, { title: string; guidance: string }>> = {
   authentication: { title: "Authentication failed", guidance: "Verify the server-side environment reference and expected authentication scheme." },
   transport: { title: "Transport failed", guidance: "Inspect the endpoint, process state, TLS, and chronological transport events." },
-  protocol: { title: "MCP protocol error", guidance: "Inspect the JSON-RPC request id, method, response, and initialization negotiation." },
+  protocol: { title: "MCP protocol error", guidance: "Inspect the JSON-RPC request id, method, response, and discovery negotiation." },
   serialization: { title: "Serialization failed", guidance: "Inspect the raw payload and the MCP SDK envelope expected at this protocol version." },
   schema_validation: { title: "Schema validation failed", guidance: "Correct the tool arguments or inspect the returned payload against the published schema." },
   tool_error: { title: "Tool-generated error", guidance: "The server completed the MCP call with an error result; inspect its returned content." },
@@ -129,7 +129,7 @@ function collectionFor(tab: DiscoveryTab, discovery: DiscoverySnapshot | null): 
     case "templates": return discovery.resource_templates;
     case "prompts": return discovery.prompts;
     case "capabilities":
-    case "initialize": return null;
+    case "connection": return null;
   }
 }
 
@@ -405,7 +405,7 @@ export function InspectorWorkspace({
         </div>
         <dl className="server-facts">
           <div><dt>Status</dt><dd>{connection.status}</dd></div>
-          <div><dt>Protocol</dt><dd>{connection.initialization?.protocol_version ?? "not initialized"}</dd></div>
+          <div><dt>Protocol</dt><dd>{connection.initialization?.protocol_version ?? "not connected"}</dd></div>
           <div><dt>Changed</dt><dd>{formatTimestamp(connection.changed_at)}</dd></div>
         </dl>
         <div className="server-actions">
@@ -423,7 +423,7 @@ export function InspectorWorkspace({
         <div className="discovery-column">
           <div className="panel-toolbar">
             <div className="tab-list" role="tablist" aria-label="MCP discovery categories">
-              {(["tools", "resources", "templates", "prompts", "capabilities", "initialize"] as const).map((tab) => (
+              {(["tools", "resources", "templates", "prompts", "capabilities", "connection"] as const).map((tab) => (
                 <button key={tab} type="button" role="tab" aria-selected={discoveryTab === tab} onClick={() => {
                   setDiscoveryTab(tab);
                   setSelectedItemIndex(0);
@@ -469,8 +469,8 @@ export function InspectorWorkspace({
             </>
           ) : discoveryTab === "capabilities" ? (
             <JsonCodeView value={connection.initialization?.capabilities ?? null} label="Negotiated capabilities" onCopy={copyText} />
-          ) : discoveryTab === "initialize" ? (
-            <JsonCodeView value={connection.initialization ?? null} label="Initialization result" onCopy={copyText} />
+          ) : discoveryTab === "connection" ? (
+            <JsonCodeView value={connection.initialization ?? null} label="Connection result" onCopy={copyText} />
           ) : discoveryError ? null : <div className="empty-state compact-empty"><strong>No discovery snapshot</strong><span>Connect the server, then refresh discovery.</span></div>}
         </div>
 

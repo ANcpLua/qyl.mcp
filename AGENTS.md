@@ -146,15 +146,13 @@ build time or runtime.
   handshake. Local publication and arbitrary-ref manual publication are not
   release paths.
 
-## Telemetry and protocol-era discipline
+## Telemetry and protocol discipline
 
-qyl.mcp emits MCP telemetry, and the 2026-07-28 revision changes what several
-recorded fields mean. `doc/support-2026-07-28.md` is the per-era authority; these
-rules bind the emit path to it.
+qyl.mcp is modern-only and pins the final `2026-07-28` wire from the stable MCP
+TypeScript SDK 2.0.0. These rules bind the emit path to that wire.
 
-- Protocol era is the negotiated version (`getProtocolEra()` /
-  `getNegotiatedProtocolVersion()`), never the presence of a `_meta` envelope: the
-  legacy-fallback probe also carries one.
+- Protocol revision comes from `getNegotiatedProtocolVersion()`, never from
+  payload-shape guesses or a local fallback.
 - Client and server identity is per-request and self-reported. Read
   `ctx.mcpReq.envelope`, not `getClientCapabilities()` / `getClientVersion()`
   (`undefined` on a 2026 connection). `clientInfo` / `serverInfo` are display,
@@ -164,8 +162,7 @@ rules bind the emit path to it.
   rounds with linked spans, never a parent-child tree, and mint the link only
   after the `requestState.verify` hook succeeds: `requestState` round-trips
   through the client, is signed rather than encrypted, and is untrusted until
-  then. The 2025 legacy shim reaches the same handler over real server→client
-  requests, so never hard-code one topology.
+  then.
 - Span and RPC status come from the JSON-RPC and tool outcome, never the HTTP
   status: on the modern path a well-formed JSON-RPC error rides HTTP 400, and a
   committed 200 can still carry an in-stream error. Map from `isError` tool

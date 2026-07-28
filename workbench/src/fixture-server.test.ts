@@ -2,9 +2,16 @@ import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
 import { test } from "node:test";
 import { CallToolResultSchema } from "@modelcontextprotocol/core";
-import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
+import {
+  Client,
+  StreamableHTTPClientTransport,
+} from "@modelcontextprotocol/client";
+import { createMcpHandler } from "@modelcontextprotocol/server";
 import { UNTRUSTED_HTML } from "./fixture-catalog.js";
-import { createFixtureMcpServer } from "./fixture-server.js";
+import {
+  createFixtureMcpServer,
+  createFixtureServerState,
+} from "./fixture-server.js";
 
 async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -17,11 +24,20 @@ async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<voi
 }
 
 test("official SDK fixture aggregates discovery and exercises tool and content behavior", { timeout: 10_000 }, async () => {
-  const fixture = createFixtureMcpServer();
-  const client = new Client({ name: "fixture-test-client", version: "1.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  await fixture.server.connect(serverTransport);
-  await client.connect(clientTransport);
+  const state = createFixtureServerState();
+  const handler = createMcpHandler(
+    () => createFixtureMcpServer(state).server,
+    { legacy: "reject" },
+  );
+  const transport = new StreamableHTTPClientTransport(
+    new URL("http://qyl-fixture-test.invalid/mcp"),
+    { fetch: (url, init) => handler.fetch(new Request(url, init)) },
+  );
+  const client = new Client(
+    { name: "fixture-test-client", version: "1.0.0" },
+    { versionNegotiation: { mode: { pin: "2026-07-28" } } },
+  );
+  await client.connect(transport);
 
   try {
     const tools = await client.listTools();
@@ -78,7 +94,7 @@ test("official SDK fixture aggregates discovery and exercises tool and content b
     });
     const refusedDeleteResult = CallToolResultSchema.parse(refusedDelete);
     assert.equal(refusedDeleteResult.isError, true);
-    assert.deepEqual(fixture.state.deletedRecordIds, []);
+    assert.deepEqual(state.deletedRecordIds, []);
 
     const acceptedDelete = await client.callTool({
       name: "fixture.delete_record",
@@ -86,7 +102,7 @@ test("official SDK fixture aggregates discovery and exercises tool and content b
     });
     const acceptedDeleteResult = CallToolResultSchema.parse(acceptedDelete);
     assert.equal(acceptedDeleteResult.isError, undefined);
-    assert.deepEqual(fixture.state.deletedRecordIds, ["alpha"]);
+    assert.deepEqual(state.deletedRecordIds, ["alpha"]);
 
     const resourceNames = (await client.listResources()).resources.map((resource) => resource.name);
     assert.deepEqual(resourceNames, ["fixture-summary", "untrusted-html", "fixture-blob"]);
@@ -126,12 +142,17 @@ test("official SDK fixture aggregates discovery and exercises tool and content b
       { signal: controller.signal },
     );
     const rejectedCall = assert.rejects(delayedCall);
-    await waitFor(() => fixture.state.delayedStarted === 1);
+    await waitFor(() => state.delayedStarted === 1);
     controller.abort();
     await rejectedCall;
-    await waitFor(() => fixture.state.delayedCancelled === 1);
-    assert.equal(fixture.state.delayedCompleted, 0);
+    await waitFor(() => state.delayedCancelled === 1);
+    assert.equal(state.delayedCompleted, 0);
   } finally {
-    await client.close();
+    const results = await Promise.allSettled([client.close(), handler.close()]);
+    const errors = results
+      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+      .map((result) => result.reason);
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1) throw new AggregateError(errors, "Fixture cleanup failed.");
   }
 });
