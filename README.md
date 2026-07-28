@@ -7,7 +7,7 @@ tools and MCP Apps for exploring a live Qyl collector.
 
 The repository ships two things. The workbench is run from a checkout, below.
 The Qyl MCP server is published as
-[`qyl-mcp-server`](https://www.npmjs.com/package/qyl-mcp-server) 1.0.0 and hosted
+[`qyl-mcp-server`](https://www.npmjs.com/package/qyl-mcp-server) 1.1.0 and hosted
 at <https://mcp.qyl.at/mcp>; connect a client to either without cloning anything.
 
 This repository is the sole MCP runtime and MCP workbench owner in the Qyl
@@ -86,6 +86,55 @@ peer cannot negotiate it; there is no fallback or negotiation setting.
 In-process and built-in connections use the same fetch-native, modern-only
 server entry and `server/discover` exchange.
 
+## Observe Graph
+
+`plugins/observe-graph` packages the `$observe-graph` skill, the remote
+`https://mcp.qyl.at/mcp` connection, and the local `qyl observer-bridge`
+connection. When Codex is running through `qyl codex`, the bridge identifies the
+one active run and live `steer`, `interrupt`, and `resume` controls are available.
+Otherwise the skill opens a selected durable run and labels it historical.
+
+The remote server exposes five generated-shape workflow tools:
+
+| Tool | Role |
+| --- | --- |
+| `list_workflow_runs` | Bounded historical run selection. |
+| `get_workflow_graph` | Bounded deterministic graph projection. |
+| `display_workflow_graph` | Opens the fullscreen MCP App. |
+| `fetch_workflow_graph_updates` | App-only journal polling, gap recovery, graph paging, and lazy content reads. |
+| `control_workflow_run` | Approval-gated run control requiring `qyl:control`. |
+
+Project identity is server-owned. Tool inputs never accept a project ID;
+`QYL_PROJECT` selects it at deployment, and the collector applies the project
+scope to every run, event, command, projection, and content lookup. The default
+project is used when the deployment does not set `QYL_PROJECT`. Inspection
+requires `qyl:read`; mutation requires the additional `qyl:control` scope.
+
+The fullscreen app keeps a bounded node/event window and fetches captured
+content only when its reference is opened. The layered DAG is authoritative;
+the radial layout is limited to small fan-out/fan-in runs. Failed attempts remain
+visible after interrupt/resume because controls append journal events instead
+of rewriting history.
+
+### Extending Observe Graph
+
+Boundary changes start in `qyl-api-schema`, then flow through the collector and
+this repository at the same published schema version. Add projection behavior
+in the collector, tool behavior in `server/src/workflow-*.ts`, replay/layout
+behavior in `server/ui/observe-graph-*.ts`, and skill routing in
+`plugins/observe-graph/skills/observe-graph/SKILL.md`. Regenerate
+`server/tool-manifest.snapshot.json` whenever a tool or resource changes.
+
+The release gate is:
+
+```bash
+npm ci
+npm run build
+npm test
+npm run smoke --workspace server
+python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugins/observe-graph
+```
+
 ## Workbench workflow
 
 After discovery, the workbench retains the negotiated protocol version,
@@ -158,6 +207,7 @@ response expose only retained trace and log evidence.
 | --- | --- |
 | `QYL_COLLECTOR_URL` | Qyl read API base URL; default `http://127.0.0.1:5100`. Also used as the OTLP base when set. |
 | `QYL_API_KEY` | Collector read and OTLP credential. |
+| `QYL_PROJECT` | Server-owned collector project scope; defaults to `default`. |
 | `QYL_OTLP_ENDPOINT` | Optional OTLP base URL for workbench self-telemetry. |
 | `QYL_MCP_TELEMETRY=0` | Disable native-server and workbench MCP spans, metrics, and operation logs. Telemetry is enabled otherwise. |
 | `QYL_MCP_CAPTURE_CONTENT=1` | Include redacted, size-bounded MCP request and response bodies in operation logs. Disabled by default. |
@@ -227,8 +277,10 @@ origins. It uses the same `QYL_COLLECTOR_URL`, `QYL_API_KEY`, and `QYL_DEMO`
 configuration. `QYL_API_KEY` is only an outgoing collector credential; it does
 not authenticate incoming MCP clients. The model-visible tools are
 `display_traces`, `display_mcp_dashboard`, `list_traces`, `get_trace`,
-`list_sessions`, `search_logs`, and `ci_log`; `fetch_telemetry` is reserved for
-the bundled MCP Apps.
+`list_sessions`, `search_logs`, `ci_log`, `list_workflow_runs`,
+`get_workflow_graph`, `display_workflow_graph`, and `control_workflow_run`;
+`fetch_telemetry` and `fetch_workflow_graph_updates` are reserved for the
+bundled MCP Apps.
 
 The workbench runner remains available with `npm run start:runner`.
 
@@ -243,9 +295,10 @@ only and never acts as a second MCP endpoint.
 Hosting authenticates as an OAuth 2.1 Resource Server backed by
 Auth0. Configure an Auth0 API with identifier `https://mcp.qyl.at/mcp`, RS256,
 the RFC 9068 access-token profile, Resource Parameter Compatibility Profile,
-and permission `qyl:read`. For stock third-party MCP clients, enable Auth0's
-strict Dynamic Client Registration and grant `qyl:read` as the API's default
-user-delegated permission; enable Client ID Metadata Document Registration
+and permissions `qyl:read` and `qyl:control`. For stock third-party MCP clients,
+enable Auth0's strict Dynamic Client Registration and grant `qyl:read` as the
+API's default user-delegated permission; `qyl:control` is an explicit step-up
+scope for run mutation. Enable Client ID Metadata Document Registration
 separately and promote the login connection to domain level. qyl itself hosts
 neither client registration nor an authorization server. Production uses
 `MCP_OAUTH_ISSUER=https://qyl-eu.eu.auth0.com/`. The server discovers the
@@ -262,7 +315,7 @@ MCP_PUBLIC_URL=https://mcp.qyl.at \
 MCP_ALLOWED_HOSTS=mcp.qyl.at,<service>.up.railway.app,healthcheck.railway.app \
 MCP_ALLOWED_ORIGIN_HOSTS=mcp.qyl.at,<service>.up.railway.app \
 MCP_OAUTH_ISSUER=https://qyl-eu.eu.auth0.com/ \
-QYL_COLLECTOR_URL=http://qyl-collector.railway.internal:5100 \
+QYL_COLLECTOR_URL=http://qyl-collector.railway.internal:8080 \
 QYL_API_KEY='<collector-api-key>' \
 npm start
 ```
