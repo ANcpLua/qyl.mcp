@@ -147,6 +147,45 @@ function notFound(): Response {
   });
 }
 
+// A browser client reads none of this without CORS — not the challenge that
+// starts its OAuth flow, not the session id, not the negotiated revision. The
+// preflight carries no credentials, so it must be answered before the gate;
+// answering it there is a 401 the browser reports as a network failure.
+const EXPOSED_HEADERS = "WWW-Authenticate, Mcp-Session-Id, MCP-Protocol-Version";
+
+function corsPreflightResponse(request: Request): Response | undefined {
+  const origin = request.headers.get("origin");
+  if (request.method !== "OPTIONS" || origin === null) return undefined;
+
+  const requestedHeaders = request.headers.get("access-control-request-headers");
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "access-control-allow-origin": origin,
+      "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
+      ...(requestedHeaders === null ? {} : { "access-control-allow-headers": requestedHeaders }),
+      "access-control-expose-headers": EXPOSED_HEADERS,
+      "access-control-max-age": "600",
+      vary: "Origin, Access-Control-Request-Headers",
+    },
+  });
+}
+
+function withCors(request: Request, response: Response): Response {
+  const origin = request.headers.get("origin");
+  if (origin === null) return response;
+
+  const headers = new Headers(response.headers);
+  headers.set("access-control-allow-origin", origin);
+  headers.set("access-control-expose-headers", EXPOSED_HEADERS);
+  headers.append("vary", "Origin");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 /**
  * The endpoint as one web-standard function. The order is the contract: the
  * discovery documents answer before the gate, or an unauthenticated client
@@ -174,11 +213,16 @@ export function createFetch(options: McpFetchOptions): (request: Request) => Pro
     if (pathname === "/") return landingResponse(request, options.landingPage);
     if (pathname !== "/mcp") return notFound();
 
-    if (options.auth === undefined) return options.handler.fetch(request);
+    const preflight = corsPreflightResponse(request);
+    if (preflight !== undefined) return preflight;
+
+    if (options.auth === undefined) {
+      return withCors(request, await options.handler.fetch(request));
+    }
 
     const authInfo = await options.auth.gate(request);
-    if (authInfo instanceof Response) return authInfo;
-    return options.handler.fetch(request, { authInfo });
+    if (authInfo instanceof Response) return withCors(request, authInfo);
+    return withCors(request, await options.handler.fetch(request, { authInfo }));
   };
 }
 

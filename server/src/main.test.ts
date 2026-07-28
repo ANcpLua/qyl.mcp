@@ -219,6 +219,41 @@ test("the discovery chain is closed for a client that arrives with nothing", asy
   assert.equal(rejected.headers.get("allow"), "GET, HEAD, OPTIONS");
 });
 
+test("a browser client can read the challenge and pass its preflight", async (context) => {
+  const endpoint = hostedEndpoint();
+  context.after(() => endpoint.handler.close());
+  const browserOrigin = `https://${resourceServerUrl.hostname}`;
+
+  const preflight = await endpoint.fetch(hosted("/mcp", {
+    method: "OPTIONS",
+    headers: {
+      origin: browserOrigin,
+      "access-control-request-method": "POST",
+      "access-control-request-headers": "authorization,content-type",
+    },
+  }));
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("access-control-allow-origin"), browserOrigin);
+  assert.equal(preflight.headers.get("access-control-allow-headers"), "authorization,content-type");
+  assert.match(preflight.headers.get("access-control-allow-methods") ?? "", /POST/u);
+
+  const challenge = await endpoint.fetch(hosted("/mcp", {
+    method: "POST",
+    headers: {
+      origin: browserOrigin,
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+  }));
+  assert.equal(challenge.status, 401);
+  assert.equal(challenge.headers.get("access-control-allow-origin"), browserOrigin);
+  assert.match(
+    challenge.headers.get("access-control-expose-headers") ?? "",
+    /WWW-Authenticate/u,
+  );
+});
+
 test("a modern client reaches the tools through the whole pipeline", async (context) => {
   const endpoint = hostedEndpoint();
   const client = new Client(
