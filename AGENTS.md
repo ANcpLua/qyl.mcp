@@ -334,6 +334,26 @@ only when they have an installable manifest, a real distribution path, and
 executable tests, and keep their API claims generated or linked rather than
 copied.
 
+## Cloudflare skills
+
+`mcp.qyl.at` is Cloudflare-proxied and `mcp-dev.qyl.at` is a named Cloudflare
+tunnel to a local origin, so the edge is part of this server's request path in
+both environments. Load `/cloudflare:cloudflare` before changing or diagnosing
+anything at that layer — tunnel ingress and `originRequest.httpHostHeader`,
+zone and proxy settings, and Access in front of the dev hostname. It retrieves
+from current Cloudflare docs rather than from memory.
+
+Two edge behaviors matter enough to name. The modern path validates the
+SEP-2243 standard headers against the body and answers 400 with `-32020` on
+mismatch, so an edge that rewrites or drops headers manifests as what looks
+like a client bug. And an `Origin` allowlist at the edge or in the server
+applies to the OAuth metadata documents too unless the pipeline answers them
+first — which is why `oauthMetadataResponse` is stage 1 and the rebinding
+guards are stage 2, never the reverse.
+
+`/cloudflare:wrangler` does not apply here: this repo deploys no Worker. That
+belongs to `qyl.at`.
+
 ## Verification
 
 ```bash
