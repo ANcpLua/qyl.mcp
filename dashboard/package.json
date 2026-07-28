@@ -1,7 +1,7 @@
 {
   "name": "qyl-mcp-dashboard",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "description": "Local dashboard for qyl.mcp resources and telemetry",
   "scripts": {

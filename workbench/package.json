@@ -1,7 +1,7 @@
 {
   "name": "qyl-mcp-workbench",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "description": "Authenticated local MCP workbench with connection inspection, evaluation, and in-process qyl telemetry tools",
   "scripts": {
