@@ -5,6 +5,11 @@ inspecting their negotiated protocol surface, invoking tools safely, and
 retaining execution and evaluation evidence. It also includes Qyl telemetry
 tools and MCP Apps for exploring a live Qyl collector.
 
+The repository ships two things. The workbench is run from a checkout, below.
+The Qyl MCP server is published as
+[`qyl-mcp-server`](https://www.npmjs.com/package/qyl-mcp-server) 1.0.0 and hosted
+at <https://mcp.qyl.at/mcp>; connect a client to either without cloning anything.
+
 This repository is the sole MCP runtime and MCP workbench owner in the Qyl
 workspace. It owns the default loopback listener on `18888`; the sibling C#
 host owns collector and diagnostics orchestration on its separate host API.
@@ -15,7 +20,8 @@ multi-user service.
 
 ## Quick start
 
-Node.js 22.12 or newer is required.
+Node.js 24 is required; it is the engine range both published and workspace
+manifests declare.
 
 ```bash
 npm ci
@@ -205,15 +211,17 @@ workbench itself still uses real local persistence and MCP execution paths.
 
 ## Standalone Qyl MCP server
 
-The installable server can be connected directly to a chat client over stdio:
+The server is published to npm as `qyl-mcp-server` and needs no checkout. Point a
+chat client at it over stdio:
 
 ```bash
-node server/dist/main.js --stdio
+npx qyl-mcp-server --stdio
 ```
 
-After `npm run build`, `npm start` launches this standalone HTTP server. Without
-`--stdio`, it serves stateless Streamable HTTP on
-`http://127.0.0.1:3001/mcp` by default; set `PORT` to change the port. The v2
+Without `--stdio` it serves stateless Streamable HTTP on
+`http://127.0.0.1:3001/mcp` by default; set `PORT` to change the port. From a
+checkout the same binary is `node server/dist/main.js` after `npm run build`, and
+`npm start` launches the HTTP form. The v2
 `createMcpHandler` and `serveStdio` entries accept only protocol revision
 `2026-07-28`; older openings are rejected.
 The local default binds only to loopback and accepts local or absent browser
@@ -228,13 +236,13 @@ The workbench runner remains available with `npm run start:runner`.
 
 ### Hosted standalone server
 
-The reference deployment serves a public product page at
+The live deployment serves a public product page at
 `https://mcp.qyl.at/`, the canonical MCP endpoint at
 `https://mcp.qyl.at/mcp`, and `/healthz` as its platform healthcheck; pushes to
 `main` deploy automatically after CI passes. The root page is presentation
 only and never acts as a second MCP endpoint.
 
-Hosting is opt-in and authenticates as an OAuth 2.1 Resource Server backed by
+Hosting authenticates as an OAuth 2.1 Resource Server backed by
 Auth0. Configure an Auth0 API with identifier `https://mcp.qyl.at/mcp`, RS256,
 the RFC 9068 access-token profile, Resource Parameter Compatibility Profile,
 and permission `qyl:read`. For stock third-party MCP clients, enable Auth0's
