@@ -1,334 +1,220 @@
 # qyl.mcp
 
-qyl.mcp is a local MCP developer workbench for connecting to real servers,
-inspecting their negotiated protocol surface, invoking tools safely, and
-retaining execution and evaluation evidence. It also includes Qyl telemetry
-tools and MCP Apps for exploring a live Qyl collector.
+MCP tools over a live [qyl](https://qyl.at) collector — traces, logs, sessions, and
+a graph view of agent runs you can watch while they execute.
 
-The repository ships two things. The workbench is run from a checkout, below.
-The Qyl MCP server is published as
-[`qyl-mcp-server`](https://www.npmjs.com/package/qyl-mcp-server) 1.1.0 and hosted
-at <https://mcp.qyl.at/mcp>; connect a client to either without cloning anything.
+The repository ships three things:
 
-This repository is the sole MCP runtime and MCP workbench owner in the Qyl
-workspace. It owns the default loopback listener on `18888`; the sibling C#
-host owns collector and diagnostics orchestration on its separate host API.
+| | What it is | How you get it |
+| --- | --- | --- |
+| **server** | An MCP server exposing qyl telemetry as tools | Hosted at `mcp.qyl.at`, or npm [`qyl-mcp-server`](https://www.npmjs.com/package/qyl-mcp-server) |
+| **workbench** | A local MCP client for inspecting *other* people's servers | Run from a checkout on `127.0.0.1:18888` |
+| **dashboard** | The HTTP UI the server serves | Bundled into the server |
 
-The browser, runner API, and managed MCP processes run with the local user's
-permissions. The runner binds only to loopback; it is not an Internet-facing
-multi-user service.
+The server is a *closed world* — a fixed, generated tool surface projecting the
+collector's data. The workbench is an *open world* — it talks to servers it did
+not write and validates their schemas at runtime. They are separate deployables
+because a browser cannot be an MCP stdio client, which is the same split the MCP
+Inspector makes.
 
-## Quick start
+Node.js 24 is required. Architecture and the component ledger live in
+[`qyl/ARCHITECTURE-1.0.0.md`](https://github.com/ANcpLua/qyl); this file does not
+restate them.
 
-Node.js 24 is required; it is the engine range both published and workspace
-manifests declare.
+---
 
-```bash
-npm ci
-npm run build
-npm run start:runner
+## Use the hosted server
+
+Nothing to install. Point an MCP client at:
+
+```
+https://mcp.qyl.at/mcp
 ```
 
-Open <http://127.0.0.1:18888>. Set `QYL_MCP_RUNNER_PORT` to use another local
-port. For live Qyl data, configure the collector before
-starting the runner:
+It is an OAuth 2.1 resource server, so an unauthenticated request answers `401`
+with an [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728.html)
+protected-resource document. A stock MCP client reads that document, discovers
+the issuer, registers itself, and completes the flow without you configuring
+anything.
 
-```bash
-export QYL_COLLECTOR_URL=http://127.0.0.1:5100
-export QYL_API_KEY='your-collector-key' # omit for an unsecured local collector
-npm run start:runner
-```
+`https://mcp.qyl.at/` is a product page and `/healthz` is the platform
+healthcheck. Neither is a protocol endpoint — `/mcp` is the only one.
 
-The dashboard bootstraps an opaque `HttpOnly`, `SameSite=Strict` loopback
-session. Session tokens are hashed in memory, never returned in API payloads,
-and do not survive a runner restart. Host and browser-origin checks protect the
-loopback API from DNS rebinding and cross-origin requests.
-
-Workbench state defaults to `~/.qyl/mcp-workbench.json`; override it with
-`QYL_MCP_STATE_PATH`. Workspaces, server definitions, preferences, executions,
-protocol evidence, tests, suites, evaluation runs, and exports are written by
-atomic replacement with mode `0600`; an app-created parent directory uses mode
-`0700`, while an explicitly supplied existing parent is left unchanged. Active work
-interrupted by a restart is restored as explicit failure evidence.
-
-## Connect an MCP server
-
-Choose **Add server** in the sidebar. User-created connections support the two
-client transports below; runner-registered built-ins are visible but cannot be
-created from the browser.
-
-| Transport | Configuration |
-| --- | --- |
-| Streamable HTTP | Credential-free HTTP(S) endpoint plus header references such as `Authorization=MCP_TOKEN|bearer` |
-| stdio | Command, one argument per line, optional working directory, and environment mappings such as `SERVER_TOKEN=MCP_SERVER_TOKEN` |
-
-Set referenced values in the runner environment before startup:
-
-```bash
-export MCP_TOKEN='remote-service-token'
-export MCP_SERVER_TOKEN='child-process-token'
-npm run start:runner
-```
-
-Only environment-variable names are sent by the browser or persisted. Values
-are resolved in the runner at connection time and registered with the shared
-redactor. Remote endpoints cannot embed credentials, query values, or fragments;
-persistent `Cookie` headers are rejected. Stdio credentials cannot be placed in
-command arguments. Starting or reconnecting a stdio server requires review of
-the exact executable, arguments, working directory, and environment references
-because it launches code with the current user's permissions.
-
-### Protocol revision
-
-The runner uses the MCP v2 split packages. Every user-configured stdio and
-Streamable HTTP connection pins protocol revision `2026-07-28` and fails when a
-peer cannot negotiate it; there is no fallback or negotiation setting.
-In-process and built-in connections use the same fetch-native, modern-only
-server entry and `server/discover` exchange.
-
-## Observe Graph
-
-`plugins/observe-graph` packages the `$observe-graph` skill, the remote
-`https://mcp.qyl.at/mcp` connection, and the local `qyl observer-bridge`
-connection. When Codex is running through `qyl codex`, the bridge identifies the
-one active run and live `steer`, `interrupt`, and `resume` controls are available.
-Otherwise the skill opens a selected durable run and labels it historical.
-
-The remote server exposes five generated-shape workflow tools:
-
-| Tool | Role |
-| --- | --- |
-| `list_workflow_runs` | Bounded historical run selection. |
-| `get_workflow_graph` | Bounded deterministic graph projection. |
-| `display_workflow_graph` | Opens the fullscreen MCP App. |
-| `fetch_workflow_graph_updates` | App-only journal polling, gap recovery, graph paging, and lazy content reads. |
-| `control_workflow_run` | Approval-gated run control requiring `qyl:control`. |
-
-Project identity is server-owned. Tool inputs never accept a project ID;
-`QYL_PROJECT` selects it at deployment, and the collector applies the project
-scope to every run, event, command, projection, and content lookup. The default
-project is used when the deployment does not set `QYL_PROJECT`. Inspection
-requires `qyl:read`; mutation requires the additional `qyl:control` scope.
-
-The fullscreen app keeps a bounded node/event window and fetches captured
-content only when its reference is opened. The layered DAG is authoritative;
-the radial layout is limited to small fan-out/fan-in runs. Failed attempts remain
-visible after interrupt/resume because controls append journal events instead
-of rewriting history.
-
-### Extending Observe Graph
-
-Boundary changes start in `qyl-api-schema`, then flow through the collector and
-this repository at the same published schema version. Add projection behavior
-in the collector, tool behavior in `server/src/workflow-*.ts`, replay/layout
-behavior in `server/ui/observe-graph-*.ts`, and skill routing in
-`plugins/observe-graph/skills/observe-graph/SKILL.md`. Regenerate
-`server/tool-manifest.snapshot.json` whenever a tool or resource changes.
-
-The release gate is:
-
-```bash
-npm ci
-npm run build
-npm test
-npm run smoke --workspace server
-python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugins/observe-graph
-```
-
-## Workbench workflow
-
-After discovery, the workbench retains the negotiated protocol version,
-server identity, capabilities, instructions, and session information. Discovery
-collects paginated tools, resources, resource templates, and prompts; it can be
-refreshed without replacing the last useful snapshot on failure.
-
-For each tool, the inspector shows its complete input schema and annotations.
-The invocation composer keeps a generated form and raw JSON view synchronized,
-validates input before submission in a deadline-bounded worker, applies a
-bounded execution timeout, and includes an idempotency key. JSON Schema and
-pattern assertions use the same isolated validation path; the browser never
-compiles a server-supplied regular expression. Results preserve MCP text,
-image, audio, embedded-resource, resource-link, and structured-content shapes
-while blocking unsafe URLs and active content.
-
-Each persisted execution exposes its request, result or typed error, lifecycle,
-duration, attempts, cancellation state, redacted JSON-RPC timeline, and Qyl
-observability evidence. Live protocol and execution streams use resumable event
-identifiers; cancellation aborts the in-flight SDK request.
-
-The qyl.mcp server also records inbound `tools/call` requests natively, including
-when it is connected directly over stdio or hosted Streamable HTTP rather than
-invoked through the workbench. The SDK-validated result, lifecycle, duration,
-redacted JSON-RPC request/result timeline, and trace/span correlation are
-written atomically to `~/.qyl/mcp-native-executions.json`; set
-`QYL_MCP_NATIVE_STATE_PATH` to choose another file. The newest 1,000 executions
-are retained. Results below two million serialized characters are preserved in
-full after credential redaction; larger durable results are replaced by an
-explicit truncation result. Timeline payloads and request metadata are bounded
-separately so they do not duplicate large results. Token usage and cost are
-retained only when a tool reports explicit structured evidence—qyl.mcp never
-derives them from prose, latency, or payload size.
-
-Server and workspace deletion is serialized against ordinary mutations.
-Deletion is rejected while relevant executions are active or evaluation
-evidence still references the server; terminal standalone execution records
-are removed with the server so durable state cannot outlive its owner.
-
-The tests workspace persists real tool invocations with status, exact, partial,
-JSON Schema, pattern, and latency assertions. Suites run with bounded
-concurrency and optional fail-fast behavior. Completed runs can be compared
-within the same suite and exported as contract-validated JSON or a Markdown
-report with artifact size and SHA-256 evidence.
-
-### Safety model
-
-MCP tool annotations are treated as hints. Only a tool explicitly marked
-read-only, non-destructive, and closed-world can run without confirmation.
-Missing, contradictory, mutating, destructive, or open-world hints require the
-user to review and approve the exact call. Test and suite runs retain their
-run-level approval; the runner never synthesizes confirmation. Arguments,
-results, protocol payloads, persisted evidence, diagnostics, and telemetry pass
-through credential and URI redaction.
-
-## Qyl observability and MCP telemetry
-
-The built-in `qyl-telemetry` server reads real traces, logs, and sessions from
-`QYL_COLLECTOR_URL`. `QYL_API_KEY`, when present, is sent using the
-header defined by the generated Qyl API contract. Every correlated read runs
-under async self-export suppression, so inspecting Qyl evidence does not create
-recursive MCP telemetry.
-
-qyl.mcp exports correlated MCP operation spans, duration histograms, and
-metadata-only operation logs over OTLP. The current Qyl collector accepts and
-discards metrics, so its generated read contract and workbench correlation
-response expose only retained trace and log evidence.
-
-| Variable | Purpose |
-| --- | --- |
-| `QYL_COLLECTOR_URL` | Qyl read API base URL; default `http://127.0.0.1:5100`. Also used as the OTLP base when set. |
-| `QYL_API_KEY` | Collector read and OTLP credential. |
-| `QYL_PROJECT` | Server-owned collector project scope; defaults to `default`. |
-| `QYL_OTLP_ENDPOINT` | Optional OTLP base URL for workbench self-telemetry. |
-| `QYL_MCP_TELEMETRY=0` | Disable native-server and workbench MCP spans, metrics, and operation logs. Telemetry is enabled otherwise. |
-| `QYL_MCP_CAPTURE_CONTENT=1` | Include redacted, size-bounded MCP request and response bodies in operation logs. Disabled by default. |
-| `QYL_MCP_STATE_PATH` | Override the durable workbench JSON path. |
-| `QYL_MCP_NATIVE_STATE_PATH` | Override the durable native-server execution evidence path. |
-
-Signal-specific `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`,
-`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`, and
-`OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` take precedence. Otherwise the base order is
-`QYL_OTLP_ENDPOINT`, `QYL_COLLECTOR_URL`,
-`OTEL_EXPORTER_OTLP_ENDPOINT`, then `http://127.0.0.1:4318`.
-
-### Pinned MCP semantic surface
-
-The implementation targets OpenTelemetry semantic conventions v1.43.0 and its
-development MCP conventions.
-
-- `mcp.client` and `mcp.server` spans are named `{mcp.method.name} {target}`
-  when a low-cardinality tool or prompt target exists. They cover requests and
-  notifications and never put argument or result content in attributes.
-- `mcp.client.operation.duration` and `mcp.server.operation.duration`
-  histograms carry the upstream dimensions. Failures use `error.type` on the
-  same operation histogram rather than a second counter.
-- The local `qyl.mcp.operation` log event carries matching trace/span context. Its
-  body is metadata-only unless `QYL_MCP_CAPTURE_CONTENT=1`; opted-in payloads
-  are redacted and bounded before export.
-
-Operations start before SDK dispatch. Standard W3C trace context and baggage,
-plus fields from a host-configured propagator, travel in the unprefixed MCP
-`params._meta` bag on every supported transport. An inbound MCP server span uses
-that remote context as its parent (or starts as a root when none is valid) and
-links any independent ambient transport span. HTTP/SSE propagation remains a
-separate instrumentation concern and is never replaced by the MCP carrier.
-
-The method vocabulary follows the active MCP SDK registry rather than a copied
-list in qyl.mcp.
-
-## Explicit demo mode
-
-Collector errors remain errors; live mode never falls back to generated data.
-For an offline demonstration, enable demo mode deliberately:
-
-```bash
-QYL_DEMO=1 npm run start:runner
-```
-
-Demo tool results carry `mode: "demo"` so consumers can label them. The
-workbench itself still uses real local persistence and MCP execution paths.
-
-## Standalone Qyl MCP server
-
-The server is published to npm as `qyl-mcp-server` and needs no checkout. Point a
-chat client at it over stdio:
+## Run the server yourself
 
 ```bash
 npx qyl-mcp-server --stdio
 ```
 
 Without `--stdio` it serves stateless Streamable HTTP on
-`http://127.0.0.1:3001/mcp` by default; set `PORT` to change the port. From a
-checkout the same binary is `node server/dist/main.js` after `npm run build`, and
-`npm start` launches the HTTP form. The v2
-`createMcpHandler` and `serveStdio` entries accept only protocol revision
-`2026-07-28`; older openings are rejected.
-The local default binds only to loopback and accepts local or absent browser
-origins. It uses the same `QYL_COLLECTOR_URL`, `QYL_API_KEY`, and `QYL_DEMO`
-configuration. `QYL_API_KEY` is only an outgoing collector credential; it does
-not authenticate incoming MCP clients. The model-visible tools are
-`display_traces`, `display_mcp_dashboard`, `list_traces`, `get_trace`,
-`list_sessions`, `search_logs`, `ci_log`, `list_workflow_runs`,
-`get_workflow_graph`, `display_workflow_graph`, and `control_workflow_run`;
-`fetch_telemetry` and `fetch_workflow_graph_updates` are reserved for the
-bundled MCP Apps.
+`http://127.0.0.1:3001/mcp`; set `PORT` to change it. The local default binds to
+loopback only and accepts local or absent browser origins.
 
-The workbench runner remains available with `npm run start:runner`.
-
-### Hosted standalone server
-
-The live deployment serves a public product page at
-`https://mcp.qyl.at/`, the canonical MCP endpoint at
-`https://mcp.qyl.at/mcp`, and `/healthz` as its platform healthcheck; pushes to
-`main` deploy automatically after CI passes. The root page is presentation
-only and never acts as a second MCP endpoint.
-
-Hosting authenticates as an OAuth 2.1 Resource Server backed by
-Auth0. Configure an Auth0 API with identifier `https://mcp.qyl.at/mcp`, RS256,
-the RFC 9068 access-token profile, Resource Parameter Compatibility Profile,
-and permissions `qyl:read` and `qyl:control`. For stock third-party MCP clients,
-enable Auth0's strict Dynamic Client Registration and grant `qyl:read` as the
-API's default user-delegated permission; `qyl:control` is an explicit step-up
-scope for run mutation. Enable Client ID Metadata Document Registration
-separately and promote the login connection to domain level. qyl itself hosts
-neither client registration nor an authorization server. Production uses
-`MCP_OAUTH_ISSUER=https://qyl-eu.eu.auth0.com/`. The server discovers the
-issuer at startup, verifies RFC 9068 bearer tokens against its JWKS, requires
-the exact resource audience and `qyl:read` scope, and publishes only the RFC
-9728 protected-resource document. It never mints tokens and keeps no static
-operator credential; startup fails closed when the issuer is unset or
-unreachable.
+Point it at a collector:
 
 ```bash
-NODE_ENV=production \
-MCP_BIND_HOST=0.0.0.0 \
-MCP_PUBLIC_URL=https://mcp.qyl.at \
-MCP_ALLOWED_HOSTS=mcp.qyl.at,<service>.up.railway.app,healthcheck.railway.app \
-MCP_ALLOWED_ORIGIN_HOSTS=mcp.qyl.at,<service>.up.railway.app \
-MCP_OAUTH_ISSUER=https://qyl-eu.eu.auth0.com/ \
-QYL_COLLECTOR_URL=http://qyl-collector.railway.internal:8080 \
-QYL_API_KEY='<collector-api-key>' \
-npm start
+export QYL_COLLECTOR_URL=http://127.0.0.1:5100
+export QYL_API_KEY='your-collector-key'   # omit for an unsecured local collector
+npx qyl-mcp-server --stdio
 ```
 
-`MCP_PUBLIC_URL` adds its hostname to the SDK's Host and Origin host allowlists
-and, as `<public-url>/mcp`, is the fixed resource identifier tokens are
-audience-bound to. A non-loopback bind requires `MCP_PUBLIC_URL`. Additional
-comma-separated hostnames support Railway's generated domain and healthcheck
-host. Native clients without an Origin header remain valid, but every hosted
-MCP request needs a valid issuer-minted `Authorization: Bearer ...` token.
+`QYL_API_KEY` is an *outgoing* collector credential. It does not authenticate
+incoming MCP clients — the local server has no inbound auth, which is why it
+binds to loopback.
 
-The repository includes `railway.toml`. In Railway, use `/` as the root
-directory, or equivalent settings:
+### Tools
+
+The authoritative surface is
+[`server/tool-manifest.snapshot.json`](server/tool-manifest.snapshot.json),
+generated from the contract and checked in. Tools marked
+`meta.ui.visibility: ["app"]` are called by the bundled MCP Apps, not by a model.
+
+Telemetry: `list_traces`, `get_trace`, `list_sessions`, `search_logs`, `ci_log`,
+`display_traces`, `display_mcp_dashboard`. Workflow graph: see below.
+
+## Observe Graph
+
+Watch an agent run as a graph while it executes, and steer it.
+
+| Tool | Role |
+| --- | --- |
+| `list_workflow_runs` | Bounded historical run selection |
+| `get_workflow_graph` | Deterministic graph projection at one journal cursor |
+| `display_workflow_graph` | Opens the fullscreen MCP App |
+| `fetch_workflow_graph_updates` | App-only journal polling, gap recovery, paging, lazy content |
+| `control_workflow_run` | Steer, interrupt, resume — approval-gated, needs `qyl:control` |
+
+`plugins/observe-graph` packages the `$observe-graph` skill together with the
+remote `mcp.qyl.at` connection and the local `qyl observer-bridge`. When Codex is
+running under `qyl codex`, the bridge identifies the one active run and the live
+controls are available; otherwise the skill opens a durable run and labels it
+historical.
+
+Failed attempts stay visible after an interrupt or resume, because controls
+append journal events rather than rewriting history. The graph is a projection
+of that journal and nothing else — the same events always produce the same
+graph. The layered DAG is authoritative; the radial layout only suits small
+fan-out runs. The app keeps a bounded node and event window and fetches captured
+content only when you open its reference.
+
+Project identity is server-owned. No tool input accepts a project ID:
+`QYL_PROJECT` selects it at deployment and the collector scopes every run,
+event, command, projection, and content lookup to it.
+
+### Extending it
+
+Boundary changes start in [`qyl-api-schema`](https://github.com/ANcpLua/qyl-api-schema),
+then flow through the collector and this repository at the same published schema
+version. Projection behavior goes in the collector; tool behavior in
+`server/src/workflow-*.ts`; replay and layout in `server/ui/observe-graph-*.ts`;
+skill routing in `plugins/observe-graph/skills/observe-graph/SKILL.md`.
+Regenerate the tool manifest whenever a tool or resource changes:
+
+```bash
+npm run snapshot:tools --workspace server
+```
+
+Read that diff rather than regenerating to make a red test green.
+
+## The workbench
+
+A local client for connecting to MCP servers you did not write, inspecting their
+negotiated surface, invoking tools safely, and keeping the evidence.
+
+```bash
+npm ci
+npm run build
+npm run start:workbench
+```
+
+Open <http://127.0.0.1:18888>. Set `QYL_MCP_WORKBENCH_PORT` for another port.
+
+**Connecting a server.** Choose *Add server*. Streamable HTTP takes a
+credential-free endpoint plus header references like
+`Authorization=MCP_TOKEN|bearer`. stdio takes a command, one argument per line,
+an optional working directory, and environment mappings like
+`SERVER_TOKEN=MCP_SERVER_TOKEN`. Only variable *names* are sent by the browser or
+persisted; values resolve in the runner at connection time and register with the
+shared redactor. Endpoints cannot embed credentials, query values, or fragments,
+and persistent `Cookie` headers are rejected.
+
+Starting a stdio server launches code with your permissions, so review the exact
+executable, arguments, working directory, and environment references first.
+
+**Protocol.** Every user-configured connection pins revision `2026-07-28` and
+fails when a peer cannot negotiate it. There is no fallback and no setting.
+
+**Safety.** Tool annotations are hints, not permissions. Only a tool explicitly
+marked read-only, non-destructive, and closed-world runs without confirmation.
+Missing, contradictory, mutating, destructive, or open-world hints require you to
+approve the exact call. The runner never synthesizes a confirmation. Arguments,
+results, protocol payloads, persisted evidence, diagnostics, and telemetry all
+pass through credential and URI redaction.
+
+**What persists.** State defaults to `~/.qyl/mcp-workbench.json`
+(`QYL_MCP_STATE_PATH` overrides). Workspaces, server definitions, executions,
+protocol evidence, tests, suites, evaluation runs, and exports are written by
+atomic replacement with mode `0600`. Work interrupted by a restart is restored as
+explicit failure evidence, not silently dropped.
+
+Each execution retains its request, result or typed error, lifecycle, duration,
+attempts, cancellation state, redacted JSON-RPC timeline, and trace correlation.
+The tests workspace persists real invocations with status, exact, partial, JSON
+Schema, pattern, and latency assertions; suites run with bounded concurrency and
+export as contract-validated JSON or Markdown with SHA-256 artifact evidence.
+
+The server also records inbound `tools/call` requests natively — including over
+plain stdio, with no workbench involved — to
+`~/.qyl/mcp-native-executions.json` (`QYL_MCP_NATIVE_STATE_PATH` overrides),
+newest 1,000 retained. Token usage and cost are kept only when a tool reports
+explicit structured evidence; qyl.mcp never infers them from prose, latency, or
+payload size.
+
+## Configuration
+
+| Variable | Purpose |
+| --- | --- |
+| `QYL_COLLECTOR_URL` | Collector read API base; default `http://127.0.0.1:5100`. Also the OTLP base when set. |
+| `QYL_API_KEY` | Collector read and OTLP credential. Outgoing only. |
+| `QYL_PROJECT` | Server-owned collector project scope; defaults to `default`. |
+| `QYL_OTLP_ENDPOINT` | Optional OTLP base for workbench self-telemetry. |
+| `QYL_MCP_TELEMETRY=0` | Disable MCP spans, metrics, and operation logs. Enabled otherwise. |
+| `QYL_MCP_CAPTURE_CONTENT=1` | Include redacted, size-bounded request and response bodies in operation logs. Off by default. |
+| `QYL_MCP_STATE_PATH` | Override the durable workbench JSON path. |
+| `QYL_MCP_NATIVE_STATE_PATH` | Override the native-execution evidence path. |
+| `QYL_MCP_WORKBENCH_PORT` | Workbench listener port; default `18888`. |
+| `QYL_DEMO=1` | Explicit offline demo mode. |
+
+Demo mode is deliberate and labelled — results carry `mode: "demo"`. A collector
+error stays an error; live mode never silently falls back to generated data.
+
+## Telemetry
+
+qyl.mcp exports correlated MCP spans, duration histograms, and metadata-only
+operation logs over OTLP, targeting OpenTelemetry semantic conventions v1.43.0
+and its development MCP conventions.
+
+`mcp.client` and `mcp.server` spans are named `{mcp.method.name} {target}` when a
+low-cardinality target exists, and never carry argument or result content.
+Failures use `error.type` on the same operation histogram rather than a second
+counter. The `qyl.mcp.operation` log event carries matching trace context; its
+body is metadata-only unless you opt in with `QYL_MCP_CAPTURE_CONTENT=1`.
+
+Trace context and baggage travel in the unprefixed MCP `params._meta` bag on
+every supported transport. An inbound server span parents off that remote context
+and links any ambient transport span. HTTP propagation stays a separate concern
+and is never replaced by the MCP carrier.
+
+Reads of qyl's own telemetry run under async self-export suppression, so
+inspecting evidence does not generate recursive MCP telemetry.
+
+Signal-specific `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT` take
+precedence; otherwise the base order is `QYL_OTLP_ENDPOINT`,
+`QYL_COLLECTOR_URL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `http://127.0.0.1:4318`.
+
+## Deploying your own
+
+`railway.toml` is included. Use `/` as the root directory:
 
 ```text
 Build:  npm run build --workspace server
@@ -336,21 +222,65 @@ Start:  node server/dist/main.js
 Health: /healthz
 ```
 
-Do not set `PORT` manually; Railway injects it. The standalone server reads it
-and binds to the configured `MCP_BIND_HOST`. The stateless server needs no
-volume and can later be scaled horizontally. Keep one replica initially while
-authentication, rate limits, and collector load are being tested. Railway's
-15-minute streaming request limit still applies to unusually long synchronous
-MCP operations; those should eventually use polling or resumable jobs.
+Do not set `PORT`; Railway injects it. The server is stateless and needs no
+volume. Railway's 15-minute streaming limit applies to unusually long synchronous
+operations.
 
-Qyl request, response, event, and error models come from
-[`qyl-api-schema`](https://github.com/ANcpLua/qyl-api-schema). MCP envelopes come
-from the official MCP SDK, and OTLP payloads come from the official
-OpenTelemetry SDK.
+```bash
+NODE_ENV=production \
+MCP_BIND_HOST=0.0.0.0 \
+MCP_PUBLIC_URL=https://mcp.example.com \
+MCP_ALLOWED_HOSTS=mcp.example.com,<service>.up.railway.app,healthcheck.railway.app \
+MCP_ALLOWED_ORIGIN_HOSTS=mcp.example.com,<service>.up.railway.app \
+MCP_OAUTH_ISSUER=https://your-tenant.eu.auth0.com/ \
+QYL_COLLECTOR_URL=http://qyl-collector.railway.internal:8080 \
+QYL_API_KEY='<collector-api-key>' \
+npm start
+```
+
+`MCP_PUBLIC_URL` adds its hostname to the Host and Origin allowlists, and
+`<public-url>/mcp` is the fixed resource identifier tokens are audience-bound to.
+A non-loopback bind requires it.
+
+### Authentication
+
+The server is a resource server only. It never mints tokens, hosts no
+authorization server, holds no client registration, and keeps no static operator
+credential. Startup fails closed when `MCP_OAUTH_ISSUER` is unset or unreachable.
+It verifies RFC 9068 bearer tokens against the issuer's JWKS, requires the exact
+resource audience and the `qyl:read` scope, and publishes only the RFC 9728
+protected-resource document.
+
+Configure an authorization server with an API whose identifier is your
+`<public-url>/mcp`, RS256, the RFC 9068 access-token profile, and permissions
+`qyl:read` and `qyl:control`. On Auth0 that means enabling **Dynamic Client
+Registration**, **Client ID Metadata Document Registration**, and the **Resource
+Parameter Compatibility Profile**, then promoting the login connection to domain
+level.
+
+**How the two scopes actually reach a client:**
+
+- **`qyl:read`** — grant it as the API's *default* third-party permission. A
+  dynamically registered client receives the defaults and can read immediately.
+- **`qyl:control`** — leave it *out* of the defaults. There is no per-application
+  grant step during dynamic registration, so a DCR client receives only the
+  defaults. Keeping `qyl:control` out therefore makes run mutation **unavailable
+  to self-registered clients entirely** — it is not a scope they can request and
+  step up into.
+
+A client that needs to steer, interrupt, or resume a run must be registered
+deliberately — via CIMD or as a first-party application — and given an explicit
+client grant for `qyl:control`. That is the intended posture: self-registering
+clients read, named clients mutate.
+
+Note that Auth0's DCR is *open* — anyone can register a client without a token.
+Combined with `qyl:read` as the default, that means anyone can self-register and
+read your telemetry, which is usually the point of a public MCP server but is
+worth deciding rather than inheriting. Auth0's Tenant ACL (`dcr` scope) narrows
+it by IP, CIDR, or geography, and `/oidc/register` is rate-limited to 5 requests
+per second per tenant.
 
 ## Verification
-
-Run the repository-native checks from the root:
 
 ```bash
 npm ci
@@ -360,38 +290,34 @@ npm run smoke
 npm run smoke:otlp
 ```
 
-`smoke` exercises explicit demo behavior. `smoke:otlp` requires the sibling Qyl
-collector checkout (or `QYL_COLLECTOR_PROJECT` pointing to its project), starts
-an API-key-protected collector, and exercises its official OTLP/protobuf and Qyl
-read surfaces.
+`smoke` exercises explicit demo behavior. `smoke:otlp` needs the sibling qyl
+collector checkout (or `QYL_COLLECTOR_PROJECT` pointing at it), starts an
+API-key-protected collector, and drives its real OTLP/protobuf and read surfaces
+— a fixture validated by a schema from this repository would prove nothing about
+interoperability.
 
-## Current limitations
+`npm test` in `server` begins with `verify:shapes`, which fails on any hand-rolled
+`z.object(` outside two documented exemptions and on any module registering a tool
+without importing the generated validators. The exemption list is self-policing:
+an entry whose file no longer declares a shape fails as stale, so the list shrinks
+on its own.
 
-- Evaluation usage and cost are displayed only when the execution evidence
-  records them; qyl.mcp does not synthesize or estimate missing values.
-- Downstream spans from an external or stdio server correlate only when that
-  server honors the MCP propagation metadata; qyl.mcp cannot retrofit
-  instrumentation into an uninstrumented peer.
+## Limits
+
+- Usage and cost appear only when execution evidence records them. qyl.mcp does
+  not estimate.
+- Downstream spans from an external or stdio peer correlate only when that peer
+  honors MCP propagation metadata. qyl.mcp cannot retrofit instrumentation into
+  an uninstrumented server.
 - The live connection journal is process-local. Execution, test, and evaluation
-  evidence is durable, but protocol traffic that is not attached to retained
-  execution evidence is not reconstructed after a runner restart.
-- Local conformance servers cover stdio and Streamable HTTP. External
-  remote services cannot be verified without their endpoints and credentials.
+  evidence is durable, but protocol traffic not attached to retained evidence is
+  not reconstructed after a restart.
+- Conformance coverage is local stdio and Streamable HTTP. External remote
+  services cannot be verified without their endpoints and credentials.
 
-```mermaid
-flowchart TD
-  A["MCP tool execution"] --> B["Durable execution evidence"]
-  B --> C{"Usage or cost recorded?"}
-  C -- "yes" --> D["Display recorded value"]
-  C -- "no" --> E["Unavailable; no estimate"]
-  B --> F["Workbench MCP span"]
-  F --> G["Exact trace/span correlation"]
-  B --> J["External or stdio peer"]
-  J --> K{"Honors MCP propagation metadata?"}
-  K -- "yes" --> L["Downstream span correlates"]
-  K -- "no" --> M["qyl.mcp cannot retrofit instrumentation"]
-  A --> N["Live process-local connection journal"]
-  N --> O["Unattached traffic is not reconstructed after restart"]
-  P["Local conformance servers"] --> Q["stdio / Streamable HTTP"]
-  R["External remote service"] --> S["Requires endpoint and credentials"]
-```
+## Contracts
+
+Request, response, event, and error models come from
+[`qyl-api-schema`](https://github.com/ANcpLua/qyl-api-schema). MCP envelopes come
+from the official MCP TypeScript SDK 2.0.0. OTLP payloads come from the official
+OpenTelemetry SDK. None of the three is mirrored or hand-built here.
