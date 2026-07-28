@@ -1,49 +1,72 @@
 # qyl-mcp-server
 
-qyl telemetry MCP server: trace explorer, MCP dashboard, log search, and CI-run
-inspection for a live [qyl](https://github.com/ANcpLua/qyl) collector — or an
-explicit, visibly labelled demo mode.
+MCP tools over a live [qyl](https://github.com/ANcpLua/qyl) collector — traces,
+logs, sessions, CI runs, and a graph view of agent runs you can watch while they
+execute.
 
 ```bash
 npx qyl-mcp-server --stdio    # stdio MCP server
-npx qyl-mcp-server            # Streamable HTTP on loopback
+npx qyl-mcp-server            # Streamable HTTP on 127.0.0.1:3001
 ```
 
-Works standalone with any MCP client. Point `QYL_COLLECTOR_URL` and
-`QYL_OTLP_ENDPOINT` at a local or hosted Qyl collector; MCP process supervision
-and interactive connections belong to the qyl.mcp workbench runner.
+Works with any MCP client. Point it at a collector:
 
-The HTTP server publishes a product and setup page at `/`; the protocol remains
-available only at `/mcp`.
+```bash
+export QYL_COLLECTOR_URL=http://127.0.0.1:5100
+export QYL_API_KEY='your-collector-key'   # omit for an unsecured local collector
+```
 
-The server uses the MCP v2 serving entries. Streamable HTTP uses
-`createMcpHandler` and stdio uses `serveStdio`; both accept only protocol
-revision `2026-07-28`.
+`QYL_API_KEY` is an *outgoing* collector credential — it does not authenticate
+incoming MCP clients, which is why the local server binds to loopback only.
+
+There is also a hosted instance at `https://mcp.qyl.at/mcp` needing no install.
+It is an OAuth 2.1 resource server, so an unauthenticated request answers `401`
+with an RFC 9728 protected-resource document that a stock MCP client follows on
+its own.
+
+Both accept only protocol revision `2026-07-28`, on MCP TypeScript SDK 2.0.0.
+The HTTP server serves a product page at `/`; `/mcp` is the only protocol
+endpoint.
 
 ## Tools
 
-`fetch_telemetry`, `list_traces`, `get_trace`, `list_sessions`, `search_logs`,
-`display_traces`, `display_mcp_dashboard`, `ci_log` — all published with
-read-only safety annotations. The two `display_*` tools return MCP Apps UI
-resources (single-file viewers).
+**Telemetry** — `list_traces`, `get_trace`, `list_sessions`, `search_logs`,
+`ci_log`, `display_traces`, `display_mcp_dashboard`.
 
-Every inbound `tools/call` is recorded natively: validated result, lifecycle,
-duration, redacted JSON-RPC timeline, and trace/span correlation are persisted
+**Workflow graph** — `list_workflow_runs`, `get_workflow_graph`,
+`display_workflow_graph`, `control_workflow_run`.
+
+**App-only** — `fetch_telemetry` and `fetch_workflow_graph_updates` are called by
+the bundled MCP Apps, not by a model.
+
+All are read-only except **`control_workflow_run`**, which steers, interrupts, or
+resumes a run. It is approval-gated and, on the hosted server, requires the
+`qyl:control` scope in addition to `qyl:read`.
+
+The `display_*` tools return MCP Apps UI resources as single-file viewers.
+
+Every inbound `tools/call` is recorded natively — validated result, lifecycle,
+duration, redacted JSON-RPC timeline, and trace/span correlation — persisted
 atomically to `~/.qyl/mcp-native-executions.json`.
 
 ## Configuration
 
 | Variable | Meaning |
 | --- | --- |
-| `QYL_COLLECTOR_URL` | qyl read API base; default `http://127.0.0.1:5100`. Also the OTLP base when set. |
-| `QYL_API_KEY` | Collector read and OTLP credential. |
+| `QYL_COLLECTOR_URL` | Collector read API base; default `http://127.0.0.1:5100`. Also the OTLP base when set. |
+| `QYL_API_KEY` | Collector read and OTLP credential. Outgoing only. |
+| `QYL_PROJECT` | Server-owned collector project scope; defaults to `default`. Never accepted as tool input. |
 | `QYL_OTLP_ENDPOINT` | Optional OTLP base for self-telemetry. |
-| `QYL_DEMO=1` | Explicit generated demo telemetry. Collector failure never silently substitutes demo data. |
+| `QYL_DEMO=1` | Explicit, visibly labelled demo telemetry. A collector failure never silently substitutes demo data. |
 | `QYL_MCP_TELEMETRY=0` | Disable MCP spans, metrics, and operation logs. |
-| `QYL_MCP_CAPTURE_CONTENT=1` | Include redacted, size-bounded request and response bodies in MCP operation logs. Disabled by default. |
+| `QYL_MCP_CAPTURE_CONTENT=1` | Include redacted, size-bounded request and response bodies in operation logs. Off by default. |
 | `QYL_MCP_NATIVE_STATE_PATH` | Override the native execution-evidence path. |
+| `PORT` | HTTP listener port; default `3001`. |
 
 Secrets are redacted before results reach the model, structured content, or
 durable evidence.
 
-Full documentation: [github.com/ANcpLua/qyl.mcp](https://github.com/ANcpLua/qyl.mcp)
+Requires Node.js 24.
+
+Full documentation, the workbench, and self-hosting:
+[github.com/ANcpLua/qyl.mcp](https://github.com/ANcpLua/qyl.mcp)
