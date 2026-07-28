@@ -66,7 +66,7 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "@ancplua/qyl-api-schema": "5.0.0",
+    "@ancplua/qyl-api-schema": "5.1.0",
     "@modelcontextprotocol/core": "2.0.0",
     "@modelcontextprotocol/express": "2.0.0",
     "@modelcontextprotocol/node": "2.0.0",
