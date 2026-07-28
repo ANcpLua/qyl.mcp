@@ -75,6 +75,159 @@ const [first] = items;
 if (!first) return empty;   // `first` is now narrowed; items[0] never is
 ```
 
+## Serving-layer target — Bun web-standard handler, protocol 2026-07-28
+
+`qyl.mcp/server` runs today as the hosted MCP endpoint on Railway
+(`https://mcp.qyl.at/mcp`), Node + Express, with a hand-wired auth front. The
+active migration target is the serving layer, not the tools: the same
+functional surface, but as a web-standard handler on Bun that speaks protocol
+revision `2026-07-28` and works for foreign MCP clients with no prior
+knowledge of qyl. The surface table above describes the current deployment
+until this lands.
+
+**There is no Bun package in the SDK, and that is not a gap.**
+`@modelcontextprotocol/express`, `/fastify`, `/hono`, and `/node` are adapters
+for Node frameworks. `createMcpHandler` from `@modelcontextprotocol/server`
+already returns `{ fetch, close, notify, bus }`, where `fetch` is a
+web-standard `(Request) => Promise<Response>` — the shape Bun expects from a
+default export. On Bun, `export default handler` is the entire mount. Anyone
+searching for a Bun adapter is searching for something that by construction
+does not exist.
+
+Authoritative sources for this work, read in this order — where these pages
+and the repo disagree, the pages win: the repo was written against an earlier
+v2 alpha.
+
+- <https://ts.sdk.modelcontextprotocol.io/v2/migration/support-2026-07-28.md>
+- <https://ts.sdk.modelcontextprotocol.io/v2/serving/http.md>
+- <https://ts.sdk.modelcontextprotocol.io/v2/serving/authorization.md>
+- <https://ts.sdk.modelcontextprotocol.io/v2/serving/legacy-clients.md>
+- <https://ts.sdk.modelcontextprotocol.io/v2/serving/web-standard.md>
+
+### Goal state
+
+`server/src/main.ts` is a single default export of the shape `{ port, fetch }`.
+Express, `@modelcontextprotocol/express`, and `@modelcontextprotocol/node` are
+gone from the server dependencies — not encapsulated, not replaced, removed.
+The endpoint serves `2026-07-28` and 2025-era clients from the same factory. A
+foreign MCP client that knows nothing about us can connect, find the auth flow
+on its own, and call tools.
+
+### The request pipeline
+
+One fetch function, four stages, in this order — the order is the thing that
+otherwise goes wrong:
+
+1. `oauthMetadataResponse(request, { oauthMetadata, resourceServerUrl })` —
+   **before** the auth gate. These documents must be reachable
+   unauthenticated, or the discovery path is circular. Returns `undefined`
+   when the route does not match.
+2. `hostHeaderValidationResponse` / `originValidationResponse` from
+   `@modelcontextprotocol/server`. The handler checks neither Host nor Origin
+   nor a token — that is deliberate, and it must happen before it. The
+   existing `MCP_ALLOWED_HOSTS` / `MCP_ALLOWED_ORIGIN_HOSTS` are the values.
+3. `requireBearerAuth({ verifier, requiredScopes })` from
+   `@modelcontextprotocol/server` (not the Express variant). Resolves to
+   `AuthInfo` **or** a finished challenge `Response` — `instanceof Response`
+   is the branch.
+4. `handler.fetch(request, { authInfo })`. `port` comes from
+   `process.env.PORT` — Railway injects it; a hardcoded port binds into the
+   void.
+
+### What makes foreign clients work
+
+Three things, and only these three, decide whether a foreign client gets
+through without instructions:
+
+- **The discovery path must be closed.** A client without a token gets 401
+  with `WWW-Authenticate: Bearer …` whose `resource_metadata` points at
+  `/.well-known/oauth-protected-resource/mcp`; that document names the
+  authorization server; the client fetches a token there and retries. If the
+  chain breaks anywhere, the user sees a bare 401 with no way forward.
+  `resourceMetadataUrl` on `requireBearerAuth` and the mounted
+  `oauthMetadataResponse` are the two halves of this.
+- **The legacy posture stays the default.** `createMcpHandler(factory)` serves
+  `2026-07-28` per request and, via `legacy: 'stateless'`, additionally serves
+  2025-era traffic from the same factory. Do not set `legacy: 'reject'`: most
+  clients shipping today are 2025-era and would get 400.
+- **Populate `expiresAt` in the verifier**, from the JWT `exp`.
+  `requireBearerAuth` answers 401 `invalid_token` for a token whose
+  `expiresAt` is unset — even when everything else is valid.
+
+### Known traps
+
+These are in the docs and cost an hour each otherwise:
+
+- On the modern path, `createMcpHandler` validates the SEP-2243 standard
+  headers (`MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`) against the body
+  and answers 400 with `-32020` on mismatch. If Railway's edge rewrites or
+  drops headers, it manifests exactly here — and looks like a client bug.
+- Under the stateless legacy posture, legacy GET (the standalone SSE stream)
+  and DELETE (session termination) answer 405. That is correct behavior, not
+  a regression finding.
+- Also under stateless legacy: there is no back-channel for server→client
+  requests, so the `input_required` shim for 2025-era clients degrades to a
+  clean capability refusal. A tool that needs elicitation or sampling hits
+  that boundary — know it, do not rebuild around it.
+- `resultType` is gone from every public result type; the 2026 error codes
+  were renumbered relative to the alphas (`-32020` HeaderMismatch, `-32021`
+  MissingRequiredClientCapability, `-32022` UnsupportedProtocolVersion). Any
+  place in the repo that hardcodes one of those values or reads
+  `result.resultType` is alpha-era and wrong today.
+- The stdio entry (`serveStdio`, the published `bin`) is its own deliverable
+  and stays untouched. It pulls no `@modelcontextprotocol/node`, so it
+  survives the removal without change.
+
+### Verification for this migration
+
+Claims do not count here; outputs count. For every item, the actual output
+belongs in the report, not a summary of it.
+
+Test foreign clients without a network: drive `handler.fetch` directly, as the
+migration page shows under "In-process testing" — a
+`StreamableHTTPClientTransport` whose `fetch` points at
+`handler.fetch(new Request(url, init))`. The URL is never dialed. That makes
+both checkable:
+
+- a client with `versionNegotiation: { mode: 'auto' }` connects and reports
+  `getProtocolEra() === 'modern'`
+- a default client (2025 handshake, no `versionNegotiation`) also connects and
+  lists the same tools
+
+Plus, with curl against the locally started Bun process:
+
+- `POST /mcp` without a token → 401, and the `WWW-Authenticate` header
+  contains `resource_metadata`
+- `GET /.well-known/oauth-protected-resource/mcp` without a token → 200, JSON
+  names the authorization server
+- `POST /mcp` with a valid token → `tools/list` returns the tools
+
+And the dependency claim as fact rather than intent:
+
+- `bun pm ls` or `npm ls @modelcontextprotocol/node` in the server workspace
+  finds nothing
+- `npm audit` at the workspace root: GHSA-frvp-7c67-39w9 no longer appears,
+  because `@hono/node-server` lost its only source
+
+### Constraints on this migration
+
+No `git push`, no `npm publish`, no Railway deploy, no change to Railway
+variables. Local commits are fine. Those operations are irreversible and
+human-gated — the run ends in `needs_verification`, never in `done`.
+
+If something about the web-standard conversion does not work out, the right
+move is to report it and leave it standing — not to build an adapter or
+wrapper to bridge the gap. A reported blocker costs five minutes; a bridged
+one also costs them, just later and more expensively.
+
+If the test files on `node:test` do not run under Bun: report the result
+(which APIs are missing), do not rewrite the suite.
+
+The report at the end: what changed, the verification outputs raw, and the
+list of what did not work out. An empty third section is a credible result; a
+third section that describes problems as solved without an output showing it
+is not.
+
 ## Role and ownership
 
 qyl.mcp owns MCP runtime behavior, local orchestration, and presentation. It is
