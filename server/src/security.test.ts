@@ -54,6 +54,30 @@ test("collector Problem Details cannot inject remote detail into tool-facing err
   }
 });
 
+test("collector requests fail closed on the configured timeout", async () => {
+  const listener = createServer((_request, response) => {
+    setTimeout(() => {
+      if (!response.destroyed) response.end("{}");
+    }, 100);
+  });
+  await listen(listener);
+  const address = listener.address();
+  assert(address && typeof address === "object");
+  const previous = process.env.QYL_COLLECTOR_URL;
+  process.env.QYL_COLLECTOR_URL = `http://127.0.0.1:${address.port}`;
+  try {
+    await assert.rejects(
+      collectorGet("/slow", {}, { timeoutMs: 20 }),
+      (error: unknown) => error instanceof CollectorError
+        && error.connectionError
+        && error.message === "collector timed out for /slow",
+    );
+  } finally {
+    restoreEnvironment("QYL_COLLECTOR_URL", previous);
+    await close(listener);
+  }
+});
+
 function restoreEnvironment(name: string, value: string | undefined): void {
   if (value === undefined) delete process.env[name];
   else process.env[name] = value;

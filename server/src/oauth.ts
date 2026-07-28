@@ -17,9 +17,11 @@ const DISCOVERY_TIMEOUT_MS = 10_000;
 export const QYL_MCP_ISSUER = "https://qyl-eu.eu.auth0.com/";
 export const QYL_MCP_RESOURCE = "https://mcp.qyl.at/mcp";
 export const QYL_MCP_SCOPE = "qyl:read";
+export const QYL_MCP_CONTROL_SCOPE = "qyl:control";
 
 export interface HostedOAuth {
   readonly requiredScopes: string[];
+  readonly scopesSupported: string[];
   readonly oauthMetadata: OAuthMetadata;
   readonly verifier: OAuthTokenVerifier;
 }
@@ -159,6 +161,7 @@ export async function loadHostedOAuth(
 
   return {
     requiredScopes: [QYL_MCP_SCOPE],
+    scopesSupported: [QYL_MCP_SCOPE, QYL_MCP_CONTROL_SCOPE],
     oauthMetadata,
     verifier: createJwtTokenVerifier({
       issuer: oauthMetadata.issuer,

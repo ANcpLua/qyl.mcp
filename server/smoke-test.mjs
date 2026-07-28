@@ -52,18 +52,23 @@ console.log("tools/list");
 const { tools } = await client.listTools();
 const names = tools.map((t) => t.name).sort();
 check(
-  "exactly the eight supported tools",
-  names.length === 8 &&
+  "exactly the thirteen supported tools",
+  names.length === 13 &&
     JSON.stringify(names) ===
       JSON.stringify(
         [
           "ci_log",
+          "control_workflow_run",
           "display_mcp_dashboard",
           "display_traces",
+          "display_workflow_graph",
           "fetch_telemetry",
+          "fetch_workflow_graph_updates",
           "get_trace",
+          "get_workflow_graph",
           "list_sessions",
           "list_traces",
+          "list_workflow_runs",
           "search_logs",
         ].sort(),
       ),
@@ -90,6 +95,30 @@ check(
   displayDashboard?._meta?.ui?.resourceUri ===
     "ui://qyl-explorer/mcp-dashboard.html",
   JSON.stringify(displayDashboard?._meta),
+);
+
+const displayWorkflow = tools.find((t) => t.name === "display_workflow_graph");
+check(
+  "display_workflow_graph has _meta.ui.resourceUri",
+  displayWorkflow?._meta?.ui?.resourceUri ===
+    "ui://qyl-explorer/observe-graph.html",
+  JSON.stringify(displayWorkflow?._meta),
+);
+
+const fetchWorkflow = tools.find((t) => t.name === "fetch_workflow_graph_updates");
+check(
+  'fetch_workflow_graph_updates has _meta.ui.visibility ["app"]',
+  JSON.stringify(fetchWorkflow?._meta?.ui?.visibility) === '["app"]',
+  JSON.stringify(fetchWorkflow?._meta),
+);
+
+const controlWorkflow = tools.find((t) => t.name === "control_workflow_run");
+check(
+  "control_workflow_run is explicitly side-effecting",
+  controlWorkflow?.annotations?.readOnlyHint === false &&
+    controlWorkflow?.annotations?.destructiveHint === true &&
+    controlWorkflow?.annotations?.idempotentHint === true,
+  JSON.stringify(controlWorkflow?.annotations),
 );
 
 const ciLog = await callTool(client, "ci_log", {});
@@ -308,7 +337,7 @@ check(
     mcpStatsRes.structuredContent.stats.mode === "demo",
 );
 
-// --- 9. resources/read of the dashboard UI -----------------------------------
+// --- 9. resources/read of the debugger UIs -----------------------------------
 console.log("resources/read ui://qyl-explorer/mcp-dashboard.html");
 if (existsSync(new URL("./dist/mcp-dashboard.html", import.meta.url))) {
   const dashRes = await client.readResource({
@@ -327,6 +356,28 @@ if (existsSync(new URL("./dist/mcp-dashboard.html", import.meta.url))) {
   );
 } else {
   console.log("  SKIPPED  dist/mcp-dashboard.html not built yet");
+}
+
+console.log("resources/read ui://qyl-explorer/observe-graph.html");
+if (existsSync(new URL("./dist/observe-graph.html", import.meta.url))) {
+  const graphRes = await client.readResource({
+    uri: "ui://qyl-explorer/observe-graph.html",
+  });
+  const content = graphRes.contents?.[0];
+  check(
+    "workflow graph resource serves the fullscreen debugger",
+    typeof content?.text === "string" &&
+      content.text.includes("qyl · observe graph") &&
+      content.text.includes("Workflow execution DAG"),
+  );
+  check(
+    "workflow graph resource has empty-CSP _meta",
+    JSON.stringify(content?._meta?.ui?.csp) ===
+      '{"connectDomains":[],"resourceDomains":[]}',
+    JSON.stringify(content?._meta),
+  );
+} else {
+  console.log("  SKIPPED  dist/observe-graph.html not built yet");
 }
 
 const nativeState = JSON.parse(await readFile(nativeStatePath, "utf8"));

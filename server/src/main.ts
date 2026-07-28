@@ -206,7 +206,7 @@ export async function startStreamableHTTPServer(
     const resourceMetadataUrl = mountProtectedResourceMetadata(app, {
       oauthMetadata: oauth.oauthMetadata,
       resourceServerUrl,
-      scopesSupported: oauth.requiredScopes,
+      scopesSupported: oauth.scopesSupported,
     });
     const requireAuth = requireBearerAuth({
       verifier: oauth.verifier,

@@ -101,6 +101,11 @@ interface ParsedCollectorPage<T> {
   hasMore: boolean;
 }
 
+export interface CollectorRequestOptions {
+  timeoutMs?: number;
+  signal?: AbortSignal;
+}
+
 /**
  * Normalize endpoint items, then validate the complete operation-specific
  * response body. The supplied schema must be an Operations.*.Response.200
@@ -148,23 +153,47 @@ function parseProblemDetails(value: unknown): ProblemDetails | undefined {
 }
 
 /**
- * GET a collector endpoint. Query params are camelCase per the collector API;
+ * Call a collector endpoint. Query params use their generated wire names;
  * `undefined` values are omitted. All response data remains unknown until the
  * endpoint-specific generated contract parser accepts it.
  */
-export async function collectorGet(
+async function collectorRequest(
   pathname: string,
-  params: Record<string, string | number | boolean | undefined> = {},
+  method: "GET" | "POST",
+  params: Record<string, string | number | boolean | undefined>,
+  body: unknown,
+  options: CollectorRequestOptions,
 ): Promise<unknown> {
   const url = new URL(pathname, collectorUrl());
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
 
+  const timeout = AbortSignal.timeout(options.timeoutMs ?? 10_000);
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, timeout])
+    : timeout;
+  const headers = {
+    accept: "application/json",
+    ...collectorHeaders(),
+    ...(body === undefined ? {} : { "content-type": "application/json" }),
+  };
+
   let response: Response;
   try {
-    response = await fetch(url, { headers: collectorHeaders() });
+    response = await fetch(url, {
+      method,
+      headers,
+      signal,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
   } catch {
+    if (options.signal?.aborted) {
+      throw new CollectorError(`collector request cancelled for ${pathname}`, true);
+    }
+    if (timeout.aborted) {
+      throw new CollectorError(`collector timed out for ${pathname}`, true);
+    }
     throw new CollectorError(
       `collector unreachable at ${collectorUrl()} — start it with ` +
         "`dotnet run --project services/qyl.collector` or set QYL_DEMO=1",
@@ -172,9 +201,9 @@ export async function collectorGet(
     );
   }
 
-  let body: unknown;
+  let responseBody: unknown;
   try {
-    body = await response.json();
+    responseBody = await response.json();
   } catch {
     throw new CollectorError(
       `collector returned invalid JSON (${response.status} ${response.statusText}) for ${pathname}`,
@@ -192,7 +221,7 @@ export async function collectorGet(
         response.status,
       );
     }
-    const problem = parseProblemDetails(body);
+    const problem = parseProblemDetails(responseBody);
     if (!problem) {
       throw new CollectorError(
         `collector contract mismatch for ${pathname}: invalid Problem Details body`,
@@ -207,7 +236,23 @@ export async function collectorGet(
     );
   }
 
-  return body;
+  return responseBody;
+}
+
+export function collectorGet(
+  pathname: string,
+  params: Record<string, string | number | boolean | undefined> = {},
+  options: CollectorRequestOptions = {},
+): Promise<unknown> {
+  return collectorRequest(pathname, "GET", params, undefined, options);
+}
+
+export function collectorPost(
+  pathname: string,
+  body: unknown,
+  options: CollectorRequestOptions = {},
+): Promise<unknown> {
+  return collectorRequest(pathname, "POST", {}, body, options);
 }
 
 export function resolveMode(): Promise<Mode> {

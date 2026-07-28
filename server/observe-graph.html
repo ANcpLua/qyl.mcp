@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="data:,">
+  <title>qyl · observe graph</title>
+</head>
+<body>
+  <main id="workflow-app" class="workflow-app">
+    <header class="observe-header">
+      <div class="observe-brand">
+        <span class="wordmark">qyl<span>.observe</span></span>
+        <span class="screen-label">execution graph</span>
+      </div>
+      <div class="run-identity">
+        <span id="run-status-mark" class="status-mark" aria-hidden="true"></span>
+        <span id="run-title">waiting for workflow</span>
+        <code id="run-id"></code>
+      </div>
+      <div class="header-operations">
+        <span id="connection-state" class="connection-state" role="status">connecting</span>
+        <button id="fit-graph" class="tool-button" type="button">Fit</button>
+        <button id="fullscreen-button" class="tool-button" type="button" hidden>Fullscreen</button>
+      </div>
+    </header>
+
+    <section class="metric-strip" aria-label="Workflow timing">
+      <div><span>work T₁</span><strong id="metric-t1">—</strong></div>
+      <div><span>critical T∞</span><strong id="metric-tinf">—</strong></div>
+      <div><span>actual wall</span><strong id="metric-wall">—</strong></div>
+      <div><span>peak</span><strong id="metric-peak">—</strong></div>
+      <div><span>workers N</span><strong id="metric-workers">—</strong></div>
+      <div class="bound-metric"><span>lower bound max(T₁/N, T∞)</span><strong id="metric-bound">—</strong></div>
+    </section>
+
+    <div id="loading-state" class="center-state">
+      <span class="scan-line" aria-hidden="true"></span>
+      <strong>Attaching to journal</strong>
+      <span>Waiting for the first deterministic projection.</span>
+    </div>
+    <div id="error-state" class="center-state error-state" hidden>
+      <strong>Projection unavailable</strong>
+      <span id="error-message"></span>
+    </div>
+
+    <section id="debugger" class="debugger" hidden>
+      <aside class="agent-rail" aria-label="Run and agents">
+        <header class="panel-heading">
+          <div><span class="panel-index">01</span><strong>fleet</strong></div>
+          <span id="agent-count">0 agents</span>
+        </header>
+        <div id="run-card" class="run-card"></div>
+        <div id="agent-list" class="agent-list" role="listbox" aria-label="Workflow agents"></div>
+        <button id="load-more-graph" class="load-more" type="button" hidden>Load next graph window</button>
+      </aside>
+
+      <section class="graph-console" aria-label="Execution graph">
+        <header class="graph-toolbar">
+          <div class="view-switch" role="group" aria-label="Graph layout">
+            <button id="layout-layered" type="button" aria-pressed="true">Layered DAG</button>
+            <button id="layout-radial" type="button" aria-pressed="false">Fleet radial</button>
+          </div>
+          <span id="viewport-count" class="viewport-count"></span>
+          <div class="provenance-key" aria-label="Edge provenance legend">
+            <span><i class="recorded-line"></i>recorded</span>
+            <span><i class="derived-line"></i>derived</span>
+          </div>
+        </header>
+        <div id="graph-viewport" class="graph-viewport" tabindex="0" aria-label="Scrollable workflow graph">
+          <svg id="graph-svg" role="tree" aria-label="Workflow execution DAG">
+            <defs>
+              <pattern id="micro-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M20 0H0V20" class="grid-path"></path>
+              </pattern>
+              <marker id="edge-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                <path d="M0 0L7 3.5L0 7Z" class="edge-arrow"></path>
+              </marker>
+            </defs>
+            <rect id="graph-grid" x="0" y="0" width="100%" height="100%" fill="url(#micro-grid)"></rect>
+            <g id="graph-world">
+              <g id="edge-layer"></g>
+              <g id="node-layer"></g>
+            </g>
+          </svg>
+          <div class="graph-help">drag to pan · wheel to zoom · arrows move selection · enter opens detail</div>
+        </div>
+        <section class="heatmap-panel" aria-label="Worker phase heatmap">
+          <header>
+            <div><span class="panel-index">02</span><strong>worker occupancy</strong></div>
+            <span id="heatmap-range"></span>
+          </header>
+          <div id="heatmap" class="heatmap"></div>
+        </section>
+      </section>
+
+      <aside class="event-console" aria-label="Workflow journal">
+        <header class="panel-heading">
+          <div><span class="panel-index">03</span><strong>journal</strong></div>
+          <code id="journal-cursor">seq 0</code>
+        </header>
+        <div id="event-list" class="event-list" tabindex="0" aria-label="Append-only workflow events">
+          <div id="event-list-inner" class="event-list-inner"></div>
+        </div>
+        <footer class="event-footer">
+          <span id="event-window-label">0 buffered</span>
+          <button id="follow-events" type="button" aria-pressed="true">follow cursor</button>
+        </footer>
+      </aside>
+    </section>
+
+    <aside id="detail-drawer" class="detail-drawer" aria-label="Workflow detail" hidden>
+      <header class="drawer-header">
+        <div>
+          <span class="panel-index">04</span>
+          <strong id="detail-title">selection</strong>
+          <span id="detail-subtitle"></span>
+        </div>
+        <button id="detail-close" type="button" aria-label="Close details">×</button>
+      </header>
+      <div class="drawer-grid">
+        <section>
+          <h2>record</h2>
+          <dl id="detail-facts" class="detail-facts"></dl>
+        </section>
+        <section>
+          <h2>attempt history</h2>
+          <div id="attempt-history" class="attempt-history"></div>
+        </section>
+        <section class="content-section">
+          <h2>captured content</h2>
+          <div id="content-list" class="content-list"></div>
+          <pre id="content-viewer" class="content-viewer" tabindex="0">Select a content reference to decrypt and retrieve it.</pre>
+        </section>
+        <section id="control-section" class="control-section">
+          <h2>run control</h2>
+          <div id="historical-control-note" class="historical-note">Live controls are unavailable for this historical run.</div>
+          <form id="control-form" hidden>
+            <label>
+              Action
+              <select id="control-action">
+                <option value="steer">steer active turn</option>
+                <option value="interrupt">interrupt active turn</option>
+                <option value="resume">resume as new attempt</option>
+              </select>
+            </label>
+            <label id="control-input-label">
+              Input
+              <textarea id="control-input" rows="3" maxlength="32768" placeholder="Additional direction for the active thread"></textarea>
+            </label>
+            <button id="control-submit" type="submit">Request control</button>
+          </form>
+          <div id="control-result" class="control-result" role="status"></div>
+        </section>
+      </div>
+    </aside>
+
+    <div id="live-announcer" class="sr-only" aria-live="polite"></div>
+  </main>
+  <script type="module" src="/ui/observe-graph.ts"></script>
+</body>
+</html>

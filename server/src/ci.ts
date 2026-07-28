@@ -9,17 +9,18 @@
  *   - one span per phase, named after the phase, carrying a `ci.leg` string
  *     attribute (e.g. "macos-latest"); a failed phase sets span status error.
  *
- * The input/output shapes have graduated: they are authored in qyl-api-schema
- * as Mcp.Tools.CiLogInput/CiRunSummary/CiPhase/CiLogOutput. The inline zod below
- * is what remains until the @ancplua/qyl-api-schema pin moves past 3.0.0, which
- * is the first release whose JSON Schema carries those definitions —
- * publishedContractSchema throws at module load on a definition the installed
- * package does not have. On that bump, delete these schemas, take the four
- * validators from contract-validation.ts, and drop the ci.ts entries from
- * verify-generated-shapes.mjs.
  */
+import type {
+  CiLogInput,
+  CiLogOutput,
+  CiPhase,
+  CiRunSummary,
+} from "@ancplua/qyl-api-schema/types";
 import type { McpServer, CallToolResult } from "@modelcontextprotocol/server";
-import { z } from "zod";
+import {
+  CiLogInputSchema,
+  CiLogOutputSchema,
+} from "./contract-validation.js";
 import { fetchSessions, fetchSessionTraces } from "./data.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, toolError } from "./tools.js";
@@ -27,50 +28,6 @@ import type { Mode, QylSession, QylSpan, QylTrace } from "./wire.js";
 
 /** Resource service-name prefix that marks telemetry as CI-emitted. */
 export const CI_SERVICE_PREFIX = "qyl-ci";
-
-const CiLogInputSchema = z.object({
-  run_id: z
-    .string()
-    .min(1)
-    .optional()
-    .describe("Session id of one CI run for a per-leg phase breakdown; omit to list recent runs."),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(50)
-    .optional()
-    .describe("Maximum CI runs to list (default 10)."),
-});
-
-const CiRunSummarySchema = z.object({
-  run_id: z.string(),
-  state: z.string(),
-  start_time: z.string(),
-  duration_ms: z.number().optional(),
-  error_count: z.number(),
-  services: z.array(z.string()),
-});
-
-const CiPhaseSchema = z.object({
-  leg: z.string(),
-  phase: z.string(),
-  status: z.enum(["ok", "error", "unset"]),
-  duration_ms: z.number(),
-  message: z.string().optional(),
-});
-
-const CiLogOutputSchema = z.object({
-  runs: z.array(CiRunSummarySchema).optional(),
-  run_id: z.string().optional(),
-  phases: z.array(CiPhaseSchema).optional(),
-  mode: z.enum(["live", "demo"]),
-});
-
-type CiLogInput = z.infer<typeof CiLogInputSchema>;
-type CiRunSummary = z.infer<typeof CiRunSummarySchema>;
-type CiPhase = z.infer<typeof CiPhaseSchema>;
-type CiLogOutput = z.infer<typeof CiLogOutputSchema>;
 
 /** CI sessions are the ones that carry at least one qyl-ci service. */
 export function filterCiSessions(sessions: QylSession[]): QylSession[] {
@@ -159,8 +116,8 @@ export function registerCiTools(server: McpServer): void {
         "Without arguments: recent CI runs (sessions whose service.name starts with " +
         `'${CI_SERVICE_PREFIX}'). With run_id: per-leg phase breakdown, failures first, ` +
         "so 'which leg hung on what' is answerable even when GitHub's log API is down.",
-      inputSchema: CiLogInputSchema.shape,
-      outputSchema: CiLogOutputSchema.shape,
+      inputSchema: CiLogInputSchema,
+      outputSchema: CiLogOutputSchema,
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
     async (args: CiLogInput): Promise<CallToolResult> => {

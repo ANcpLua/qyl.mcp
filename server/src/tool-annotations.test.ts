@@ -8,8 +8,9 @@ import {
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { createServer } from "./server.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS } from "./tools.js";
+import { CONTROL_WORKFLOW_TOOL_ANNOTATIONS } from "./workflow-tools.js";
 
-test("all qyl telemetry tools publish explicit read-only safety annotations", async () => {
+test("qyl tools publish explicit read versus control safety annotations", async () => {
   const server = createServer({ nativeExecution: false });
   const client = new Client({ name: "tool-annotations-test", version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -23,17 +24,28 @@ test("all qyl telemetry tools publish explicit read-only safety annotations", as
       tools.map((tool) => tool.name).sort(),
       [
         "ci_log",
+        "control_workflow_run",
         "display_mcp_dashboard",
         "display_traces",
+        "display_workflow_graph",
         "fetch_telemetry",
+        "fetch_workflow_graph_updates",
         "get_trace",
+        "get_workflow_graph",
         "list_sessions",
         "list_traces",
+        "list_workflow_runs",
         "search_logs",
       ],
     );
     for (const tool of tools) {
-      assert.deepEqual(tool.annotations, READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, tool.name);
+      assert.deepEqual(
+        tool.annotations,
+        tool.name === "control_workflow_run"
+          ? CONTROL_WORKFLOW_TOOL_ANNOTATIONS
+          : READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
+        tool.name,
+      );
     }
   } finally {
     await client.close().catch(() => undefined);
@@ -68,7 +80,7 @@ test("qyl server factory serves protocol revision 2026-07-28 over the fetch entr
       cacheScope: string;
     };
     const { tools } = toolsResult;
-    assert.equal(tools.length, 8);
+    assert.equal(tools.length, 13);
     assert.equal(toolsResult.ttlMs, 300_000);
     assert.equal(toolsResult.cacheScope, "public");
     const discover = client.getDiscoverResult() as ReturnType<Client["getDiscoverResult"]> & {
@@ -84,6 +96,13 @@ test("qyl server factory serves protocol revision 2026-07-28 over the fetch entr
       displayMetadata?.ui?.resourceUri,
       "ui://qyl-explorer/mcp-app.html",
     );
+    const workflowMetadata = tools.find((tool) => tool.name === "display_workflow_graph")?._meta as
+      | { ui?: { resourceUri?: unknown } }
+      | undefined;
+    assert.equal(
+      workflowMetadata?.ui?.resourceUri,
+      "ui://qyl-explorer/observe-graph.html",
+    );
 
     const resourcesResult = await client.listResources() as Awaited<ReturnType<Client["listResources"]>> & {
       ttlMs: number;
@@ -96,10 +115,27 @@ test("qyl server factory serves protocol revision 2026-07-28 over the fetch entr
       resources.find((resource) => resource.uri === "ui://qyl-explorer/mcp-app.html")?.mimeType,
       "text/html;profile=mcp-app",
     );
+    assert.equal(
+      resources.find((resource) =>
+        resource.uri === "ui://qyl-explorer/observe-graph.html"
+      )?.mimeType,
+      "text/html;profile=mcp-app",
+    );
     const appResult = await client.readResource({ uri: "ui://qyl-explorer/mcp-app.html" }) as
       Awaited<ReturnType<Client["readResource"]>> & { ttlMs: number; cacheScope: string };
     assert.equal(appResult.ttlMs, 86_400_000);
     assert.equal(appResult.cacheScope, "public");
+    const workflowResult = await client.readResource({
+      uri: "ui://qyl-explorer/observe-graph.html",
+    }) as Awaited<ReturnType<Client["readResource"]>> & {
+      ttlMs: number;
+      cacheScope: string;
+    };
+    assert.equal(workflowResult.ttlMs, 86_400_000);
+    assert.equal(workflowResult.cacheScope, "public");
+    const workflowContent = workflowResult.contents[0];
+    assert(workflowContent && "text" in workflowContent);
+    assert.match(workflowContent.text, /qyl · observe graph/);
   } finally {
     await client.close().catch(() => undefined);
     await handler.close().catch(() => undefined);

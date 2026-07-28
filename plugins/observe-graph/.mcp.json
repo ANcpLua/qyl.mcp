@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "qyl": {
+      "type": "http",
+      "url": "https://mcp.qyl.at/mcp"
+    },
+    "qyl-observer": {
+      "command": "qyl",
+      "args": ["observer-bridge"]
+    }
+  }
+}

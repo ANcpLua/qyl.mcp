@@ -14,6 +14,9 @@ export const RESOURCE_URI = "ui://qyl-explorer/mcp-app.html";
 /** URI of the MCP dashboard UI resource. */
 export const DASHBOARD_RESOURCE_URI = "ui://qyl-explorer/mcp-dashboard.html";
 
+/** URI of the fullscreen workflow debugger MCP App. */
+export const WORKFLOW_GRAPH_RESOURCE_URI = "ui://qyl-explorer/observe-graph.html";
+
 const apiKeyHeader = qylOpenApi.components.securitySchemes.ApiKeyAuth.name;
 if (typeof apiKeyHeader !== "string" || apiKeyHeader.length === 0) {
   throw new Error("published Qyl OpenAPI has no API-key header name");
@@ -41,5 +44,9 @@ export function collectorUrl(): string {
 /** Optional collector credential, sent under the generated OpenAPI header. */
 export function collectorHeaders(): Record<string, string> {
   const apiKey = process.env.QYL_API_KEY?.trim();
-  return apiKey ? { [apiKeyHeader]: apiKey } : {};
+  const project = process.env.QYL_PROJECT?.trim();
+  return {
+    ...(apiKey ? { [apiKeyHeader]: apiKey } : {}),
+    ...(project ? { "X-Qyl-Project": project } : {}),
+  };
 }

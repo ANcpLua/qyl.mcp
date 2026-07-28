@@ -329,6 +329,80 @@ export const FetchTelemetryInputSchema = publishedContractSchema<QylContracts.Fe
 export const FetchTelemetryOutputSchema = publishedContractSchema<QylContracts.FetchTelemetryOutput>(
   "Mcp.Tools.FetchTelemetryOutput",
 );
+export const CiLogInputSchema = publishedContractSchema<QylContracts.CiLogInput>(
+  "Mcp.Tools.CiLogInput",
+);
+export const CiRunSummarySchema = publishedContractSchema<QylContracts.CiRunSummary>(
+  "Mcp.Tools.CiRunSummary",
+);
+export const CiPhaseSchema = publishedContractSchema<QylContracts.CiPhase>(
+  "Mcp.Tools.CiPhase",
+);
+export const CiLogOutputSchema = publishedContractSchema<QylContracts.CiLogOutput>(
+  "Mcp.Tools.CiLogOutput",
+);
+
+// Workflow journal, projection, lazy content, and curated debugger tool shapes.
+export const WorkflowRunSchema = publishedContractSchema<QylContracts.WorkflowRun>(
+  "Workflow.WorkflowRun",
+);
+export const WorkflowRunPageSchema = publishedContractSchema<QylContracts.WorkflowRunPage>(
+  "Operations.WorkflowRunsApi_list.Response.200",
+);
+export const WorkflowEventPageSchema = publishedContractSchema<QylContracts.WorkflowEventPage>(
+  "Operations.WorkflowRunsApi_readEvents.Response.200",
+);
+export const WorkflowGraphSnapshotSchema =
+  publishedContractSchema<QylContracts.WorkflowGraphSnapshot>(
+    "Operations.WorkflowRunsApi_getGraph.Response.200",
+  );
+export const WorkflowContentSchema = publishedContractSchema<QylContracts.WorkflowContent>(
+  "Operations.WorkflowRunsApi_getContent.Response.200",
+);
+export const WorkflowControlCommandSchema =
+  publishedContractSchema<QylContracts.WorkflowControlCommand>(
+    "Operations.WorkflowRunsApi_submitControl.Response.200",
+  );
+export const ListWorkflowRunsInputSchema =
+  publishedContractSchema<QylContracts.ListWorkflowRunsInput>(
+    "Mcp.Tools.ListWorkflowRunsInput",
+  );
+export const ListWorkflowRunsOutputSchema =
+  publishedContractSchema<QylContracts.ListWorkflowRunsOutput>(
+    "Mcp.Tools.ListWorkflowRunsOutput",
+  );
+export const GetWorkflowGraphInputSchema =
+  publishedContractSchema<QylContracts.GetWorkflowGraphInput>(
+    "Mcp.Tools.GetWorkflowGraphInput",
+  );
+export const GetWorkflowGraphOutputSchema =
+  publishedContractSchema<QylContracts.GetWorkflowGraphOutput>(
+    "Mcp.Tools.GetWorkflowGraphOutput",
+  );
+export const DisplayWorkflowGraphInputSchema =
+  publishedContractSchema<QylContracts.DisplayWorkflowGraphInput>(
+    "Mcp.Tools.DisplayWorkflowGraphInput",
+  );
+export const DisplayWorkflowGraphOutputSchema =
+  publishedContractSchema<QylContracts.DisplayWorkflowGraphOutput>(
+    "Mcp.Tools.DisplayWorkflowGraphOutput",
+  );
+export const FetchWorkflowGraphUpdatesInputSchema =
+  publishedContractSchema<QylContracts.FetchWorkflowGraphUpdatesInput>(
+    "Mcp.Tools.FetchWorkflowGraphUpdatesInput",
+  );
+export const FetchWorkflowGraphUpdatesOutputSchema =
+  publishedContractSchema<QylContracts.FetchWorkflowGraphUpdatesOutput>(
+    "Mcp.Tools.FetchWorkflowGraphUpdatesOutput",
+  );
+export const ControlWorkflowRunInputSchema =
+  publishedContractSchema<QylContracts.ControlWorkflowRunInput>(
+    "Mcp.Tools.ControlWorkflowRunInput",
+  );
+export const ControlWorkflowRunOutputSchema =
+  publishedContractSchema<QylContracts.ControlWorkflowRunOutput>(
+    "Mcp.Tools.ControlWorkflowRunOutput",
+  );
 
 export const RunnerResourceStateSchema = publishedContractSchema<QylContracts.RunnerResourceState>(
   "Runner.RunnerResourceState",

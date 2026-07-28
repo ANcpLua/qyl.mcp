@@ -7,10 +7,14 @@ import {
   DisplayMcpDashboardOutputSchema,
   DisplayTracesInputSchema,
   DisplayTracesOutputSchema,
+  DisplayWorkflowGraphInputSchema,
+  FetchWorkflowGraphUpdatesInputSchema,
   FetchTelemetryInputSchema,
   FetchTelemetryOutputSchema,
+  GetWorkflowGraphInputSchema,
   GetTraceInputSchema,
   GetTraceOutputSchema,
+  ListWorkflowRunsInputSchema,
   ListSessionsInputSchema,
   ListSessionsOutputSchema,
   ListTracesInputSchema,
@@ -27,6 +31,7 @@ import {
   SpanSchema,
   TraceSchema,
   TracesListResponseSchema,
+  ControlWorkflowRunInputSchema,
 } from "./contract-validation.js";
 import {
   parseCollectorLog,
@@ -47,7 +52,7 @@ test("every published Workbench definition has a runtime validator", () => {
   assert.deepEqual(missing, []);
 });
 
-test("published schemas own defaults, bounds, and required inputs for all seven contract tools", () => {
+test("published telemetry schemas own defaults, bounds, and required tool inputs", () => {
   assert.deepEqual(DisplayTracesInputSchema.parse({}), { limit: 20 });
   assert(!DisplayTracesInputSchema.safeParse({ limit: 0 }).success);
   assert(!DisplayTracesInputSchema.safeParse({ limit: 101 }).success);
@@ -80,6 +85,70 @@ test("published schemas own defaults, bounds, and required inputs for all seven 
   assert(!FetchTelemetryInputSchema.safeParse({}).success);
   assert(!FetchTelemetryInputSchema.safeParse({ view: "logs", severity_min: 25 }).success);
   assert(!FetchTelemetryInputSchema.safeParse({ view: "mcp_stats", hours: 169 }).success);
+});
+
+test("published workflow tool schemas own paging, identity, and control boundaries", () => {
+  assert.deepEqual(ListWorkflowRunsInputSchema.parse({}), { limit: 20 });
+  assert(!ListWorkflowRunsInputSchema.safeParse({ limit: 101 }).success);
+  assert(
+    !ListWorkflowRunsInputSchema.safeParse({
+      limit: 20,
+      project_id: "model-selected-project",
+    }).success,
+  );
+
+  assert.deepEqual(GetWorkflowGraphInputSchema.parse({ run_id: "run-1" }), {
+    run_id: "run-1",
+    node_limit: 250,
+    edge_limit: 500,
+  });
+  assert(!GetWorkflowGraphInputSchema.safeParse({}).success);
+  assert(!GetWorkflowGraphInputSchema.safeParse({ run_id: "run-1", node_limit: 1001 }).success);
+
+  assert.deepEqual(DisplayWorkflowGraphInputSchema.parse({}), {
+    node_limit: 250,
+    edge_limit: 500,
+  });
+
+  const contentRef = `sha256:${"a".repeat(64)}`;
+  assert.deepEqual(
+    FetchWorkflowGraphUpdatesInputSchema.parse({
+      run_id: "run-1",
+      after_sequence: "4",
+      content_ref: contentRef,
+    }),
+    {
+      run_id: "run-1",
+      after_sequence: "4",
+      limit: 250,
+      wait_ms: 20_000,
+      node_limit: 250,
+      edge_limit: 500,
+      content_ref: contentRef,
+    },
+  );
+  assert(
+    !FetchWorkflowGraphUpdatesInputSchema.safeParse({
+      run_id: "run-1",
+      after_sequence: "4",
+      content_ref: "not-content-addressed",
+    }).success,
+  );
+
+  assert(
+    ControlWorkflowRunInputSchema.safeParse({
+      run_id: "run-1",
+      action: "interrupt",
+      idempotency_key: "interrupt-1",
+    }).success,
+  );
+  assert(
+    !ControlWorkflowRunInputSchema.safeParse({
+      run_id: "run-1",
+      action: "restart-agent",
+      idempotency_key: "unsupported-control",
+    }).success,
+  );
 });
 
 test("published output schemas accept the programmatically generated demo dataset", async () => {

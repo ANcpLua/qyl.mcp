@@ -27,7 +27,11 @@ import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/s
 import fs from "node:fs/promises";
 import path from "node:path";
 import packageMetadata from "../package.json" with { type: "json" };
-import { DASHBOARD_RESOURCE_URI, RESOURCE_URI } from "./config.js";
+import {
+  DASHBOARD_RESOURCE_URI,
+  RESOURCE_URI,
+  WORKFLOW_GRAPH_RESOURCE_URI,
+} from "./config.js";
 import { CollectorError } from "./collector.js";
 import {
   DisplayMcpDashboardInputSchema,
@@ -56,6 +60,7 @@ import {
   toolError,
 } from "./tools.js";
 import { registerCiTools } from "./ci.js";
+import { registerWorkflowTools } from "./workflow-tools.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 import type { McpTelemetryTransport } from "./mcp-semconv.js";
 import {
@@ -75,6 +80,7 @@ const DIST_DIR = import.meta.dirname;
 // server is created per request and per-instance caches would be useless.
 let cachedAppHtml: string | undefined;
 let cachedDashboardHtml: string | undefined;
+let cachedWorkflowGraphHtml: string | undefined;
 const PUBLIC_CATALOG_CACHE = { ttlMs: 300_000, cacheScope: "public" } as const;
 const PUBLIC_APP_CACHE = { ttlMs: 86_400_000, cacheScope: "public" } as const;
 
@@ -193,6 +199,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
 
   registerTelemetryTools(server);
   registerCiTools(server);
+  registerWorkflowTools(server);
 
   server.registerTool(
     "fetch_telemetry",
@@ -317,6 +324,35 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
             uri: DASHBOARD_RESOURCE_URI,
             mimeType: RESOURCE_MIME_TYPE,
             text: cachedDashboardHtml,
+            _meta: {
+              ui: {
+                csp: {
+                  connectDomains: [],
+                  resourceDomains: [],
+                },
+              },
+            },
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerResource(
+    WORKFLOW_GRAPH_RESOURCE_URI,
+    WORKFLOW_GRAPH_RESOURCE_URI,
+    { mimeType: RESOURCE_MIME_TYPE, cacheHint: PUBLIC_APP_CACHE },
+    async (): Promise<ReadResourceResult> => {
+      const html = (cachedWorkflowGraphHtml ??= await fs.readFile(
+        path.join(DIST_DIR, "observe-graph.html"),
+        "utf-8",
+      ));
+      return {
+        contents: [
+          {
+            uri: WORKFLOW_GRAPH_RESOURCE_URI,
+            mimeType: RESOURCE_MIME_TYPE,
+            text: html,
             _meta: {
               ui: {
                 csp: {

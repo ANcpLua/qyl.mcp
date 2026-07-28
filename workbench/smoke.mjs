@@ -154,16 +154,26 @@ try {
   );
   const discovery = await discoveryResponse.json();
   check(
-    "real SDK discovery returns eight tools and server surfaces",
-    discoveryResponse.ok && discovery.tools?.count === 8 && Array.isArray(discovery.prompts?.items),
+    "real SDK discovery returns thirteen tools and server surfaces",
+    discoveryResponse.ok && discovery.tools?.count === 13 && Array.isArray(discovery.prompts?.items),
   );
   check(
-    "all qyl query tools publish complete read-only safety annotations",
-    discovery.tools?.items?.every((tool) =>
-      tool.annotations?.readOnlyHint === true
-      && tool.annotations?.destructiveHint === false
-      && tool.annotations?.idempotentHint === true
-      && tool.annotations?.openWorldHint === false),
+    "all qyl inspection tools publish complete read-only safety annotations",
+    discovery.tools?.items
+      ?.filter((tool) => tool.name !== "control_workflow_run")
+      .every((tool) =>
+        tool.annotations?.readOnlyHint === true
+        && tool.annotations?.destructiveHint === false
+        && tool.annotations?.idempotentHint === true
+        && tool.annotations?.openWorldHint === false),
+  );
+  const controlTool = discovery.tools?.items?.find((tool) => tool.name === "control_workflow_run");
+  check(
+    "workflow control discovery is explicitly side-effecting and idempotent",
+    controlTool?.annotations?.readOnlyHint === false
+      && controlTool?.annotations?.destructiveHint === true
+      && controlTool?.annotations?.idempotentHint === true
+      && controlTool?.annotations?.openWorldHint === false,
   );
 
   const executionUrl = `${baseUrl}/workbench/workspaces/default/servers/${serverId}/executions`;

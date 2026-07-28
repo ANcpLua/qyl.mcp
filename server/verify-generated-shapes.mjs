@@ -25,17 +25,11 @@ const shapeExemptions = {
   "native-execution.ts":
     "durable local execution evidence — persisted process state that never crosses an " +
     "MCP, HTTP, SSE, or generated-client boundary",
-  "ci.ts":
-    "TODO(contract-loop): the ci_log shapes are authored in qyl-api-schema as " +
-    "Mcp.Tools.CiLogInput/CiLogOutput; this file switches to publishedContractSchema " +
-    "when the @ancplua/qyl-api-schema pin moves past 3.0.0",
 };
 
 // Registering a tool without importing the generated validators means the tool's
 // shapes came from somewhere else.
-const registrationExemptions = {
-  "ci.ts": shapeExemptions["ci.ts"],
-};
+const registrationExemptions = {};
 
 async function sourceFiles(directory) {
   const found = [];
