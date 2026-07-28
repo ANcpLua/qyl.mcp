@@ -2,8 +2,6 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer, request, type Server } from "node:http";
 import test from "node:test";
-import { createMcpHandler, McpServer, type McpHttpHandler } from "@modelcontextprotocol/server";
-import { toNodeHandler } from "@modelcontextprotocol/node";
 import { createMcpApp } from "./http-security.js";
 
 interface TestResponse {
@@ -12,23 +10,20 @@ interface TestResponse {
   headers: Record<string, string | string[] | undefined>;
 }
 
-async function listen(): Promise<{ server: Server; handler: McpHttpHandler; port: number }> {
+// The subject is the Host/Origin guard in front of the routes, not what the
+// routes answer: every assertion below reads a 403 the guard produced or a
+// success it let through. Both routes therefore answer 204 — mounting an MCP
+// handler here would only prove the SDK still serves `initialize`.
+async function listen(): Promise<{ server: Server; port: number }> {
   const app = createMcpApp({ bindHost: "127.0.0.1" });
-  const handler = createMcpHandler(
-    () => new McpServer({ name: "http-security-test", version: "1.0.0" }),
-    { legacy: "reject" },
-  );
-  const nodeHandler = toNodeHandler(handler);
   app.get("/probe", (_request, response) => response.status(204).end());
-  app.all("/mcp", async (incoming, response) => {
-    await nodeHandler(incoming, response, incoming.body);
-  });
+  app.all("/mcp", (_request, response) => response.status(204).end());
   const server = createServer(app);
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const address = server.address();
   assert(address && typeof address === "object");
-  return { server, handler, port: address.port };
+  return { server, port: address.port };
 }
 
 function postMcp(port: number, origin?: string): Promise<TestResponse> {
@@ -98,11 +93,8 @@ function get(
 }
 
 test("standalone MCP app accepts loopback Host and local or absent Origin", async (context) => {
-  const { server, handler, port } = await listen();
-  context.after(async () => {
-    await handler.close();
-    server.close();
-  });
+  const { server, port } = await listen();
+  context.after(() => server.close());
 
   assert.equal((await get(port)).status, 204);
   assert.equal(
@@ -114,11 +106,8 @@ test("standalone MCP app accepts loopback Host and local or absent Origin", asyn
 });
 
 test("standalone MCP app rejects missing and rebound Host", async (context) => {
-  const { server, handler, port } = await listen();
-  context.after(async () => {
-    await handler.close();
-    server.close();
-  });
+  const { server, port } = await listen();
+  context.after(() => server.close());
 
   // Node may reject a Host-less HTTP/1.1 request before Express; it must not
   // reach the route in either case.
@@ -130,11 +119,8 @@ test("standalone MCP app rejects missing and rebound Host", async (context) => {
 });
 
 test("standalone MCP app accepts loopback origins on any port and rejects other hosts", async (context) => {
-  const { server, handler, port } = await listen();
-  context.after(async () => {
-    await handler.close();
-    server.close();
-  });
+  const { server, port } = await listen();
+  context.after(() => server.close());
 
   assert.notEqual((await postMcp(port, "http://localhost:9999")).status, 403);
 

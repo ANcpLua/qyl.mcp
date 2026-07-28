@@ -1,41 +1,27 @@
 import assert from "node:assert/strict";
-import { once } from "node:events";
 import test from "node:test";
-import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
-import { requireBearerAuth } from "@modelcontextprotocol/express";
+import { Client, StreamableHTTPClientTransport, type FetchLike } from "@modelcontextprotocol/client";
 import {
   createMcpHandler,
   McpServer,
   OAuthError,
   OAuthErrorCode,
+  requireBearerAuth,
   type AuthInfo,
   type OAuthTokenVerifier,
 } from "@modelcontextprotocol/server";
-import { toNodeHandler } from "@modelcontextprotocol/node";
 import { z } from "zod";
-import { createMcpApp } from "./http-security.js";
-import { closeHttpListener } from "./main.js";
 import { QYL_MCP_RESOURCE, QYL_MCP_SCOPE } from "./oauth.js";
 
 const resourceMetadataUrl =
   "https://mcp.qyl.at/.well-known/oauth-protected-resource/mcp";
+const endpoint = new URL(QYL_MCP_RESOURCE);
 
-test("bearer middleware fails closed with the resource challenge and scopes", async (context) => {
-  const verifier = testVerifier();
-  const app = createMcpApp({ bindHost: "127.0.0.1" });
-  app.all("/mcp", requireBearerAuth({
-    verifier,
-    requiredScopes: [QYL_MCP_SCOPE],
-    resourceMetadataUrl,
-  }), (_request, response) => response.status(204).end());
-  const listener = app.listen(0, "127.0.0.1");
-  await once(listener, "listening");
-  context.after(() => closeHttpListener(listener));
-  const address = listener.address();
-  assert(address && typeof address === "object");
-  const endpoint = `http://127.0.0.1:${address.port}/mcp`;
+test("bearer gate fails closed with the resource challenge and scopes", async () => {
+  const gate = bearerGate();
 
-  const missing = await fetch(endpoint);
+  const missing = await gate(new Request(endpoint));
+  assert(missing instanceof Response);
   assert.equal(missing.status, 401);
   assert.match(missing.headers.get("www-authenticate") ?? "", /Bearer/u);
   assert.match(
@@ -43,15 +29,13 @@ test("bearer middleware fails closed with the resource challenge and scopes", as
     /resource_metadata="https:\/\/mcp\.qyl\.at\/\.well-known\/oauth-protected-resource\/mcp"/u,
   );
 
-  const invalid = await fetch(endpoint, {
-    headers: { authorization: "Bearer invalid" },
-  });
+  const invalid = await gate(bearer("invalid"));
+  assert(invalid instanceof Response);
   assert.equal(invalid.status, 401);
   assert.match(invalid.headers.get("www-authenticate") ?? "", /invalid_token/u);
 
-  const missingScope = await fetch(endpoint, {
-    headers: { authorization: "Bearer missing-scope" },
-  });
+  const missingScope = await gate(bearer("missing-scope"));
+  assert(missingScope instanceof Response);
   assert.equal(missingScope.status, 403);
   assert.match(missingScope.headers.get("www-authenticate") ?? "", /insufficient_scope/u);
   assert.match(missingScope.headers.get("www-authenticate") ?? "", /scope="qyl:read"/u);
@@ -76,28 +60,23 @@ test("verified SDK AuthInfo reaches the modern tool request context", async (con
     );
     return server;
   }, { legacy: "reject" });
-  const nodeHandler = toNodeHandler(handler);
-  const app = createMcpApp({ bindHost: "127.0.0.1" });
-  app.all("/mcp", requireBearerAuth({
-    verifier: testVerifier(),
-    requiredScopes: [QYL_MCP_SCOPE],
-    resourceMetadataUrl,
-  }), async (request, response) => {
-    await nodeHandler(request, response, request.body);
-  });
-  const listener = app.listen(0, "127.0.0.1");
-  await once(listener, "listening");
-  context.after(async () => {
-    await handler.close();
-    await closeHttpListener(listener);
-  });
-  const address = listener.address();
-  assert(address && typeof address === "object");
+  context.after(() => handler.close());
 
-  const transport = new StreamableHTTPClientTransport(
-    new URL(`http://127.0.0.1:${address.port}/mcp`),
-    { requestInit: { headers: { authorization: "Bearer good" } } },
-  );
+  // The hosted composition minus the socket: gate the request, hand the
+  // verified AuthInfo to the handler, return its Response. A real client
+  // transport still drives it, so the negotiated envelope stays under test —
+  // only the Node adapter, which the endpoint will not run, is gone.
+  const gate = bearerGate();
+  const serve: FetchLike = async (url, init) => {
+    const request = new Request(url, init);
+    const auth = await gate(request);
+    return auth instanceof Response ? auth : handler.fetch(request, { authInfo: auth });
+  };
+
+  const transport = new StreamableHTTPClientTransport(endpoint, {
+    fetch: serve,
+    requestInit: { headers: { authorization: "Bearer good" } },
+  });
   const client = new Client(
     { name: "auth-context-client", version: "1.0.0" },
     { versionNegotiation: { mode: { pin: "2026-07-28" } } },
@@ -112,6 +91,18 @@ test("verified SDK AuthInfo reaches the modern tool request context", async (con
   assert.equal(observed?.resource?.href, QYL_MCP_RESOURCE);
   assert.equal(typeof observed?.expiresAt, "number");
 });
+
+function bearerGate(): (request: Request) => Promise<AuthInfo | Response> {
+  return requireBearerAuth({
+    verifier: testVerifier(),
+    requiredScopes: [QYL_MCP_SCOPE],
+    resourceMetadataUrl,
+  });
+}
+
+function bearer(token: string): Request {
+  return new Request(endpoint, { headers: { authorization: `Bearer ${token}` } });
+}
 
 function testVerifier(): OAuthTokenVerifier {
   return {
