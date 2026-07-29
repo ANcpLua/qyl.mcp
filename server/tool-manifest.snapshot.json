@@ -1,5 +1,5 @@
 {
-  "contract_revision": "sha256:9d94fe8f5c913e4b",
+  "contract_revision": "sha256:f32216c3a3172ab0",
   "tools": [
     {
       "name": "ci_log",
@@ -2334,12 +2334,6 @@
                       "minLength": 1,
                       "maxLength": 128,
                       "description": "Stable identifier of one agent within a workflow run."
-                    },
-                    "parent_node_id": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 192,
-                      "description": "Stable identifier of one graph node."
                     },
                     "started_at": {
                       "type": "string",
@@ -6894,12 +6888,6 @@
                       "maxLength": 128,
                       "description": "Stable identifier of one agent within a workflow run."
                     },
-                    "parent_node_id": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 192,
-                      "description": "Stable identifier of one graph node."
-                    },
                     "started_at": {
                       "type": "string",
                       "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
@@ -8963,12 +8951,6 @@
                       "minLength": 1,
                       "maxLength": 128,
                       "description": "Stable identifier of one agent within a workflow run."
-                    },
-                    "parent_node_id": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 192,
-                      "description": "Stable identifier of one graph node."
                     },
                     "started_at": {
                       "type": "string",

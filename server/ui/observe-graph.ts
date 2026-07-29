@@ -638,7 +638,6 @@ function renderNodeDetails(node: WorkflowGraphNode): void {
     ["status", node.status],
     ["attempt", node.attempt_id ?? "—"],
     ["agent", node.agent_id ?? "—"],
-    ["parent", node.parent_node_id ?? "—"],
     ["started", node.started_at ?? "—"],
     ["ended", node.ended_at ?? "—"],
     ["duration", formatDuration(node.duration_ms)],

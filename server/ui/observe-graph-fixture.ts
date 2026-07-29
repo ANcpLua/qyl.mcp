@@ -102,7 +102,6 @@ export const observeGraphVisualFixture = {
           status: "succeeded",
           attempt_id: "attempt-2",
           agent_id: "agent-collector",
-          parent_node_id: "agent:collector:2",
           started_at: "2026-07-28T12:00:17Z",
           ended_at: "2026-07-28T12:00:18Z",
           duration_ms: 1120,
