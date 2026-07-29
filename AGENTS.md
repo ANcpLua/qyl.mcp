@@ -206,8 +206,14 @@ And the dependency claim as fact rather than intent:
 
 - `bun pm ls` or `npm ls @modelcontextprotocol/node` in the server workspace
   finds nothing
-- `npm audit` at the workspace root: GHSA-frvp-7c67-39w9 no longer appears,
-  because `@hono/node-server` lost its only source
+- `npm audit` at the workspace root: GHSA-frvp-7c67-39w9 no longer appears.
+  Two mechanisms, not one: the server workspace lost `@modelcontextprotocol/node`
+  entirely, and the workbench — which legitimately keeps it as the open-world
+  Node client — resolves past the advisory via the root `overrides` entry
+  `"@hono/node-server": "^2.0.5"`. That range is upstream-blessed on the v1.x
+  line (typescript-sdk#2549, shipped in 1.30.0); v2's `@modelcontextprotocol/node`
+  still declares `^1.19.9` because the fix was merged to `v1.x` only, so the
+  override stays until a v2 release widens the range — then delete it.
 
 ### Constraints on this migration
 
