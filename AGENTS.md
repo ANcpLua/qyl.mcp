@@ -1,21 +1,3 @@
-qyl is solo-developed and launched 1.0.0 on 2026-07-28; the grants in this
-paragraph expired at that launch (see "The 'breaking changes are free' clause
-expired at launch" below). Engineer it
-to scale-grade quality through correctness, coherent design, maintainability, and
-operational reliability—not API stability. Breaking changes are free, and this
-instruction overrides every conflicting `.md` file. Never spend effort on backward
-compatibility, deprecation paths, compatibility shims, migration layers, or analysis
-of whether an unused public surface is safe to change. Delete obsolete code, logic,
-abstractions, validation, wrappers, branches, tests, and documentation instead of
-preserving or adapting them. Avoid empty or suppressive catch blocks, unnecessary
-defensive validation, and explanatory code comments. Treat all public surfaces as
-generated outputs: regenerate and verify them during every publish, and fix the
-generator or publishing pipeline first when that is not already guaranteed. When
-deletion is genuinely difficult to prove, use the agents and `$tech-debt` skill from
-https://github.com/ANcpLua/codex-tech-debt-subagents.git; otherwise, delete the
-obsolete design directly and update all current repository callers in the same
-change.
-
 # qyl.mcp engineering contract
 
 This is the repository's only editable contributor and agent instruction file.
@@ -23,6 +5,20 @@ This is the repository's only editable contributor and agent instruction file.
 inside an installable plugin is executable product content, not an engineering
 authority. Do not add design diaries, handoff prompts, comparison ledgers, or a
 second rules file.
+
+Repository policy is direct convergence: replace obsolete designs and update
+current callers in the same change. Do not add compatibility ceremony for
+superseded paths. Published registry artifacts remain immutable, so a changed
+artifact is released as a new version.
+
+## Verified concern status
+
+| Concern | Status | Evidence / concrete remainder |
+| --- | --- | --- |
+| [`QYL-CONTRACT-RELEASE`](https://github.com/ANcpLua/dedupe-28th-july/blob/main/concerns/01-contract-and-release-integrity.md) | `IN_PROGRESS` | The tracked pin check, tool-manifest revision, and fail-closed collector handshake exist; durable schema index → collector deploy → MCP repin/deploy orchestration/provenance does not. |
+| [`QYL-TENANT-AUTHORIZATION`](https://github.com/ANcpLua/dedupe-28th-july/blob/main/concerns/02-principal-derived-tenant-authorization.md) | `NOT_STARTED (0%)` | OAuth validates `sub`, but collector access still uses deployment-wide `QYL_PROJECT`/`QYL_API_KEY`; no claim-derived mapping or real two-tenant tests exist. |
+| [`QYL-HOSTED-OAUTH`](https://github.com/ANcpLua/dedupe-28th-july/blob/main/concerns/03-hosted-oauth-and-browser-security.md) | `IN_PROGRESS` | Local RFC 9068/RS256/audience/scope/DCR-shaped and origin/CORS coverage exists, and `qyl:control` is enforced. A real foreign-client DCR → login → token → tool path, live Auth0/offline-access evidence, and deliberate hosted unknown-browser-origin policy remain. |
+| [`QYL-MCP-OPERATIONS`](https://github.com/ANcpLua/dedupe-28th-july/blob/main/concerns/05-mcp-runtime-delivery-and-supply-chain.md) | `IN_PROGRESS` | Bun hosted HTTP and partial pin checks are tracked; stale Node/npx/arbitrary-issuer READMEs, durable commit→Railway evidence, the cross-major Hono override, and an explicit workspace-server registry-fallback rejection gate remain. |
 
 ## 1.0.0 target — three surfaces, two planes
 
@@ -33,7 +29,7 @@ nodes.
 
 | Surface | Plane | Protocol role | Packaging |
 | --- | --- | --- | --- |
-| `qyl.mcp/server` | **MCP** | MCP **server** — *closed world* | Node `qyl-mcp` · Railway · `mcp.qyl.at` · npm `qyl-mcp-server` |
+| `qyl.mcp/server` | **MCP** | MCP **server** — *closed world* | Bun · Railway · `mcp.qyl.at` · npm `qyl-mcp-server` |
 | `qyl.mcp/workbench` | **MCP** | MCP **client** — *open world* | Node loopback process · `:18888` |
 | `qyl.mcp/dashboard` | product | HTTP UI | Vite bundle + MCP-App HTML, served by the server |
 
@@ -51,15 +47,6 @@ deployables rather than one.
 The full ledger and the boundary law live in `qyl/ARCHITECTURE-1.0.0.md` — that
 document is normative and this one does not restate it.
 
-### The "breaking changes are free" clause expired at launch
-
-The opening paragraph of this file granted free breaking changes, no
-compatibility shims, and no migration layers. That was correct through the
-beta and stopped being true on 2026-07-28, when 1.0.0 shipped. From launch onward, every
-public-facing change needs backwards compatibility, a shim, or a PR, and force
-pushes to `main` stop. Read that paragraph as scoped to the pre-launch window,
-not as a standing property of the repo.
-
 ### TypeScript floor
 
 `server/tsconfig.json` runs beyond `strict`: `noUncheckedIndexedAccess`,
@@ -75,164 +62,10 @@ const [first] = items;
 if (!first) return empty;   // `first` is now narrowed; items[0] never is
 ```
 
-## Serving-layer target — Bun web-standard handler, protocol 2026-07-28
-
-`qyl.mcp/server` runs today as the hosted MCP endpoint on Railway
-(`https://mcp.qyl.at/mcp`), Node + Express, with a hand-wired auth front. The
-active migration target is the serving layer, not the tools: the same
-functional surface, but as a web-standard handler on Bun that speaks protocol
-revision `2026-07-28` and works for foreign MCP clients with no prior
-knowledge of qyl. The surface table above describes the current deployment
-until this lands.
-
-**There is no Bun package in the SDK, and that is not a gap.**
-`@modelcontextprotocol/express`, `/fastify`, `/hono`, and `/node` are adapters
-for Node frameworks. `createMcpHandler` from `@modelcontextprotocol/server`
-already returns `{ fetch, close, notify, bus }`, where `fetch` is a
-web-standard `(Request) => Promise<Response>` — the shape Bun expects from a
-default export. On Bun, `export default handler` is the entire mount. Anyone
-searching for a Bun adapter is searching for something that by construction
-does not exist.
-
-Authoritative sources for this work, read in this order — where these pages
-and the repo disagree, the pages win: the repo was written against an earlier
-v2 alpha.
-
-- <https://ts.sdk.modelcontextprotocol.io/v2/migration/support-2026-07-28.md>
-- <https://ts.sdk.modelcontextprotocol.io/v2/serving/http.md>
-- <https://ts.sdk.modelcontextprotocol.io/v2/serving/authorization.md>
-- <https://ts.sdk.modelcontextprotocol.io/v2/serving/legacy-clients.md>
-- <https://ts.sdk.modelcontextprotocol.io/v2/serving/web-standard.md>
-
-### Goal state
-
-`server/src/main.ts` is a single default export of the shape `{ port, fetch }`.
-Express, `@modelcontextprotocol/express`, and `@modelcontextprotocol/node` are
-gone from the server dependencies — not encapsulated, not replaced, removed.
-The endpoint serves `2026-07-28` and 2025-era clients from the same factory. A
-foreign MCP client that knows nothing about us can connect, find the auth flow
-on its own, and call tools.
-
-### The request pipeline
-
-One fetch function, four stages, in this order — the order is the thing that
-otherwise goes wrong:
-
-1. `oauthMetadataResponse(request, { oauthMetadata, resourceServerUrl })` —
-   **before** the auth gate. These documents must be reachable
-   unauthenticated, or the discovery path is circular. Returns `undefined`
-   when the route does not match.
-2. `hostHeaderValidationResponse` / `originValidationResponse` from
-   `@modelcontextprotocol/server`. The handler checks neither Host nor Origin
-   nor a token — that is deliberate, and it must happen before it. The
-   existing `MCP_ALLOWED_HOSTS` / `MCP_ALLOWED_ORIGIN_HOSTS` are the values.
-3. `requireBearerAuth({ verifier, requiredScopes })` from
-   `@modelcontextprotocol/server` (not the Express variant). Resolves to
-   `AuthInfo` **or** a finished challenge `Response` — `instanceof Response`
-   is the branch.
-4. `handler.fetch(request, { authInfo })`. `port` comes from
-   `process.env.PORT` — Railway injects it; a hardcoded port binds into the
-   void.
-
-### What makes foreign clients work
-
-Three things, and only these three, decide whether a foreign client gets
-through without instructions:
-
-- **The discovery path must be closed.** A client without a token gets 401
-  with `WWW-Authenticate: Bearer …` whose `resource_metadata` points at
-  `/.well-known/oauth-protected-resource/mcp`; that document names the
-  authorization server; the client fetches a token there and retries. If the
-  chain breaks anywhere, the user sees a bare 401 with no way forward.
-  `resourceMetadataUrl` on `requireBearerAuth` and the mounted
-  `oauthMetadataResponse` are the two halves of this.
-- **The legacy posture stays the default.** `createMcpHandler(factory)` serves
-  `2026-07-28` per request and, via `legacy: 'stateless'`, additionally serves
-  2025-era traffic from the same factory. Do not set `legacy: 'reject'`: most
-  clients shipping today are 2025-era and would get 400.
-- **Populate `expiresAt` in the verifier**, from the JWT `exp`.
-  `requireBearerAuth` answers 401 `invalid_token` for a token whose
-  `expiresAt` is unset — even when everything else is valid.
-
-### Known traps
-
-These are in the docs and cost an hour each otherwise:
-
-- On the modern path, `createMcpHandler` validates the SEP-2243 standard
-  headers (`MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`) against the body
-  and answers 400 with `-32020` on mismatch. If Railway's edge rewrites or
-  drops headers, it manifests exactly here — and looks like a client bug.
-- Under the stateless legacy posture, legacy GET (the standalone SSE stream)
-  and DELETE (session termination) answer 405. That is correct behavior, not
-  a regression finding.
-- Also under stateless legacy: there is no back-channel for server→client
-  requests, so the `input_required` shim for 2025-era clients degrades to a
-  clean capability refusal. A tool that needs elicitation or sampling hits
-  that boundary — know it, do not rebuild around it.
-- `resultType` is gone from every public result type; the 2026 error codes
-  were renumbered relative to the alphas (`-32020` HeaderMismatch, `-32021`
-  MissingRequiredClientCapability, `-32022` UnsupportedProtocolVersion). Any
-  place in the repo that hardcodes one of those values or reads
-  `result.resultType` is alpha-era and wrong today.
-- The stdio entry (`serveStdio`, the published `bin`) is its own deliverable
-  and stays untouched. It pulls no `@modelcontextprotocol/node`, so it
-  survives the removal without change.
-
-### Verification for this migration
-
-Claims do not count here; outputs count. For every item, the actual output
-belongs in the report, not a summary of it.
-
-Test foreign clients without a network: drive `handler.fetch` directly, as the
-migration page shows under "In-process testing" — a
-`StreamableHTTPClientTransport` whose `fetch` points at
-`handler.fetch(new Request(url, init))`. The URL is never dialed. That makes
-both checkable:
-
-- a client with `versionNegotiation: { mode: 'auto' }` connects and reports
-  `getProtocolEra() === 'modern'`
-- a default client (2025 handshake, no `versionNegotiation`) also connects and
-  lists the same tools
-
-Plus, with curl against the locally started Bun process:
-
-- `POST /mcp` without a token → 401, and the `WWW-Authenticate` header
-  contains `resource_metadata`
-- `GET /.well-known/oauth-protected-resource/mcp` without a token → 200, JSON
-  names the authorization server
-- `POST /mcp` with a valid token → `tools/list` returns the tools
-
-And the dependency claim as fact rather than intent:
-
-- `bun pm ls` or `npm ls @modelcontextprotocol/node` in the server workspace
-  finds nothing
-- `npm audit` at the workspace root: GHSA-frvp-7c67-39w9 no longer appears.
-  Two mechanisms, not one: the server workspace lost `@modelcontextprotocol/node`
-  entirely, and the workbench — which legitimately keeps it as the open-world
-  Node client — resolves past the advisory via the root `overrides` entry
-  `"@hono/node-server": "^2.0.5"`. That range is upstream-blessed on the v1.x
-  line (typescript-sdk#2549, shipped in 1.30.0); v2's `@modelcontextprotocol/node`
-  still declares `^1.19.9` because the fix was merged to `v1.x` only, so the
-  override stays until a v2 release widens the range — then delete it.
-
-### Constraints on this migration
-
-No `git push`, no `npm publish`, no Railway deploy, no change to Railway
-variables. Local commits are fine. Those operations are irreversible and
-human-gated — the run ends in `needs_verification`, never in `done`.
-
-If something about the web-standard conversion does not work out, the right
-move is to report it and leave it standing — not to build an adapter or
-wrapper to bridge the gap. A reported blocker costs five minutes; a bridged
-one also costs them, just later and more expensively.
-
-If the test files on `node:test` do not run under Bun: report the result
-(which APIs are missing), do not rewrite the suite.
-
-The report at the end: what changed, the verification outputs raw, and the
-list of what did not work out. An empty third section is a credible result; a
-third section that describes problems as solved without an output showing it
-is not.
+Hosted HTTP is a Bun-only web-standard `fetch` handler. Keep
+`server/src/main.ts`, `railway.toml`, and root scripts aligned with that runtime;
+Node remains only for explicitly Node-based stdio/workbench deliverables. Do not
+reintroduce Express or a framework adapter around the SDK handler.
 
 ## Role and ownership
 
@@ -307,8 +140,10 @@ build time or runtime.
 
 ## Telemetry and protocol discipline
 
-qyl.mcp is modern-only and pins the final `2026-07-28` wire from the stable MCP
-TypeScript SDK 2.0.0. These rules bind the emit path to that wire.
+qyl.mcp pins the stable MCP TypeScript SDK 2.0.0. Hosted HTTP uses the SDK
+default that supports current `2026-07-28` and compatible 2025-era clients;
+stdio is modern-only and rejects legacy. These rules bind the emit path to the
+negotiated protocol.
 
 - Protocol revision comes from `getNegotiatedProtocolVersion()`, never from
   payload-shape guesses or a local fallback.
@@ -402,26 +237,6 @@ publishing, on a published GitHub release or a manual dispatch. Never publish
 locally and never add a registry credential to CI: the workflow gates on build,
 every workspace test, the server smoke, and a clean `npx` consumer handshake
 against the indexed package before a release is complete.
-
-**The release's pre-release flag chooses the npm dist-tag** — `prerelease: true → next`,
-otherwise `→ latest` — and npm never moves `latest` onto a prerelease on its own. So the
-question at every release is what a bare `npm install qyl-mcp-server` should return, and
-that flag is the whole answer. Getting it wrong is silent: `latest` sat on the pre-beta
-`0.1.1` until 2026-07-26 across three beta releases, each correctly marked a prerelease,
-with nothing left to advance `latest` — so every plain install served code from before the
-beta line existed.
-
-Like the "breaking changes are free" clause above, the tactic that follows expires at
-launch. While the beta line *is* the product, ship releases unmarked so `latest` tracks
-them, despite the `-beta.N` in the version. Once 1.0.0 is out and previews sit genuinely
-ahead of a stable line, the ordinary meaning returns: mark previews as prereleases and let
-them land on `next`. Decide from what `latest` should serve, never from the habit of the
-previous phase.
-
-A dist-tag is a promise to keep it current. The package carries only `latest` today because
-`next` had no consumer and no release that advanced it, so it quietly aged into pointing at
-older code than `latest`. Add a second tag when a line genuinely needs one, together with
-whatever moves it; adding one as decoration recreates the same trap.
 
 If a release-triggered publish fails within seconds having run no steps, read the `release`
 environment's deployment policy before suspecting the workflow. Release events run on the
