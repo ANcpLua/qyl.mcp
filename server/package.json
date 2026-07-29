@@ -1,6 +1,6 @@
 {
   "name": "qyl-mcp-server",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "type": "module",
   "description": "qyl telemetry MCP Apps server: trace explorer and MCP dashboard for a live collector or explicit demo mode",
   "repository": {
@@ -66,7 +66,7 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "@ancplua/qyl-api-schema": "5.1.0",
+    "@ancplua/qyl-api-schema": "6.0.0",
     "@modelcontextprotocol/core": "2.0.0",
     "@modelcontextprotocol/server": "2.0.0",
     "@opentelemetry/api": "^1.9.1",

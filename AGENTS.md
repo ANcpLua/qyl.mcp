@@ -11,15 +11,6 @@ current callers in the same change. Do not add compatibility ceremony for
 superseded paths. Published registry artifacts remain immutable, so a changed
 artifact is released as a new version.
 
-## Verified concern status
-
-| Concern | Status | Evidence / concrete remainder |
-| --- | --- | --- |
-| [`QYL-CONTRACT-RELEASE`](https://github.com/ANcpLua/dedupe-28th-july/blob/main/concerns/01-contract-and-release-integrity.md) | `IN_PROGRESS` | The tracked pin check, tool-manifest revision, and fail-closed collector handshake exist; durable schema index → collector deploy → MCP repin/deploy orchestration/provenance does not. |
-| [`QYL-TENANT-AUTHORIZATION`](https://github.com/ANcpLua/dedupe-28th-july/blob/main/concerns/02-principal-derived-tenant-authorization.md) | `NOT_STARTED (0%)` | OAuth validates `sub`, but collector access still uses deployment-wide `QYL_PROJECT`/`QYL_API_KEY`; no claim-derived mapping or real two-tenant tests exist. |
-| [`QYL-HOSTED-OAUTH`](https://github.com/ANcpLua/dedupe-28th-july/blob/main/concerns/03-hosted-oauth-and-browser-security.md) | `IN_PROGRESS` | Local RFC 9068/RS256/audience/scope/DCR-shaped and origin/CORS coverage exists, and `qyl:control` is enforced. A real foreign-client DCR → login → token → tool path, live Auth0/offline-access evidence, and deliberate hosted unknown-browser-origin policy remain. |
-| [`QYL-MCP-OPERATIONS`](https://github.com/ANcpLua/dedupe-28th-july/blob/main/concerns/05-mcp-runtime-delivery-and-supply-chain.md) | `IN_PROGRESS` | Bun hosted HTTP and partial pin checks are tracked; stale Node/npx/arbitrary-issuer READMEs, durable commit→Railway evidence, the cross-major Hono override, and an explicit workspace-server registry-fallback rejection gate remain. |
-
 ## 1.0.0 target — three surfaces, two planes
 
 This repository holds **both** MCP-plane components of the platform plus one
@@ -227,8 +218,8 @@ exemption, so the list shrinks by itself rather than outliving its reason.
 
 `server/tool-manifest.snapshot.json` is the G10b artifact: the full tool surface
 an agent sees, plus the contract revision it was generated from. Regenerate it
-deliberately with `npm run snapshot:tools` and read the diff — never to make a
-red test green.
+deliberately with `npm run snapshot:tools --workspace server` and read the
+diff — never to make a red test green.
 
 ## Publishing
 
