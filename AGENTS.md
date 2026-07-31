@@ -11,4 +11,6 @@ Do not patch SDK internals when an owned registration boundary exists.
 
 Validate with `npm ci`, `npm run verify:pins`, `npm run build`, `npm test`,
 `npm run smoke`, and `npm run smoke:otlp`. Regenerate the tool snapshot only
-deliberately and inspect its diff. Publishing is CI OIDC only.
+deliberately and inspect its diff. Publishing is CI OIDC only; a registry write
+that is not a publish (dist-tag move, deprecate) goes through
+`~/.claude/bin/npm-authed` — the script header is the runbook.
