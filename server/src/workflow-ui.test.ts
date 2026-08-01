@@ -16,6 +16,7 @@ import {
 } from "./workflow-layout.js";
 
 const contentRef = `sha256:${"b".repeat(64)}`;
+const generation = "bbbbbbbbbbbb4bbb8bbbbbbbbbbbbbbb";
 const recorded = {
   type: "recorded" as const,
   event_ids: ["event-spawn"],
@@ -23,12 +24,18 @@ const recorded = {
 const graph = {
   run: {
     run_id: "run-replay",
+    generation,
     thread_id: "thread-1",
     title: "failure then resume",
     status: "active",
     started_at: "2026-07-28T12:00:00Z",
     latest_journal_sequence: "4",
     active_attempt_id: "attempt-2",
+  },
+  projection_status: {
+    state: "committed",
+    generation,
+    journal_position: "4",
   },
   nodes: [
     {

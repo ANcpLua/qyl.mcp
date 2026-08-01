@@ -1,5 +1,5 @@
 {
-  "contract_revision": "sha256:f32216c3a3172ab0",
+  "contract_revision": "sha256:53278018c62ed547",
   "tools": [
     {
       "name": "ci_log",
@@ -2203,7 +2203,10 @@
             "description": "Stable identifier of one observed Codex workflow run."
           },
           "node_cursor": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1536,
+            "description": "Opaque node continuation. Reuse it unchanged from the preceding snapshot's next_node_cursor; do not parse, construct, or modify it."
           },
           "node_limit": {
             "default": 250,
@@ -2212,7 +2215,10 @@
             "maximum": 1000
           },
           "edge_cursor": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1536,
+            "description": "Opaque edge continuation. Reuse it unchanged from the preceding snapshot's next_edge_cursor; do not parse, construct, or modify it."
           },
           "edge_limit": {
             "default": 500,
@@ -2239,6 +2245,13 @@
                     "minLength": 1,
                     "maxLength": 128,
                     "description": "Stable identifier of one observed Codex workflow run."
+                  },
+                  "generation": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 32,
+                    "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                    "description": "Opaque incarnation identifier for one workflow run's projected state."
                   },
                   "thread_id": {
                     "type": "string"
@@ -2268,7 +2281,7 @@
                     "type": "string",
                     "maxLength": 20,
                     "pattern": "^(0|[1-9][0-9]*)$",
-                    "description": "Unsigned source or collector journal sequence encoded without JavaScript precision loss."
+                    "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
                   },
                   "active_attempt_id": {
                     "type": "string",
@@ -2284,12 +2297,138 @@
                 },
                 "required": [
                   "run_id",
+                  "generation",
                   "status",
                   "started_at",
                   "latest_journal_sequence"
                 ],
                 "additionalProperties": false,
                 "description": "One immutable workflow run."
+              },
+              "projection_status": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "const": "committed"
+                      },
+                      "generation": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                        "description": "Opaque incarnation identifier for one workflow run's projected state."
+                      },
+                      "journal_position": {
+                        "type": "string",
+                        "maxLength": 20,
+                        "pattern": "^(0|[1-9][0-9]*)$",
+                        "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "generation",
+                      "journal_position"
+                    ],
+                    "additionalProperties": false,
+                    "description": "A valid committed projection that can be served to readers."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "const": "rebuilding"
+                      },
+                      "generation": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                        "description": "Opaque incarnation identifier for one workflow run's projected state."
+                      },
+                      "target_journal_position": {
+                        "type": "string",
+                        "maxLength": 20,
+                        "pattern": "^(0|[1-9][0-9]*)$",
+                        "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+                      },
+                      "retry_after_ms": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "generation",
+                      "target_journal_position",
+                      "retry_after_ms"
+                    ],
+                    "additionalProperties": false,
+                    "description": "The requested generation is being reconstructed from its authoritative journal."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "const": "unavailable"
+                      },
+                      "generation": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                        "description": "Opaque incarnation identifier for one workflow run's projected state."
+                      },
+                      "retry_after_ms": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "retry_after_ms"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Projection work is temporarily unavailable after a retryable storage failure."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "const": "corrupt"
+                      },
+                      "generation": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                        "description": "Opaque incarnation identifier for one workflow run's projected state."
+                      },
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "corrupt_derived_state",
+                          "incompatible_derived_state"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "reason"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Derived projection state is corrupt or incompatible and cannot currently be served."
+                  }
+                ],
+                "description": "Closed public availability state for one workflow projection. Storage paths, hashes, fingerprints, and database errors remain private."
               },
               "nodes": {
                 "type": "array",
@@ -2300,7 +2439,7 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 192,
-                      "description": "Stable identifier of one graph node."
+                      "description": "Stable identifier of one graph node. Canonical tuples structurally distinguish run scope from attempt scope, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
                     },
                     "kind": {
                       "type": "string",
@@ -2381,19 +2520,22 @@
                   "type": "object",
                   "properties": {
                     "edge_id": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 192,
+                      "description": "Stable identifier of one graph edge. Endpoint tuples preserve the nodes' structural run-versus-attempt scope and ordinal component boundaries, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its edge kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
                     },
                     "source_node_id": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 192,
-                      "description": "Stable identifier of one graph node."
+                      "description": "Stable identifier of one graph node. Canonical tuples structurally distinguish run scope from attempt scope, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
                     },
                     "target_node_id": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 192,
-                      "description": "Stable identifier of one graph node."
+                      "description": "Stable identifier of one graph node. Canonical tuples structurally distinguish run scope from attempt scope, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
                     },
                     "kind": {
                       "type": "string",
@@ -2483,7 +2625,7 @@
                     "provenance"
                   ],
                   "additionalProperties": false,
-                  "description": "One typed edge in the deterministic workflow graph projection."
+                  "description": "One typed edge in the deterministic workflow graph projection. Data, Control, and Gate edges are causal dependencies. Temporal edges describe observed order, Resource edges describe resource use, and Conflict edges describe contention; Temporal, Resource, and Conflict edges are excluded from critical-path causality."
                 }
               },
               "statistics": {
@@ -2529,7 +2671,7 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 192,
-                      "description": "Stable identifier of one graph node."
+                      "description": "Stable identifier of one graph node. Canonical tuples structurally distinguish run scope from attempt scope, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
                     }
                   }
                 },
@@ -2543,19 +2685,25 @@
                   "critical_path_node_ids"
                 ],
                 "additionalProperties": false,
-                "description": "Work and critical-path statistics for a workflow graph."
+                "description": "Work and critical-path statistics for a workflow graph. Every ToolCall, Wait, Gate, and duration-bearing Message or Item contributes an independently weighted interval even when it has no Agent owner. An Agent contributes its own-work fragments: its interval minus the union of precisely owned child intervals clipped to the Agent interval. Precisely owned children are Control-linked Agent and ToolCall nodes, Temporal-linked Wait nodes, Gate-linked Gate nodes, and Data-linked duration-bearing Message or Item nodes. Peak concurrency sweeps every positive independently weighted or Agent own-work fragment. Critical-path analysis uses only Data, Control, and Gate edges, condenses each causal strongly connected component, charges every component member exactly once, and expands selected component members in ordinal node-id order."
               },
               "journal_sequence": {
                 "type": "string",
                 "maxLength": 20,
                 "pattern": "^(0|[1-9][0-9]*)$",
-                "description": "Unsigned source or collector journal sequence encoded without JavaScript precision loss."
+                "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
               },
               "next_node_cursor": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1536,
+                "description": "Opaque node continuation for the next page. Reuse it unchanged as node_cursor on the next graph request; do not parse, construct, or modify it."
               },
               "next_edge_cursor": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1536,
+                "description": "Opaque edge continuation for the next page. Reuse it unchanged as edge_cursor on the next graph request; do not parse, construct, or modify it."
               },
               "has_more_nodes": {
                 "type": "boolean"
@@ -2576,6 +2724,7 @@
             },
             "required": [
               "run",
+              "projection_status",
               "nodes",
               "edges",
               "statistics",
@@ -6564,7 +6713,7 @@
             "type": "string",
             "maxLength": 20,
             "pattern": "^(0|[1-9][0-9]*)$",
-            "description": "Unsigned source or collector journal sequence encoded without JavaScript precision loss."
+            "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
           },
           "limit": {
             "default": 250,
@@ -6579,7 +6728,10 @@
             "maximum": 30000
           },
           "node_cursor": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1536,
+            "description": "Opaque node continuation. Reuse it unchanged from the preceding snapshot's next_node_cursor; do not parse, construct, or modify it."
           },
           "node_limit": {
             "default": 250,
@@ -6588,7 +6740,10 @@
             "maximum": 1000
           },
           "edge_cursor": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1536,
+            "description": "Opaque edge continuation. Reuse it unchanged from the preceding snapshot's next_edge_cursor; do not parse, construct, or modify it."
           },
           "edge_limit": {
             "default": 500,
@@ -6740,7 +6895,7 @@
                       "type": "string",
                       "maxLength": 20,
                       "pattern": "^(0|[1-9][0-9]*)$",
-                      "description": "Unsigned source or collector journal sequence encoded without JavaScript precision loss."
+                      "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
                     }
                   },
                   "required": [
@@ -6760,13 +6915,13 @@
                 "type": "string",
                 "maxLength": 20,
                 "pattern": "^(0|[1-9][0-9]*)$",
-                "description": "Unsigned source or collector journal sequence encoded without JavaScript precision loss."
+                "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
               },
               "high_water_mark": {
                 "type": "string",
                 "maxLength": 20,
                 "pattern": "^(0|[1-9][0-9]*)$",
-                "description": "Unsigned source or collector journal sequence encoded without JavaScript precision loss."
+                "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
               },
               "cursor_gap": {
                 "type": "boolean"
@@ -6792,6 +6947,13 @@
                     "minLength": 1,
                     "maxLength": 128,
                     "description": "Stable identifier of one observed Codex workflow run."
+                  },
+                  "generation": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 32,
+                    "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                    "description": "Opaque incarnation identifier for one workflow run's projected state."
                   },
                   "thread_id": {
                     "type": "string"
@@ -6821,7 +6983,7 @@
                     "type": "string",
                     "maxLength": 20,
                     "pattern": "^(0|[1-9][0-9]*)$",
-                    "description": "Unsigned source or collector journal sequence encoded without JavaScript precision loss."
+                    "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
                   },
                   "active_attempt_id": {
                     "type": "string",
@@ -6837,12 +6999,138 @@
                 },
                 "required": [
                   "run_id",
+                  "generation",
                   "status",
                   "started_at",
                   "latest_journal_sequence"
                 ],
                 "additionalProperties": false,
                 "description": "One immutable workflow run."
+              },
+              "projection_status": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "const": "committed"
+                      },
+                      "generation": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                        "description": "Opaque incarnation identifier for one workflow run's projected state."
+                      },
+                      "journal_position": {
+                        "type": "string",
+                        "maxLength": 20,
+                        "pattern": "^(0|[1-9][0-9]*)$",
+                        "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "generation",
+                      "journal_position"
+                    ],
+                    "additionalProperties": false,
+                    "description": "A valid committed projection that can be served to readers."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "const": "rebuilding"
+                      },
+                      "generation": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                        "description": "Opaque incarnation identifier for one workflow run's projected state."
+                      },
+                      "target_journal_position": {
+                        "type": "string",
+                        "maxLength": 20,
+                        "pattern": "^(0|[1-9][0-9]*)$",
+                        "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+                      },
+                      "retry_after_ms": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "generation",
+                      "target_journal_position",
+                      "retry_after_ms"
+                    ],
+                    "additionalProperties": false,
+                    "description": "The requested generation is being reconstructed from its authoritative journal."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "const": "unavailable"
+                      },
+                      "generation": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                        "description": "Opaque incarnation identifier for one workflow run's projected state."
+                      },
+                      "retry_after_ms": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "retry_after_ms"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Projection work is temporarily unavailable after a retryable storage failure."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "const": "corrupt"
+                      },
+                      "generation": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                        "description": "Opaque incarnation identifier for one workflow run's projected state."
+                      },
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "corrupt_derived_state",
+                          "incompatible_derived_state"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "reason"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Derived projection state is corrupt or incompatible and cannot currently be served."
+                  }
+                ],
+                "description": "Closed public availability state for one workflow projection. Storage paths, hashes, fingerprints, and database errors remain private."
               },
               "nodes": {
                 "type": "array",
@@ -6853,7 +7141,7 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 192,
-                      "description": "Stable identifier of one graph node."
+                      "description": "Stable identifier of one graph node. Canonical tuples structurally distinguish run scope from attempt scope, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
                     },
                     "kind": {
                       "type": "string",
@@ -6934,19 +7222,22 @@
                   "type": "object",
                   "properties": {
                     "edge_id": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 192,
+                      "description": "Stable identifier of one graph edge. Endpoint tuples preserve the nodes' structural run-versus-attempt scope and ordinal component boundaries, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its edge kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
                     },
                     "source_node_id": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 192,
-                      "description": "Stable identifier of one graph node."
+                      "description": "Stable identifier of one graph node. Canonical tuples structurally distinguish run scope from attempt scope, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
                     },
                     "target_node_id": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 192,
-                      "description": "Stable identifier of one graph node."
+                      "description": "Stable identifier of one graph node. Canonical tuples structurally distinguish run scope from attempt scope, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
                     },
                     "kind": {
                       "type": "string",
@@ -7036,7 +7327,7 @@
                     "provenance"
                   ],
                   "additionalProperties": false,
-                  "description": "One typed edge in the deterministic workflow graph projection."
+                  "description": "One typed edge in the deterministic workflow graph projection. Data, Control, and Gate edges are causal dependencies. Temporal edges describe observed order, Resource edges describe resource use, and Conflict edges describe contention; Temporal, Resource, and Conflict edges are excluded from critical-path causality."
                 }
               },
               "statistics": {
@@ -7082,7 +7373,7 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 192,
-                      "description": "Stable identifier of one graph node."
+                      "description": "Stable identifier of one graph node. Canonical tuples structurally distinguish run scope from attempt scope, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
                     }
                   }
                 },
@@ -7096,19 +7387,25 @@
                   "critical_path_node_ids"
                 ],
                 "additionalProperties": false,
-                "description": "Work and critical-path statistics for a workflow graph."
+                "description": "Work and critical-path statistics for a workflow graph. Every ToolCall, Wait, Gate, and duration-bearing Message or Item contributes an independently weighted interval even when it has no Agent owner. An Agent contributes its own-work fragments: its interval minus the union of precisely owned child intervals clipped to the Agent interval. Precisely owned children are Control-linked Agent and ToolCall nodes, Temporal-linked Wait nodes, Gate-linked Gate nodes, and Data-linked duration-bearing Message or Item nodes. Peak concurrency sweeps every positive independently weighted or Agent own-work fragment. Critical-path analysis uses only Data, Control, and Gate edges, condenses each causal strongly connected component, charges every component member exactly once, and expands selected component members in ordinal node-id order."
               },
               "journal_sequence": {
                 "type": "string",
                 "maxLength": 20,
                 "pattern": "^(0|[1-9][0-9]*)$",
-                "description": "Unsigned source or collector journal sequence encoded without JavaScript precision loss."
+                "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
               },
               "next_node_cursor": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1536,
+                "description": "Opaque node continuation for the next page. Reuse it unchanged as node_cursor on the next graph request; do not parse, construct, or modify it."
               },
               "next_edge_cursor": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1536,
+                "description": "Opaque edge continuation for the next page. Reuse it unchanged as edge_cursor on the next graph request; do not parse, construct, or modify it."
               },
               "has_more_nodes": {
                 "type": "boolean"
@@ -7129,6 +7426,7 @@
             },
             "required": [
               "run",
+              "projection_status",
               "nodes",
               "edges",
               "statistics",
@@ -8817,7 +9115,10 @@
             "description": "Stable identifier of one observed Codex workflow run."
           },
           "node_cursor": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1536,
+            "description": "Opaque node continuation. Reuse it unchanged from the preceding snapshot's next_node_cursor; do not parse, construct, or modify it."
           },
           "node_limit": {
             "default": 250,
@@ -8826,7 +9127,10 @@
             "maximum": 1000
           },
           "edge_cursor": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1536,
+            "description": "Opaque edge continuation. Reuse it unchanged from the preceding snapshot's next_edge_cursor; do not parse, construct, or modify it."
           },
           "edge_limit": {
             "default": 500,
@@ -8857,6 +9161,13 @@
                     "maxLength": 128,
                     "description": "Stable identifier of one observed Codex workflow run."
                   },
+                  "generation": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 32,
+                    "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                    "description": "Opaque incarnation identifier for one workflow run's projected state."
+                  },
                   "thread_id": {
                     "type": "string"
                   },
@@ -8885,7 +9196,7 @@
                     "type": "string",
                     "maxLength": 20,
                     "pattern": "^(0|[1-9][0-9]*)$",
-                    "description": "Unsigned source or collector journal sequence encoded without JavaScript precision loss."
+                    "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
                   },
                   "active_attempt_id": {
                     "type": "string",
@@ -8901,12 +9212,138 @@
                 },
                 "required": [
                   "run_id",
+                  "generation",
                   "status",
                   "started_at",
                   "latest_journal_sequence"
                 ],
                 "additionalProperties": false,
                 "description": "One immutable workflow run."
+              },
+              "projection_status": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "const": "committed"
+                      },
+                      "generation": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                        "description": "Opaque incarnation identifier for one workflow run's projected state."
+                      },
+                      "journal_position": {
+                        "type": "string",
+                        "maxLength": 20,
+                        "pattern": "^(0|[1-9][0-9]*)$",
+                        "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "generation",
+                      "journal_position"
+                    ],
+                    "additionalProperties": false,
+                    "description": "A valid committed projection that can be served to readers."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "const": "rebuilding"
+                      },
+                      "generation": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                        "description": "Opaque incarnation identifier for one workflow run's projected state."
+                      },
+                      "target_journal_position": {
+                        "type": "string",
+                        "maxLength": 20,
+                        "pattern": "^(0|[1-9][0-9]*)$",
+                        "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+                      },
+                      "retry_after_ms": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "generation",
+                      "target_journal_position",
+                      "retry_after_ms"
+                    ],
+                    "additionalProperties": false,
+                    "description": "The requested generation is being reconstructed from its authoritative journal."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "const": "unavailable"
+                      },
+                      "generation": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                        "description": "Opaque incarnation identifier for one workflow run's projected state."
+                      },
+                      "retry_after_ms": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "retry_after_ms"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Projection work is temporarily unavailable after a retryable storage failure."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "const": "corrupt"
+                      },
+                      "generation": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                        "description": "Opaque incarnation identifier for one workflow run's projected state."
+                      },
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "corrupt_derived_state",
+                          "incompatible_derived_state"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "reason"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Derived projection state is corrupt or incompatible and cannot currently be served."
+                  }
+                ],
+                "description": "Closed public availability state for one workflow projection. Storage paths, hashes, fingerprints, and database errors remain private."
               },
               "nodes": {
                 "type": "array",
@@ -8917,7 +9354,7 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 192,
-                      "description": "Stable identifier of one graph node."
+                      "description": "Stable identifier of one graph node. Canonical tuples structurally distinguish run scope from attempt scope, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
                     },
                     "kind": {
                       "type": "string",
@@ -8998,19 +9435,22 @@
                   "type": "object",
                   "properties": {
                     "edge_id": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 192,
+                      "description": "Stable identifier of one graph edge. Endpoint tuples preserve the nodes' structural run-versus-attempt scope and ordinal component boundaries, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its edge kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
                     },
                     "source_node_id": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 192,
-                      "description": "Stable identifier of one graph node."
+                      "description": "Stable identifier of one graph node. Canonical tuples structurally distinguish run scope from attempt scope, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
                     },
                     "target_node_id": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 192,
-                      "description": "Stable identifier of one graph node."
+                      "description": "Stable identifier of one graph node. Canonical tuples structurally distinguish run scope from attempt scope, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
                     },
                     "kind": {
                       "type": "string",
@@ -9100,7 +9540,7 @@
                     "provenance"
                   ],
                   "additionalProperties": false,
-                  "description": "One typed edge in the deterministic workflow graph projection."
+                  "description": "One typed edge in the deterministic workflow graph projection. Data, Control, and Gate edges are causal dependencies. Temporal edges describe observed order, Resource edges describe resource use, and Conflict edges describe contention; Temporal, Resource, and Conflict edges are excluded from critical-path causality."
                 }
               },
               "statistics": {
@@ -9146,7 +9586,7 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 192,
-                      "description": "Stable identifier of one graph node."
+                      "description": "Stable identifier of one graph node. Canonical tuples structurally distinguish run scope from attempt scope, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
                     }
                   }
                 },
@@ -9160,19 +9600,25 @@
                   "critical_path_node_ids"
                 ],
                 "additionalProperties": false,
-                "description": "Work and critical-path statistics for a workflow graph."
+                "description": "Work and critical-path statistics for a workflow graph. Every ToolCall, Wait, Gate, and duration-bearing Message or Item contributes an independently weighted interval even when it has no Agent owner. An Agent contributes its own-work fragments: its interval minus the union of precisely owned child intervals clipped to the Agent interval. Precisely owned children are Control-linked Agent and ToolCall nodes, Temporal-linked Wait nodes, Gate-linked Gate nodes, and Data-linked duration-bearing Message or Item nodes. Peak concurrency sweeps every positive independently weighted or Agent own-work fragment. Critical-path analysis uses only Data, Control, and Gate edges, condenses each causal strongly connected component, charges every component member exactly once, and expands selected component members in ordinal node-id order."
               },
               "journal_sequence": {
                 "type": "string",
                 "maxLength": 20,
                 "pattern": "^(0|[1-9][0-9]*)$",
-                "description": "Unsigned source or collector journal sequence encoded without JavaScript precision loss."
+                "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
               },
               "next_node_cursor": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1536,
+                "description": "Opaque node continuation for the next page. Reuse it unchanged as node_cursor on the next graph request; do not parse, construct, or modify it."
               },
               "next_edge_cursor": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1536,
+                "description": "Opaque edge continuation for the next page. Reuse it unchanged as edge_cursor on the next graph request; do not parse, construct, or modify it."
               },
               "has_more_nodes": {
                 "type": "boolean"
@@ -9193,6 +9639,7 @@
             },
             "required": [
               "run",
+              "projection_status",
               "nodes",
               "edges",
               "statistics",
@@ -10412,7 +10859,10 @@
             "description": "Current lifecycle of a workflow run."
           },
           "cursor": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "description": "Opaque workflow-run list continuation scoped to the project and status filter. Reuse it unchanged; clients must not parse or construct it."
           },
           "limit": {
             "default": 20,
@@ -10438,6 +10888,13 @@
                   "minLength": 1,
                   "maxLength": 128,
                   "description": "Stable identifier of one observed Codex workflow run."
+                },
+                "generation": {
+                  "type": "string",
+                  "minLength": 32,
+                  "maxLength": 32,
+                  "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                  "description": "Opaque incarnation identifier for one workflow run's projected state."
                 },
                 "thread_id": {
                   "type": "string"
@@ -10467,7 +10924,7 @@
                   "type": "string",
                   "maxLength": 20,
                   "pattern": "^(0|[1-9][0-9]*)$",
-                  "description": "Unsigned source or collector journal sequence encoded without JavaScript precision loss."
+                  "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
                 },
                 "active_attempt_id": {
                   "type": "string",
@@ -10483,6 +10940,7 @@
               },
               "required": [
                 "run_id",
+                "generation",
                 "status",
                 "started_at",
                 "latest_journal_sequence"
@@ -10492,7 +10950,10 @@
             }
           },
           "next_cursor": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "description": "Opaque workflow-run list continuation scoped to the project and status filter. Reuse it unchanged; clients must not parse or construct it."
           },
           "has_more": {
             "type": "boolean"

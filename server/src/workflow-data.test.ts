@@ -16,8 +16,10 @@ import {
 } from "./contract-validation.js";
 
 const contentRef = `sha256:${"a".repeat(64)}`;
+const generation = "aaaaaaaaaaaa4aaa8aaaaaaaaaaaaaaa";
 const run = {
   run_id: "run-1",
+  generation,
   thread_id: "thread-1",
   title: "fan-out fixture",
   status: "active",
@@ -27,6 +29,11 @@ const run = {
 };
 const graph = {
   run,
+  projection_status: {
+    state: "committed",
+    generation,
+    journal_position: "7",
+  },
   nodes: [{
     node_id: "agent:root",
     kind: "agent",
