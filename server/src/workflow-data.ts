@@ -249,6 +249,7 @@ export async function getMostRecentWorkflowRun(
 export async function fetchWorkflowGraphUpdates(
   input: FetchWorkflowGraphUpdatesInput,
   signal?: AbortSignal,
+  options: { includeGraphOnJournalChange?: boolean } = {},
 ): Promise<FetchWorkflowGraphUpdatesOutput> {
   const waitMs = input.content_ref === undefined ? input.wait_ms ?? 20_000 : 0;
   const page = parseWorkflowEvents(
@@ -265,8 +266,8 @@ export async function fetchWorkflowGraphUpdates(
   );
 
   const graphRequested =
-    page.events.length > 0
-    || page.cursor_gap
+    (options.includeGraphOnJournalChange !== false
+      && (page.events.length > 0 || page.cursor_gap))
     || input.node_cursor !== undefined
     || input.edge_cursor !== undefined
     || (input.node_limit !== undefined && input.node_limit !== 250)

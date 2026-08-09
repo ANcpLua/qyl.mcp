@@ -9670,6 +9670,820 @@
       }
     },
     {
+      "name": "inspect_workflow_events",
+      "title": "Inspect Workflow Events",
+      "description": "Read immutable workflow journal events after a collector sequence and optionally retrieve one protected payload by content_ref. Versioned diagnostics arrive as content_captured events: inspect the safe machine-readable summary in data, then fetch protected evidence through a listed content_ref when needed. Graph pages are returned only when graph cursor or non-default graph limit input explicitly requests one.",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "meta": null,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Stable identifier of one observed Codex workflow run."
+          },
+          "after_sequence": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+          },
+          "limit": {
+            "default": 250,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "wait_ms": {
+            "default": 20000,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30000
+          },
+          "node_cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1536,
+            "description": "Opaque node continuation. Reuse it unchanged from the preceding snapshot's next_node_cursor; do not parse, construct, or modify it."
+          },
+          "node_limit": {
+            "default": 250,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "edge_cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1536,
+            "description": "Opaque edge continuation. Reuse it unchanged from the preceding snapshot's next_edge_cursor; do not parse, construct, or modify it."
+          },
+          "edge_limit": {
+            "default": 500,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000
+          },
+          "content_ref": {
+            "type": "string",
+            "minLength": 71,
+            "maxLength": 71,
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "description": "Optional captured payload to retrieve lazily for the selected run."
+          }
+        },
+        "required": [
+          "run_id",
+          "after_sequence"
+        ],
+        "additionalProperties": false,
+        "description": "Input for the app-only fetch_workflow_graph_updates tool."
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "object",
+            "properties": {
+              "events": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "event_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160,
+                      "description": "Stable identifier of one immutable journal event."
+                    },
+                    "source_sequence": {
+                      "type": "string",
+                      "maxLength": 20,
+                      "pattern": "^(0|[1-9][0-9]*)$",
+                      "description": "Unsigned source or collector journal sequence encoded without JavaScript precision loss."
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "run_created",
+                        "run_completed",
+                        "thread_started",
+                        "thread_resumed",
+                        "turn_started",
+                        "turn_completed",
+                        "turn_interrupted",
+                        "attempt_started",
+                        "attempt_completed",
+                        "agent_spawned",
+                        "agent_started",
+                        "agent_completed",
+                        "message_sent",
+                        "message_received",
+                        "wait_started",
+                        "wait_completed",
+                        "joined",
+                        "item_started",
+                        "item_completed",
+                        "tool_started",
+                        "tool_completed",
+                        "approval_requested",
+                        "approval_resolved",
+                        "content_captured",
+                        "file_written",
+                        "control_requested",
+                        "control_accepted",
+                        "control_applied",
+                        "control_rejected",
+                        "control_failed"
+                      ],
+                      "description": "Immutable journal event kinds accepted from a Codex observer."
+                    },
+                    "thread_id": {
+                      "type": "string"
+                    },
+                    "turn_id": {
+                      "type": "string"
+                    },
+                    "attempt_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Stable identifier of one workflow attempt."
+                    },
+                    "agent_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Stable identifier of one agent within a workflow run."
+                    },
+                    "parent_agent_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Stable identifier of one agent within a workflow run."
+                    },
+                    "receiver_agent_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Stable identifier of one agent within a workflow run."
+                    },
+                    "tool_call_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Stable identifier of one tool call within a workflow run."
+                    },
+                    "content_refs": {
+                      "maxItems": 64,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 71,
+                        "maxLength": 71,
+                        "pattern": "^sha256:[a-f0-9]{64}$",
+                        "description": "Content-addressed reference to a captured workflow payload."
+                      }
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": {}
+                    },
+                    "run_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Stable identifier of one observed Codex workflow run."
+                    },
+                    "client_id": {
+                      "type": "string"
+                    },
+                    "journal_sequence": {
+                      "type": "string",
+                      "maxLength": 20,
+                      "pattern": "^(0|[1-9][0-9]*)$",
+                      "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+                    }
+                  },
+                  "required": [
+                    "event_id",
+                    "source_sequence",
+                    "timestamp",
+                    "kind",
+                    "run_id",
+                    "client_id",
+                    "journal_sequence"
+                  ],
+                  "additionalProperties": false,
+                  "description": "One immutable event after collector journal sequence assignment."
+                }
+              },
+              "next_sequence": {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+              },
+              "high_water_mark": {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+              },
+              "cursor_gap": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "events",
+              "next_sequence",
+              "high_water_mark",
+              "cursor_gap"
+            ],
+            "additionalProperties": false,
+            "description": "A bounded page of workflow journal events."
+          },
+          "graph": {
+            "type": "object",
+            "properties": {
+              "run": {
+                "type": "object",
+                "properties": {
+                  "run_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "description": "Stable identifier of one observed Codex workflow run."
+                  },
+                  "generation": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 32,
+                    "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                    "description": "Opaque incarnation identifier for one workflow run's projected state."
+                  },
+                  "thread_id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "completed",
+                      "failed",
+                      "interrupted"
+                    ],
+                    "description": "Current lifecycle of a workflow run."
+                  },
+                  "started_at": {
+                    "type": "string",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  },
+                  "ended_at": {
+                    "type": "string",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  },
+                  "latest_journal_sequence": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(0|[1-9][0-9]*)$",
+                    "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+                  },
+                  "active_attempt_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "description": "Stable identifier of one workflow attempt."
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "run_id",
+                  "generation",
+                  "status",
+                  "started_at",
+                  "latest_journal_sequence"
+                ],
+                "additionalProperties": false,
+                "description": "One immutable workflow run."
+              },
+              "projection_status": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "const": "committed"
+                      },
+                      "generation": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                        "description": "Opaque incarnation identifier for one workflow run's projected state."
+                      },
+                      "journal_position": {
+                        "type": "string",
+                        "maxLength": 20,
+                        "pattern": "^(0|[1-9][0-9]*)$",
+                        "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "generation",
+                      "journal_position"
+                    ],
+                    "additionalProperties": false,
+                    "description": "A valid committed projection that can be served to readers."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "const": "rebuilding"
+                      },
+                      "generation": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                        "description": "Opaque incarnation identifier for one workflow run's projected state."
+                      },
+                      "target_journal_position": {
+                        "type": "string",
+                        "maxLength": 20,
+                        "pattern": "^(0|[1-9][0-9]*)$",
+                        "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+                      },
+                      "retry_after_ms": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "generation",
+                      "target_journal_position",
+                      "retry_after_ms"
+                    ],
+                    "additionalProperties": false,
+                    "description": "The requested generation is being reconstructed from its authoritative journal."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "const": "unavailable"
+                      },
+                      "generation": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                        "description": "Opaque incarnation identifier for one workflow run's projected state."
+                      },
+                      "retry_after_ms": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "retry_after_ms"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Projection work is temporarily unavailable after a retryable storage failure."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "const": "corrupt"
+                      },
+                      "generation": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$",
+                        "description": "Opaque incarnation identifier for one workflow run's projected state."
+                      },
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "corrupt_derived_state",
+                          "incompatible_derived_state"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "reason"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Derived projection state is corrupt or incompatible and cannot currently be served."
+                  }
+                ],
+                "description": "Closed public availability state for one workflow projection. Storage paths, hashes, fingerprints, and database errors remain private."
+              },
+              "nodes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "node_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 192,
+                      "description": "Stable identifier of one graph node. Canonical tuples structurally distinguish run scope from attempt scope, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "run",
+                        "attempt",
+                        "turn",
+                        "agent",
+                        "tool_call",
+                        "message",
+                        "wait",
+                        "gate",
+                        "resource"
+                      ],
+                      "description": "Kinds of execution node in the deterministic workflow graph."
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "attempt_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Stable identifier of one workflow attempt."
+                    },
+                    "agent_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Stable identifier of one agent within a workflow run."
+                    },
+                    "started_at": {
+                      "type": "string",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "ended_at": {
+                      "type": "string",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "duration_ms": {
+                      "type": "number",
+                      "minimum": 0,
+                      "x-csharp-type": "double",
+                      "description": "Duration in milliseconds"
+                    },
+                    "content_refs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 71,
+                        "maxLength": 71,
+                        "pattern": "^sha256:[a-f0-9]{64}$",
+                        "description": "Content-addressed reference to a captured workflow payload."
+                      }
+                    },
+                    "attributes": {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "node_id",
+                    "kind",
+                    "label",
+                    "status"
+                  ],
+                  "additionalProperties": false,
+                  "description": "One node in the deterministic workflow graph projection."
+                }
+              },
+              "edges": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "edge_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 192,
+                      "description": "Stable identifier of one graph edge. Endpoint tuples preserve the nodes' structural run-versus-attempt scope and ordinal component boundaries, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its edge kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
+                    },
+                    "source_node_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 192,
+                      "description": "Stable identifier of one graph node. Canonical tuples structurally distinguish run scope from attempt scope, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
+                    },
+                    "target_node_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 192,
+                      "description": "Stable identifier of one graph node. Canonical tuples structurally distinguish run scope from attempt scope, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "data",
+                        "control",
+                        "conflict",
+                        "resource",
+                        "gate",
+                        "temporal"
+                      ],
+                      "description": "Semantic relationship represented by a workflow graph edge."
+                    },
+                    "provenance": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "recorded"
+                            },
+                            "event_ids": {
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 160,
+                                "description": "Stable identifier of one immutable journal event."
+                              }
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "event_ids"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Recorded edge provenance directly observed from Codex."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "derived"
+                            },
+                            "event_ids": {
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 160,
+                                "description": "Stable identifier of one immutable journal event."
+                              }
+                            },
+                            "evidence": {
+                              "type": "string"
+                            },
+                            "confidence": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1,
+                              "x-csharp-type": "double",
+                              "description": "Ratio value (0.0 to 1.0)"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "event_ids",
+                            "evidence",
+                            "confidence"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Derived edge provenance with explicit evidence and confidence."
+                        }
+                      ],
+                      "description": "Provenance for one workflow graph edge."
+                    }
+                  },
+                  "required": [
+                    "edge_id",
+                    "source_node_id",
+                    "target_node_id",
+                    "kind",
+                    "provenance"
+                  ],
+                  "additionalProperties": false,
+                  "description": "One typed edge in the deterministic workflow graph projection. Data, Control, and Gate edges are causal dependencies. Temporal edges describe observed order, Resource edges describe resource use, and Conflict edges describe contention; Temporal, Resource, and Conflict edges are excluded from critical-path causality."
+                }
+              },
+              "statistics": {
+                "type": "object",
+                "properties": {
+                  "t1_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "x-csharp-type": "double",
+                    "description": "Duration in milliseconds"
+                  },
+                  "t_infinity_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "x-csharp-type": "double",
+                    "description": "Duration in milliseconds"
+                  },
+                  "wall_time_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "x-csharp-type": "double",
+                    "description": "Duration in milliseconds"
+                  },
+                  "peak_concurrency": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "worker_count": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "parallel_lower_bound_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "x-csharp-type": "double",
+                    "description": "Duration in milliseconds"
+                  },
+                  "critical_path_node_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 192,
+                      "description": "Stable identifier of one graph node. Canonical tuples structurally distinguish run scope from attempt scope, escape colon as \\c and backslash as \\\\, and never infer scope from a literal component value. A canonical identifier over 192 Unicode scalar values is replaced by its kind, a tilde, and the full lowercase 64-hex SHA-256 of the length-prefixed canonical tuple."
+                    }
+                  }
+                },
+                "required": [
+                  "t1_ms",
+                  "t_infinity_ms",
+                  "wall_time_ms",
+                  "peak_concurrency",
+                  "worker_count",
+                  "parallel_lower_bound_ms",
+                  "critical_path_node_ids"
+                ],
+                "additionalProperties": false,
+                "description": "Work and critical-path statistics for a workflow graph. Every ToolCall, Wait, Gate, and duration-bearing Message or Item contributes an independently weighted interval even when it has no Agent owner. An Agent contributes its own-work fragments: its interval minus the union of precisely owned child intervals clipped to the Agent interval. Precisely owned children are Control-linked Agent and ToolCall nodes, Temporal-linked Wait nodes, Gate-linked Gate nodes, and Data-linked duration-bearing Message or Item nodes. Peak concurrency sweeps every positive independently weighted or Agent own-work fragment. Critical-path analysis uses only Data, Control, and Gate edges, condenses each causal strongly connected component, charges every component member exactly once, and expands selected component members in ordinal node-id order."
+              },
+              "journal_sequence": {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+              },
+              "next_node_cursor": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1536,
+                "description": "Opaque node continuation for the next page. Reuse it unchanged as node_cursor on the next graph request; do not parse, construct, or modify it."
+              },
+              "next_edge_cursor": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1536,
+                "description": "Opaque edge continuation for the next page. Reuse it unchanged as edge_cursor on the next graph request; do not parse, construct, or modify it."
+              },
+              "has_more_nodes": {
+                "type": "boolean"
+              },
+              "has_more_edges": {
+                "type": "boolean"
+              },
+              "total_node_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "total_edge_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "run",
+              "projection_status",
+              "nodes",
+              "edges",
+              "statistics",
+              "journal_sequence",
+              "has_more_nodes",
+              "has_more_edges",
+              "total_node_count",
+              "total_edge_count"
+            ],
+            "additionalProperties": false,
+            "description": "Deterministic graph projection at one journal cursor."
+          },
+          "content": {
+            "type": "object",
+            "properties": {
+              "content_ref": {
+                "type": "string",
+                "minLength": 71,
+                "maxLength": 71,
+                "pattern": "^sha256:[a-f0-9]{64}$",
+                "description": "Content-addressed reference to a captured workflow payload."
+              },
+              "content_type": {
+                "type": "string",
+                "examples": [
+                  "application/json"
+                ],
+                "description": "MIME content type"
+              },
+              "encoding": {
+                "type": "string",
+                "enum": [
+                  "utf8",
+                  "base64"
+                ],
+                "description": "Encoding used when lazily returning captured workflow content."
+              },
+              "content": {
+                "type": "string"
+              },
+              "size_bytes": {
+                "type": "number",
+                "minimum": 0,
+                "multipleOf": 1,
+                "x-csharp-type": "long",
+                "description": "Size in bytes"
+              }
+            },
+            "required": [
+              "content_ref",
+              "content_type",
+              "encoding",
+              "content",
+              "size_bytes"
+            ],
+            "additionalProperties": false,
+            "description": "Lazily retrieved captured workflow content."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "demo"
+            ],
+            "description": "Whether a qyl MCP tool read live collector data or the explicit demo dataset."
+          }
+        },
+        "required": [
+          "page",
+          "mode"
+        ],
+        "additionalProperties": false,
+        "description": "Structured output for the app-only fetch_workflow_graph_updates tool."
+      }
+    },
+    {
       "name": "list_sessions",
       "title": "List Sessions",
       "description": "List qyl sessions with trace/span/error counts, state, and GenAI token usage where present. Pass a session id to display_traces to see a session's traces in the explorer UI.",

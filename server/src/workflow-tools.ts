@@ -154,6 +154,38 @@ export function registerWorkflowTools(server: McpServer): void {
   );
 
   server.registerTool(
+    "inspect_workflow_events",
+    {
+      title: "Inspect Workflow Events",
+      description:
+        "Read immutable workflow journal events after a collector sequence and optionally " +
+        "retrieve one protected payload by content_ref. Versioned diagnostics arrive as " +
+        "content_captured events: inspect the safe machine-readable summary in data, then " +
+        "fetch protected evidence through a listed content_ref when needed. Graph pages are " +
+        "returned only when graph cursor or non-default graph limit input explicitly requests one.",
+      inputSchema: FetchWorkflowGraphUpdatesInputSchema,
+      outputSchema: FetchWorkflowGraphUpdatesOutputSchema,
+      annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
+    },
+    async (input: FetchWorkflowGraphUpdatesInput, context): Promise<CallToolResult> => {
+      try {
+        const output = await fetchWorkflowGraphUpdates(
+          input,
+          context.mcpReq.signal,
+          { includeGraphOnJournalChange: false },
+        );
+        return toolResult(
+          `Inspected ${output.page.events.length} workflow events through sequence ` +
+            `${output.page.next_sequence}${output.content === undefined ? "" : " and fetched protected content"}.`,
+          output,
+        );
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "fetch_workflow_graph_updates",
     {
       title: "Fetch Workflow Graph Updates",
