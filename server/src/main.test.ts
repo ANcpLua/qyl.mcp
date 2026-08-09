@@ -19,7 +19,7 @@ import {
   readStreamableHTTPConfig,
   sanitizedErrorType,
 } from "./main.js";
-import { QYL_MCP_RESOURCE, QYL_MCP_SCOPE } from "./oauth.js";
+import { QYL_MCP_CONTROL_SCOPE, QYL_MCP_RESOURCE, QYL_MCP_SCOPE } from "./oauth.js";
 
 const resourceServerUrl = new URL(QYL_MCP_RESOURCE);
 const origin = resourceServerUrl.origin;
@@ -78,7 +78,7 @@ function hostedEndpoint(options: { authenticated?: boolean } = {}): Endpoint {
           metadata: {
             oauthMetadata,
             resourceServerUrl,
-            scopesSupported: [QYL_MCP_SCOPE],
+            scopesSupported: [QYL_MCP_SCOPE, QYL_MCP_CONTROL_SCOPE],
           },
         },
       }),
@@ -199,7 +199,7 @@ test("the discovery chain is closed for a client that arrives with nothing", asy
   assert.deepEqual(await metadata.json(), {
     resource: resourceServerUrl.href,
     authorization_servers: [oauthMetadata.issuer],
-    scopes_supported: [QYL_MCP_SCOPE],
+    scopes_supported: [QYL_MCP_SCOPE, QYL_MCP_CONTROL_SCOPE],
   });
 
   // Clients that probe the origin directly get the AS mirror rather than a 404.

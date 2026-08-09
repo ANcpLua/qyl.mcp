@@ -281,25 +281,13 @@ level.
 
 **How the two scopes actually reach a client:**
 
-- **`qyl:read`** — grant it as the API's *default* third-party permission. A
-  dynamically registered client receives the defaults and can read immediately.
-- **`qyl:control`** — leave it *out* of the defaults. There is no per-application
-  grant step during dynamic registration, so a DCR client receives only the
-  defaults. Keeping `qyl:control` out therefore makes run mutation **unavailable
-  to self-registered clients entirely** — it is not a scope they can request and
-  step up into.
+- **`qyl:read`** — the normal hosted-access requirement for reading telemetry and
+  using the MCP Apps.
+- **`qyl:control`** — additionally enables the approval-gated
+  `control_workflow_run` tool for steering, interrupting, and resuming runs.
 
-A client that needs to steer, interrupt, or resume a run must be registered
-deliberately — via CIMD or as a first-party application — and given an explicit
-client grant for `qyl:control`. That is the intended posture: self-registering
-clients read, named clients mutate.
-
-Note that Auth0's DCR is *open* — anyone can register a client without a token.
-Combined with `qyl:read` as the default, that means anyone can self-register and
-read your telemetry, which is usually the point of a public MCP server but is
-worth deciding rather than inheriting. Auth0's Tenant ACL (`dcr` scope) narrows
-it by IP, CIDR, or geography, and `/oidc/register` is rate-limited to 5 requests
-per second per tenant.
+Grant both as the API's default third-party user permissions so dynamically
+registered and other self-registering clients receive both scopes.
 
 ## Verification
 
