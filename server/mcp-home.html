@@ -24,8 +24,8 @@
         <p class="eyebrow"><span aria-hidden="true"></span> Hosted MCP endpoint</p>
         <h1 id="hero-title">Your telemetry,<br><em>inside the agent.</em></h1>
         <p class="hero-lede">
-          Give coding agents direct, read-only access to qyl traces, logs, sessions,
-          CI evidence, and MCP traffic—without leaving the work where failures happen.
+          Give coding agents direct read access to qyl traces, logs, sessions, and CI
+          evidence, plus explicitly granted workflow controls—without leaving the work.
         </p>
 
         <div class="endpoint" aria-label="MCP endpoint">
@@ -87,7 +87,7 @@
       <div class="section-intro">
         <p class="section-index">01 / TOOL SURFACE</p>
         <h2 id="tools-title">Ask from the place you’re already fixing.</h2>
-        <p>Every tool is explicitly read-only. Results remain structured for the model and inspectable for you.</p>
+        <p><code>qyl:read</code> covers evidence and views. Grant <code>qyl:control</code> separately to named clients for approval-gated workflow controls.</p>
       </div>
       <ol class="tool-list">
         <li><code>display_traces</code><span>Open a correlated waterfall and its logs.</span><b>MCP App</b></li>
@@ -95,6 +95,7 @@
         <li><code>get_trace</code><span>Inspect the complete span tree for one trace.</span><b>Read</b></li>
         <li><code>display_mcp_dashboard</code><span>See tool traffic, latency, and failures.</span><b>MCP App</b></li>
         <li><code>ci_log</code><span>Bring CI execution evidence into the investigation.</span><b>Read</b></li>
+        <li><code>control_workflow_run</code><span>Steer, interrupt, or resume a run.</span><b>Control</b></li>
       </ol>
     </section>
 

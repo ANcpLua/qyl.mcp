@@ -15,14 +15,16 @@ import { createServer } from "./server.js";
 import { hasWorkflowControlScope } from "./workflow-tools.js";
 
 const diagnosticContentRef = `sha256:${"d".repeat(64)}`;
+const selfRegisteredDefaultScopes = [QYL_MCP_SCOPE];
+const explicitControlScopes = [QYL_MCP_SCOPE, QYL_MCP_CONTROL_SCOPE];
 
-test("control scope predicate does not treat read access as mutation authority", () => {
+test("self-registered read defaults do not confer mutation authority", () => {
   assert.equal(hasWorkflowControlScope(undefined), false);
-  assert.equal(hasWorkflowControlScope([QYL_MCP_SCOPE]), false);
-  assert.equal(hasWorkflowControlScope([QYL_MCP_SCOPE, QYL_MCP_CONTROL_SCOPE]), true);
+  assert.equal(hasWorkflowControlScope(selfRegisteredDefaultScopes), false);
+  assert.equal(hasWorkflowControlScope(explicitControlScopes), true);
 });
 
-test("control_workflow_run enforces qyl:control at the tool boundary", async (context) => {
+test("control_workflow_run rejects read defaults and accepts explicit control", async (context) => {
   const handler = createMcpHandler(
     () => createServer({ nativeExecution: false }),
     { legacy: "reject" },
@@ -53,14 +55,14 @@ test("control_workflow_run enforces qyl:control at the tool boundary", async (co
     else process.env.QYL_COLLECTOR_URL = previousCollector;
   });
 
-  const withoutControl = await callControl(handler, [QYL_MCP_SCOPE]);
+  const withoutControl = await callControl(handler, selfRegisteredDefaultScopes);
   assert.equal(withoutControl.isError, true);
   assert.match(
     withoutControl.content.find((item) => item.type === "text")?.text ?? "",
     /qyl:control/u,
   );
 
-  const withControl = await callControl(handler, [QYL_MCP_SCOPE, QYL_MCP_CONTROL_SCOPE]);
+  const withControl = await callControl(handler, explicitControlScopes);
   assert.notEqual(withControl.isError, true);
   assert.equal(
     (withControl.structuredContent as { command?: { status?: string } } | undefined)
