@@ -24,7 +24,7 @@
     "node": "24.x"
   },
   "devDependencies": {
-    "@types/node": "26.1.2",
+    "@types/node": "26.2.0",
     "qyl-mcp-dashboard": "^1.1.1",
     "qyl-mcp-server": "^1.1.1",
     "qyl-mcp-workbench": "^1.1.1",
