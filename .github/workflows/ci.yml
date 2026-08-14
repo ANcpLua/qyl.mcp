@@ -46,6 +46,16 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm run smoke
+      - name: Build live collector fixture
+        run: |
+          dotnet restore qyl/services/qyl.collector/qyl.collector.csproj \
+            --configfile qyl/nuget.config \
+            -p:TreatWarningsAsErrors=false
+          dotnet build qyl/services/qyl.collector/qyl.collector.csproj \
+            --configuration Release \
+            --no-restore \
+            -p:QylEmbedDashboard=false
+          test -x qyl/artifacts/bin/qyl.collector/release/qyl.collector
       - name: Verify live OTLP and all seven tool contracts
         run: npm run smoke:otlp
         env:
