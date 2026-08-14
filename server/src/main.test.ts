@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client, StreamableHTTPClientTransport, type FetchLike } from "@modelcontextprotocol/client";
 import {
@@ -19,11 +20,13 @@ import {
   readStreamableHTTPConfig,
   sanitizedErrorType,
 } from "./main.js";
-import { QYL_MCP_RESOURCE, QYL_MCP_SCOPE } from "./oauth.js";
+import { QYL_MCP_CONTROL_SCOPE, QYL_MCP_RESOURCE, QYL_MCP_SCOPE } from "./oauth.js";
 
 const resourceServerUrl = new URL(QYL_MCP_RESOURCE);
 const origin = resourceServerUrl.origin;
 const landingPage = "<!doctype html><title>qyl MCP</title><main>ready</main>";
+const publishedLandingPage = await readFile(new URL("../mcp-home.html", import.meta.url), "utf8");
+const deploymentReadme = await readFile(new URL("../../README.md", import.meta.url), "utf8");
 
 const oauthMetadata: OAuthMetadata = {
   issuer: "https://qyl-eu.eu.auth0.com/",
@@ -78,7 +81,7 @@ function hostedEndpoint(options: { authenticated?: boolean } = {}): Endpoint {
           metadata: {
             oauthMetadata,
             resourceServerUrl,
-            scopesSupported: [QYL_MCP_SCOPE],
+            scopesSupported: [QYL_MCP_SCOPE, QYL_MCP_CONTROL_SCOPE],
           },
         },
       }),
@@ -117,6 +120,20 @@ test("the public root serves the qyl MCP landing page", async (context) => {
   assert.match(await response.text(), /<main>ready<\/main>/u);
   assert.equal((await endpoint.fetch(hosted("/", { method: "POST" }))).status, 404);
   assert.equal((await endpoint.fetch(hosted("/healthz"))).status, 200);
+});
+
+test("hosted guidance keeps workflow control explicit and warns about open DCR", () => {
+  assert.match(
+    publishedLandingPage,
+    /Grant <code>qyl:control<\/code> separately to named clients/u,
+  );
+  assert.match(deploymentReadme, /leave this out of the defaults/u);
+  assert.match(deploymentReadme, /Self-registering clients remain read-only by default/u);
+  assert.match(deploymentReadme, /Dynamic Client Registration is open/u);
+  assert.match(deploymentReadme, /dynamic_client_registration_security_mode` to `strict/u);
+  assert.match(deploymentReadme, /traces, logs, sessions, and CI evidence/u);
+  assert.match(deploymentReadme, /accepts only the qyl production Auth0 issuer/u);
+  assert.doesNotMatch(deploymentReadme, /Grant both as the API's default/u);
 });
 
 test("sanitized errors expose only a safe error class", () => {
@@ -186,6 +203,8 @@ test("the discovery chain is closed for a client that arrives with nothing", asy
   assert.equal(unauthorized.status, 401);
   const challenge = unauthorized.headers.get("www-authenticate") ?? "";
   assert.match(challenge, /^Bearer/u);
+  assert.match(challenge, /scope="qyl:read"/u);
+  assert.doesNotMatch(challenge, /qyl:control/u);
   assert.match(
     challenge,
     /resource_metadata="https:\/\/mcp\.qyl\.at\/\.well-known\/oauth-protected-resource\/mcp"/u,
@@ -199,7 +218,7 @@ test("the discovery chain is closed for a client that arrives with nothing", asy
   assert.deepEqual(await metadata.json(), {
     resource: resourceServerUrl.href,
     authorization_servers: [oauthMetadata.issuer],
-    scopes_supported: [QYL_MCP_SCOPE],
+    scopes_supported: [QYL_MCP_SCOPE, QYL_MCP_CONTROL_SCOPE],
   });
 
   // Clients that probe the origin directly get the AS mirror rather than a 404.

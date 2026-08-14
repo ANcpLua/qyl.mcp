@@ -253,7 +253,7 @@ MCP_BIND_HOST=0.0.0.0 \
 MCP_PUBLIC_URL=https://mcp.example.com \
 MCP_ALLOWED_HOSTS=mcp.example.com,<service>.up.railway.app,healthcheck.railway.app \
 MCP_ALLOWED_ORIGIN_HOSTS=mcp.example.com,<service>.up.railway.app \
-MCP_OAUTH_ISSUER=https://your-tenant.eu.auth0.com/ \
+MCP_OAUTH_ISSUER=https://qyl-eu.eu.auth0.com/ \
 QYL_COLLECTOR_URL=http://qyl-collector.railway.internal:8080 \
 QYL_API_KEY='<collector-api-key>' \
 npm start
@@ -262,6 +262,10 @@ npm start
 `MCP_PUBLIC_URL` adds its hostname to the Host and Origin allowlists, and
 `<public-url>/mcp` is the fixed resource identifier tokens are audience-bound to.
 A non-loopback bind requires it.
+
+This release accepts only the qyl production Auth0 issuer shown above; any other
+`MCP_OAUTH_ISSUER` fails startup. Configure the API audience for your public URL
+in that tenant rather than substituting an arbitrary OAuth issuer.
 
 ### Authentication
 
@@ -281,25 +285,29 @@ level.
 
 **How the two scopes actually reach a client:**
 
-- **`qyl:read`** — grant it as the API's *default* third-party permission. A
-  dynamically registered client receives the defaults and can read immediately.
-- **`qyl:control`** — leave it *out* of the defaults. There is no per-application
-  grant step during dynamic registration, so a DCR client receives only the
-  defaults. Keeping `qyl:control` out therefore makes run mutation **unavailable
-  to self-registered clients entirely** — it is not a scope they can request and
-  step up into.
+- **`qyl:read`** — make only this scope available in the API's default
+  third-party client grant. A self-registering client can request read access
+  within that grant; the server's initial authorization challenge requests only
+  `qyl:read`.
+- **`qyl:control`** — leave this out of the defaults. The server requires this
+  exact scope before it forwards a steer, interrupt, or resume command; approval
+  annotations alone are not an authorization boundary.
 
-A client that needs to steer, interrupt, or resume a run must be registered
-deliberately — via CIMD or as a first-party application — and given an explicit
-client grant for `qyl:control`. That is the intended posture: self-registering
-clients read, named clients mutate.
+A client that needs workflow control must be registered deliberately through
+CIMD or as a named first-party application and receive an explicit client grant
+containing both `qyl:read` and `qyl:control`, because a per-client grant replaces
+rather than extends the default. That client must then explicitly request and
+reauthorize with `qyl:control`; a denied tool call does not trigger automatic
+scope step-up. Self-registering clients remain read-only by default.
 
-Note that Auth0's DCR is *open* — anyone can register a client without a token.
-Combined with `qyl:read` as the default, that means anyone can self-register and
-read your telemetry, which is usually the point of a public MCP server but is
-worth deciding rather than inheriting. Auth0's Tenant ACL (`dcr` scope) narrows
-it by IP, CIDR, or geography, and `/oidc/register` is rate-limited to 5 requests
-per second per tenant.
+Auth0 Dynamic Client Registration is open: anyone can register a client without
+a token. Combined with default `qyl:read`, that permits anyone who completes
+authorization to read the deployment's traces, logs, sessions, and CI evidence.
+Set the tenant's `dynamic_client_registration_security_mode` to `strict` before
+relying on the default-grant boundary. Make read exposure deliberate or restrict
+DCR with the Auth0 Tenant ACL (`dcr` scope), which can filter by IP, CIDR, or
+geography; `/oidc/register` is also rate-limited to five requests per second per
+tenant.
 
 ## Verification
 
