@@ -8,7 +8,7 @@ import {
   createMcpHandler,
   type AuthInfo,
 } from "@modelcontextprotocol/server";
-import { FetchWorkflowGraphUpdatesOutputSchema } from "./contract-validation.js";
+import { InspectWorkflowEventsOutputSchema } from "./contract-validation.js";
 import { connectModernTestClient } from "./modern-test-client.test-helper.js";
 import { QYL_MCP_CONTROL_SCOPE, QYL_MCP_RESOURCE, QYL_MCP_SCOPE } from "./oauth.js";
 import { createServer } from "./server.js";
@@ -162,11 +162,10 @@ test("inspect_workflow_events returns diagnostic events and optional protected c
     arguments: {
       run_id: "run-1",
       after_sequence: "7",
-      wait_ms: 0,
     },
   });
   assert.notEqual(eventResult.isError, true);
-  const eventOutput = FetchWorkflowGraphUpdatesOutputSchema.parse(
+  const eventOutput = InspectWorkflowEventsOutputSchema.parse(
     eventResult.structuredContent,
   );
   assert.equal(eventOutput.page.events[0]?.kind, "content_captured");
@@ -174,7 +173,6 @@ test("inspect_workflow_events returns diagnostic events and optional protected c
     eventOutput.page.events[0]?.data?.extension_id,
     "qyl.agent.diagnostic.snapshot",
   );
-  assert.equal(eventOutput.graph, undefined);
   assert.equal(eventOutput.content, undefined);
 
   const contentResult = await connection.client.callTool({
@@ -186,10 +184,9 @@ test("inspect_workflow_events returns diagnostic events and optional protected c
     },
   });
   assert.notEqual(contentResult.isError, true);
-  const contentOutput = FetchWorkflowGraphUpdatesOutputSchema.parse(
+  const contentOutput = InspectWorkflowEventsOutputSchema.parse(
     contentResult.structuredContent,
   );
-  assert.equal(contentOutput.graph, undefined);
   assert.equal(contentOutput.content?.content_ref, diagnosticContentRef);
   assert.match(contentOutput.content?.content ?? "", /event_count/u);
 

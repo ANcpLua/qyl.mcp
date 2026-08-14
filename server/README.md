@@ -48,6 +48,8 @@ Format `qyl.agent.diagnostic.snapshot` version `1` stores dynamic names only in
 protected JSON. Public/internal values are encrypted, sensitive values are redacted,
 and secret values are omitted before IPC. The journal and OTel event expose only a
 value-free summary; models retrieve protected evidence explicitly by `content_ref`.
+`inspect_workflow_events` performs an immediate bounded journal read; graph cursors
+and long-poll controls remain exclusive to the app-only graph update tool.
 
 **App-only** — `fetch_telemetry` and `fetch_workflow_graph_updates` are called by
 the bundled MCP Apps, not by a model.

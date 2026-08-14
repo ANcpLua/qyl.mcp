@@ -12,6 +12,7 @@ import {
   FetchTelemetryInputSchema,
   FetchTelemetryOutputSchema,
   GetWorkflowGraphInputSchema,
+  InspectWorkflowEventsInputSchema,
   GetTraceInputSchema,
   GetTraceOutputSchema,
   ListWorkflowRunsInputSchema,
@@ -134,6 +135,29 @@ test("published workflow tool schemas own paging, identity, and control boundari
       content_ref: "not-content-addressed",
     }).success,
   );
+
+  assert.deepEqual(
+    InspectWorkflowEventsInputSchema.parse({
+      run_id: "run-1",
+      after_sequence: "4",
+      content_ref: contentRef,
+    }),
+    {
+      run_id: "run-1",
+      after_sequence: "4",
+      limit: 250,
+      content_ref: contentRef,
+    },
+  );
+  for (const appOnlyField of ["wait_ms", "node_cursor", "node_limit", "edge_cursor", "edge_limit"] as const) {
+    assert(
+      !InspectWorkflowEventsInputSchema.safeParse({
+        run_id: "run-1",
+        after_sequence: "4",
+        [appOnlyField]: appOnlyField.endsWith("limit") ? 1 : appOnlyField === "wait_ms" ? 0 : "opaque",
+      }).success,
+    );
+  }
 
   assert(
     ControlWorkflowRunInputSchema.safeParse({

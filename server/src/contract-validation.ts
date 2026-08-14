@@ -395,6 +395,14 @@ export const FetchWorkflowGraphUpdatesOutputSchema =
   publishedContractSchema<QylContracts.FetchWorkflowGraphUpdatesOutput>(
     "Mcp.Tools.FetchWorkflowGraphUpdatesOutput",
   );
+export const InspectWorkflowEventsInputSchema =
+  publishedContractSchema<QylContracts.InspectWorkflowEventsInput>(
+    "Mcp.Tools.InspectWorkflowEventsInput",
+  );
+export const InspectWorkflowEventsOutputSchema =
+  publishedContractSchema<QylContracts.InspectWorkflowEventsOutput>(
+    "Mcp.Tools.InspectWorkflowEventsOutput",
+  );
 export const ControlWorkflowRunInputSchema =
   publishedContractSchema<QylContracts.ControlWorkflowRunInput>(
     "Mcp.Tools.ControlWorkflowRunInput",

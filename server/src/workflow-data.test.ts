@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   fetchWorkflowGraphUpdates,
   getWorkflowGraph,
+  inspectWorkflowEvents,
   listWorkflowRuns,
   parseWorkflowGraph,
   submitWorkflowControl,
@@ -12,6 +13,7 @@ import {
   ControlWorkflowRunInputSchema,
   FetchWorkflowGraphUpdatesInputSchema,
   GetWorkflowGraphInputSchema,
+  InspectWorkflowEventsInputSchema,
   ListWorkflowRunsInputSchema,
 } from "./contract-validation.js";
 
@@ -120,6 +122,17 @@ test("workflow collector client enforces generated shapes and server-owned proje
   assert.equal(updates.content?.content, "captured prompt");
   assert.equal(updates.graph, undefined);
 
+  const inspected = await inspectWorkflowEvents(
+    InspectWorkflowEventsInputSchema.parse({
+      run_id: "run-1",
+      after_sequence: "7",
+      content_ref: contentRef,
+    }),
+  );
+  assert.equal(inspected.page.events.length, 0);
+  assert.equal(inspected.content?.content, "captured prompt");
+  assert.equal(Object.hasOwn(inspected, "graph"), false);
+
   const command = await submitWorkflowControl(
     ControlWorkflowRunInputSchema.parse({
       run_id: "run-1",
@@ -136,7 +149,17 @@ test("workflow collector client enforces generated shapes and server-owned proje
     assert.equal(request.headers["x-otlp-api-key"], "collector-key");
   }
   assert.equal(requests[0]?.url.searchParams.get("limit"), "1");
-  assert.equal(requests[2]?.url.searchParams.get("wait_ms"), "0");
+  const eventRequests = requests.filter((request) =>
+    request.url.pathname === "/api/v1/workflow-runs/run-1/events"
+  );
+  assert.equal(eventRequests.length, 2);
+  assert.equal(eventRequests[0]?.url.searchParams.get("wait_ms"), "0");
+  assert.equal(eventRequests[1]?.url.searchParams.get("wait_ms"), "0");
+  assert.equal(eventRequests[1]?.url.searchParams.get("limit"), "250");
+  assert.equal(
+    requests.filter((request) => request.url.pathname.endsWith("/graph")).length,
+    1,
+  );
   assert.equal(
     requests.find((request) => request.method === "POST")?.body
       && (requests.find((request) => request.method === "POST")!.body as { idempotency_key: string })

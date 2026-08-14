@@ -6,6 +6,8 @@ import type {
   FetchWorkflowGraphUpdatesInput,
   GetWorkflowGraphInput,
   GetWorkflowGraphOutput,
+  InspectWorkflowEventsInput,
+  InspectWorkflowEventsOutput,
   ListWorkflowRunsInput,
 } from "@ancplua/qyl-api-schema/types";
 import type {
@@ -23,6 +25,8 @@ import {
   FetchWorkflowGraphUpdatesOutputSchema,
   GetWorkflowGraphInputSchema,
   GetWorkflowGraphOutputSchema,
+  InspectWorkflowEventsInputSchema,
+  InspectWorkflowEventsOutputSchema,
   ListWorkflowRunsInputSchema,
   ListWorkflowRunsOutputSchema,
 } from "./contract-validation.js";
@@ -32,6 +36,7 @@ import {
   fetchWorkflowGraphUpdates,
   getMostRecentWorkflowRun,
   getWorkflowGraph,
+  inspectWorkflowEvents,
   listWorkflowRuns,
   submitWorkflowControl,
 } from "./workflow-data.js";
@@ -161,18 +166,17 @@ export function registerWorkflowTools(server: McpServer): void {
         "Read immutable workflow journal events after a collector sequence and optionally " +
         "retrieve one protected payload by content_ref. Versioned diagnostics arrive as " +
         "content_captured events: inspect the safe machine-readable summary in data, then " +
-        "fetch protected evidence through a listed content_ref when needed. Graph pages are " +
-        "returned only when graph cursor or non-default graph limit input explicitly requests one.",
-      inputSchema: FetchWorkflowGraphUpdatesInputSchema,
-      outputSchema: FetchWorkflowGraphUpdatesOutputSchema,
+        "fetch protected evidence through a listed content_ref when needed. Reads are immediate " +
+        "and bounded; graph projection and long-poll controls belong to the app-only update tool.",
+      inputSchema: InspectWorkflowEventsInputSchema,
+      outputSchema: InspectWorkflowEventsOutputSchema,
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
-    async (input: FetchWorkflowGraphUpdatesInput, context): Promise<CallToolResult> => {
+    async (input: InspectWorkflowEventsInput, context): Promise<CallToolResult> => {
       try {
-        const output = await fetchWorkflowGraphUpdates(
+        const output: InspectWorkflowEventsOutput = await inspectWorkflowEvents(
           input,
           context.mcpReq.signal,
-          { includeGraphOnJournalChange: false },
         );
         return toolResult(
           `Inspected ${output.page.events.length} workflow events through sequence ` +
