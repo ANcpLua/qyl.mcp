@@ -6,6 +6,8 @@ import type {
   FetchWorkflowGraphUpdatesInput,
   GetWorkflowGraphInput,
   GetWorkflowGraphOutput,
+  InspectWorkflowEventsInput,
+  InspectWorkflowEventsOutput,
   ListWorkflowRunsInput,
 } from "@ancplua/qyl-api-schema/types";
 import type {
@@ -23,6 +25,8 @@ import {
   FetchWorkflowGraphUpdatesOutputSchema,
   GetWorkflowGraphInputSchema,
   GetWorkflowGraphOutputSchema,
+  InspectWorkflowEventsInputSchema,
+  InspectWorkflowEventsOutputSchema,
   ListWorkflowRunsInputSchema,
   ListWorkflowRunsOutputSchema,
 } from "./contract-validation.js";
@@ -32,6 +36,7 @@ import {
   fetchWorkflowGraphUpdates,
   getMostRecentWorkflowRun,
   getWorkflowGraph,
+  inspectWorkflowEvents,
   listWorkflowRuns,
   submitWorkflowControl,
 } from "./workflow-data.js";
@@ -147,6 +152,37 @@ export function registerWorkflowTools(server: McpServer): void {
           mode: "live",
         };
         return toolResult(graphSummary("Displaying workflow", graph), output);
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "inspect_workflow_events",
+    {
+      title: "Inspect Workflow Events",
+      description:
+        "Read immutable workflow journal events after a collector sequence and optionally " +
+        "retrieve one protected payload by content_ref. Versioned diagnostics arrive as " +
+        "content_captured events: inspect the safe machine-readable summary in data, then " +
+        "fetch protected evidence through a listed content_ref when needed. Reads are immediate " +
+        "and bounded; graph projection and long-poll controls belong to the app-only update tool.",
+      inputSchema: InspectWorkflowEventsInputSchema,
+      outputSchema: InspectWorkflowEventsOutputSchema,
+      annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
+    },
+    async (input: InspectWorkflowEventsInput, context): Promise<CallToolResult> => {
+      try {
+        const output: InspectWorkflowEventsOutput = await inspectWorkflowEvents(
+          input,
+          context.mcpReq.signal,
+        );
+        return toolResult(
+          `Inspected ${output.page.events.length} workflow events through sequence ` +
+            `${output.page.next_sequence}${output.content === undefined ? "" : " and fetched protected content"}.`,
+          output,
+        );
       } catch (error) {
         return toolError(error);
       }

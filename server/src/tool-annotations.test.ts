@@ -30,6 +30,7 @@ test("qyl tools publish explicit read versus control safety annotations", async 
         "fetch_workflow_graph_updates",
         "get_trace",
         "get_workflow_graph",
+        "inspect_workflow_events",
         "list_sessions",
         "list_traces",
         "list_workflow_runs",
@@ -45,6 +46,13 @@ test("qyl tools publish explicit read versus control safety annotations", async 
         tool.name,
       );
     }
+
+    const inspectionTool = tools.find((tool) => tool.name === "inspect_workflow_events");
+    assert.ok(inspectionTool, "inspect_workflow_events must be model-visible");
+    assert.equal(inspectionTool._meta, undefined);
+    assert.match(inspectionTool.description ?? "", /content_captured/u);
+    assert.match(inspectionTool.description ?? "", /safe machine-readable summary in data/u);
+    assert.match(inspectionTool.description ?? "", /protected evidence.*content_ref/u);
   } finally {
     await connection.close();
   }
@@ -77,7 +85,7 @@ test("qyl server factory serves protocol revision 2026-07-28 over the fetch entr
       cacheScope: string;
     };
     const { tools } = toolsResult;
-    assert.equal(tools.length, 13);
+    assert.equal(tools.length, 14);
     assert.equal(toolsResult.ttlMs, 300_000);
     assert.equal(toolsResult.cacheScope, "public");
     const discover = client.getDiscoverResult() as ReturnType<Client["getDiscoverResult"]> & {

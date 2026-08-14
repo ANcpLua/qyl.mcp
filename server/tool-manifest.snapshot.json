@@ -1,5 +1,5 @@
 {
-  "contract_revision": "sha256:53278018c62ed547",
+  "contract_revision": "sha256:72545708596baccd",
   "tools": [
     {
       "name": "ci_log",
@@ -9667,6 +9667,287 @@
         ],
         "additionalProperties": false,
         "description": "Structured output for get_workflow_graph."
+      }
+    },
+    {
+      "name": "inspect_workflow_events",
+      "title": "Inspect Workflow Events",
+      "description": "Read immutable workflow journal events after a collector sequence and optionally retrieve one protected payload by content_ref. Versioned diagnostics arrive as content_captured events: inspect the safe machine-readable summary in data, then fetch protected evidence through a listed content_ref when needed. Reads are immediate and bounded; graph projection and long-poll controls belong to the app-only update tool.",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "meta": null,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Stable identifier of one observed Codex workflow run."
+          },
+          "after_sequence": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+          },
+          "limit": {
+            "default": 250,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "content_ref": {
+            "type": "string",
+            "minLength": 71,
+            "maxLength": 71,
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "description": "Optional captured payload to retrieve lazily for the selected run."
+          }
+        },
+        "required": [
+          "run_id",
+          "after_sequence"
+        ],
+        "additionalProperties": false,
+        "description": "Input for inspect_workflow_events."
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "object",
+            "properties": {
+              "events": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "event_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160,
+                      "description": "Stable identifier of one immutable journal event."
+                    },
+                    "source_sequence": {
+                      "type": "string",
+                      "maxLength": 20,
+                      "pattern": "^(0|[1-9][0-9]*)$",
+                      "description": "Unsigned source or collector journal sequence encoded without JavaScript precision loss."
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "run_created",
+                        "run_completed",
+                        "thread_started",
+                        "thread_resumed",
+                        "turn_started",
+                        "turn_completed",
+                        "turn_interrupted",
+                        "attempt_started",
+                        "attempt_completed",
+                        "agent_spawned",
+                        "agent_started",
+                        "agent_completed",
+                        "message_sent",
+                        "message_received",
+                        "wait_started",
+                        "wait_completed",
+                        "joined",
+                        "item_started",
+                        "item_completed",
+                        "tool_started",
+                        "tool_completed",
+                        "approval_requested",
+                        "approval_resolved",
+                        "content_captured",
+                        "file_written",
+                        "control_requested",
+                        "control_accepted",
+                        "control_applied",
+                        "control_rejected",
+                        "control_failed"
+                      ],
+                      "description": "Immutable journal event kinds accepted from a Codex observer."
+                    },
+                    "thread_id": {
+                      "type": "string"
+                    },
+                    "turn_id": {
+                      "type": "string"
+                    },
+                    "attempt_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Stable identifier of one workflow attempt."
+                    },
+                    "agent_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Stable identifier of one agent within a workflow run."
+                    },
+                    "parent_agent_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Stable identifier of one agent within a workflow run."
+                    },
+                    "receiver_agent_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Stable identifier of one agent within a workflow run."
+                    },
+                    "tool_call_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Stable identifier of one tool call within a workflow run."
+                    },
+                    "content_refs": {
+                      "maxItems": 64,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 71,
+                        "maxLength": 71,
+                        "pattern": "^sha256:[a-f0-9]{64}$",
+                        "description": "Content-addressed reference to a captured workflow payload."
+                      }
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": {}
+                    },
+                    "run_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Stable identifier of one observed Codex workflow run."
+                    },
+                    "client_id": {
+                      "type": "string"
+                    },
+                    "journal_sequence": {
+                      "type": "string",
+                      "maxLength": 20,
+                      "pattern": "^(0|[1-9][0-9]*)$",
+                      "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+                    }
+                  },
+                  "required": [
+                    "event_id",
+                    "source_sequence",
+                    "timestamp",
+                    "kind",
+                    "run_id",
+                    "client_id",
+                    "journal_sequence"
+                  ],
+                  "additionalProperties": false,
+                  "description": "One immutable event after collector journal sequence assignment."
+                }
+              },
+              "next_sequence": {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+              },
+              "high_water_mark": {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "description": "Collector-assigned position in the authoritative workflow journal, encoded without JavaScript precision loss."
+              },
+              "cursor_gap": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "events",
+              "next_sequence",
+              "high_water_mark",
+              "cursor_gap"
+            ],
+            "additionalProperties": false,
+            "description": "A bounded page of workflow journal events."
+          },
+          "content": {
+            "type": "object",
+            "properties": {
+              "content_ref": {
+                "type": "string",
+                "minLength": 71,
+                "maxLength": 71,
+                "pattern": "^sha256:[a-f0-9]{64}$",
+                "description": "Content-addressed reference to a captured workflow payload."
+              },
+              "content_type": {
+                "type": "string",
+                "examples": [
+                  "application/json"
+                ],
+                "description": "MIME content type"
+              },
+              "encoding": {
+                "type": "string",
+                "enum": [
+                  "utf8",
+                  "base64"
+                ],
+                "description": "Encoding used when lazily returning captured workflow content."
+              },
+              "content": {
+                "type": "string"
+              },
+              "size_bytes": {
+                "type": "number",
+                "minimum": 0,
+                "multipleOf": 1,
+                "x-csharp-type": "long",
+                "description": "Size in bytes"
+              }
+            },
+            "required": [
+              "content_ref",
+              "content_type",
+              "encoding",
+              "content",
+              "size_bytes"
+            ],
+            "additionalProperties": false,
+            "description": "Lazily retrieved captured workflow content."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "demo"
+            ],
+            "description": "Whether a qyl MCP tool read live collector data or the explicit demo dataset."
+          }
+        },
+        "required": [
+          "page",
+          "mode"
+        ],
+        "additionalProperties": false,
+        "description": "Structured output for inspect_workflow_events."
       }
     },
     {

@@ -3,6 +3,8 @@ import type {
   FetchWorkflowGraphUpdatesInput,
   FetchWorkflowGraphUpdatesOutput,
   GetWorkflowGraphInput,
+  InspectWorkflowEventsInput,
+  InspectWorkflowEventsOutput,
   ListWorkflowRunsInput,
   ListWorkflowRunsOutput,
   WorkflowContent,
@@ -251,17 +253,12 @@ export async function fetchWorkflowGraphUpdates(
   signal?: AbortSignal,
 ): Promise<FetchWorkflowGraphUpdatesOutput> {
   const waitMs = input.content_ref === undefined ? input.wait_ms ?? 20_000 : 0;
-  const page = parseWorkflowEvents(
-    await collectorGet(
-      `/api/v1/workflow-runs/${encodeURIComponent(input.run_id)}/events`,
-      {
-        after_sequence: input.after_sequence,
-        limit: input.limit ?? 250,
-        wait_ms: waitMs,
-      },
-      { signal, timeoutMs: waitMs + 5_000 },
-    ),
-    `/api/v1/workflow-runs/${input.run_id}/events`,
+  const page = await readWorkflowEvents(
+    input.run_id,
+    input.after_sequence,
+    input.limit,
+    waitMs,
+    signal,
   );
 
   const graphRequested =
@@ -285,14 +282,7 @@ export async function fetchWorkflowGraphUpdates(
     : undefined;
   const content = input.content_ref === undefined
     ? undefined
-    : parseWorkflowContent(
-        await collectorGet(
-          `/api/v1/workflow-runs/${encodeURIComponent(input.run_id)}/content/${encodeURIComponent(input.content_ref)}`,
-          {},
-          { signal, timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS },
-        ),
-        `/api/v1/workflow-runs/${input.run_id}/content/${input.content_ref}`,
-      );
+    : await readWorkflowContent(input.run_id, input.content_ref, signal);
 
   return {
     page,
@@ -300,6 +290,64 @@ export async function fetchWorkflowGraphUpdates(
     ...(content === undefined ? {} : { content }),
     mode: "live",
   };
+}
+
+export async function inspectWorkflowEvents(
+  input: InspectWorkflowEventsInput,
+  signal?: AbortSignal,
+): Promise<InspectWorkflowEventsOutput> {
+  const page = await readWorkflowEvents(
+    input.run_id,
+    input.after_sequence,
+    input.limit,
+    0,
+    signal,
+  );
+  const content = input.content_ref === undefined
+    ? undefined
+    : await readWorkflowContent(input.run_id, input.content_ref, signal);
+
+  return {
+    page,
+    ...(content === undefined ? {} : { content }),
+    mode: "live",
+  };
+}
+
+async function readWorkflowEvents(
+  runId: string,
+  afterSequence: string,
+  limit: number | undefined,
+  waitMs: number,
+  signal: AbortSignal | undefined,
+): Promise<WorkflowEventPage> {
+  return parseWorkflowEvents(
+    await collectorGet(
+      `/api/v1/workflow-runs/${encodeURIComponent(runId)}/events`,
+      {
+        after_sequence: afterSequence,
+        limit: limit ?? 250,
+        wait_ms: waitMs,
+      },
+      { signal, timeoutMs: waitMs + 5_000 },
+    ),
+    `/api/v1/workflow-runs/${runId}/events`,
+  );
+}
+
+async function readWorkflowContent(
+  runId: string,
+  contentRef: string,
+  signal: AbortSignal | undefined,
+): Promise<WorkflowContent> {
+  return parseWorkflowContent(
+    await collectorGet(
+      `/api/v1/workflow-runs/${encodeURIComponent(runId)}/content/${encodeURIComponent(contentRef)}`,
+      {},
+      { signal, timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS },
+    ),
+    `/api/v1/workflow-runs/${runId}/content/${contentRef}`,
+  );
 }
 
 export async function submitWorkflowControl(

@@ -7,7 +7,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -99,6 +99,7 @@ do {
 const workbenchBaseUrl = `http://127.0.0.1:${workbenchPort}`;
 const temp = await mkdtemp(join(tmpdir(), "qyl-mcp-otlp-"));
 const collectorApiKey = `qyl-smoke-${randomUUID()}`;
+const projectScope = "default";
 const childEnv = { ...process.env };
 for (const key of Object.keys(childEnv)) {
   if (key.startsWith("OTEL_EXPORTER_OTLP")) delete childEnv[key];
@@ -150,11 +151,95 @@ try {
     throw new Error(`secure collector accepted an unauthenticated read (${unauthenticated.status})`);
   }
 
+  const diagnosticRunId = `diagnostic-smoke-${randomUUID()}`;
+  const diagnosticSnapshot = {
+    extension_id: "qyl.agent.diagnostic.snapshot",
+    format_version: 1,
+    snapshot_id: "mcp_live_roundtrip",
+    capture_nonce: randomUUID().replaceAll("-", ""),
+    probe_id: "mcp.live.roundtrip",
+    phase: "checkpoint",
+    variables: [{
+      name: "persisted_trace_count",
+      type: "integer",
+      classification: "internal",
+      capture: "value",
+      value: 1,
+    }],
+    checks: [{
+      check_id: "trace_count_exists",
+      operator: "exists",
+      actual: "persisted_trace_count",
+      outcome: "pass",
+    }],
+    outcome: "pass",
+  };
+  const diagnosticContent = JSON.stringify(diagnosticSnapshot);
+  const diagnosticContentRef = `sha256:${createHash("sha256").update(diagnosticContent).digest("hex")}`;
+  const diagnosticSummary = {
+    extension_id: diagnosticSnapshot.extension_id,
+    format_version: diagnosticSnapshot.format_version,
+    snapshot_id: diagnosticSnapshot.snapshot_id,
+    probe_id: diagnosticSnapshot.probe_id,
+    phase: diagnosticSnapshot.phase,
+    outcome: diagnosticSnapshot.outcome,
+    variable_count: diagnosticSnapshot.variables.length,
+    check_count: diagnosticSnapshot.checks.length,
+    failed_check_count: 0,
+    content_ref: diagnosticContentRef,
+  };
+  const workflowHeaders = {
+    [apiKeyHeader]: collectorApiKey,
+    "x-qyl-project": projectScope,
+    "content-type": "application/json",
+  };
+  const createdWorkflow = await fetch(`${baseUrl}/api/v1/workflow-runs`, {
+    method: "POST",
+    headers: workflowHeaders,
+    body: JSON.stringify({
+      run_id: diagnosticRunId,
+      thread_id: "qyl-mcp-live-smoke",
+      title: "Protected diagnostic snapshot round-trip",
+      started_at: new Date().toISOString(),
+    }),
+  });
+  if (!createdWorkflow.ok) {
+    throw new Error(`diagnostic workflow create returned ${createdWorkflow.status}: ${await createdWorkflow.text()}`);
+  }
+  const appendedDiagnostic = await fetch(
+    `${baseUrl}/api/v1/workflow-runs/${encodeURIComponent(diagnosticRunId)}/events`,
+    {
+      method: "POST",
+      headers: workflowHeaders,
+      body: JSON.stringify({
+        client_id: "qyl-mcp-live-smoke",
+        events: [{
+          event_id: `diagnostic-${randomUUID()}`,
+          source_sequence: "1",
+          timestamp: new Date().toISOString(),
+          kind: "content_captured",
+          content_refs: [diagnosticContentRef],
+          data: diagnosticSummary,
+        }],
+        content: [{
+          content_ref: diagnosticContentRef,
+          content_type: "application/json",
+          encoding: "utf8",
+          content: diagnosticContent,
+        }],
+      }),
+    },
+  );
+  if (!appendedDiagnostic.ok) {
+    throw new Error(`diagnostic workflow append returned ${appendedDiagnostic.status}: ${await appendedDiagnostic.text()}`);
+  }
+
   const telemetry = new McpTelemetry({
     ...process.env,
     QYL_COLLECTOR_URL: baseUrl,
     QYL_MCP_TELEMETRY: "1",
     QYL_API_KEY: collectorApiKey,
+    QYL_PROJECT: projectScope,
   });
   const endTimeMs = Date.now();
   telemetry.recordOperation({
@@ -209,6 +294,7 @@ try {
     QYL_MCP_STATE_PATH: join(temp, "workbench-state.json"),
     QYL_MCP_NATIVE_STATE_PATH: join(temp, "workbench-native-executions.json"),
     QYL_API_KEY: collectorApiKey,
+    QYL_PROJECT: projectScope,
   };
   delete workbenchEnv.QYL_OTLP_ENDPOINT;
   for (const key of Object.keys(workbenchEnv)) {
@@ -373,6 +459,7 @@ try {
       QYL_COLLECTOR_URL: baseUrl,
       QYL_DEMO: "0",
       QYL_API_KEY: collectorApiKey,
+      QYL_PROJECT: projectScope,
       QYL_MCP_NATIVE_STATE_PATH: join(temp, "stdio-native-executions.json"),
     },
     stderr: "pipe",
@@ -408,6 +495,48 @@ try {
       throw new Error("live collector 404 did not flow through generated Problem Details");
     }
 
+    const inspectedEvents = await client.callTool({
+      name: "inspect_workflow_events",
+      arguments: { run_id: diagnosticRunId, after_sequence: "0", limit: 10 },
+    });
+    const diagnosticEvent = inspectedEvents.structuredContent?.page?.events?.find((event) =>
+      event.kind === "content_captured" && event.content_refs?.includes(diagnosticContentRef)
+    );
+    if (inspectedEvents.isError || !diagnosticEvent) {
+      throw new Error(`live diagnostic summary was not inspectable: ${JSON.stringify(inspectedEvents.content)}`);
+    }
+    const returnedSummary = diagnosticEvent.data;
+    if (
+      typeof returnedSummary !== "object"
+      || returnedSummary === null
+      || Array.isArray(returnedSummary)
+      || JSON.stringify(Object.keys(returnedSummary).sort())
+        !== JSON.stringify(Object.keys(diagnosticSummary).sort())
+      || Object.entries(diagnosticSummary).some(([key, value]) => returnedSummary[key] !== value)
+    ) {
+      throw new Error(`diagnostic event leaked or changed protected snapshot fields: ${JSON.stringify(returnedSummary)}`);
+    }
+
+    const inspectedContent = await client.callTool({
+      name: "inspect_workflow_events",
+      arguments: {
+        run_id: diagnosticRunId,
+        after_sequence: inspectedEvents.structuredContent.page.next_sequence,
+        content_ref: diagnosticContentRef,
+      },
+    });
+    const returnedContent = inspectedContent.structuredContent?.content;
+    if (
+      inspectedContent.isError
+      || returnedContent?.content_ref !== diagnosticContentRef
+      || returnedContent?.content_type !== "application/json"
+      || returnedContent?.encoding !== "utf8"
+      || returnedContent?.content !== diagnosticContent
+    ) {
+      throw new Error(`protected diagnostic content did not round-trip: ${JSON.stringify(inspectedContent.content)}`);
+    }
+    console.log("ok content_captured summary led to explicit protected content retrieval");
+
     const remainingCalls = [
       ["ci_log", {}],
       ["display_traces", { trace_id: matched.trace_id }],
@@ -422,7 +551,7 @@ try {
         throw new Error(`${name} returned isError: ${JSON.stringify(result.content)}`);
       }
     }
-    console.log("ok generated API-key auth and Qyl schemas validate all eight tools against the live collector");
+    console.log("ok generated API-key auth and Qyl schemas validate live telemetry and diagnostic workflow reads");
   } finally {
     await client.close().catch(() => {});
   }

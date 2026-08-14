@@ -13,7 +13,7 @@
     "smoke:otlp": "node telemetry-smoke.mjs"
   },
   "dependencies": {
-    "@ancplua/qyl-api-schema": "7.0.0",
+    "@ancplua/qyl-api-schema": "7.1.0",
     "@modelcontextprotocol/client": "2.0.0",
     "@modelcontextprotocol/core": "2.0.0",
     "@modelcontextprotocol/express": "2.0.0",
@@ -23,7 +23,7 @@
     "@opentelemetry/sdk-trace-base": "^2.10.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
     "express": "^5.2.1",
-    "qyl-mcp-server": "^1.1.2",
+    "qyl-mcp-server": "^1.2.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
