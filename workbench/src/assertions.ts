@@ -32,6 +32,7 @@ export interface AssertionEvidence {
 const MAX_PATTERN_LENGTH = 1_000;
 const MAX_PATTERN_INPUT_LENGTH = 100_000;
 const PATTERN_DEADLINE_MS = 250;
+const PATTERN_WORKER_STARTUP_DEADLINE_MS = 5_000;
 const PATTERN_WORKER_CONCURRENCY = 4;
 const ALLOWED_PATTERN_FLAGS = new Set(["i", "m", "s", "u"]);
 
@@ -139,7 +140,15 @@ async function evaluateValueAssertion(
                 case "timeout":
                     return result(assertion, false, "JSON Schema evaluation exceeded the safety deadline.");
                 case "worker_error":
-                    return result(assertion, false, "JSON Schema evaluation failed in its isolated worker.");
+                    return result(
+                        assertion,
+                        false,
+                        parsed.phase === "startup"
+                            ? parsed.reason === "timeout"
+                                ? "JSON Schema worker did not become ready before its startup deadline."
+                                : "JSON Schema worker failed before becoming ready."
+                            : "JSON Schema evaluation failed in its isolated worker.",
+                    );
             }
         }
         case "pattern": {
@@ -178,6 +187,12 @@ async function evaluateValueAssertion(
                     `Pattern evaluation exceeded the ${PATTERN_DEADLINE_MS} ms safety deadline.`,
                 );
             }
+            if (outcome.kind === "startup_timeout") {
+                return result(assertion, false, "Pattern worker did not become ready before its startup deadline.");
+            }
+            if (outcome.kind === "startup_error") {
+                return result(assertion, false, "Pattern worker failed before becoming ready.");
+            }
             if (outcome.kind === "worker_error") {
                 return result(assertion, false, "Pattern evaluation failed in its isolated worker.");
             }
@@ -197,47 +212,106 @@ type PatternWorkerOutcome =
     | { kind: "result"; passed: boolean }
     | { kind: "invalid" }
     | { kind: "timeout" }
+    | { kind: "startup_timeout" }
+    | { kind: "startup_error" }
     | { kind: "worker_error" };
 
-function testPatternIsolated(
+interface PatternWorkerHandle {
+    on(event: "message", listener: (message: unknown) => void): PatternWorkerHandle;
+    once(event: "error" | "messageerror" | "exit", listener: () => void): PatternWorkerHandle;
+    removeAllListeners(): PatternWorkerHandle;
+    postMessage(message: unknown): void;
+    terminate(): Promise<number>;
+}
+
+interface PatternWorkerOptions {
+    createWorker?: () => PatternWorkerHandle;
+    armDeadline?: (delayMs: number, onDeadline: () => void) => () => void;
+}
+
+export function testPatternIsolated(
     pattern: string,
     flags: string,
     input: string,
+    options: PatternWorkerOptions = {},
 ): Promise<PatternWorkerOutcome> {
     return new Promise((resolveOutcome) => {
-        let worker: Worker;
+        let worker: PatternWorkerHandle;
         try {
-            worker = new Worker(new URL("./pattern-worker.js", import.meta.url), {
-                workerData: { pattern, flags, input },
-                resourceLimits: {
-                    maxOldGenerationSizeMb: 32,
-                    maxYoungGenerationSizeMb: 8,
-                    stackSizeMb: 1,
+            worker = options.createWorker?.() ?? new Worker(
+                new URL("./pattern-worker.js", import.meta.url),
+                {
+                    resourceLimits: {
+                        maxOldGenerationSizeMb: 32,
+                        maxYoungGenerationSizeMb: 8,
+                        stackSizeMb: 1,
+                    },
                 },
-            });
+            );
         } catch {
-            resolveOutcome({ kind: "worker_error" });
+            resolveOutcome({ kind: "startup_error" });
             return;
         }
+        const armDeadline = options.armDeadline ?? setWorkerDeadline;
         let settled = false;
-        let deadline: NodeJS.Timeout | undefined;
+        let phase: "starting" | "executing" = "starting";
+        let cancelStartupDeadline: (() => void) | undefined;
+        let cancelExecutionDeadline: (() => void) | undefined;
         const finish = (outcome: PatternWorkerOutcome) => {
             if (settled) return;
             settled = true;
-            if (deadline !== undefined) clearTimeout(deadline);
+            cancelStartupDeadline?.();
+            cancelExecutionDeadline?.();
             worker.removeAllListeners();
             void worker.terminate();
             resolveOutcome(outcome);
         };
 
-        worker.once("message", (message: unknown) => {
-            if (isPatternWorkerOutcome(message)) finish(message);
-            else finish({ kind: "worker_error" });
+        worker.on("message", (message: unknown) => {
+            if (phase === "starting") {
+                if (!isWorkerReady(message)) {
+                    finish({ kind: "startup_error" });
+                    return;
+                }
+                phase = "executing";
+                cancelStartupDeadline?.();
+                cancelStartupDeadline = undefined;
+                cancelExecutionDeadline = armDeadline(
+                    PATTERN_DEADLINE_MS,
+                    () => finish({ kind: "timeout" }),
+                );
+                try {
+                    worker.postMessage({ pattern, flags, input });
+                } catch {
+                    finish({ kind: "worker_error" });
+                }
+                return;
+            }
+            finish(isPatternWorkerOutcome(message) ? message : { kind: "worker_error" });
         });
-        worker.once("error", () => finish({ kind: "worker_error" }));
-        worker.once("exit", () => finish({ kind: "worker_error" }));
-        deadline = setTimeout(() => finish({ kind: "timeout" }), PATTERN_DEADLINE_MS);
+        worker.once("error", () => finish(
+            phase === "starting" ? { kind: "startup_error" } : { kind: "worker_error" },
+        ));
+        worker.once("messageerror", () => finish(
+            phase === "starting" ? { kind: "startup_error" } : { kind: "worker_error" },
+        ));
+        worker.once("exit", () => finish(
+            phase === "starting" ? { kind: "startup_error" } : { kind: "worker_error" },
+        ));
+        cancelStartupDeadline = armDeadline(
+            PATTERN_WORKER_STARTUP_DEADLINE_MS,
+            () => finish({ kind: "startup_timeout" }),
+        );
     });
+}
+
+function setWorkerDeadline(delayMs: number, onDeadline: () => void): () => void {
+    const deadline = setTimeout(onDeadline, delayMs);
+    return () => clearTimeout(deadline);
+}
+
+function isWorkerReady(value: unknown): boolean {
+    return isRecord(value) && value.kind === "ready";
 }
 
 function isPatternWorkerOutcome(value: unknown): value is PatternWorkerOutcome {

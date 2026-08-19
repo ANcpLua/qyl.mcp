@@ -2,6 +2,7 @@ import { Worker } from "node:worker_threads";
 
 const JSON_SCHEMA_PATTERN_DEADLINE_MS = 500;
 const JSON_SCHEMA_GENERAL_DEADLINE_MS = 2_000;
+const JSON_SCHEMA_WORKER_STARTUP_DEADLINE_MS = 5_000;
 const MAX_SCHEMA_CHARACTERS = 1_000_000;
 const MAX_VALUE_CHARACTERS = 2_000_000;
 
@@ -16,7 +17,21 @@ export type JsonSchemaValidationResult =
     | { kind: "invalid_schema" }
     | { kind: "too_large"; subject: "schema" | "value" }
     | { kind: "timeout" }
-    | { kind: "worker_error" };
+    | { kind: "worker_error"; phase: "startup"; reason: "timeout" | "error" }
+    | { kind: "worker_error"; phase?: never; reason?: never };
+
+interface JsonSchemaWorkerHandle {
+    on(event: "message", listener: (message: unknown) => void): JsonSchemaWorkerHandle;
+    once(event: "error" | "messageerror" | "exit", listener: () => void): JsonSchemaWorkerHandle;
+    removeAllListeners(): JsonSchemaWorkerHandle;
+    postMessage(message: unknown): void;
+    terminate(): Promise<number>;
+}
+
+interface JsonSchemaWorkerOptions {
+    createWorker?: () => JsonSchemaWorkerHandle;
+    armDeadline?: (delayMs: number, onDeadline: () => void) => () => void;
+}
 
 /**
  * Compile and evaluate untrusted JSON Schema in a disposable worker. JSON
@@ -27,6 +42,7 @@ export type JsonSchemaValidationResult =
 export function validateJsonSchemaIsolated(
     schema: unknown,
     value: unknown,
+    options: JsonSchemaWorkerOptions = {},
 ): Promise<JsonSchemaValidationResult> {
     const schemaSize = serializedLength(schema);
     if (schemaSize === undefined || schemaSize > MAX_SCHEMA_CHARACTERS) {
@@ -41,38 +57,89 @@ export function validateJsonSchemaIsolated(
         : JSON_SCHEMA_GENERAL_DEADLINE_MS;
 
     return new Promise((resolveResult) => {
-        let worker: Worker;
+        let worker: JsonSchemaWorkerHandle;
         try {
-            worker = new Worker(new URL("./json-schema-worker.js", import.meta.url), {
-                workerData: { schema, value },
-                resourceLimits: {
-                    maxOldGenerationSizeMb: 64,
-                    maxYoungGenerationSizeMb: 16,
-                    stackSizeMb: 2,
+            worker = options.createWorker?.() ?? new Worker(
+                new URL("./json-schema-worker.js", import.meta.url),
+                {
+                    resourceLimits: {
+                        maxOldGenerationSizeMb: 64,
+                        maxYoungGenerationSizeMb: 16,
+                        stackSizeMb: 2,
+                    },
                 },
-            });
+            );
         } catch {
-            resolveResult({ kind: "worker_error" });
+            resolveResult({ kind: "worker_error", phase: "startup", reason: "error" });
             return;
         }
 
+        const armDeadline = options.armDeadline ?? setWorkerDeadline;
         let settled = false;
+        let phase: "starting" | "executing" = "starting";
+        let cancelStartupDeadline: (() => void) | undefined;
+        let cancelExecutionDeadline: (() => void) | undefined;
         const finish = (result: JsonSchemaValidationResult): void => {
             if (settled) return;
             settled = true;
-            clearTimeout(deadline);
+            cancelStartupDeadline?.();
+            cancelExecutionDeadline?.();
             worker.removeAllListeners();
             void worker.terminate();
             resolveResult(result);
         };
-        const deadline = setTimeout(() => finish({ kind: "timeout" }), deadlineMs);
 
-        worker.once("message", (message: unknown) => {
+        worker.on("message", (message: unknown) => {
+            if (phase === "starting") {
+                if (!isWorkerReady(message)) {
+                    finish({ kind: "worker_error", phase: "startup", reason: "error" });
+                    return;
+                }
+                phase = "executing";
+                cancelStartupDeadline?.();
+                cancelStartupDeadline = undefined;
+                cancelExecutionDeadline = armDeadline(
+                    deadlineMs,
+                    () => finish({ kind: "timeout" }),
+                );
+                try {
+                    worker.postMessage({ schema, value });
+                } catch {
+                    finish({ kind: "worker_error" });
+                }
+                return;
+            }
             finish(isWorkerResult(message) ? message : { kind: "worker_error" });
         });
-        worker.once("error", () => finish({ kind: "worker_error" }));
-        worker.once("exit", () => finish({ kind: "worker_error" }));
+        worker.once("error", () => finish(
+            phase === "starting"
+                ? { kind: "worker_error", phase: "startup", reason: "error" }
+                : { kind: "worker_error" },
+        ));
+        worker.once("messageerror", () => finish(
+            phase === "starting"
+                ? { kind: "worker_error", phase: "startup", reason: "error" }
+                : { kind: "worker_error" },
+        ));
+        worker.once("exit", () => finish(
+            phase === "starting"
+                ? { kind: "worker_error", phase: "startup", reason: "error" }
+                : { kind: "worker_error" },
+        ));
+        cancelStartupDeadline = armDeadline(
+            JSON_SCHEMA_WORKER_STARTUP_DEADLINE_MS,
+            () => finish({ kind: "worker_error", phase: "startup", reason: "timeout" }),
+        );
     });
+}
+
+function setWorkerDeadline(delayMs: number, onDeadline: () => void): () => void {
+    const deadline = setTimeout(onDeadline, delayMs);
+    return () => clearTimeout(deadline);
+}
+
+function isWorkerReady(value: unknown): boolean {
+    return isRecord(value) && value.kind === "ready";
 }
 
 function containsPatternKeyword(value: unknown): boolean {

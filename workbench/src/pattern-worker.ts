@@ -1,4 +1,4 @@
-import { parentPort, workerData } from "node:worker_threads";
+import { parentPort } from "node:worker_threads";
 
 interface PatternWorkerInput {
     pattern: string;
@@ -6,10 +6,15 @@ interface PatternWorkerInput {
     input: string;
 }
 
-const request = workerData as PatternWorkerInput;
-try {
-    const passed = new RegExp(request.pattern, request.flags).test(request.input);
-    parentPort?.postMessage({ kind: "result", passed });
-} catch {
-    parentPort?.postMessage({ kind: "invalid" });
+const port = parentPort;
+if (port !== null) {
+    port.once("message", (request: PatternWorkerInput) => {
+        try {
+            const passed = new RegExp(request.pattern, request.flags).test(request.input);
+            port.postMessage({ kind: "result", passed });
+        } catch {
+            port.postMessage({ kind: "invalid" });
+        }
+    });
+    port.postMessage({ kind: "ready" });
 }

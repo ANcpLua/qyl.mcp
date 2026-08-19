@@ -1,11 +1,69 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import test from "node:test";
 import {
     evaluateAssertions,
     isPartialMatch,
     readJsonPointer,
+    testPatternIsolated,
 } from "./assertions.js";
+import { validateJsonSchemaIsolated } from "./json-schema-validator.js";
 import type { WorkbenchTestAssertion } from "@ancplua/qyl-api-schema/types";
+
+class FakeWorker extends EventEmitter {
+    readonly postedMessages: unknown[] = [];
+    terminationCount = 0;
+
+    constructor(private readonly eventLog?: string[]) {
+        super();
+    }
+
+    postMessage(message: unknown): void {
+        this.eventLog?.push("post");
+        this.postedMessages.push(message);
+    }
+
+    terminate(): Promise<number> {
+        this.terminationCount += 1;
+        return Promise.resolve(0);
+    }
+}
+
+class ManualDeadlines {
+    readonly deadlines: Array<{
+        delayMs: number;
+        onDeadline: () => void;
+        active: boolean;
+    }> = [];
+
+    constructor(private readonly eventLog?: string[]) {}
+
+    readonly arm = (delayMs: number, onDeadline: () => void): (() => void) => {
+        const deadline = { delayMs, onDeadline, active: true };
+        this.eventLog?.push(`arm:${delayMs}`);
+        this.deadlines.push(deadline);
+        return () => {
+            if (!deadline.active) return;
+            deadline.active = false;
+            this.eventLog?.push(`cancel:${delayMs}`);
+        };
+    };
+
+    activeDelays(): number[] {
+        return this.deadlines
+            .filter((deadline) => deadline.active)
+            .map((deadline) => deadline.delayMs);
+    }
+
+    fire(delayMs: number): void {
+        const deadline = this.deadlines.find(
+            (candidate) => candidate.active && candidate.delayMs === delayMs,
+        );
+        if (deadline === undefined) throw new Error(`No active ${delayMs} ms deadline.`);
+        deadline.active = false;
+        deadline.onDeadline();
+    }
+}
 
 test("JSON Pointer selects escaped object keys and bounded array indices", () => {
     const value = { "a/b": { "~key": ["zero", { ok: true }] } };
@@ -76,6 +134,108 @@ test("invalid and unsafe pattern assertions fail without throwing", async () => 
     assert.match(invalidPattern.message ?? "", /Invalid regular expression/u);
     assert.match(nonString.message ?? "", /require a string/u);
     assert.equal([duplicateFlags, unsupportedFlags, invalidPattern, nonString].every((entry) => entry.status === "failed"), true);
+});
+
+test("pattern workers distinguish ready, startup, and execution phases", { timeout: 2_000 }, async () => {
+    assert.deepEqual(await testPatternIsolated("^ready$", "u", "ready"), {
+        kind: "result",
+        passed: true,
+    });
+    assert.deepEqual(await testPatternIsolated("[", "u", "value"), { kind: "invalid" });
+
+    const startupWorker = new FakeWorker();
+    const startupDeadlines = new ManualDeadlines();
+    const startupResult = testPatternIsolated("a", "u", "a", {
+        createWorker: () => startupWorker,
+        armDeadline: startupDeadlines.arm,
+    });
+    assert.deepEqual(startupDeadlines.activeDelays(), [5_000]);
+    assert.deepEqual(startupWorker.postedMessages, []);
+    startupDeadlines.fire(5_000);
+    assert.deepEqual(await startupResult, { kind: "startup_timeout" });
+    assert.equal(startupWorker.terminationCount, 1);
+
+    assert.deepEqual(await testPatternIsolated("a", "u", "a", {
+        createWorker: () => {
+            throw new Error("startup failed");
+        },
+    }), { kind: "startup_error" });
+
+    const executionEvents: string[] = [];
+    const executionWorker = new FakeWorker(executionEvents);
+    const executionDeadlines = new ManualDeadlines(executionEvents);
+    const executionResult = testPatternIsolated("a", "u", "a", {
+        createWorker: () => executionWorker,
+        armDeadline: executionDeadlines.arm,
+    });
+    executionWorker.emit("message", { kind: "ready" });
+    assert.deepEqual(executionEvents, ["arm:5000", "cancel:5000", "arm:250", "post"]);
+    assert.deepEqual(executionDeadlines.activeDelays(), [250]);
+    assert.deepEqual(executionWorker.postedMessages, [{ pattern: "a", flags: "u", input: "a" }]);
+    executionDeadlines.fire(250);
+    assert.deepEqual(await executionResult, { kind: "timeout" });
+    assert.equal(executionWorker.terminationCount, 1);
+});
+
+test("JSON Schema workers distinguish ready, startup, and execution phases", { timeout: 2_000 }, async () => {
+    assert.deepEqual(await validateJsonSchemaIsolated({ type: "string" }, "ready"), {
+        kind: "valid",
+        data: "ready",
+    });
+
+    const startupWorker = new FakeWorker();
+    const startupDeadlines = new ManualDeadlines();
+    const startupResult = validateJsonSchemaIsolated({ type: "string" }, "value", {
+        createWorker: () => startupWorker,
+        armDeadline: startupDeadlines.arm,
+    });
+    assert.deepEqual(startupDeadlines.activeDelays(), [5_000]);
+    assert.deepEqual(startupWorker.postedMessages, []);
+    startupDeadlines.fire(5_000);
+    assert.deepEqual(await startupResult, {
+        kind: "worker_error",
+        phase: "startup",
+        reason: "timeout",
+    });
+    assert.equal(startupWorker.terminationCount, 1);
+
+    assert.deepEqual(await validateJsonSchemaIsolated({ type: "string" }, "value", {
+        createWorker: () => {
+            throw new Error("startup failed");
+        },
+    }), { kind: "worker_error", phase: "startup", reason: "error" });
+
+    const patternEvents: string[] = [];
+    const patternWorker = new FakeWorker(patternEvents);
+    const patternDeadlines = new ManualDeadlines(patternEvents);
+    const patternResult = validateJsonSchemaIsolated(
+        { type: "string", pattern: "a" },
+        "a",
+        {
+            createWorker: () => patternWorker,
+            armDeadline: patternDeadlines.arm,
+        },
+    );
+    patternWorker.emit("message", { kind: "ready" });
+    assert.deepEqual(patternEvents, ["arm:5000", "cancel:5000", "arm:500", "post"]);
+    assert.deepEqual(patternDeadlines.activeDelays(), [500]);
+    assert.deepEqual(patternWorker.postedMessages, [{
+        schema: { type: "string", pattern: "a" },
+        value: "a",
+    }]);
+    patternDeadlines.fire(500);
+    assert.deepEqual(await patternResult, { kind: "timeout" });
+
+    const generalWorker = new FakeWorker();
+    const generalDeadlines = new ManualDeadlines();
+    const generalResult = validateJsonSchemaIsolated({ type: "string" }, "a", {
+        createWorker: () => generalWorker,
+        armDeadline: generalDeadlines.arm,
+    });
+    generalWorker.emit("message", { kind: "ready" });
+    assert.deepEqual(generalDeadlines.activeDelays(), [2_000]);
+    generalDeadlines.fire(2_000);
+    assert.deepEqual(await generalResult, { kind: "timeout" });
 });
 
 test("missing values and invalid schemas are evidence-backed failures", async () => {
