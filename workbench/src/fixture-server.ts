@@ -1,5 +1,5 @@
 import { McpServer, ResourceTemplate, ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
-import * as z from "zod/v4";
+import * as z from "zod";
 import {
   abortableFixtureDelay,
   DELAYED_INPUT,

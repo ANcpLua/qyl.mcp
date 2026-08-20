@@ -1,5 +1,5 @@
 import type { Prompt, Resource, ResourceTemplateType as ResourceTemplateDescriptor, Tool } from "@modelcontextprotocol/server";
-import * as z from "zod/v4";
+import * as z from "zod";
 
 export const FIXTURE_PAGE_SIZE = 2;
 

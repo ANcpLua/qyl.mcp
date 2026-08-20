@@ -11,7 +11,7 @@ import {
   CallToolResultSchema,
   JSONRPCMessageSchema,
 } from "@modelcontextprotocol/core";
-import { z } from "zod/v4";
+import { z } from "zod";
 
 const APP_PROTOCOL_VERSION = "2026-01-26";
 
