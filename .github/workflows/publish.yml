@@ -46,8 +46,13 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       # Trusted publishing to npmjs needs npm >= 11.5.1; Node 24 bundles an older npm.
+      # npm is used only for the publish itself — install and gates run on bun.
       - name: Upgrade npm for trusted publishing
         run: npm install -g npm@latest
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
 
       - name: Verify the server package is not private
         run: |
@@ -57,7 +62,7 @@ jobs:
           fi
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Resolve npm dist-tag
         shell: bash
@@ -141,9 +146,9 @@ jobs:
       # explicit-demo smoke. The OTLP smoke needs the live sibling collector and stays local.
       - name: Build and test
         run: |
-          npm run build
-          npm test
-          npm run smoke --workspace server
+          bun run build
+          bun run test
+          bun run --cwd server smoke
 
       - name: Publish npm to npmjs.org (OIDC + provenance)
         run: |

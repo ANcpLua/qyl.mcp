@@ -6,8 +6,8 @@
   "description": "Authenticated local MCP workbench with connection inspection, evaluation, and in-process qyl telemetry tools",
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "npm run clean && tsc",
-    "test": "npm run build && node --test dist/src/*.test.js",
+    "build": "bun run clean && tsc",
+    "test": "bun run build && node --test dist/src/*.test.js",
     "smoke": "node smoke.mjs",
     "start": "node dist/main.js",
     "smoke:otlp": "node telemetry-smoke.mjs"

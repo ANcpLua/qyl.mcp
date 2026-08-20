@@ -28,8 +28,11 @@ order nothing enforces, and it fails silently when that order changes.
 Browser code must not import deployable server implementation. Keep secrets and
 process control in the host, never the browser.
 
-Validate with `npm ci`, `npm run verify:pins`, `npm run build`, `npm test`,
-`npm run smoke`, and `npm run smoke:otlp`. Regenerate the tool snapshot only
+Bun owns dependency management: `bun.lock` is the only lockfile and
+`packageManager` pins the Bun version. npm appears exactly once, as the publish
+client trusted publishing requires. Validate with `bun install --frozen-lockfile`,
+`bun run verify:pins`, `bun run build`, `bun run test`,
+`bun run smoke`, and `bun run smoke:otlp`. Regenerate the tool snapshot only
 deliberately and inspect its diff. Publishing is CI OIDC only; a registry write
 that is not a publish (dist-tag move, deprecate) goes through
 `~/.claude/bin/npm-authed` — the script header is the runbook.

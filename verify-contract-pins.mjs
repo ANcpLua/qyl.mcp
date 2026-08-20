@@ -7,7 +7,7 @@
  *
  * The check itself is older than this file; it lived as inline bash in
  * .github/workflows/ci.yml, which made it unrunnable before pushing. The
- * documented local gate (npm ci/build/test/smoke/smoke:otlp) was therefore a
+ * documented local gate (install/build/test/smoke/smoke:otlp) was therefore a
  * strict subset of the real one, and the only way to learn you had skewed the
  * pin was to lose a CI run to it. Extracting it is what makes the two gates the
  * same gate: CI now invokes this script instead of carrying a second copy.
@@ -18,7 +18,7 @@
  * than no check, because it reports green for the one condition it exists to
  * catch.
  *
- * Run: npm run verify:pins
+ * Run: bun run verify:pins
  */
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";

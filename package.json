@@ -10,14 +10,14 @@
     "dashboard"
   ],
   "scripts": {
-    "build": "npm run build --workspace server && npm run build --workspace workbench && npm run build --workspace dashboard",
+    "build": "bun run --cwd server build && bun run --cwd workbench build && bun run --cwd dashboard build",
     "postbuild": "node scripts/build-site.mjs",
-    "test": "npm run test --workspace server && npm run test --workspace workbench && npm run test --workspace dashboard && npm run postbuild && node --test scripts/build-site.test.mjs",
+    "test": "bun run --cwd server test && bun run --cwd workbench test && bun run --cwd dashboard test && bun run postbuild && node --test scripts/build-site.test.mjs",
     "start": "bun server/dist/main.js",
     "start:workbench": "node workbench/dist/main.js",
-    "smoke": "npm run smoke --workspace server && npm run smoke --workspace workbench",
-    "smoke:otlp": "npm run smoke:otlp --workspace workbench",
-    "dev": "npm run build --workspace server && npm run dev --workspace dashboard",
+    "smoke": "bun run --cwd server smoke && bun run --cwd workbench smoke",
+    "smoke:otlp": "bun run --cwd workbench smoke:otlp",
+    "dev": "bun run --cwd server build && bun run --cwd dashboard dev",
     "verify:pins": "node verify-contract-pins.mjs"
   },
   "engines": {
@@ -29,7 +29,7 @@
     "qyl-mcp-server": "^1.2.0",
     "qyl-mcp-workbench": "^1.1.1",
     "typescript": "7.0.2",
-    "vite": "8.2.1"
+    "vite": "8.2.2"
   },
   "optionalDependencies": {
     "@typescript/typescript-darwin-arm64": "7.0.2",

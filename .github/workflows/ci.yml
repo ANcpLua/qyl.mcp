@@ -35,17 +35,19 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: qyl/global.json
 
-      - run: npm ci
-      - run: npm run build
-      - run: npm test
-      - run: npm run smoke
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: bun run test
+      - run: bun run smoke
       - name: Build live collector fixture
         run: |
           dotnet restore qyl/services/qyl.collector/qyl.collector.csproj \
@@ -57,6 +59,6 @@ jobs:
             -p:QylEmbedDashboard=false
           test -x qyl/artifacts/bin/qyl.collector/release/qyl.collector
       - name: Verify live OTLP and MCP contract surface
-        run: npm run smoke:otlp
+        run: bun run smoke:otlp
         env:
           QYL_COLLECTOR_PROJECT: ${{ github.workspace }}/qyl/services/qyl.collector/qyl.collector.csproj
