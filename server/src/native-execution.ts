@@ -6,10 +6,11 @@ import { CallToolRequestSchema, CallToolResultSchema } from "@modelcontextprotoc
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import type { McpServer, CallToolRequest, CallToolResult, ServerContext } from "@modelcontextprotocol/server";
 import { randomUUID } from "node:crypto";
+import { rename } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { AtomicJsonStore } from "./atomic-json-store.js";
+import { AtomicJsonStore, PersistenceError } from "./atomic-json-store.js";
 import {
   WorkbenchExecutionCostSchema,
   WorkbenchExecutionTokenUsageSchema,
@@ -31,7 +32,8 @@ import {
 } from "./telemetry.js";
 
 // 2: usage and cost evidence follows the published contract's snake_case names,
-// so a version-1 file must fail loudly rather than half-parse.
+// so a version-1 file must never half-parse. It is set aside rather than read —
+// see archiveUnreadableState.
 const NATIVE_STATE_VERSION = 2 as const;
 const DEFAULT_MAX_EXECUTIONS = 1_000;
 const NATIVE_SERVER_ID = "qyl.mcp/native";
@@ -119,7 +121,9 @@ export interface FileNativeExecutionRepositoryOptions {
 
 /** Durable, redacted native-server evidence kept separately from workbench state. */
 export class FileNativeExecutionRepository implements NativeExecutionRepository {
-  private readonly store: AtomicJsonStore<NativeExecutionState>;
+  private store: AtomicJsonStore<NativeExecutionState>;
+  private readonly openStore: () => AtomicJsonStore<NativeExecutionState>;
+  private readonly filePath: string;
   private readonly maxExecutions: number;
   private readonly now: () => number;
   private initialization: Promise<void> | undefined;
@@ -135,14 +139,34 @@ export class FileNativeExecutionRepository implements NativeExecutionRepository 
       "maxExecutions",
     );
     this.now = options.now ?? Date.now;
-    this.store = new AtomicJsonStore(
-      options.filePath ?? nativeStatePath(environment),
-      {
+    this.filePath = options.filePath ?? nativeStatePath(environment);
+    this.openStore = () =>
+      new AtomicJsonStore(this.filePath, {
         initial: () => ({ version: NATIVE_STATE_VERSION, executions: [] }),
         parse: (value) => NativeExecutionStateSchema.parse(value),
         prepareForWrite: (value) =>
           NativeExecutionStateSchema.parse(redactor.redact(value)),
-      },
+      });
+    this.store = this.openStore();
+  }
+
+  /**
+   * Move a state file this build cannot read out of the way, and say so.
+   *
+   * The schema deliberately refuses to half-parse an older layout, but refusing
+   * forever is not the same as refusing to guess: a state file written before a
+   * version bump would otherwise fail every single tool call for the life of the
+   * installation, because the store caches its failed load and evidence is
+   * written before the tool runs. Renaming preserves the old records for anyone
+   * who wants them and lets this process start a fresh log. Nothing is deleted
+   * and nothing is migrated.
+   */
+  private async archiveUnreadableState(reason: PersistenceError): Promise<void> {
+    const archived = `${this.filePath}.unreadable-${new Date(this.now()).toISOString().replaceAll(":", "-")}`;
+    await rename(this.filePath, archived);
+    console.error(
+      `qyl.mcp could not read its execution evidence (${reason.kind}); ` +
+        `moved it to ${archived} and started a new log`,
     );
   }
 
@@ -171,7 +195,16 @@ export class FileNativeExecutionRepository implements NativeExecutionRepository 
   }
 
   private async initializeCore(): Promise<void> {
-    await this.store.initialize();
+    try {
+      await this.store.initialize();
+    } catch (error) {
+      // A write fault is about this filesystem, not about the file's contents;
+      // archiving would not help and would discard readable evidence.
+      if (!(error instanceof PersistenceError) || error.kind === "write_failed") throw error;
+      await this.archiveUnreadableState(error);
+      this.store = this.openStore();
+      await this.store.initialize();
+    }
     const completedMs = this.now();
     const completedAt = timestamp(completedMs);
     const current = await this.store.read();

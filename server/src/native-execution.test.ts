@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -393,5 +393,30 @@ test("a recording fault answers tools/call through its only failure channel", as
     assert.doesNotMatch(text, /evidence store is unavailable/u, "the detail belongs on stderr, not on the wire");
   } finally {
     await connection.close();
+  }
+});
+
+test("a state file this build cannot read is archived, not fatal", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "qyl-native-archive-"));
+  const filePath = join(directory, "state.json");
+  // Exactly the shape that bricked every tool call: the pre-bump version literal.
+  await writeFile(filePath, JSON.stringify({ version: 1, executions: [] }), "utf8");
+
+  try {
+    const repository = new FileNativeExecutionRepository({
+      filePath,
+      now: () => Date.parse("2026-08-20T00:00:00.000Z"),
+    });
+    assert.deepEqual(await repository.list(), [], "the repository serves a fresh log");
+
+    const archived = (await readdir(directory)).filter((entry) => entry.includes("unreadable"));
+    assert.equal(archived.length, 1, `expected one archived file, got ${archived.join(", ")}`);
+    assert.deepEqual(
+      JSON.parse(await readFile(join(directory, archived[0]!), "utf8")),
+      { version: 1, executions: [] },
+      "the old records are preserved byte for byte",
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });
