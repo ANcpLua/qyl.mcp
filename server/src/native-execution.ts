@@ -271,7 +271,7 @@ export class NativeExecutionRuntime {
         jsonRpcRequestId: requestId,
         errorType: "evidence_persistence_failed",
       });
-      throw error;
+      throw new EvidenceRecordingError(error);
     }
 
     let result: CallToolResult;
@@ -301,7 +301,7 @@ export class NativeExecutionRuntime {
           jsonRpcRequestId: requestId,
           errorType: "evidence_persistence_failed",
         });
-        throw persistenceError;
+        throw new EvidenceRecordingError(persistenceError);
       }
       operation?.end({
         endTimeMs: completedMs,
@@ -348,7 +348,7 @@ export class NativeExecutionRuntime {
         jsonRpcRequestId: requestId,
         errorType: "evidence_persistence_failed",
       });
-      throw error;
+      throw new EvidenceRecordingError(error);
     }
     operation?.end({
       endTimeMs: completedMs,
@@ -401,6 +401,40 @@ type UntypedSetRequestHandler = (
   handlerOrSchemas: unknown,
   handler?: UntypedRequestHandler,
 ) => void;
+/**
+ * A fault in the evidence layer itself, as opposed to anything the tool did.
+ *
+ * Only these become an isError result: a malformed tool result is a server bug
+ * the SDK's own result validation is entitled to fail loudly on, and collapsing
+ * the two would hide it.
+ */
+export class EvidenceRecordingError extends Error {
+  constructor(readonly cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = "EvidenceRecordingError";
+  }
+}
+
+/**
+ * Report a recording-layer fault to the caller of `tools/call`.
+ *
+ * The detail goes to stderr rather than into the result: the message reaches a
+ * model, and a persistence fault names a local state path that has no meaning
+ * to it and does not belong on the wire.
+ */
+function recordingFailureResult(error: unknown): CallToolResult {
+  const detail = error instanceof Error ? error.message : String(error);
+  console.error(`native execution evidence could not be recorded: ${detail}`);
+  return {
+    content: [{
+      type: "text",
+      text: "This tool call was not run: qyl.mcp could not record its execution evidence. " +
+        "The server logged the reason; every tool stays unavailable until it is resolved.",
+    }],
+    isError: true,
+  };
+}
+
 const instrumentedServers = new WeakSet<McpServer>();
 const nativeTelemetryServers = new WeakSet<McpServer>();
 const recordingServers = new WeakSet<McpServer>();
@@ -425,10 +459,23 @@ export function installNativeExecutionRecording(
     recordingServers.add(server);
     original(method, async (request: unknown, extra: NativeRequestExtra) => {
       const validated = CallToolRequestSchema.parse(request);
-      return runtime.execute(
-        { request: validated, extra, transport },
-        () => handler(validated, extra),
-      );
+      try {
+        return await runtime.execute(
+          { request: validated, extra, transport },
+          () => handler(validated, extra),
+        );
+      } catch (error) {
+        // This wrapper is a raw tools/call handler, so it sits above the
+        // dispatcher that turns a tool handler's exception into an isError
+        // result — nothing below converts what the recording layer itself
+        // throws. `tools/call` has exactly one failure channel, and letting a
+        // persistence fault escape as a JSON-RPC error makes a broken evidence
+        // store indistinguishable from a broken protocol. Everything else keeps
+        // travelling untouched, including the result validation that is
+        // supposed to fail loudly and UrlElicitationRequired's route to the host.
+        if (!(error instanceof EvidenceRecordingError)) throw error;
+        return recordingFailureResult(error.cause);
+      }
     });
   };
 }

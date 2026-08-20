@@ -278,9 +278,14 @@ test("native telemetry reports terminal evidence persistence failures", async ()
   );
 
   try {
-    await assert.rejects(
-      connection.client.callTool({ name: "fixture.persistence-failure", arguments: {} }),
-    );
+    // The subject here is the telemetry below. The call itself comes back as an
+    // isError result rather than rejecting: tools/call has no protocol-error
+    // channel (errors.md), so a persistence fault has to be reported in-band.
+    const result = await connection.client.callTool({
+      name: "fixture.persistence-failure",
+      arguments: {},
+    });
+    assert.equal(result.isError, true);
     assert.equal(writes, 2);
     assert.equal(starts.length, 1);
     assert.equal(completions.length, 1);
@@ -360,4 +365,33 @@ test("recording that never wrapped a tools/call dispatcher fails loudly", () => 
 
 test("the shipped server arms recording", () => {
   assert.doesNotThrow(() => createServer({ transport: "builtin" }));
+});
+
+test("a recording fault answers tools/call through its only failure channel", async () => {
+  // errors.md: a tools/call handler produces tool errors, never protocol errors.
+  // The recording wrapper is a raw tools/call handler, so a fault inside it has
+  // nothing below to convert it — before this it left as -32603.
+  const failing: NativeExecutionRepository = {
+    save() {
+      return Promise.reject(new Error("evidence store is unavailable"));
+    },
+  };
+  const connection = await connectModernTestClient(
+    { name: "recording-fault-test", version: "1.0.0" },
+    () =>
+      createServer({
+        transport: "streamable_http",
+        nativeExecution: new NativeExecutionRuntime(failing, { redactor: new SecretRedactor() }),
+      }),
+  );
+
+  try {
+    const result = await connection.client.callTool({ name: "list_traces", arguments: {} });
+    assert.equal(result.isError, true);
+    const text = String((result.content as { text?: string }[])[0]?.text);
+    assert.match(text, /could not record its execution evidence/u);
+    assert.doesNotMatch(text, /evidence store is unavailable/u, "the detail belongs on stderr, not on the wire");
+  } finally {
+    await connection.close();
+  }
 });
