@@ -403,6 +403,7 @@ type UntypedSetRequestHandler = (
 ) => void;
 const instrumentedServers = new WeakSet<McpServer>();
 const nativeTelemetryServers = new WeakSet<McpServer>();
+const recordingServers = new WeakSet<McpServer>();
 
 /** Wrap the SDK's single tools/call dispatcher, covering all current and future tools. */
 export function installNativeExecutionRecording(
@@ -421,6 +422,7 @@ export function installNativeExecutionRecording(
       original(method, handlerOrSchemas, customHandler);
       return;
     }
+    recordingServers.add(server);
     original(method, async (request: unknown, extra: NativeRequestExtra) => {
       const validated = CallToolRequestSchema.parse(request);
       return runtime.execute(
@@ -429,6 +431,25 @@ export function installNativeExecutionRecording(
       );
     });
   };
+}
+
+/**
+ * Fail construction when recording never took hold, which is otherwise silent.
+ *
+ * The wrapper above only sees a tools/call registration that happens after it is
+ * installed. McpServer registers that dispatcher in its own constructor as soon as
+ * `capabilities.tools` is declared there, and only defers it to the first
+ * registerTool call when it is not — so declaring the capability up front would
+ * leave every tool call unrecorded while answering normally. Evidence is an audit
+ * surface; losing it has to be an error at startup, not a gap discovered later.
+ */
+export function assertNativeExecutionRecordingArmed(server: McpServer): void {
+  if (recordingServers.has(server)) return;
+  throw new Error(
+    "native execution recording never wrapped a tools/call dispatcher: the MCP server " +
+      "registered it before installNativeExecutionRecording ran (declaring capabilities.tools " +
+      "on the McpServer constructor does this). Register tools after installing recording.",
+  );
 }
 
 export function hasNativeExecutionTelemetry(server: unknown): boolean {

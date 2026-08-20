@@ -5,10 +5,13 @@ import { join } from "node:path";
 import test from "node:test";
 import { CallToolResultSchema } from "@modelcontextprotocol/core";
 import type { CallToolResult } from "@modelcontextprotocol/client";
+import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
+  assertNativeExecutionRecordingArmed,
   FileNativeExecutionRepository,
   hasNativeExecutionTelemetry,
+  installNativeExecutionRecording,
   NativeExecutionRuntime,
   type NativeExecutionRecord,
   type NativeExecutionRepository,
@@ -328,4 +331,33 @@ test("file native repository uses atomic private persistence", async () => {
     await connection.close();
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("recording that never wrapped a tools/call dispatcher fails loudly", () => {
+  // McpServer registers the tools/call dispatcher in its constructor as soon as
+  // capabilities.tools is declared there, which is before recording can wrap it.
+  // Without the guard the tools answer normally and record nothing at all.
+  const server = new McpServer(
+    { name: "guard-fixture", version: "0.0.0" },
+    { capabilities: { tools: {} } },
+  );
+  installNativeExecutionRecording(
+    server,
+    new NativeExecutionRuntime(new MemoryRepository(), { redactor: new SecretRedactor() }),
+    "builtin",
+  );
+  server.registerTool(
+    "fixture.unrecorded",
+    {},
+    async (): Promise<CallToolResult> => ({ content: [{ type: "text", text: "unrecorded" }] }),
+  );
+
+  assert.throws(
+    () => assertNativeExecutionRecordingArmed(server),
+    /never wrapped a tools\/call dispatcher/u,
+  );
+});
+
+test("the shipped server arms recording", () => {
+  assert.doesNotThrow(() => createServer({ transport: "builtin" }));
 });

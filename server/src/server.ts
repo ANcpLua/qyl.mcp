@@ -63,6 +63,7 @@ import { registerWorkflowTools } from "./workflow-tools.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 import type { McpTelemetryTransport } from "./mcp-semconv.js";
 import {
+  assertNativeExecutionRecordingArmed,
   defaultNativeExecutionRuntime,
   installNativeExecutionRecording,
   type NativeExecutionRuntime,
@@ -367,6 +368,8 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       };
     },
   );
+
+  if (options.nativeExecution !== false) assertNativeExecutionRecordingArmed(server);
 
   return server;
 }
