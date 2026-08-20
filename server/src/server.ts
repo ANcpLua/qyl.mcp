@@ -21,7 +21,7 @@ import type {
   FetchTelemetryInput,
   FetchTelemetryOutput,
 } from "@ancplua/qyl-api-schema/types";
-import { McpServer } from "@modelcontextprotocol/server";
+import { McpServer, ResourceNotFoundError } from "@modelcontextprotocol/server";
 import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/server";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -80,11 +80,63 @@ export {
 const DIST_DIR = import.meta.dirname;
 // Cached across createServer() calls — in stateless HTTP deployments a fresh
 // server is created per request and per-instance caches would be useless.
-let cachedAppHtml: string | undefined;
-let cachedDashboardHtml: string | undefined;
-let cachedWorkflowGraphHtml: string | undefined;
+const viewerHtmlByFile = new Map<string, string>();
 const PUBLIC_CATALOG_CACHE = { ttlMs: 300_000, cacheScope: "public" } as const;
 const PUBLIC_APP_CACHE = { ttlMs: 86_400_000, cacheScope: "public" } as const;
+
+/** MCP Apps viewers declare an empty CSP: the bundles are single-file and fetch nothing. */
+const SELF_CONTAINED_VIEWER_CSP = {
+  ui: { csp: { connectDomains: [], resourceDomains: [] } },
+} as const;
+
+/**
+ * Register one vite-built single-file viewer as a fixed-URI resource.
+ *
+ * A read callback has no `isError` channel, so a failure here has to leave as a
+ * JSON-RPC error response. Anything that is not a `ProtocolError` becomes
+ * `-32603` Internal Error carrying the raw exception message — for a missing
+ * bundle that is `fs`'s ENOENT, which names an absolute server path and tells
+ * the caller nothing it can act on. `ResourceNotFoundError` is the subclass the
+ * SDK defines for a `resources/read` that cannot produce contents: it carries
+ * the spec's `-32602`, puts the requested URI in `data`, and lets the message
+ * say what to rebuild.
+ */
+export function registerViewerResource(
+  server: McpServer,
+  uri: string,
+  fileName: string,
+): void {
+  server.registerResource(
+    uri,
+    uri,
+    { mimeType: RESOURCE_MIME_TYPE, cacheHint: PUBLIC_APP_CACHE },
+    async (): Promise<ReadResourceResult> => {
+      let html = viewerHtmlByFile.get(fileName);
+      if (html === undefined) {
+        try {
+          html = await fs.readFile(path.join(DIST_DIR, fileName), "utf-8");
+        } catch {
+          throw new ResourceNotFoundError(
+            uri,
+            `${uri} is not built: dist/${fileName} is missing — run \`npm run build\` ` +
+              "in the server workspace to produce the viewer bundles",
+          );
+        }
+        viewerHtmlByFile.set(fileName, html);
+      }
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: RESOURCE_MIME_TYPE,
+            text: html,
+            _meta: SELF_CONTAINED_VIEWER_CSP,
+          },
+        ],
+      };
+    },
+  );
+}
 
 export interface CreateServerOptions {
   /** Transport identity recorded on native server spans and durable evidence. */
@@ -101,10 +153,13 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       version: packageMetadata.version,
     },
     {
+      // One hint per catalog method this server actually answers. McpServer
+      // registers the resource trio on the first registerResource and the tool
+      // handlers on the first registerTool; it never registers prompts/list,
+      // because nothing here calls registerPrompt.
       cacheHints: {
         "server/discover": PUBLIC_CATALOG_CACHE,
         "tools/list": PUBLIC_CATALOG_CACHE,
-        "prompts/list": PUBLIC_CATALOG_CACHE,
         "resources/list": PUBLIC_CATALOG_CACHE,
         "resources/templates/list": PUBLIC_CATALOG_CACHE,
       },
@@ -273,101 +328,9 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
     },
   );
 
-  server.registerResource(
-    RESOURCE_URI,
-    RESOURCE_URI,
-    { mimeType: RESOURCE_MIME_TYPE, cacheHint: PUBLIC_APP_CACHE },
-    async (): Promise<ReadResourceResult> => {
-      const html = (cachedAppHtml ??= await fs.readFile(
-        path.join(DIST_DIR, "mcp-app.html"),
-        "utf-8",
-      ));
-      return {
-        contents: [
-          {
-            uri: RESOURCE_URI,
-            mimeType: RESOURCE_MIME_TYPE,
-            text: html,
-            _meta: {
-              ui: {
-                csp: {
-                  connectDomains: [],
-                  resourceDomains: [],
-                },
-              },
-            },
-          },
-        ],
-      };
-    },
-  );
-
-  server.registerResource(
-    DASHBOARD_RESOURCE_URI,
-    DASHBOARD_RESOURCE_URI,
-    { mimeType: RESOURCE_MIME_TYPE, cacheHint: PUBLIC_APP_CACHE },
-    async (): Promise<ReadResourceResult> => {
-      if (cachedDashboardHtml === undefined) {
-        try {
-          cachedDashboardHtml = await fs.readFile(
-            path.join(DIST_DIR, "mcp-dashboard.html"),
-            "utf-8",
-          );
-        } catch {
-          throw new Error(
-            "dashboard UI not built yet: dist/mcp-dashboard.html is missing — " +
-              "build the mcp-dashboard.html vite entry (`npm run build`) first",
-          );
-        }
-      }
-      return {
-        contents: [
-          {
-            uri: DASHBOARD_RESOURCE_URI,
-            mimeType: RESOURCE_MIME_TYPE,
-            text: cachedDashboardHtml,
-            _meta: {
-              ui: {
-                csp: {
-                  connectDomains: [],
-                  resourceDomains: [],
-                },
-              },
-            },
-          },
-        ],
-      };
-    },
-  );
-
-  server.registerResource(
-    WORKFLOW_GRAPH_RESOURCE_URI,
-    WORKFLOW_GRAPH_RESOURCE_URI,
-    { mimeType: RESOURCE_MIME_TYPE, cacheHint: PUBLIC_APP_CACHE },
-    async (): Promise<ReadResourceResult> => {
-      const html = (cachedWorkflowGraphHtml ??= await fs.readFile(
-        path.join(DIST_DIR, "observe-graph.html"),
-        "utf-8",
-      ));
-      return {
-        contents: [
-          {
-            uri: WORKFLOW_GRAPH_RESOURCE_URI,
-            mimeType: RESOURCE_MIME_TYPE,
-            text: html,
-            _meta: {
-              ui: {
-                csp: {
-                  connectDomains: [],
-                  resourceDomains: [],
-                },
-              },
-            },
-          },
-        ],
-      };
-    },
-  );
+  registerViewerResource(server, RESOURCE_URI, "mcp-app.html");
+  registerViewerResource(server, DASHBOARD_RESOURCE_URI, "mcp-dashboard.html");
+  registerViewerResource(server, WORKFLOW_GRAPH_RESOURCE_URI, "observe-graph.html");
 
   if (options.nativeExecution !== false) assertNativeExecutionRecordingArmed(server);
 
