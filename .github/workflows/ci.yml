@@ -25,10 +25,10 @@ jobs:
       # ref — so name a cross-repo skew before the long build does, instead of
       # letting smoke:otlp fail at the spawned server's startup handshake on a
       # push that changed nothing here.
-      # Inline here until 2026-07-28, which made it the one gate nobody could run
-      # before pushing. It is now verify-contract-pins.mjs, invoked identically
-      # from CI and from `npm run verify:pins`, so there is one implementation
-      # rather than a workflow copy and a local approximation.
+      # Inline here until it became the one gate nobody could run before pushing.
+      # It is now verify-contract-pins.mjs, invoked identically from CI and from
+      # `bun run verify:pins`, so there is one implementation rather than a
+      # workflow copy and a local approximation.
       - name: Cross-repo contract pins must agree
         run: node verify-contract-pins.mjs
 

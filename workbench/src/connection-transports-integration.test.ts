@@ -163,7 +163,6 @@ for (const transport of ["streamable-http"] as const) {
             assert(operations.some((operation) => operation.method === "tools/call"
                 && operation.role === "client"));
             assert.equal(operations.some((operation) => operation.role === "server"), false);
-            assert.equal(connected.initialization?.sessionId, undefined);
             const discover = operations.find((candidate) => candidate.method === "server/discover");
             assert(discover, "missing server/discover operation");
             assert.equal(operations.some((operation) => operation.method === "initialize"), false);
@@ -200,7 +199,6 @@ test("connection manager pins Streamable HTTP to protocol revision 2026-07-28", 
     try {
         const connected = await manager.connect("modern-http");
         assert.equal(connected.initialization?.protocolVersion, "2026-07-28");
-        assert.equal(connected.initialization?.sessionId, undefined);
         assert.equal(manager.getClient("modern-http").getProtocolEra(), "modern");
         assert.equal(connected.initialization?.serverInfo?.name, "qyl-mcp-conformance-fixture");
         assert.equal(connected.initialization?.discovery.tools.length, 6);

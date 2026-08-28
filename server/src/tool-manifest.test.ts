@@ -10,7 +10,7 @@
  * than to the day someone last looked at it.
  *
  * This test only compares. Regenerate deliberately with
- * `npm run snapshot:tools` — a plain script run, so no ambient environment
+ * `bun run snapshot:tools` — a plain script run, so no ambient environment
  * variable can turn the assertion into a self-approving rewrite.
  */
 
@@ -25,7 +25,7 @@ test("the published tool manifest matches its committed snapshot", async () => {
   const committed = await readFile(snapshotUrl, "utf8").catch(() => undefined);
   assert.ok(
     committed !== undefined,
-    "tool-manifest.snapshot.json is missing — regenerate it with `npm run snapshot:tools`",
+    "tool-manifest.snapshot.json is missing — regenerate it with `bun run snapshot:tools`",
   );
   assert.match(
     committed,
@@ -36,6 +36,6 @@ test("the published tool manifest matches its committed snapshot", async () => {
   assert.equal(
     manifest,
     committed,
-    "the tool manifest changed: review the diff, then regenerate with `npm run snapshot:tools`",
+    "the tool manifest changed: review the diff, then regenerate with `bun run snapshot:tools`",
   );
 });

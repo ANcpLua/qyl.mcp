@@ -3,7 +3,7 @@
  * plus the contract revision it was generated from. Shared by the snapshot
  * test (which only compares) and update-tool-manifest-snapshot.mjs (which
  * writes): regeneration is an explicit script run, never a side effect of
- * `npm test` in an environment that happens to carry a variable.
+ * `bun test` in an environment that happens to carry a variable.
  */
 import { generatedContractRevision } from "./contract-handshake.js";
 import { connectModernTestClient } from "./modern-test-client.test-helper.js";

@@ -83,7 +83,7 @@ interface StartupWorkbench {
 
 /**
  * Restore durable state before binding, but never make UI availability wait on
- * remote MCP initialization. Auto-connect remains observable through the
+ * remote MCP connections. Auto-connect remains observable through the
  * registered connection's disconnected/connecting/failed lifecycle.
  */
 export async function initializeWorkbenchAndListeners(

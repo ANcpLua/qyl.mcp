@@ -28,6 +28,18 @@ requireMatch(
   /Grant <code>qyl:control<\/code> separately to named clients/u,
   "must tell operators to grant qyl:control separately to named clients",
 );
+requireMatch(
+  "built landing page",
+  builtLandingHtml,
+  /2026-07-28/u,
+  "must name the only protocol revision the endpoint serves",
+);
+forbidMatch(
+  "built landing page",
+  builtLandingHtml,
+  /stateless/iu,
+  "must not describe the endpoint by the SDK's rejected legacy serving mode",
+);
 
 requireMatch(
   "deployment README",

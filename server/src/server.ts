@@ -78,8 +78,8 @@ export {
 
 // The vite-built single-file viewers live next to the compiled server code.
 const DIST_DIR = import.meta.dirname;
-// Cached across createServer() calls — in stateless HTTP deployments a fresh
-// server is created per request and per-instance caches would be useless.
+// Cached across createServer() calls — createMcpHandler builds a fresh server
+// per HTTP request, so per-instance caches would be useless.
 const viewerHtmlByFile = new Map<string, string>();
 const PUBLIC_CATALOG_CACHE = { ttlMs: 300_000, cacheScope: "public" } as const;
 const PUBLIC_APP_CACHE = { ttlMs: 86_400_000, cacheScope: "public" } as const;
@@ -118,7 +118,7 @@ export function registerViewerResource(
         } catch {
           throw new ResourceNotFoundError(
             uri,
-            `${uri} is not built: dist/${fileName} is missing — run \`npm run build\` ` +
+            `${uri} is not built: dist/${fileName} is missing — run \`bun run build\` ` +
               "in the server workspace to produce the viewer bundles",
           );
         }

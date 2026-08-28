@@ -1535,7 +1535,6 @@ function initializationResponse(initialization: ConnectionInitializationSnapshot
         server_identity: serverIdentity,
         capabilities: initialization.capabilities,
         ...(initialization.instructions === undefined ? {} : { instructions: initialization.instructions }),
-        ...(initialization.sessionId === undefined ? {} : { session_info: { id: initialization.sessionId } }),
         result: {
             protocolVersion,
             serverInfo: serverIdentity,

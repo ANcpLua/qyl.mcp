@@ -79,7 +79,6 @@ const NativeExecutionRecordSchema = z.object({
       "inproc",
       "builtin",
     ]),
-    sessionId: z.string().min(1).max(2_048).optional(),
     meta: z.record(z.string(), z.unknown()).optional(),
   }).strict(),
   result: z.unknown().optional(),
@@ -238,7 +237,7 @@ export interface NativeExecutionRuntimeOptions {
 
 export interface NativeToolCallInput {
   request: CallToolRequest;
-  extra: ServerContext;
+  ctx: ServerContext;
   transport: McpTelemetryTransport;
 }
 
@@ -269,7 +268,7 @@ export class NativeExecutionRuntime {
     const startedMs = this.now();
     const executionId = this.id();
     const startedAt = timestamp(startedMs);
-    const requestId = input.extra.mcpReq.id;
+    const requestId = input.ctx.mcpReq.id;
     const durableRequestId = sanitizeRequestId(requestId, this.redactor);
     const toolName = input.request.params.name;
     const operation = this.startTelemetry(input, executionId, startedMs);
@@ -285,9 +284,6 @@ export class NativeExecutionRuntime {
         toolName: this.redactor.redactText(toolName).slice(0, 1_024),
         arguments: sanitizeArguments(input.request.params.arguments, this.redactor),
         transport: input.transport,
-        ...(input.extra.sessionId === undefined
-          ? {}
-          : { sessionId: this.redactor.redactText(input.extra.sessionId).slice(0, 2_048) }),
         ...(input.request.params._meta === undefined
           ? {}
           : { meta: sanitizeRecord(input.request.params._meta, this.redactor) }),
@@ -424,10 +420,9 @@ export class NativeExecutionRuntime {
   }
 }
 
-type NativeRequestExtra = ServerContext;
 type UntypedRequestHandler = (
   request: unknown,
-  extra: NativeRequestExtra,
+  ctx: ServerContext,
 ) => unknown | Promise<unknown>;
 type UntypedSetRequestHandler = (
   method: string,
@@ -436,10 +431,8 @@ type UntypedSetRequestHandler = (
 ) => void;
 /**
  * A fault in the evidence layer itself, as opposed to anything the tool did.
- *
- * Only these become an isError result: a malformed tool result is a server bug
- * the SDK's own result validation is entitled to fail loudly on, and collapsing
- * the two would hide it.
+ * Only these become an isError result; a malformed tool result is a server bug
+ * that fails the runtime's CallToolResultSchema parse and stays loud.
  */
 export class EvidenceRecordingError extends Error {
   constructor(readonly cause: unknown) {
@@ -490,22 +483,17 @@ export function installNativeExecutionRecording(
       return;
     }
     recordingServers.add(server);
-    original(method, async (request: unknown, extra: NativeRequestExtra) => {
+    original(method, async (request: unknown, ctx: ServerContext) => {
       const validated = CallToolRequestSchema.parse(request);
       try {
         return await runtime.execute(
-          { request: validated, extra, transport },
-          () => handler(validated, extra),
+          { request: validated, ctx, transport },
+          () => handler(validated, ctx),
         );
       } catch (error) {
-        // This wrapper is a raw tools/call handler, so it sits above the
-        // dispatcher that turns a tool handler's exception into an isError
-        // result — nothing below converts what the recording layer itself
-        // throws. `tools/call` has exactly one failure channel, and letting a
-        // persistence fault escape as a JSON-RPC error makes a broken evidence
-        // store indistinguishable from a broken protocol. Everything else keeps
-        // travelling untouched, including the result validation that is
-        // supposed to fail loudly and UrlElicitationRequired's route to the host.
+        // The SDK converts throws into isError only inside the dispatcher this
+        // wrapper calls (errors.md); above it a throw leaves as a JSON-RPC error,
+        // so an evidence fault is answered here and every other throw passes.
         if (!(error instanceof EvidenceRecordingError)) throw error;
         return recordingFailureResult(error.cause);
       }

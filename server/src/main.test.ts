@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Client, StreamableHTTPClientTransport, type FetchLike } from "@modelcontextprotocol/client";
 import {
-  createMcpHandler,
   getOAuthProtectedResourceMetadataUrl,
   McpServer,
   OAuthError,
   OAuthErrorCode,
+  ProtocolErrorCode,
   requireBearerAuth,
   type AuthInfo,
   type McpHttpHandler,
@@ -16,6 +16,7 @@ import {
 import { z } from "zod";
 import {
   createFetch,
+  createHostedHandler,
   readStreamableHTTPConfig,
   sanitizedErrorType,
 } from "./main.js";
@@ -46,7 +47,7 @@ interface Endpoint {
 // skip discovery, the rebinding guards, and the gate, which is most of what
 // the serving layer is.
 function hostedEndpoint(options: { authenticated?: boolean } = {}): Endpoint {
-  const handler = createMcpHandler(() => {
+  const handler = createHostedHandler(() => {
     const server = new McpServer({ name: "qyl-serving-test", version: "1.0.0" });
     server.registerTool(
       "auth_context",
@@ -59,7 +60,7 @@ function hostedEndpoint(options: { authenticated?: boolean } = {}): Endpoint {
       }),
     );
     return server;
-  });
+  }, () => undefined);
 
   return {
     handler,
@@ -278,7 +279,7 @@ test("a modern client reaches the tools through the whole pipeline", async (cont
   assert.deepEqual(result.content, [{ type: "text", text: "strict-dcr-client" }]);
 });
 
-test("a 2025-era client lists the same tools from the same factory", async (context) => {
+test("a 2025-era client is refused after the gate with the supported revision", async (context) => {
   const endpoint = hostedEndpoint();
   const client = new Client({ name: "legacy-pipeline-client", version: "1.0.0" });
   context.after(async () => {
@@ -286,13 +287,35 @@ test("a 2025-era client lists the same tools from the same factory", async (cont
     await endpoint.handler.close();
   });
 
-  await client.connect(new StreamableHTTPClientTransport(resourceServerUrl, {
+  const response = await endpoint.fetch(hosted("/mcp", {
+    method: "POST",
+    headers: {
+      authorization: "Bearer good",
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-11-25",
+        capabilities: {},
+        clientInfo: { name: "legacy-pipeline-client", version: "1.0.0" },
+      },
+    }),
+  }));
+  assert.equal(response.status, 400);
+  const body = await response.json() as {
+    error: { code: number; data: { supported: string[]; requested: string } };
+  };
+  assert.equal(body.error.code, ProtocolErrorCode.UnsupportedProtocolVersion);
+  assert.deepEqual(body.error.data.supported, ["2026-07-28"]);
+
+  await assert.rejects(client.connect(new StreamableHTTPClientTransport(resourceServerUrl, {
     fetch: transportFetch(endpoint),
     requestInit: { headers: { authorization: "Bearer good" } },
-  }));
-
-  assert.equal(client.getProtocolEra(), "legacy");
-  assert.deepEqual((await client.listTools()).tools.map((tool) => tool.name), ["auth_context"]);
+  })));
 });
 
 function testVerifier(): OAuthTokenVerifier {

@@ -68,6 +68,7 @@ traffic) produce and own that data.
 |------------------------|----------|:---:|:-------:|:------:|:-------:|:---------:|
 | `list_workflow_runs`   | Snapshot |  +  |    +    |  N/A   |   N/A   |    N/A    |
 | `get_workflow_graph`   | Snapshot |  +  |    +    |  N/A   |   N/A   |    N/A    |
+| `inspect_workflow_events` | Snapshot |  +  |    +    |  N/A   |   N/A   |    N/A    |
 | `control_workflow_run` | Snapshot |  C  |    C    |  N/A   |   N/A   |    N/A    |
 
 The workflow journal is owned by qyl and surfaced by qyl.mcp; no other repository touches it. `control_workflow_run` is

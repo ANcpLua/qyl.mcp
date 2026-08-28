@@ -37,7 +37,7 @@
         <div class="protocol-facts" aria-label="Protocol properties">
           <span><i class="fact-dot fact-live" aria-hidden="true"></i>2026-07-28</span>
           <span><i class="fact-dot" aria-hidden="true"></i>OAuth 2.1</span>
-          <span><i class="fact-dot" aria-hidden="true"></i>Stateless HTTP</span>
+          <span><i class="fact-dot" aria-hidden="true"></i>Per-request HTTP</span>
         </div>
       </div>
 
@@ -102,8 +102,8 @@
     <section class="protocol-section" aria-labelledby="protocol-title">
       <p class="section-index">02 / PROTOCOL</p>
       <div class="protocol-heading">
-        <h2 id="protocol-title">Built for the stateless MCP.</h2>
-        <p>No sticky session, legacy handshake, or SSE transport compatibility layer.</p>
+        <h2 id="protocol-title">Built for the 2026 MCP.</h2>
+        <p>No session, no 2025 handshake, no SSE compatibility layer &mdash; a 2025-era request is refused with <code>-32022</code>.</p>
       </div>
       <div class="protocol-grid">
         <article><span>01</span><h3>Per-request identity</h3><p>Every request carries its protocol, client identity, and capabilities.</p></article>

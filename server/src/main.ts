@@ -147,11 +147,11 @@ function notFound(): Response {
   });
 }
 
-// A browser client reads none of this without CORS — not the challenge that
-// starts its OAuth flow, not the session id, not the negotiated revision. The
-// preflight carries no credentials, so it must be answered before the gate;
-// answering it there is a 401 the browser reports as a network failure.
-const EXPOSED_HEADERS = "WWW-Authenticate, Mcp-Session-Id, MCP-Protocol-Version";
+// A browser client cannot read the challenge that starts its OAuth flow
+// without CORS. The preflight carries no credentials, so it must be answered
+// before the gate; answering it there is a 401 the browser reports as a
+// network failure.
+const EXPOSED_HEADERS = "WWW-Authenticate";
 
 function corsPreflightResponse(request: Request): Response | undefined {
   const origin = request.headers.get("origin");
@@ -162,7 +162,7 @@ function corsPreflightResponse(request: Request): Response | undefined {
     status: 204,
     headers: {
       "access-control-allow-origin": origin,
-      "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
+      "access-control-allow-methods": "POST, OPTIONS",
       ...(requestedHeaders === null ? {} : { "access-control-allow-headers": requestedHeaders }),
       "access-control-expose-headers": EXPOSED_HEADERS,
       "access-control-max-age": "600",
@@ -249,15 +249,23 @@ export interface ServeOptions {
   fetch: (request: Request) => Promise<Response>;
 }
 
+/**
+ * Revision 2026-07-28 only, on every transport: a 2025-era request is answered
+ * with `-32022` UnsupportedProtocolVersion; there is no legacy serving and no session.
+ */
+export function createHostedHandler(
+  factory: Parameters<typeof createMcpHandler>[0],
+  onerror: (error: unknown) => void,
+): McpHttpHandler {
+  return createMcpHandler(factory, { legacy: "reject", onerror });
+}
+
 async function createHostedRuntime(
   config: StreamableHTTPServerConfig,
 ): Promise<ServeOptions> {
-  // No `legacy` option: the default stateless posture serves 2026-07-28 and
-  // 2025-era clients from this one factory, and most clients shipping today
-  // are still 2025-era.
-  const handler = createMcpHandler(
+  const handler = createHostedHandler(
     () => createServer({ transport: "streamable_http" }),
-    { onerror: (error) => reportError("Standalone MCP request", error) },
+    (error) => reportError("Standalone MCP request", error),
   );
 
   const options: McpFetchOptions = {

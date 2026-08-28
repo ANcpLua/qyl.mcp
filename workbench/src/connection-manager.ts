@@ -121,7 +121,6 @@ export interface ConnectionInitializationSnapshot {
     capabilities: ServerCapabilities;
     instructions?: string;
     protocolVersion?: string;
-    sessionId?: string;
     discovery: DiscoverySnapshot;
 }
 
@@ -345,7 +344,7 @@ export class ConnectionManager {
     /**
      * Remove a persisted connection from the runtime. Active SDK transports are
      * closed before ownership is released so deleting or replacing a server
-     * cannot strand a child process, HTTP session, or in-process server.
+     * cannot strand a child process, HTTP connection, or in-process server.
      */
     async unregister(connectionId: string): Promise<void> {
         const entry = this.requireEntry(connectionId);
@@ -516,7 +515,6 @@ export class ConnectionManager {
             if (negotiatedProtocolVersion !== undefined) {
                 initialization.protocolVersion = negotiatedProtocolVersion;
             }
-            if (transport.sessionId !== undefined) initialization.sessionId = transport.sessionId;
 
             entry.active = { client, transport, server };
             entry.initialization = initialization;
@@ -678,11 +676,9 @@ export class ConnectionManager {
                     env,
                     stderr: "pipe",
                 });
-                // MCP propagation travels in JSON-RPC params._meta for every
-                // transport. Drain the child pipe from the moment it is constructed so a
-                // verbose server cannot block before MCP initialization. Raw
-                // stderr is deliberately discarded rather than journaled or
-                // persisted because it may contain credentials.
+                // Drain the child pipe from construction so a chatty server cannot block on
+                // a full pipe before it answers the connect-time server/discover. Raw stderr
+                // is discarded, never journaled or persisted, because it may carry credentials.
                 drainStdioStderr(transport, journal);
                 return {
                     transport,

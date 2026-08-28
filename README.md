@@ -46,7 +46,7 @@ healthcheck. Neither is a protocol endpoint — `/mcp` is the only one.
 npx qyl-mcp-server --stdio
 ```
 
-Without `--stdio` it serves stateless Streamable HTTP on
+Without `--stdio` it serves Streamable HTTP (revision `2026-07-28` only) on
 `http://127.0.0.1:3001/mcp`; set `PORT` to change it. The local default binds to
 loopback only and accepts local or absent browser origins.
 
@@ -80,6 +80,7 @@ Watch an agent run as a graph while it executes, and steer it.
 | --- | --- |
 | `list_workflow_runs` | Bounded historical run selection |
 | `get_workflow_graph` | Deterministic graph projection at one journal cursor |
+| `inspect_workflow_events` | Bounded journal read of one run's events, protected content by `content_ref` |
 | `display_workflow_graph` | Opens the fullscreen MCP App |
 | `fetch_workflow_graph_updates` | App-only journal polling, gap recovery, paging, lazy content |
 | `control_workflow_run` | Steer, interrupt, resume — approval-gated, needs `qyl:control` |
@@ -111,7 +112,7 @@ skill routing in `plugins/observe-graph/skills/observe-graph/SKILL.md`.
 Regenerate the tool manifest whenever a tool or resource changes:
 
 ```bash
-npm run snapshot:tools --workspace server
+bun run --cwd server snapshot:tools
 ```
 
 Read that diff rather than regenerating to make a red test green. The plugin has
@@ -127,9 +128,9 @@ A local client for connecting to MCP servers you did not write, inspecting their
 negotiated surface, invoking tools safely, and keeping the evidence.
 
 ```bash
-npm ci
-npm run build
-npm run start:workbench
+bun install --frozen-lockfile
+bun run build
+bun run start:workbench
 ```
 
 Open <http://127.0.0.1:18888>. Set `QYL_MCP_WORKBENCH_PORT` for another port.
@@ -312,11 +313,11 @@ tenant.
 ## Verification
 
 ```bash
-npm ci
-npm run build
-npm test
-npm run smoke
-npm run smoke:otlp
+bun install --frozen-lockfile
+bun run build
+bun run test
+bun run smoke
+bun run smoke:otlp
 ```
 
 `smoke` exercises explicit demo behavior. `smoke:otlp` needs the sibling qyl
@@ -325,7 +326,7 @@ API-key-protected collector, and drives its real OTLP/protobuf and read surfaces
 — a fixture validated by a schema from this repository would prove nothing about
 interoperability.
 
-`npm test` in `server` begins with `verify:shapes`, which fails on any hand-rolled
+`bun run test` in `server` begins with `verify:shapes`, which fails on any hand-rolled
 `z.object(` outside two documented exemptions and on any module registering a tool
 without importing the generated validators. The exemption list is self-policing:
 an entry whose file no longer declares a shape fails as stale, so the list shrinks
