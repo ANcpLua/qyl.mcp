@@ -11,13 +11,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ancplua/qyl-api-schema": "7.3.0",
+    "@ancplua/qyl-api-schema": "7.4.0",
     "@modelcontextprotocol/core": "2.0.0",
     "@modelcontextprotocol/server": "2.0.0",
     "qyl-mcp-server": "^2.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "zod": "^4.4.3"
+    "zod": "^4.5.0"
   },
   "devDependencies": {
     "@types/node": "26.4.0",
