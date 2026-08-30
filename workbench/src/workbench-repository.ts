@@ -38,7 +38,7 @@ const STATE_VERSION = 5 as const;
 const DEFAULT_WORKSPACE_NAME = "Local workbench";
 
 const IdentifierSchema = z.string().min(1).max(128);
-const IsoDateSchema = z.string().datetime({ offset: true });
+const IsoDateSchema = z.iso.datetime({ offset: true });
 const JsonObjectSchema = z.record(z.string(), z.unknown());
 
 // The persisted connection vocabulary is the contract vocabulary: same property
@@ -72,7 +72,7 @@ export const PersistedConnectionDefinitionSchema = z.discriminatedUnion("transpo
     }).strict(),
     z.object({
         transport: z.literal("streamable_http"),
-        endpoint: z.string().url().max(8_192),
+        endpoint: z.url().max(8_192),
         headers: z.array(HeaderReferenceSchema).max(128).default([]),
     }).strict(),
     z.object({

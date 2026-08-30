@@ -142,6 +142,10 @@ function isWorkerReady(value: unknown): boolean {
     return isRecord(value) && value.kind === "ready";
 }
 
+// `pattern` is not the only keyword whose value zod compiles to a RegExp:
+// fromJSONSchema turns every `patternProperties` KEY into one and tests it
+// against each input key, so a schema carrying only `patternProperties` must get
+// the same tight deadline.
 function containsPatternKeyword(value: unknown): boolean {
     if (typeof value !== "object" || value === null) return false;
     const stack: unknown[] = [value];
@@ -150,7 +154,10 @@ function containsPatternKeyword(value: unknown): boolean {
         const current = stack.pop();
         if (typeof current !== "object" || current === null || seen.has(current)) continue;
         seen.add(current);
-        if (!Array.isArray(current) && Object.hasOwn(current, "pattern")) return true;
+        if (!Array.isArray(current)
+            && (Object.hasOwn(current, "pattern") || Object.hasOwn(current, "patternProperties"))) {
+            return true;
+        }
         stack.push(...(Array.isArray(current) ? current : Object.values(current)));
     }
     return false;

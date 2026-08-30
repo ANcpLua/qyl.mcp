@@ -10,8 +10,7 @@ import type {
     WorkbenchExecutionStatus,
     WorkbenchExecutionTokenUsage,
 } from "@ancplua/qyl-api-schema/types";
-import { CallToolResultSchema } from "@modelcontextprotocol/core";
-import { ProtocolError, SdkErrorCode, SdkError } from "@modelcontextprotocol/client";
+import { ProtocolError, SdkErrorCode, SdkError, SdkHttpError, UnauthorizedError } from "@modelcontextprotocol/client";
 import type { Client, Tool } from "@modelcontextprotocol/client";
 import type {
     ConnectionInitializationSnapshot,
@@ -428,7 +427,11 @@ export class ExecutionService {
         const telemetryOperation = this.startTelemetry(record, startedMs);
 
         try {
-            const result = CallToolResultSchema.parse(await runWithMcpPropagation(
+            // `Client.callTool` resolves the result schema from the method name and
+            // validates it against the negotiated era's codec before returning, so
+            // re-parsing here would only re-check what the SDK already checked — and
+            // would reject a result the SDK accepted if the eras ever diverge.
+            const result = await runWithMcpPropagation(
                 telemetryOperation?.propagation,
                 () => this.correlationContext.run(
                     pending.correlation,
@@ -447,7 +450,7 @@ export class ExecutionService {
                         },
                     ),
                 ),
-            ));
+            );
             const completedMs = this.now();
             const evidence = extractExecutionEvidence(result);
             if (evidence.tokenUsage !== undefined) record.tokenUsage = evidence.tokenUsage;
@@ -494,7 +497,7 @@ export class ExecutionService {
                 record,
                 telemetryOperation,
                 completedMs,
-                telemetryErrorType(error, classified.error.code),
+                telemetryErrorType(error, classified),
                 this.redactor.redact({ error: classified.error }),
                 classified.error.message,
             );
@@ -738,10 +741,17 @@ export class ExecutionService {
     }
 }
 
-function telemetryErrorType(error: unknown, fallback: string): string {
+function telemetryErrorType(
+    error: unknown,
+    classified: { status: ExecutionStatus; error: ExecutionError },
+): string {
+    // Cancelling aborts the request signal, and the v2 client rejects an aborted
+    // request with SdkError(RequestTimeout) wrapping the AbortError rather than
+    // rethrowing it. The classified status, not the SDK code, decides here.
+    if (classified.status === "cancelled") return classified.error.code;
     if (error instanceof SdkError && error.code === SdkErrorCode.RequestTimeout) return "request_timeout";
     if (error instanceof SdkError && error.code === SdkErrorCode.ConnectionClosed) return "connection_closed";
-    return fallback;
+    return classified.error.code;
 }
 
 function correlatedJsonRpcErrorCode(
@@ -954,8 +964,7 @@ function classifyExecutionError(
     }
 
     const message = redactor.redactText(error instanceof Error ? error.message : String(error));
-    const lower = message.toLowerCase();
-    const category: ExecutionErrorCategory = /401|403|unauthori[sz]ed|forbidden|authentication/u.test(lower)
+    const category: ExecutionErrorCategory = isAuthorizationError(error)
         ? "authentication"
         : error instanceof SyntaxError
           ? "serialization"
@@ -974,6 +983,22 @@ function classifyExecutionError(
             retryable: category === "transport" || category === "authentication",
         },
     };
+}
+
+// The v2 client reports authorization failures as typed errors, never as message
+// text. Without an OAuth provider the Streamable HTTP transport raises
+// SdkHttpError(ClientHttpNotImplemented) carrying the real HTTP status, its
+// re-authorization paths raise SdkHttpError with ClientHttpAuthentication /
+// ClientHttpForbidden, and the provider handshake raises UnauthorizedError. The
+// message is `Error POSTing to endpoint: <response body>` — server-controlled
+// text a workbench pointed at untrusted servers must not classify on.
+function isAuthorizationError(error: unknown): boolean {
+    if (error instanceof UnauthorizedError) return true;
+    if (!(error instanceof SdkHttpError)) return false;
+    return error.status === 401
+        || error.status === 403
+        || error.code === SdkErrorCode.ClientHttpAuthentication
+        || error.code === SdkErrorCode.ClientHttpForbidden;
 }
 
 function cancellationError(now: number): ExecutionError {

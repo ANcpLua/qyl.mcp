@@ -40,7 +40,7 @@ const NATIVE_SERVER_ID = "qyl.mcp/native";
 const MAX_PROTOCOL_PAYLOAD_CHARACTERS = 64_000;
 
 const IdentifierSchema = z.string().min(1).max(256);
-const IsoDateSchema = z.string().datetime({ offset: true });
+const IsoDateSchema = z.iso.datetime({ offset: true });
 const JsonRpcRequestIdSchema = z.union([z.string().max(2_048), z.number().finite()]);
 // Usage and cost evidence is the published contract's own shape, so the
 // persisted record validates against the generated schema rather than a local

@@ -4,9 +4,13 @@ import { z } from "zod";
 
 type JsonSchemaObject = Record<string, unknown>;
 
-// z.fromJSONSchema currently translates JSON Schema `date-time` to a Z-only
-// validator. JSON Schema uses RFC 3339, which also permits numeric UTC offsets;
-// reuse Zod's own offset-aware pattern while retaining the published format.
+// z.fromJSONSchema already reads `format: date-time` as an offset-aware RFC 3339
+// validator whose regex is character-for-character this pattern, so the rewrite
+// no longer changes what parses. It survives because of what it *publishes*:
+// left in place, `format` makes z.toJSONSchema emit `format` alongside the same
+// pattern on every contract timestamp in the tool manifest. Dropping the rewrite
+// is therefore a wire change to the pinned manifest, not a validation change --
+// do it together with `bun run snapshot:tools`, never on its own.
 const rfc3339DateTimePattern = (() => {
   const pattern = z.iso.datetime({ offset: true }).def.pattern;
   if (!(pattern instanceof RegExp)) {
@@ -222,7 +226,12 @@ const publishedContractSchemas = new Map<string, z.ZodType<unknown>>();
 export function publishedContractSchema<TContract>(definitionName: string): z.ZodType<TContract> {
   const cached = publishedContractSchemas.get(definitionName);
   if (cached) return cached as z.ZodType<TContract>;
-  if (!(definitionName in zodCompatibleContractJsonSchema.$defs)) {
+  // `Object.hasOwn`, not `in`: `$defs` is an `Object.fromEntries` result and so
+  // inherits `Object.prototype`, where `in` answers true for `toString`,
+  // `constructor`, and `__proto__`. Each of those then reaches `z.fromJSONSchema`
+  // as `#/$defs/toString`, which resolves to `z.any()` — an accept-everything
+  // validator installed in place of the throw this guard exists to produce.
+  if (!Object.hasOwn(zodCompatibleContractJsonSchema.$defs, definitionName)) {
     throw new Error(`Published Qyl JSON Schema has no '${definitionName}' definition`);
   }
   const schema = z.fromJSONSchema({

@@ -10,8 +10,13 @@ const port = parentPort;
 if (port !== null) {
     port.once("message", (request: JsonSchemaWorkerInput) => {
         try {
+            // A foreign schema's `$id`/`id` is copied into the registry that
+            // fromJSONSchema writes to, and zod's global registry indexes those ids
+            // in a strong Map. Hand it a throwaway registry so an untrusted schema
+            // cannot reach process-global state at all.
             const validator = z.fromJSONSchema(
                 request.schema as Parameters<typeof z.fromJSONSchema>[0],
+                { registry: z.registry() },
             );
             const parsed = validator.safeParse(request.value);
             if (parsed.success) {

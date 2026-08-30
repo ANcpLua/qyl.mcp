@@ -175,10 +175,23 @@ function ResultPanel({ execution }: { execution: ExecutionRecord }) {
   if (execution.result === undefined) {
     return <div className="empty-state compact-empty"><strong>No result yet</strong><span>The accepted execution is still in progress.</span></div>;
   }
-  const parsed = CallToolResultSchema.safeParse(execution.result);
-  return parsed.success
+  // CallToolResultSchema is a loose object whose `content` carries `.default([])`,
+  // so safeParse accepts ANY JSON object — `{}` parses to `{ content: [] }`. Without
+  // a discriminator first, a payload that is not a tool result would render as an
+  // empty ContentRenderer instead of falling through to the raw view.
+  const parsed = hasToolResultField(execution.result)
+    ? CallToolResultSchema.safeParse(execution.result)
+    : undefined;
+  return parsed?.success === true
     ? <ContentRenderer result={parsed.data} onCopyStructuredContent={copyText} />
     : <JsonCodeView value={execution.result} label="Raw result" onCopy={copyText} />;
+}
+
+function hasToolResultField(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  return Object.hasOwn(value, "content")
+    || Object.hasOwn(value, "structuredContent")
+    || Object.hasOwn(value, "isError");
 }
 
 function ProtocolTimeline({ events, executionId }: { events: ProtocolEvent[]; executionId?: string }) {

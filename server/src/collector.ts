@@ -48,9 +48,13 @@ function contractMismatch(context: string, error: z.ZodError): CollectorError {
 }
 
 /**
- * The published JSON Schema accepts RFC 3339 offsets. Zod's JSON-Schema
- * converter currently accepts only the canonical `Z` spelling, so normalize a
- * valid collector timestamp before applying the generated contract validator.
+ * Not a validation workaround: the generated contract validator accepts every
+ * RFC 3339 spelling, offsets included. This normalizes so that live timestamps
+ * read exactly like demo ones, which demo.ts builds with `Date#toISOString`,
+ * because consumers use the string as the value -- summaries.ts renders it and
+ * ci.ts reports it, where a `+02:00` trace must not print unlike a `Z` trace.
+ * Validating before converting keeps a malformed timestamp a contract mismatch
+ * instead of a `RangeError`; the canonical form costs sub-millisecond digits.
  */
 const rfc3339 = z.iso.datetime({ offset: true });
 

@@ -64,8 +64,14 @@ export const TOOL_ERROR_INPUT = z.object({
   message: z.string().min(1).max(200).default("intentional fixture failure"),
 });
 
-function objectJsonSchema(schema: z.ZodType): Tool["inputSchema"] {
-  return z.toJSONSchema(schema) as Tool["inputSchema"];
+// `registerTool` advertises the INPUT projection of an input schema and the
+// OUTPUT projection of an output schema. zod's own default is `io: "output"` for
+// both, which for an input schema marks a `.default()` field `required` and adds
+// `additionalProperties: false` — a stricter contract than the registered
+// z.object actually enforces. This catalog backs the fixture's `tools/list`
+// override, so the projection has to match what the SDK would have advertised.
+function objectJsonSchema(schema: z.ZodType, io: "input" | "output"): Tool["inputSchema"] {
+  return z.toJSONSchema(schema, { io }) as Tool["inputSchema"];
 }
 
 export const FIXTURE_TOOLS = [
@@ -73,8 +79,8 @@ export const FIXTURE_TOOLS = [
     name: "fixture.safe_lookup",
     title: "Safe catalog lookup",
     description: "Reads deterministic fixture data without external side effects.",
-    inputSchema: objectJsonSchema(SAFE_LOOKUP_INPUT),
-    outputSchema: objectJsonSchema(SAFE_LOOKUP_OUTPUT),
+    inputSchema: objectJsonSchema(SAFE_LOOKUP_INPUT, "input"),
+    outputSchema: objectJsonSchema(SAFE_LOOKUP_OUTPUT, "output"),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -86,8 +92,8 @@ export const FIXTURE_TOOLS = [
     name: "fixture.rich_result",
     title: "Structured and multimodal result",
     description: "Returns structured data, an image, a resource link, and untrusted markup as inert data.",
-    inputSchema: objectJsonSchema(RICH_RESULT_INPUT),
-    outputSchema: objectJsonSchema(RICH_RESULT_OUTPUT),
+    inputSchema: objectJsonSchema(RICH_RESULT_INPUT, "input"),
+    outputSchema: objectJsonSchema(RICH_RESULT_OUTPUT, "output"),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -99,8 +105,8 @@ export const FIXTURE_TOOLS = [
     name: "fixture.evidence",
     title: "Explicit usage and cost evidence",
     description: "Returns observed usage and cost metadata without requiring qyl.mcp to estimate it.",
-    inputSchema: objectJsonSchema(EVIDENCE_INPUT),
-    outputSchema: objectJsonSchema(EVIDENCE_OUTPUT),
+    inputSchema: objectJsonSchema(EVIDENCE_INPUT, "input"),
+    outputSchema: objectJsonSchema(EVIDENCE_OUTPUT, "output"),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -112,8 +118,8 @@ export const FIXTURE_TOOLS = [
     name: "fixture.delete_record",
     title: "Delete fixture record",
     description: "Exercises an explicitly consequential and destructive operation.",
-    inputSchema: objectJsonSchema(DELETE_RECORD_INPUT),
-    outputSchema: objectJsonSchema(DELETE_RECORD_OUTPUT),
+    inputSchema: objectJsonSchema(DELETE_RECORD_INPUT, "input"),
+    outputSchema: objectJsonSchema(DELETE_RECORD_OUTPUT, "output"),
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -125,8 +131,8 @@ export const FIXTURE_TOOLS = [
     name: "fixture.delayed",
     title: "Cancellable delayed operation",
     description: "Waits for a bounded duration and observes MCP request cancellation.",
-    inputSchema: objectJsonSchema(DELAYED_INPUT),
-    outputSchema: objectJsonSchema(DELAYED_OUTPUT),
+    inputSchema: objectJsonSchema(DELAYED_INPUT, "input"),
+    outputSchema: objectJsonSchema(DELAYED_OUTPUT, "output"),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -138,7 +144,7 @@ export const FIXTURE_TOOLS = [
     name: "fixture.tool_error",
     title: "Intentional tool error",
     description: "Returns a standard MCP tool result with isError set for error-path tests.",
-    inputSchema: objectJsonSchema(TOOL_ERROR_INPUT),
+    inputSchema: objectJsonSchema(TOOL_ERROR_INPUT, "input"),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,

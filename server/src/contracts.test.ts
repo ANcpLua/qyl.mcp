@@ -390,3 +390,40 @@ test("collector boundary normalizes RFC 3339 offsets and rejects alternate wire 
   malformedLog.severity_number = "Info" as never;
   assert.throws(() => parseCollectorLog(malformedLog), /collector contract mismatch/);
 });
+
+test("contract date-time fields accept RFC 3339 and reject its near-misses", () => {
+  const trace = structuredClone(getDemo().traces[0]);
+  // Seconds are mandatory in RFC 3339 `partial-time`, an offset is `HH:MM`, and
+  // one of `Z` or an offset is mandatory -- the three rejections below. A Zod
+  // pattern change that loosens or tightens any of them fails here by value.
+  const cases = [
+    ["2026-07-28T12:00:00Z", true],
+    ["2026-07-28T12:00:00+02:00", true],
+    ["2026-07-28T12:00:00.123456789Z", true],
+    ["2026-07-28T12:00Z", false],
+    ["2026-07-28T12:00:00+0200", false],
+    ["2026-07-28T12:00:00", false],
+  ] as const;
+
+  for (const [value, accepted] of cases) {
+    assert.equal(
+      TraceSchema.safeParse({ ...trace, start_time: value }).success,
+      accepted,
+      `start_time ${value} should be ${accepted ? "accepted" : "rejected"}`,
+    );
+  }
+});
+
+test("an inherited Object.prototype key is not a contract definition", () => {
+  // `$defs` comes from `Object.fromEntries`, so `in` answers true for every
+  // `Object.prototype` key. Before the `Object.hasOwn` guard these resolved
+  // through `#/$defs/<key>` to `z.any()`: a validator that accepts anything,
+  // installed silently where the missing-definition throw belongs.
+  for (const inherited of ["toString", "constructor", "__proto__", "hasOwnProperty"]) {
+    assert.throws(
+      () => ContractSchemas.publishedContractSchema(inherited),
+      new RegExp(`has no '${inherited}' definition`),
+      `${inherited} must not resolve to a contract definition`,
+    );
+  }
+});

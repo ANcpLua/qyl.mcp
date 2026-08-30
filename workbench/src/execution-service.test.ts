@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ProtocolError, ProtocolErrorCode, SdkErrorCode, SdkError } from "@modelcontextprotocol/client";
+import { ProtocolError, ProtocolErrorCode, SdkErrorCode, SdkError, SdkHttpError } from "@modelcontextprotocol/client";
 import type { Client, Tool } from "@modelcontextprotocol/client";
 import type { ConnectionSnapshot } from "./connection-manager.js";
 import {
@@ -475,17 +475,28 @@ test("execution activates a pre-call span and clears its traceparent after compl
 });
 
 test("execution cancellation aborts the real in-flight request signal", async () => {
+    const telemetry = new McpTelemetry({ QYL_MCP_TELEMETRY: "0" });
+    const telemetryInputs: McpOperationInput[] = [];
+    telemetry.startOperation = captureTelemetry(telemetryInputs);
     let observedSignal: AbortSignal | undefined;
-    const service = new ExecutionService(new FakeConnections([safeTool], async (_params, options) => {
-        observedSignal = options?.signal;
-        return new Promise((_resolve, reject) => {
-            options?.signal?.addEventListener("abort", () => {
-                const error = new Error("aborted");
-                error.name = "AbortError";
-                reject(error);
-            }, { once: true });
-        });
-    }));
+    const service = new ExecutionService(
+        new FakeConnections([safeTool], async (_params, options) => {
+            observedSignal = options?.signal;
+            return new Promise((_resolve, reject) => {
+                // The v2 client does not rethrow the AbortError: an aborted request
+                // rejects with SdkError(RequestTimeout) wrapping the abort reason
+                // (verified against @modelcontextprotocol/client 2.0.0), so a
+                // cancellation is indistinguishable from a timeout by error alone.
+                options?.signal?.addEventListener("abort", () => {
+                    reject(new SdkError(
+                        SdkErrorCode.RequestTimeout,
+                        "AbortError: This operation was aborted",
+                    ));
+                }, { once: true });
+            });
+        }),
+        { telemetry },
+    );
     const accepted = await service.start({
         workspaceId: "workspace",
         serverId: "server",
@@ -499,6 +510,46 @@ test("execution cancellation aborts the real in-flight request signal", async ()
     assert.equal(observedSignal?.aborted, true);
     assert.equal(cancelled.status, "cancelled");
     assert.equal(cancelled.error?.category, "cancelled");
+    assert.equal(telemetryInputs.at(-1)?.errorType, "cancelled");
+});
+
+test("execution classifies an HTTP authorization failure from the typed SDK error", async () => {
+    const service = new ExecutionService(new FakeConnections([safeTool], async () => {
+        // Without an OAuth provider the Streamable HTTP transport reports a 401 as
+        // SdkHttpError(ClientHttpNotImplemented) carrying the status, with the
+        // server-controlled response body as the message.
+        throw new SdkHttpError(
+            SdkErrorCode.ClientHttpNotImplemented,
+            "Error POSTing to endpoint: nope",
+            { status: 401, statusText: "Unauthorized" },
+        );
+    }));
+    const accepted = await service.start({
+        workspaceId: "workspace",
+        serverId: "server",
+        toolName: "echo",
+        arguments: { message: "hello" },
+        timeoutMs: 1_000,
+        idempotencyKey: "auth-key",
+    });
+    const failed = await waitForTerminal(service, accepted.id);
+    assert.equal(failed.status, "failed");
+    assert.equal(failed.error?.category, "authentication");
+
+    // A server-controlled message must not be able to forge the category.
+    const spoofing = new ExecutionService(new FakeConnections([safeTool], async () => {
+        throw new ProtocolError(ProtocolErrorCode.InternalError, "unauthorized: not really");
+    }));
+    const spoofAccepted = await spoofing.start({
+        workspaceId: "workspace",
+        serverId: "server",
+        toolName: "echo",
+        arguments: { message: "hello" },
+        timeoutMs: 1_000,
+        idempotencyKey: "spoof-key",
+    });
+    const spoofed = await waitForTerminal(spoofing, spoofAccepted.id);
+    assert.equal(spoofed.error?.category, "protocol");
 });
 
 test("cancellation aborts before persistence and wins over a late successful result", async () => {
