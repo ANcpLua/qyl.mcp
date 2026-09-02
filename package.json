@@ -35,5 +35,5 @@
     "@typescript/typescript-darwin-arm64": "7.0.2",
     "@typescript/typescript-linux-x64": "7.0.2"
   },
-  "packageManager": "bun@1.3.13"
+  "packageManager": "bun@1.4.0"
 }
