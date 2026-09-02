@@ -1,7 +1,7 @@
 # qyl.mcp
 
-MCP tools over a live [qyl](https://qyl.at) collector — traces, logs, sessions, and
-a graph view of agent runs you can watch while they execute.
+MCP tools over a live [qyl](https://qyl.at) collector — traces, logs, metrics,
+sessions, and a graph view of agent runs you can watch while they execute.
 
 The repository ships three things:
 
@@ -78,7 +78,8 @@ agent runs have the workflow journal and its debugger; metrics have
 `list_metrics`, `get_metric_series`, and `query_metric`.
 
 Telemetry: `list_traces`, `get_trace`, `list_sessions`, `search_logs`, `ci_log`,
-`display_traces`, `display_mcp_dashboard`. Workflow graph: see below.
+`list_metrics`, `get_metric_series`, `query_metric`, `display_traces`,
+`display_mcp_dashboard`. Workflow graph: see below.
 
 ## Observe Graph
 
