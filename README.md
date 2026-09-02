@@ -244,7 +244,10 @@ precedence; otherwise the base order is `QYL_OTLP_ENDPOINT`,
 
 ## Deploying your own
 
-`railway.toml` is included. Use `/` as the root directory:
+Railway settings live in `.railway/railway.ts` (Railway Infrastructure as Code).
+The file is not read at deploy time: preview with `railway config plan` and
+push it to your project with `railway config apply`. Use `/` as the root
+directory:
 
 ```text
 Build:  bun run --cwd server build

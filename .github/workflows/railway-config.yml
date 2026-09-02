@@ -1,0 +1,49 @@
+name: Railway config
+
+# Plans .railway/railway.ts changes on pull requests and applies the reviewed
+# plan when the pull request merges. The file is never read at deploy time.
+# Both jobs skip (not fail) until the RAILWAY_TOKEN repository secret exists.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    paths:
+      - ".railway/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      has-token: ${{ steps.check.outputs.has-token }}
+    steps:
+      - id: check
+        run: echo "has-token=${{ secrets.RAILWAY_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+
+  plan:
+    needs: preflight
+    if: needs.preflight.outputs.has-token == 'true' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: railwayapp/config@9e17d413dbe219f19d62538d9c06b5dbb5e9abf8 # v1.2.0
+        with:
+          command: plan
+          railway-token: ${{ secrets.RAILWAY_TOKEN }}
+
+  apply:
+    needs: preflight
+    if: needs.preflight.outputs.has-token == 'true' && github.event.action == 'closed' && github.event.pull_request.merged && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+      - uses: railwayapp/config@9e17d413dbe219f19d62538d9c06b5dbb5e9abf8 # v1.2.0
+        with:
+          command: apply
+          railway-token: ${{ secrets.RAILWAY_TOKEN }}
