@@ -20,6 +20,7 @@ import {
   ListTracesOutputSchema,
   SearchLogsInputSchema,
   SearchLogsOutputSchema,
+  compactOutputSchema,
 } from "./contract-validation.js";
 import { fetchLogs, fetchSessions, fetchTrace, fetchTraces } from "./data.js";
 import {
@@ -67,7 +68,7 @@ export function registerTelemetryTools(server: McpServer): void {
         "span count, error flag). Spans are omitted — use get_trace for full span data. " +
         "Use display_traces instead when the user wants to LOOK at traces in the explorer UI.",
       inputSchema: ListTracesInputSchema,
-      outputSchema: ListTracesOutputSchema,
+      outputSchema: compactOutputSchema(ListTracesOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
     async (args: ListTracesInput): Promise<CallToolResult> => {
@@ -93,7 +94,7 @@ export function registerTelemetryTools(server: McpServer): void {
         "attributes, events, and status. Use display_traces instead when the user " +
         "wants to SEE the trace waterfall.",
       inputSchema: GetTraceInputSchema,
-      outputSchema: GetTraceOutputSchema,
+      outputSchema: compactOutputSchema(GetTraceOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
     async (args: GetTraceInput): Promise<CallToolResult> => {
@@ -116,7 +117,7 @@ export function registerTelemetryTools(server: McpServer): void {
         "usage where present. Pass a session id to display_traces to see a " +
         "session's traces in the explorer UI.",
       inputSchema: ListSessionsInputSchema,
-      outputSchema: ListSessionsOutputSchema,
+      outputSchema: compactOutputSchema(ListSessionsOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
     async (args: ListSessionsInput): Promise<CallToolResult> => {
@@ -139,7 +140,7 @@ export function registerTelemetryTools(server: McpServer): void {
         "name, minimum severity (OTel numbers: 9 INFO, 13 WARN, 17 ERROR), and a " +
         "body substring query.",
       inputSchema: SearchLogsInputSchema,
-      outputSchema: SearchLogsOutputSchema,
+      outputSchema: compactOutputSchema(SearchLogsOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
     async (args: SearchLogsInput): Promise<CallToolResult> => {

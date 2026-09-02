@@ -22,13 +22,13 @@ import {
   DisplayWorkflowGraphInputSchema,
   DisplayWorkflowGraphOutputSchema,
   FetchWorkflowGraphUpdatesInputSchema,
-  FetchWorkflowGraphUpdatesOutputSchema,
   GetWorkflowGraphInputSchema,
   GetWorkflowGraphOutputSchema,
   InspectWorkflowEventsInputSchema,
   InspectWorkflowEventsOutputSchema,
   ListWorkflowRunsInputSchema,
   ListWorkflowRunsOutputSchema,
+  compactOutputSchema,
 } from "./contract-validation.js";
 import { QYL_MCP_CONTROL_SCOPE } from "./oauth.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, toolError } from "./tools.js";
@@ -80,7 +80,7 @@ export function registerWorkflowTools(server: McpServer): void {
         "cursor-paged and contain run metadata only; use get_workflow_graph or " +
         "display_workflow_graph to inspect execution.",
       inputSchema: ListWorkflowRunsInputSchema,
-      outputSchema: ListWorkflowRunsOutputSchema,
+      outputSchema: compactOutputSchema(ListWorkflowRunsOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
     async (input: ListWorkflowRunsInput, context): Promise<CallToolResult> => {
@@ -104,7 +104,7 @@ export function registerWorkflowTools(server: McpServer): void {
         "Read a bounded page of the deterministic workflow DAG, including typed edges, " +
         "recorded or derived provenance, attempt-preserving nodes, and weighted timing statistics.",
       inputSchema: GetWorkflowGraphInputSchema,
-      outputSchema: GetWorkflowGraphOutputSchema,
+      outputSchema: compactOutputSchema(GetWorkflowGraphOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
     async (input: GetWorkflowGraphInput, context): Promise<CallToolResult> => {
@@ -128,7 +128,7 @@ export function registerWorkflowTools(server: McpServer): void {
         "Open the fullscreen qyl workflow debugger. Pass a run_id for a known live or " +
         "historical run, or omit it to open the newest journaled run.",
       inputSchema: DisplayWorkflowGraphInputSchema,
-      outputSchema: DisplayWorkflowGraphOutputSchema,
+      outputSchema: compactOutputSchema(DisplayWorkflowGraphOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: { ui: { resourceUri: WORKFLOW_GRAPH_RESOURCE_URI } },
     },
@@ -169,7 +169,7 @@ export function registerWorkflowTools(server: McpServer): void {
         "fetch protected evidence through a listed content_ref when needed. Reads are immediate " +
         "and bounded; graph projection and long-poll controls belong to the app-only update tool.",
       inputSchema: InspectWorkflowEventsInputSchema,
-      outputSchema: InspectWorkflowEventsOutputSchema,
+      outputSchema: compactOutputSchema(InspectWorkflowEventsOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
     async (input: InspectWorkflowEventsInput, context): Promise<CallToolResult> => {
@@ -197,7 +197,14 @@ export function registerWorkflowTools(server: McpServer): void {
         "Long-poll workflow journal updates, refresh a bounded graph page, or lazily " +
         "retrieve one captured content object. The model should NOT call this tool directly.",
       inputSchema: FetchWorkflowGraphUpdatesInputSchema,
-      outputSchema: FetchWorkflowGraphUpdatesOutputSchema,
+      // No outputSchema: this tool is `_meta.ui.visibility: ["app"]`, so its only
+      // caller is the bundled viewer, which is compiled against the generated
+      // TypeScript types and never reads the advertised schema. Publishing one
+      // anyway put the whole telemetry tree into every client's `tools/list`
+      // (18 KB of the 232 KB manifest) to describe a shape no model may call.
+      // Structured content is still returned and still typed by the generated
+      // contract at compile time, and workflow-ui.test.ts still parses these bodies
+      // against FetchWorkflowGraphUpdatesOutputSchema, so the shape stays pinned.
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: { ui: { visibility: ["app"] } },
     },
@@ -223,7 +230,7 @@ export function registerWorkflowTools(server: McpServer): void {
         "Submit an idempotent run-level steer, interrupt, or resume command. This mutates " +
         "the active Codex thread through its outbound observer channel and requires qyl:control.",
       inputSchema: ControlWorkflowRunInputSchema,
-      outputSchema: ControlWorkflowRunOutputSchema,
+      outputSchema: compactOutputSchema(ControlWorkflowRunOutputSchema),
       annotations: CONTROL_WORKFLOW_TOOL_ANNOTATIONS,
     },
     async (input: ControlWorkflowRunInput, context): Promise<CallToolResult> => {

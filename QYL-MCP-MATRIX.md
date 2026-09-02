@@ -15,7 +15,7 @@ sufficiently verified.
 For the `Baseline` column:
 
 - `Snapshot` means the tool appears in `server/tool-manifest.snapshot.json` at contract revision
-  `sha256:53278018c62ed547`. The server is closed-world: a fresh runtime `tools/list` must equal the snapshot, and the
+  `sha256:a11cb761a9cb6534`. The server is closed-world: a fresh runtime `tools/list` must equal the snapshot, and the
   snapshot is regenerated only deliberately with its diff inspected.
 
 Unlike the Rider inventory, there are no `VERIFY` or `GHOST` states: the generated manifest is the contract, so a tool
@@ -86,6 +86,10 @@ never as part of routine inspection.
 Both tools state "The model should NOT call this tool directly." `fetch_telemetry` feeds the trace explorer wherever
 `display_traces` is used; `fetch_workflow_graph_updates` long-polls journal updates for the workflow debugger. They
 exist in the manifest for the embedded UI's callbacks, not for agents.
+
+Neither publishes an `outputSchema`. Their callers are the bundled viewers, compiled against the generated TypeScript
+types, so describing those bodies in `tools/list` spent 86 KB of every client's context on shapes no model may request.
+They still return structured content, and the snapshot still pins their input schemas and UI metadata.
 
 ## UI resources
 

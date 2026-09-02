@@ -38,7 +38,7 @@ import {
   DisplayTracesInputSchema,
   DisplayTracesOutputSchema,
   FetchTelemetryInputSchema,
-  FetchTelemetryOutputSchema,
+  compactOutputSchema,
 } from "./contract-validation.js";
 import {
   fetchLogs,
@@ -184,7 +184,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
         "this over list_traces/get_trace whenever the user wants to " +
         "look at traces.",
       inputSchema: DisplayTracesInputSchema,
-      outputSchema: DisplayTracesOutputSchema,
+      outputSchema: compactOutputSchema(DisplayTracesOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
@@ -238,7 +238,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
         "rates. Prefer this when the user asks about MCP usage, tool health, " +
         "or MCP monitoring.",
       inputSchema: DisplayMcpDashboardInputSchema,
-      outputSchema: DisplayMcpDashboardOutputSchema,
+      outputSchema: compactOutputSchema(DisplayMcpDashboardOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: { ui: { resourceUri: DASHBOARD_RESOURCE_URI } },
     },
@@ -266,7 +266,14 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
         "Fetch traces, a single trace, or logs for the trace explorer UI. " +
         "The model should NOT call this tool directly.",
       inputSchema: FetchTelemetryInputSchema,
-      outputSchema: FetchTelemetryOutputSchema,
+      // No outputSchema: this tool is `_meta.ui.visibility: ["app"]`, so its only
+      // caller is the bundled viewer, which is compiled against the generated
+      // TypeScript types and never reads the advertised schema. Publishing one
+      // anyway put the whole telemetry tree into every client's `tools/list`
+      // (68 KB of the 232 KB manifest) to describe a shape no model may call.
+      // Structured content is still returned and still typed by the generated
+      // contract at compile time, and contracts.test.ts still parses these bodies
+      // against FetchTelemetryOutputSchema, so the shape stays pinned to the contract.
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: { ui: { visibility: ["app"] } },
     },

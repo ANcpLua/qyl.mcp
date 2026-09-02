@@ -20,6 +20,7 @@ import type { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 import {
   CiLogInputSchema,
   CiLogOutputSchema,
+  compactOutputSchema,
 } from "./contract-validation.js";
 import { fetchSessions, fetchSessionTraces } from "./data.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
@@ -117,7 +118,7 @@ export function registerCiTools(server: McpServer): void {
         `'${CI_SERVICE_PREFIX}'). With run_id: per-leg phase breakdown, failures first, ` +
         "so 'which leg hung on what' is answerable even when GitHub's log API is down.",
       inputSchema: CiLogInputSchema,
-      outputSchema: CiLogOutputSchema,
+      outputSchema: compactOutputSchema(CiLogOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
     async (args: CiLogInput): Promise<CallToolResult> => {

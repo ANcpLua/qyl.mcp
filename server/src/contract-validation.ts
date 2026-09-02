@@ -1,6 +1,7 @@
 import type * as QylContracts from "@ancplua/qyl-api-schema/types";
 import { publishedContractSchema, type ContractInput } from "@ancplua/qyl-api-schema/zod";
-import type { z } from "zod";
+import type { StandardSchemaWithJSON } from "@modelcontextprotocol/server";
+import { z } from "zod";
 
 // The JSON-Schema-to-Zod adapter that produced these validators is published by
 // the contract package itself, so this module is now only the named bindings.
@@ -9,6 +10,67 @@ import type { z } from "zod";
 // and verify-generated-shapes.mjs requires every server/src module that calls
 // registerTool to import the generated shapes from contract-validation.js.
 export { publishedContractSchema, type ContractInput };
+
+const JSON_SCHEMA_TARGET = "draft-2020-12" as const;
+
+const compacted = new WeakMap<object, StandardSchemaWithJSON<never, never>>();
+
+/**
+ * Emits a tool's output JSON Schema with repeated subschemas hoisted into
+ * `$defs`, when that spelling is actually smaller than the inlined one.
+ *
+ * The contract's telemetry models nest: a Trace carries Spans, a Span carries
+ * attribute values, and the same leaf shapes recur dozens of times inside one
+ * response body. The SDK asks a schema for its JSON Schema through
+ * `~standard.jsonSchema`, and zod's default there inlines every occurrence, so
+ * `tools/list` shipped the Span tree once per mention — 232 KB for fourteen
+ * tools, most of it the same object repeated. Every byte of that is context an
+ * agent pays for on connect.
+ *
+ * The choice is per schema and measured, not assumed: `reused: "ref"` hoists
+ * anything seen twice, which is a loss on a flat shape whose repeats are single
+ * keywords ("#/$defs/__schema12" costs more than {"type":"string"}). Taking the
+ * smaller of the two keeps the win where the nesting is real and changes
+ * nothing where it is not, so no tool pays for the mechanism.
+ *
+ * Validation is unchanged — `validate` still runs the generated zod schema, so
+ * structured content is checked against the contract exactly as before. Only
+ * the advertised spelling of the same schema differs, and the conversion is
+ * deferred and memoised so importing this module in a browser bundle
+ * (dashboard, workbench) costs nothing.
+ */
+export function compactOutputSchema<T>(schema: z.ZodType<T>): StandardSchemaWithJSON<T, T> {
+  // createServer() runs per hosted request, so the wrapper is cached on the
+  // generated schema: registering fourteen tools must not re-derive the same
+  // JSON Schema on every connection.
+  const cachedWrapper = compacted.get(schema);
+  if (cachedWrapper !== undefined) return cachedWrapper as StandardSchemaWithJSON<T, T>;
+
+  let emitted: Record<string, unknown> | undefined;
+  const jsonSchema = (): Record<string, unknown> => {
+    if (emitted === undefined) {
+      const inlined = z.toJSONSchema(schema, { target: JSON_SCHEMA_TARGET, io: "output" });
+      const hoisted = z.toJSONSchema(schema, {
+        target: JSON_SCHEMA_TARGET,
+        io: "output",
+        reused: "ref",
+      });
+      emitted = JSON.stringify(hoisted).length < JSON.stringify(inlined).length ? hoisted : inlined;
+    }
+    return emitted;
+  };
+  const standard = schema["~standard"];
+  const wrapper = {
+    "~standard": {
+      version: 1,
+      vendor: standard.vendor,
+      jsonSchema: { input: jsonSchema, output: jsonSchema },
+      validate: (value: unknown) => standard.validate(value),
+    },
+  } as StandardSchemaWithJSON<T, T>;
+  compacted.set(schema, wrapper as unknown as StandardSchemaWithJSON<never, never>);
+  return wrapper;
+}
 
 function workbenchContractSchema<TContract>(name: string): z.ZodType<TContract> {
   return publishedContractSchema<TContract>(`Workbench.${name}`);
