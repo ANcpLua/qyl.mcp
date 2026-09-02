@@ -154,8 +154,8 @@ try {
   );
   const discovery = await discoveryResponse.json();
   check(
-    "real SDK discovery returns fourteen tools and server surfaces",
-    discoveryResponse.ok && discovery.tools?.count === 14 && Array.isArray(discovery.prompts?.items),
+    "real SDK discovery returns seventeen tools and server surfaces",
+    discoveryResponse.ok && discovery.tools?.count === 17 && Array.isArray(discovery.prompts?.items),
   );
   check(
     "all qyl inspection tools publish complete read-only safety annotations",

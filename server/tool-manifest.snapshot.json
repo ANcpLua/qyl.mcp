@@ -1,5 +1,5 @@
 {
-  "contract_revision": "sha256:a11cb761a9cb6534",
+  "contract_revision": "sha256:64c464569005a485",
   "tools": [
     {
       "name": "ci_log",
@@ -2501,6 +2501,272 @@
       "outputSchema": null
     },
     {
+      "name": "get_metric_series",
+      "title": "Get Metric Series",
+      "description": "List the distinct attribute streams recorded under one metric name, with each stream's attributes, service, and first/last seen. Use it to discover which attribute keys are worth passing to query_metric as group_by or attr filters, before running a range query that would otherwise collapse or explode the result.",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "meta": null,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "metric_name": {
+            "type": "string"
+          },
+          "attr": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Exact attribute match, repeatable, as `key=value`. A series must match\nevery matcher given."
+          },
+          "attr_prefix": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Attribute prefix match, repeatable, as `key=prefix`."
+          },
+          "limit": {
+            "default": 200,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          }
+        },
+        "required": [
+          "metric_name"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "series_id": {
+                  "type": "string",
+                  "description": "Stable identifier for this stream, derived from its name, attributes and resource."
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Instrument name this series belongs to."
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "gauge",
+                    "sum",
+                    "histogram",
+                    "exponential_histogram"
+                  ],
+                  "description": "Shape of a stored metric stream."
+                },
+                "attributes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256,
+                        "description": "Attribute key (dot-separated namespace)"
+                      },
+                      "value": {
+                        "description": "Attribute value",
+                        "$ref": "#/$defs/__schema1"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "value"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Key-value attribute pair following OTel conventions"
+                  },
+                  "description": "The attributes that distinguish this series from others under the same name."
+                },
+                "service_name": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "first_seen": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                "last_seen": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                }
+              },
+              "required": [
+                "series_id",
+                "name",
+                "kind",
+                "attributes",
+                "first_seen",
+                "last_seen"
+              ],
+              "additionalProperties": false,
+              "description": "One distinct attribute stream recorded under a metric name."
+            },
+            "description": "List of items in this page"
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "Cursor for the next page (null if no more pages)"
+          },
+          "prev_cursor": {
+            "type": "string",
+            "description": "Cursor for the previous page (null if first page)"
+          },
+          "has_more": {
+            "type": "boolean",
+            "description": "Whether there are more items available"
+          }
+        },
+        "required": [
+          "items",
+          "has_more"
+        ],
+        "additionalProperties": false,
+        "description": "Cursor-based paginated response wrapper",
+        "$defs": {
+          "__schema0": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema1"
+            }
+          },
+          "__schema1": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "int"
+                  },
+                  "value": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(0|-?[1-9][0-9]*)$",
+                    "x-csharp-type": "long",
+                    "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged OTLP signed 64-bit integer attribute."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "double"
+                  },
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "NaN",
+                          "Infinity",
+                          "-Infinity"
+                        ]
+                      }
+                    ],
+                    "description": "An OTLP attribute double encoded as a JSON number when finite or a canonical named string when non-finite."
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged OTLP double attribute."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "bytes"
+                  },
+                  "base64": {
+                    "type": "string",
+                    "contentEncoding": "base64"
+                  }
+                },
+                "required": [
+                  "type",
+                  "base64"
+                ],
+                "additionalProperties": false,
+                "description": "Base64 bytes projected by qyl without colliding with an ordinary string attribute."
+              },
+              {
+                "$ref": "#/$defs/__schema0"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "kvlist"
+                  },
+                  "values": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": {
+                      "$ref": "#/$defs/__schema1"
+                    }
+                  }
+                },
+                "required": [
+                  "type",
+                  "values"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged recursive OTLP key-value-list, distinct from other object-shaped attribute variants."
+              }
+            ],
+            "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute."
+          }
+        }
+      }
+    },
+    {
       "name": "get_trace",
       "title": "Get Trace",
       "description": "Fetch a single qyl trace by trace id, including every span with timing, attributes, events, and status. Use display_traces instead when the user wants to SEE the trace waterfall.",
@@ -4675,6 +4941,124 @@
       }
     },
     {
+      "name": "list_metrics",
+      "title": "List Metrics",
+      "description": "List the metric instruments recorded for this project: name, kind (gauge/sum/histogram), unit, how many attribute streams exist under each name, and when it was last written. Start here — query_metric needs an exact instrument name, and this is where the names come from.",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "meta": null,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name_prefix": {
+            "type": "string",
+            "description": "Return only names starting with this prefix."
+          },
+          "limit": {
+            "default": 200,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Instrument name, e.g. `http.server.request.duration`."
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "gauge",
+                    "sum",
+                    "histogram",
+                    "exponential_histogram"
+                  ],
+                  "description": "Shape of a stored metric stream."
+                },
+                "temporality": {
+                  "type": "string",
+                  "enum": [
+                    "unspecified",
+                    "delta",
+                    "cumulative"
+                  ],
+                  "description": "How successive points of a sum or histogram relate to each other."
+                },
+                "monotonic": {
+                  "type": "boolean",
+                  "description": "Whether a sum only ever increases. Meaningless for other kinds."
+                },
+                "unit": {
+                  "type": "string",
+                  "description": "UCUM unit as reported by the producer, e.g. `s` or `{request}`."
+                },
+                "description": {
+                  "type": "string",
+                  "description": "Producer-supplied description of the instrument."
+                },
+                "series_count": {
+                  "type": "number",
+                  "multipleOf": 1,
+                  "description": "Number of distinct attribute streams recorded under this name."
+                },
+                "last_seen": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                  "description": "Timestamp of the most recent point recorded under this name."
+                }
+              },
+              "required": [
+                "name",
+                "kind",
+                "temporality",
+                "monotonic",
+                "series_count",
+                "last_seen"
+              ],
+              "additionalProperties": false,
+              "description": "One metric name recorded for a project, collapsed across all of its series.\nThis is the catalog entry a client reads before it knows which series exist."
+            },
+            "description": "List of items in this page"
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "Cursor for the next page (null if no more pages)"
+          },
+          "prev_cursor": {
+            "type": "string",
+            "description": "Cursor for the previous page (null if first page)"
+          },
+          "has_more": {
+            "type": "boolean",
+            "description": "Whether there are more items available"
+          }
+        },
+        "required": [
+          "items",
+          "has_more"
+        ],
+        "additionalProperties": false,
+        "description": "Cursor-based paginated response wrapper"
+      }
+    },
+    {
       "name": "list_sessions",
       "title": "List Sessions",
       "description": "List qyl sessions with trace/span/error counts, state, and GenAI token usage where present. Pass a session id to display_traces to see a session's traces in the explorer UI.",
@@ -5985,6 +6369,356 @@
         ],
         "additionalProperties": false,
         "description": "Structured output for list_workflow_runs."
+      }
+    },
+    {
+      "name": "query_metric",
+      "title": "Query Metric",
+      "description": "Run a time-bucketed range query over one metric: a window (start_time, end_time), a bucket width (step_ms), a reducer (aggregation: avg, min, max, sum, count, last, p50, p90, p95, p99), optional group_by attribute keys, and optional attr/attr_prefix matchers written 'key=value'. Returns one stream per grouping with its buckets. One bucket spanning the whole window collapses the answer to a single number.",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "meta": null,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "metric_name": {
+            "type": "string"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "step_ms": {
+            "default": 60000,
+            "description": "Bucket width in milliseconds. One bucket spanning the range collapses the query to a single value.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400000
+          },
+          "aggregation": {
+            "default": "avg",
+            "description": "Server-side reducer applied to the points falling in one time bucket.",
+            "type": "string",
+            "enum": [
+              "avg",
+              "min",
+              "max",
+              "sum",
+              "count",
+              "last",
+              "p50",
+              "p90",
+              "p95",
+              "p99"
+            ]
+          },
+          "group_by": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Attribute keys to split the result by, repeatable. Omitted, every matching series collapses into one stream."
+          },
+          "attr": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Exact attribute match, repeatable, as `key=value`."
+          },
+          "attr_prefix": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Attribute prefix match, repeatable, as `key=prefix`."
+          },
+          "series_limit": {
+            "default": 50,
+            "description": "Maximum result streams. A grouping that exceeds this is truncated, not refused.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          }
+        },
+        "required": [
+          "metric_name",
+          "start_time",
+          "end_time"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Instrument name the query ran against."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "gauge",
+              "sum",
+              "histogram",
+              "exponential_histogram"
+            ],
+            "description": "Shape of a stored metric stream."
+          },
+          "unit": {
+            "type": "string"
+          },
+          "aggregation": {
+            "type": "string",
+            "enum": [
+              "avg",
+              "min",
+              "max",
+              "sum",
+              "count",
+              "last",
+              "p50",
+              "p90",
+              "p95",
+              "p99"
+            ],
+            "description": "Server-side reducer applied to the points falling in one time bucket."
+          },
+          "step_ms": {
+            "type": "number",
+            "multipleOf": 1,
+            "description": "Bucket width actually used, which may be widened from the requested step."
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "attributes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256,
+                        "description": "Attribute key (dot-separated namespace)"
+                      },
+                      "value": {
+                        "description": "Attribute value",
+                        "$ref": "#/$defs/__schema1"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "value"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Key-value attribute pair following OTel conventions"
+                  },
+                  "description": "The grouping key that produced this stream."
+                },
+                "buckets": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "bucket_start": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                        "description": "Inclusive start of the bucket, aligned to the query's step from the query's start."
+                      },
+                      "value": {
+                        "description": "The aggregation applied to the points in this bucket. Null when the bucket\nholds no value: either no point landed in it, or every point that did was\nan OTLP `NO_RECORDED_VALUE` marker.",
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "point_count": {
+                        "type": "number",
+                        "multipleOf": 1,
+                        "description": "Number of stored points folded into this bucket."
+                      }
+                    },
+                    "required": [
+                      "bucket_start",
+                      "value",
+                      "point_count"
+                    ],
+                    "additionalProperties": false,
+                    "description": "One aggregated time bucket of a metric range query."
+                  }
+                }
+              },
+              "required": [
+                "attributes",
+                "buckets"
+              ],
+              "additionalProperties": false,
+              "description": "One result stream of a metric range query. With no `group_by` the whole\nresult is a single stream whose `attributes` are empty; with `group_by` there\nis one stream per distinct combination of the requested attribute values."
+            }
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Whether streams were dropped because the result exceeded the series limit."
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "aggregation",
+          "step_ms",
+          "start_time",
+          "end_time",
+          "series",
+          "truncated"
+        ],
+        "additionalProperties": false,
+        "description": "The answer to a metric range query: what was asked, and the streams it produced.",
+        "$defs": {
+          "__schema0": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema1"
+            }
+          },
+          "__schema1": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "int"
+                  },
+                  "value": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(0|-?[1-9][0-9]*)$",
+                    "x-csharp-type": "long",
+                    "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged OTLP signed 64-bit integer attribute."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "double"
+                  },
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "NaN",
+                          "Infinity",
+                          "-Infinity"
+                        ]
+                      }
+                    ],
+                    "description": "An OTLP attribute double encoded as a JSON number when finite or a canonical named string when non-finite."
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged OTLP double attribute."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "bytes"
+                  },
+                  "base64": {
+                    "type": "string",
+                    "contentEncoding": "base64"
+                  }
+                },
+                "required": [
+                  "type",
+                  "base64"
+                ],
+                "additionalProperties": false,
+                "description": "Base64 bytes projected by qyl without colliding with an ordinary string attribute."
+              },
+              {
+                "$ref": "#/$defs/__schema0"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "kvlist"
+                  },
+                  "values": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": {
+                      "$ref": "#/$defs/__schema1"
+                    }
+                  }
+                },
+                "required": [
+                  "type",
+                  "values"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged recursive OTLP key-value-list, distinct from other object-shaped attribute variants."
+              }
+            ],
+            "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute."
+          }
+        }
       }
     },
     {

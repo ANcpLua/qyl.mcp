@@ -8,6 +8,9 @@
 
 import type {
   LogRecord,
+  MetricDescriptor,
+  MetricQueryResult,
+  MetricSeries,
   ProblemDetails,
   SessionEntity,
   Trace,
@@ -16,6 +19,9 @@ import { z } from "zod";
 import { collectorHeaders, collectorUrl } from "./config.js";
 import {
   LogRecordSchema,
+  MetricDescriptorSchema,
+  MetricQueryResultSchema,
+  MetricSeriesSchema,
   ProblemDetailsSchema,
   SessionSchema,
   TraceSchema,
@@ -93,6 +99,70 @@ export function parseCollectorSession(value: unknown, context = "session"): Sess
   return parsed.data;
 }
 
+/** Normalize RFC 3339 spelling, then enforce the public MetricDescriptor schema. */
+export function parseCollectorMetricDescriptor(
+  value: unknown,
+  context = "metric",
+): MetricDescriptor {
+  const descriptor = asRecord(value, context);
+  const parsed = MetricDescriptorSchema.safeParse({
+    ...descriptor,
+    last_seen: canonicalDateTime(descriptor.last_seen, `${context}.last_seen`),
+  });
+  if (!parsed.success) throw contractMismatch(context, parsed.error);
+  return parsed.data;
+}
+
+/** Normalize RFC 3339 spelling, then enforce the public MetricSeries schema. */
+export function parseCollectorMetricSeries(value: unknown, context = "series"): MetricSeries {
+  const series = asRecord(value, context);
+  const parsed = MetricSeriesSchema.safeParse({
+    ...series,
+    first_seen: canonicalDateTime(series.first_seen, `${context}.first_seen`),
+    last_seen: canonicalDateTime(series.last_seen, `${context}.last_seen`),
+  });
+  if (!parsed.success) throw contractMismatch(context, parsed.error);
+  return parsed.data;
+}
+
+/**
+ * Normalize every timestamp a range query answers with, then enforce the
+ * operation's own 200 body. Bucket starts are normalized too: a chart axis
+ * built from `+02:00` labels next to `Z` labels is a rendering bug the reader
+ * would have to diagnose.
+ */
+export function parseCollectorMetricQueryResult(
+  value: unknown,
+  context = "metric query",
+): MetricQueryResult {
+  const result = asRecord(value, context);
+  const series = Array.isArray(result.series) ? result.series : [];
+  const parsed = MetricQueryResultSchema.safeParse({
+    ...result,
+    start_time: canonicalDateTime(result.start_time, `${context}.start_time`),
+    end_time: canonicalDateTime(result.end_time, `${context}.end_time`),
+    series: series.map((stream, streamIndex) => {
+      const entry = asRecord(stream, `${context}.series[${streamIndex}]`);
+      const buckets = Array.isArray(entry.buckets) ? entry.buckets : [];
+      return {
+        ...entry,
+        buckets: buckets.map((bucket, bucketIndex) => {
+          const point = asRecord(bucket, `${context}.series[${streamIndex}].buckets[${bucketIndex}]`);
+          return {
+            ...point,
+            bucket_start: canonicalDateTime(
+              point.bucket_start,
+              `${context}.series[${streamIndex}].buckets[${bucketIndex}].bucket_start`,
+            ),
+          };
+        }),
+      };
+    }),
+  });
+  if (!parsed.success) throw contractMismatch(context, parsed.error);
+  return parsed.data;
+}
+
 /** Enforce the public LogRecord schema without alternate wire encodings. */
 export function parseCollectorLog(value: unknown, context = "log"): LogRecord {
   const parsed = LogRecordSchema.safeParse(asRecord(value, context));
@@ -164,13 +234,21 @@ function parseProblemDetails(value: unknown): ProblemDetails | undefined {
 async function collectorRequest(
   pathname: string,
   method: "GET" | "POST",
-  params: Record<string, string | number | boolean | undefined>,
+  params: CollectorQueryParams,
   body: unknown,
   options: CollectorRequestOptions,
 ): Promise<unknown> {
   const url = new URL(pathname, collectorUrl());
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) url.searchParams.set(key, String(value));
+    if (value === undefined) continue;
+    // A repeatable parameter is repeated, not joined: the metrics operations
+    // publish `group_by`, `attr`, and `attr_prefix` as arrays with no
+    // collection format, which is one `key=` pair per value.
+    if (Array.isArray(value)) {
+      for (const item of value) url.searchParams.append(key, String(item));
+      continue;
+    }
+    url.searchParams.set(key, String(value));
   }
 
   const timeout = AbortSignal.timeout(options.timeoutMs ?? 10_000);
@@ -243,9 +321,15 @@ async function collectorRequest(
   return responseBody;
 }
 
+/** Query values a published operation parameter can carry, repeatable included. */
+export type CollectorQueryParams = Record<
+  string,
+  string | number | boolean | readonly string[] | undefined
+>;
+
 export function collectorGet(
   pathname: string,
-  params: Record<string, string | number | boolean | undefined> = {},
+  params: CollectorQueryParams = {},
   options: CollectorRequestOptions = {},
 ): Promise<unknown> {
   return collectorRequest(pathname, "GET", params, undefined, options);

@@ -18,6 +18,8 @@ import packageMetadata from "../package.json" with { type: "json" };
 import type {
   Attribute,
   AttributeValue,
+  MetricKind,
+  MetricTemporality,
   Resource,
   SessionId,
   SessionState,
@@ -813,6 +815,7 @@ function buildDemoData(): DemoData {
 const DEMO_REBUILD_INTERVAL_MS = 60_000;
 let demoData: DemoData | undefined;
 let demoMcpSpans: QylSpan[] | undefined;
+let demoMetrics: DemoMetricStream[] | undefined;
 
 // Rebuild both datasets when the anchor ages past the TTL. Cheap enough to do
 // lazily on access (~10k synthesized spans), and only demo mode ever gets here.
@@ -822,6 +825,7 @@ function refreshDemo(): void {
   demoAnchorMs = now;
   demoData = buildDemoData();
   demoMcpSpans = buildDemoMcpSpans();
+  demoMetrics = buildDemoMetrics();
 }
 
 export function getDemo(): DemoData {
@@ -832,6 +836,11 @@ export function getDemo(): DemoData {
 export function getDemoMcpSpans(): QylSpan[] {
   refreshDemo();
   return demoMcpSpans!;
+}
+
+export function getDemoMetrics(): DemoMetricStream[] {
+  refreshDemo();
+  return demoMetrics!;
 }
 
 // =============================================================================
@@ -979,4 +988,141 @@ function buildDemoMcpSpans(): QylSpan[] {
     }
   }
   return spans;
+}
+
+// =============================================================================
+// Demo metrics (contract 8.0.0 metrics read surface)
+//
+// Stored points rather than pre-aggregated answers: query_metric's demo path
+// runs the same bucketing and reducer the collector would, so a demo answer
+// exercises step_ms, aggregation, group_by and the matchers instead of
+// pretending they were honored. Three instruments covering the three kinds a
+// reader actually meets — a histogram in seconds, a monotonic delta sum, and a
+// gauge in bytes — each with several attribute streams.
+// =============================================================================
+
+/** One stored demo stream: its identity, and the points recorded under it. */
+export interface DemoMetricStream {
+  name: string;
+  kind: MetricKind;
+  temporality: MetricTemporality;
+  monotonic: boolean;
+  unit: string;
+  description: string;
+  serviceName: string;
+  attributes: Attribute[];
+  /** Newest last. Point timestamps are epoch milliseconds. */
+  points: Array<{ atMs: number; value: number }>;
+}
+
+const DEMO_METRIC_WINDOW_MS = 6 * 3_600_000;
+const DEMO_METRIC_STEP_MS = 30_000;
+
+interface DemoMetricSpec {
+  name: string;
+  kind: MetricKind;
+  temporality: MetricTemporality;
+  monotonic: boolean;
+  unit: string;
+  description: string;
+  streams: Array<{
+    service: string;
+    attributes: Record<string, string>;
+    median: number;
+    /** Multiplicative spread; 0 is a flat line. */
+    spread: number;
+  }>;
+}
+
+const DEMO_METRIC_SPECS: DemoMetricSpec[] = [
+  {
+    name: "http.server.request.duration",
+    kind: "histogram",
+    temporality: "cumulative",
+    monotonic: false,
+    unit: "s",
+    description: "Duration of inbound HTTP server requests.",
+    streams: [
+      {
+        service: "checkout-api",
+        attributes: { "http.route": "/checkout", "http.response.status_code": "200" },
+        median: 0.082,
+        spread: 0.55,
+      },
+      {
+        service: "checkout-api",
+        attributes: { "http.route": "/checkout", "http.response.status_code": "500" },
+        median: 1.9,
+        spread: 0.4,
+      },
+      {
+        service: "checkout-api",
+        attributes: { "http.route": "/health", "http.response.status_code": "200" },
+        median: 0.0021,
+        spread: 0.3,
+      },
+      {
+        service: "agent-worker",
+        attributes: { "http.route": "/v1/agent/run", "http.response.status_code": "200" },
+        median: 2.4,
+        spread: 0.6,
+      },
+    ],
+  },
+  {
+    name: "qyl.collector.spans.ingested",
+    kind: "sum",
+    temporality: "delta",
+    monotonic: true,
+    unit: "{span}",
+    description: "Spans accepted by the collector's OTLP receiver.",
+    streams: [
+      { service: "qyl-collector", attributes: { "otel.signal": "traces" }, median: 420, spread: 0.35 },
+      { service: "qyl-collector", attributes: { "otel.signal": "logs" }, median: 96, spread: 0.5 },
+    ],
+  },
+  {
+    name: "process.runtime.dotnet.gc.heap.size",
+    kind: "gauge",
+    temporality: "unspecified",
+    monotonic: false,
+    unit: "By",
+    description: "Managed heap size per GC generation.",
+    streams: [
+      { service: "checkout-api", attributes: { "gc.heap.generation": "gen0" }, median: 12_500_000, spread: 0.2 },
+      { service: "checkout-api", attributes: { "gc.heap.generation": "gen2" }, median: 88_000_000, spread: 0.08 },
+    ],
+  },
+];
+
+function buildDemoMetrics(): DemoMetricStream[] {
+  const streams: DemoMetricStream[] = [];
+  let seed = 0x51ee7;
+  for (const spec of DEMO_METRIC_SPECS) {
+    for (const stream of spec.streams) {
+      const random = mulberry32((seed += 0x9e3779b9));
+      const points: Array<{ atMs: number; value: number }> = [];
+      const start = demoAnchorMs - DEMO_METRIC_WINDOW_MS;
+      // A slow sine plus per-point jitter: enough shape that p95 differs from
+      // avg and a max lands somewhere a reader can point at.
+      for (let at = start; at <= demoAnchorMs; at += DEMO_METRIC_STEP_MS) {
+        const phase = ((at - start) / DEMO_METRIC_WINDOW_MS) * Math.PI * 2;
+        const wave = 1 + stream.spread * 0.6 * Math.sin(phase);
+        const jitter = 1 + stream.spread * (random() - 0.5);
+        points.push({ atMs: at, value: Math.max(0, stream.median * wave * jitter) });
+      }
+      streams.push({
+        name: spec.name,
+        kind: spec.kind,
+        temporality: spec.temporality,
+        monotonic: spec.monotonic,
+        unit: spec.unit,
+        description: spec.description,
+        serviceName: stream.service,
+        attributes: Object.entries(stream.attributes).map(([key, value]) => ({ key, value })),
+        points,
+      });
+    }
+  }
+  return streams;
 }

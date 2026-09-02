@@ -52,8 +52,8 @@ console.log("tools/list");
 const { tools } = await client.listTools();
 const names = tools.map((t) => t.name).sort();
 check(
-  "exactly the fourteen supported tools",
-  names.length === 14 &&
+  "exactly the seventeen supported tools",
+  names.length === 17 &&
     JSON.stringify(names) ===
       JSON.stringify(
         [
@@ -64,12 +64,15 @@ check(
           "display_workflow_graph",
           "fetch_telemetry",
           "fetch_workflow_graph_updates",
+          "get_metric_series",
           "get_trace",
           "get_workflow_graph",
           "inspect_workflow_events",
+          "list_metrics",
           "list_sessions",
           "list_traces",
           "list_workflow_runs",
+          "query_metric",
           "search_logs",
         ].sort(),
       ),

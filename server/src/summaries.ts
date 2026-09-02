@@ -3,6 +3,11 @@
  */
 
 import type {
+  MetricDescriptor,
+  MetricQueryResult,
+  MetricSeries,
+} from "@ancplua/qyl-api-schema/types";
+import type {
   McpDashboardStats,
   Mode,
   QylLogRecord,
@@ -183,4 +188,74 @@ export function summarizeMcpStats(stats: McpDashboardStats, hours: number): stri
     }
   }
   return lines.join("\n");
+}
+
+/** One catalog line per instrument: what it is, and how much of it there is. */
+export function summarizeMetricCatalog(metrics: readonly MetricDescriptor[], mode: Mode): string {
+  if (metrics.length === 0) return `No metrics recorded (${mode} mode).`;
+  const rows = metrics.map((metric) => {
+    const unit = metric.unit ? ` [${metric.unit}]` : "";
+    return `${metric.name}${unit} — ${metric.kind}, ${metric.series_count} series, last ${metric.last_seen}`;
+  });
+  return `${metrics.length} metrics (${mode} mode):\n${rows.join("\n")}`;
+}
+
+/** One line per stream, naming the attributes that distinguish it. */
+export function summarizeMetricSeries(series: readonly MetricSeries[], mode: Mode): string {
+  if (series.length === 0) return `No series match those attributes (${mode} mode).`;
+  const rows = series.map((stream) => {
+    const attributes = stream.attributes
+      .map((attribute) => `${attribute.key}=${String(attribute.value)}`)
+      .join(" ");
+    const service = stream.service_name ? `${stream.service_name} ` : "";
+    return `${stream.series_id} ${service}${attributes || "(no attributes)"}`;
+  });
+  return `${series.length} series of ${series[0]?.name} (${mode} mode):\n${rows.join("\n")}`;
+}
+
+/**
+ * A range query answered as text: the shape of each stream, not every bucket.
+ * The buckets are in structured content for anything that wants to plot them;
+ * repeating them here would be the largest and least readable half of the
+ * answer, so the text carries what a reader asks next — which stream, how far
+ * it moved, and whether the answer is complete.
+ */
+export function summarizeMetricQuery(result: MetricQueryResult, mode: Mode): string {
+  const unit = result.unit ? ` ${result.unit}` : "";
+  const header =
+    `${result.name} ${result.aggregation} over ${result.start_time}..${result.end_time} ` +
+    `at ${result.step_ms} ms buckets (${mode} mode)`;
+  if (result.series.length === 0) return `${header}\nNo matching series.`;
+
+  const rows = result.series.map((stream) => {
+    const values = stream.buckets
+      .map((bucket) => bucket.value)
+      .filter((value): value is number => value !== null);
+    const label = stream.attributes.length === 0
+      ? "all series"
+      : stream.attributes.map((a) => `${a.key}=${String(a.value)}`).join(" ");
+    if (values.length === 0) return `${label}: no recorded values`;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const avg = values.reduce((total, value) => total + value, 0) / values.length;
+    const last = values[values.length - 1] as number;
+    const points = stream.buckets.reduce((total, bucket) => total + bucket.point_count, 0);
+    return (
+      `${label}: last ${format(last)}${unit}, min ${format(min)}, avg ${format(avg)}, ` +
+      `max ${format(max)} over ${values.length}/${stream.buckets.length} buckets, ${points} points`
+    );
+  });
+
+  const truncated = result.truncated
+    ? "\nTruncated: more streams matched than series_limit allowed."
+    : "";
+  return `${header}\n${rows.join("\n")}${truncated}`;
+}
+
+/** Metric values span bytes to seconds; four significant digits reads well for both. */
+function format(value: number): string {
+  if (value === 0) return "0";
+  const magnitude = Math.abs(value);
+  if (magnitude >= 1000 || magnitude < 0.001) return value.toPrecision(4);
+  return String(Number(value.toPrecision(4)));
 }

@@ -59,6 +59,7 @@ import {
   toolError,
 } from "./tools.js";
 import { registerCiTools } from "./ci.js";
+import { registerMetricsTools } from "./metrics-tools.js";
 import { registerWorkflowTools } from "./workflow-tools.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 import type { McpTelemetryTransport } from "./mcp-semconv.js";
@@ -256,6 +257,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
 
   registerTelemetryTools(server);
   registerCiTools(server);
+  registerMetricsTools(server);
   registerWorkflowTools(server);
 
   server.registerTool(

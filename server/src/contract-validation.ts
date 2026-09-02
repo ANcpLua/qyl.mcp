@@ -23,8 +23,8 @@ const compacted = new WeakMap<object, StandardSchemaWithJSON<never, never>>();
  * attribute values, and the same leaf shapes recur dozens of times inside one
  * response body. The SDK asks a schema for its JSON Schema through
  * `~standard.jsonSchema`, and zod's default there inlines every occurrence, so
- * `tools/list` shipped the Span tree once per mention — 232 KB for fourteen
- * tools, most of it the same object repeated. Every byte of that is context an
+ * `tools/list` shipped the Span tree once per mention — 232 KB for the fourteen
+ * tools that existed when this was written, most of it the same object repeated. Every byte of that is context an
  * agent pays for on connect.
  *
  * The choice is per schema and measured, not assumed: `reused: "ref"` hoists
@@ -41,7 +41,7 @@ const compacted = new WeakMap<object, StandardSchemaWithJSON<never, never>>();
  */
 export function compactOutputSchema<T>(schema: z.ZodType<T>): StandardSchemaWithJSON<T, T> {
   // createServer() runs per hosted request, so the wrapper is cached on the
-  // generated schema: registering fourteen tools must not re-derive the same
+  // generated schema: registering every tool must not re-derive the same
   // JSON Schema on every connection.
   const cachedWrapper = compacted.get(schema);
   if (cachedWrapper !== undefined) return cachedWrapper as StandardSchemaWithJSON<T, T>;
@@ -111,6 +111,27 @@ export const LogsListResponseSchema =
 export const SessionsListResponseSchema =
   publishedContractSchema<QylContracts.CursorPageSessionEntity>(
     "Operations.SessionsApi_list.Response.200",
+  );
+
+// Metrics read surface (contract 8.0.0). The list and series endpoints page
+// like every other reader; the query endpoint answers with the result model
+// directly, so its 200 body IS MetricQueryResult.
+export const MetricDescriptorSchema = publishedContractSchema<QylContracts.MetricDescriptor>(
+  "OTel.Metrics.MetricDescriptor",
+);
+export const MetricSeriesSchema = publishedContractSchema<QylContracts.MetricSeries>(
+  "OTel.Metrics.MetricSeries",
+);
+export const MetricQueryResultSchema = publishedContractSchema<QylContracts.MetricQueryResult>(
+  "Operations.MetricsApi_query.Response.200",
+);
+export const MetricsListResponseSchema =
+  publishedContractSchema<QylContracts.CursorPageMetricDescriptor>(
+    "Operations.MetricsApi_list.Response.200",
+  );
+export const MetricSeriesListResponseSchema =
+  publishedContractSchema<QylContracts.CursorPageMetricSeries>(
+    "Operations.MetricsApi_listSeries.Response.200",
   );
 
 export const ProblemDetailsSchema = publishedContractSchema<QylContracts.ProblemDetails>(

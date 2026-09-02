@@ -73,6 +73,10 @@ The authoritative surface is
 generated from the contract and checked in. Tools marked
 `meta.ui.visibility: ["app"]` are called by the bundled MCP Apps, not by a model.
 
+Traces, logs, and sessions have readers and an explorer; CI runs have `ci_log`;
+agent runs have the workflow journal and its debugger; metrics have
+`list_metrics`, `get_metric_series`, and `query_metric`.
+
 Telemetry: `list_traces`, `get_trace`, `list_sessions`, `search_logs`, `ci_log`,
 `display_traces`, `display_mcp_dashboard`. Workflow graph: see below.
 

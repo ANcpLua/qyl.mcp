@@ -34,6 +34,15 @@ endpoint.
 **Telemetry** — `list_traces`, `get_trace`, `list_sessions`, `search_logs`,
 `ci_log`, `display_traces`, `display_mcp_dashboard`.
 
+**Metrics** — `list_metrics`, `get_metric_series`, `query_metric`. Read in that
+order: the catalog gives you an exact instrument name and how many attribute
+streams it has, series discovery tells you which attribute keys are worth
+grouping or filtering on, and the range query answers the actual question —
+a window, a bucket width (`step_ms`), a reducer (`avg`, `min`, `max`, `sum`,
+`count`, `last`, `p50`, `p90`, `p95`, `p99`), optional `group_by` keys, and
+optional `attr` / `attr_prefix` matchers written `key=value`. One bucket
+spanning the whole window collapses the answer to a single number.
+
 **Workflow graph** — `list_workflow_runs`, `get_workflow_graph`,
 `display_workflow_graph`, `inspect_workflow_events`, `control_workflow_run`.
 
@@ -87,6 +96,24 @@ durable evidence.
 `--stdio` runs under Node.js 24 or Bun 1.3, which is what `npx` gives you.
 The HTTP entry is a web-standard fetch handler served by its default export,
 so serving it requires Bun.
+
+## Release notes
+
+### 3.0.0
+
+- Metrics reading: `list_metrics`, `get_metric_series`, and `query_metric` over
+  the collector's metrics API. Each carries the read-only safety annotations.
+- Contract major: `@ancplua/qyl-api-schema` 8.0.0, revision
+  `sha256:64c464569005a485`. The startup handshake refuses a collector that
+  advertises anything else, so this server and the collector move together.
+
+### 2.1.0
+
+- `tools/list` shrank 44.6%: shared models in the output schemas are emitted as
+  `$defs`/`$ref` where that is smaller, and the two app-only tools
+  (`fetch_telemetry`, `fetch_workflow_graph_updates`) no longer publish an
+  output schema at all.
+- Native execution evidence is written only by a local server; see above.
 
 Full documentation, the workbench, and self-hosting:
 [github.com/ANcpLua/qyl.mcp](https://github.com/ANcpLua/qyl.mcp)

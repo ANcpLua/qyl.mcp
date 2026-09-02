@@ -32,12 +32,15 @@ test("qyl tools publish explicit read versus control safety annotations", async 
         "display_workflow_graph",
         "fetch_telemetry",
         "fetch_workflow_graph_updates",
+        "get_metric_series",
         "get_trace",
         "get_workflow_graph",
         "inspect_workflow_events",
+        "list_metrics",
         "list_sessions",
         "list_traces",
         "list_workflow_runs",
+        "query_metric",
         "search_logs",
       ],
     );
@@ -89,7 +92,7 @@ test("qyl server factory serves protocol revision 2026-07-28 over the fetch entr
       cacheScope: string;
     };
     const { tools } = toolsResult;
-    assert.equal(tools.length, 14);
+    assert.equal(tools.length, 17);
     assert.equal(toolsResult.ttlMs, 300_000);
     assert.equal(toolsResult.cacheScope, "public");
     const discover = client.getDiscoverResult() as ReturnType<Client["getDiscoverResult"]> & {

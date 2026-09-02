@@ -15,7 +15,7 @@ sufficiently verified.
 For the `Baseline` column:
 
 - `Snapshot` means the tool appears in `server/tool-manifest.snapshot.json` at contract revision
-  `sha256:a11cb761a9cb6534`. The server is closed-world: a fresh runtime `tools/list` must equal the snapshot, and the
+  `sha256:64c464569005a485`. The server is closed-world: a fresh runtime `tools/list` must equal the snapshot, and the
   snapshot is regenerated only deliberately with its diff inspected.
 
 Unlike the Rider inventory, there are no `VERIFY` or `GHOST` states: the generated manifest is the contract, so a tool
@@ -48,6 +48,23 @@ Conditional scenarios for the generic readers:
   site itself emits no OTLP.
 - `SemConv`: confirming generated attribute names appear on real spans and logs.
 - `AutoInstr`: confirming emitted instrumentation (spans, logs, GenAI token usage) arrives at a running collector.
+
+## Metrics reading
+
+| Tool                | Baseline | qyl | qyl.mcp | qyl.at | SemConv | AutoInstr |
+|---------------------|----------|:---:|:-------:|:------:|:-------:|:---------:|
+| `list_metrics`      | Snapshot |  +  |    +    |   C    |    C    |     C     |
+| `get_metric_series` | Snapshot |  +  |    +    |   C    |    C    |     C     |
+| `query_metric`      | Snapshot |  +  |    +    |   C    |    C    |     C     |
+
+The metrics read contract arrived in `@ancplua/qyl-api-schema` 8.0.0. The three tools are read in order:
+`list_metrics` for an exact instrument name and its series count, `get_metric_series` for the attribute keys
+worth grouping or filtering on, `query_metric` for the windowed answer. Passing `group_by` without first
+looking at the series is the common way to get either one collapsed line or a truncated fan-out.
+
+Conditional for the same reason the generic trace and log readers are: `SemConv` and `AutoInstr` use them to
+confirm that emitted instruments and their attribute vocabulary actually arrive at a running collector, and
+`qyl.at` to check documented metric names against live behavior. Neither owns the data.
 
 ## Interactive displays
 
@@ -103,13 +120,13 @@ They still return structured content, and the snapshot still pins their input sc
 
 | Repository                              | Direct toolset | Conditional focus                                              |
 |-----------------------------------------|---------------:|----------------------------------------------------------------|
-| `qyl`                                   |       10 tools | Run control on live Codex threads                              |
-| `qyl.mcp`                               |       10 tools | Run control when testing the `qyl:control` path                |
+| `qyl`                                   |       13 tools | Run control on live Codex threads                              |
+| `qyl.mcp`                               |       13 tools | Run control when testing the `qyl:control` path                |
 | `qyl.at`                                |        0 tools | Telemetry readers and trace explorer for docs verification     |
 | `Qyl.OpenTelemetry.SemanticConventions` |        0 tools | Telemetry readers for verifying generated attribute vocabulary |
 | `Qyl.OpenTelemetry.AutoInstrumentation` |        0 tools | Telemetry readers for verifying emitted instrumentation        |
 
-The central policy is: keep the read-only telemetry intelligence directly available where the data is owned, prefer the
+The central policy is: keep the read-only telemetry and metrics intelligence directly available where the data is owned, prefer the
 interactive displays whenever the human wants to look rather than the model wants to read, keep the single mutating
 control tool behind explicit intent and the `qyl:control` scope, and never let the model call the UI-plumbing fetch
 tools directly.
