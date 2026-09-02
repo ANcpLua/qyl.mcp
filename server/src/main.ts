@@ -260,11 +260,34 @@ export function createHostedHandler(
   return createMcpHandler(factory, { legacy: "reject", onerror });
 }
 
+/**
+ * Whether this HTTP process may persist native execution evidence.
+ *
+ * The evidence file is a LOCAL artifact: it records every inbound tools/call —
+ * lifecycle, duration, and a redacted JSON-RPC timeline — into a single JSON
+ * file under $HOME. That is exactly what an operator running the server on
+ * their own machine wants, and exactly what a public deployment must not do:
+ * there the callers are other people, the file would blend their requests into
+ * one container-local store, nothing rotates it, and nothing ever reads it
+ * back. MCP_PUBLIC_URL is the signal that this process serves somebody else, so
+ * recording is armed only in its absence — the loopback default keeps it, and
+ * so does --stdio, which is a local process by construction.
+ */
+export function recordsNativeExecutionEvidence(
+  config: StreamableHTTPServerConfig,
+): boolean {
+  return config.publicUrl === undefined;
+}
+
 async function createHostedRuntime(
   config: StreamableHTTPServerConfig,
 ): Promise<ServeOptions> {
   const handler = createHostedHandler(
-    () => createServer({ transport: "streamable_http" }),
+    () =>
+      createServer({
+        transport: "streamable_http",
+        ...(recordsNativeExecutionEvidence(config) ? {} : { nativeExecution: false }),
+      }),
     (error) => reportError("Standalone MCP request", error),
   );
 
@@ -298,6 +321,25 @@ async function createHostedRuntime(
   return { port: config.port, hostname: config.bindHost, fetch: createFetch(options) };
 }
 
+/**
+ * Why `legacy: "reject"` rather than the SDK's default `"serve"`.
+ *
+ * serveStdio defaults to serving a 2025-era opening from a second, pinned
+ * instance of the same factory, so taking the default would make stdio accept
+ * old clients for free. It is deliberately not taken: this server is a closed
+ * world whose whole surface — the pinned tool manifest, the startup contract
+ * handshake against the collector's advertised revision, and the landing page
+ * the deployment verifier gates — is stated at exactly one protocol revision,
+ * 2026-07-28. `createMcpHandler` cannot serve the 2025 era for the hosted
+ * endpoint without also serving a second wire format for the same tools, and a
+ * server that answers "only 2026-07-28" over HTTP while quietly answering 2025
+ * over stdio has two contracts and one README.
+ *
+ * The cost is real and accepted: a 2025-era client launching this over npx gets
+ * `-32022` naming the revisions this build serves, instead of a working
+ * session. That is a legible failure, and the fix is a client upgrade rather
+ * than a second serving mode nothing here tests.
+ */
 export function startStdioServer(serverFactory: () => McpServer): StdioServerHandle {
   const handle = serveStdio(serverFactory, {
     legacy: "reject",

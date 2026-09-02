@@ -60,9 +60,12 @@ resumes a run. It is approval-gated and, on the hosted server, requires the
 
 The `display_*` tools return MCP Apps UI resources as single-file viewers.
 
-Every inbound `tools/call` is recorded natively — validated result, lifecycle,
-duration, redacted JSON-RPC timeline, and trace/span correlation — persisted
-atomically to `~/.qyl/mcp-native-executions.json`.
+Every inbound `tools/call` on a local server — `--stdio`, or HTTP without
+`MCP_PUBLIC_URL` — is recorded natively: validated result, lifecycle, duration,
+redacted JSON-RPC timeline, and trace/span correlation, persisted atomically to
+`~/.qyl/mcp-native-executions.json`. A public deployment (`MCP_PUBLIC_URL` set)
+records nothing to disk; that evidence file is a local developer artifact, not a
+multi-tenant audit log.
 
 ## Configuration
 
@@ -81,7 +84,9 @@ atomically to `~/.qyl/mcp-native-executions.json`.
 Secrets are redacted before results reach the model, structured content, or
 durable evidence.
 
-Requires Node.js 24.
+`--stdio` runs under Node.js 24 or Bun 1.3, which is what `npx` gives you.
+The HTTP entry is a web-standard fetch handler served by its default export,
+so serving it requires Bun.
 
 Full documentation, the workbench, and self-hosting:
 [github.com/ANcpLua/qyl.mcp](https://github.com/ANcpLua/qyl.mcp)

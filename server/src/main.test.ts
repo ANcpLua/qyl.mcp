@@ -18,6 +18,7 @@ import {
   createFetch,
   createHostedHandler,
   readStreamableHTTPConfig,
+  recordsNativeExecutionEvidence,
   sanitizedErrorType,
 } from "./main.js";
 import { QYL_MCP_CONTROL_SCOPE, QYL_MCP_RESOURCE, QYL_MCP_SCOPE } from "./oauth.js";
@@ -155,6 +156,21 @@ test("hosted HTTP configuration composes public and additional allowlists", () =
     "healthcheck.railway.app",
   ]);
   assert.deepEqual(config.allowedOrigins, ["mcp.qyl.at", "railway.example"]);
+});
+
+test("durable execution evidence is written by a local server and not a hosted one", () => {
+  assert.equal(recordsNativeExecutionEvidence(readStreamableHTTPConfig({})), true);
+  assert.equal(
+    recordsNativeExecutionEvidence(
+      readStreamableHTTPConfig({
+        MCP_BIND_HOST: "0.0.0.0",
+        MCP_PUBLIC_URL: "https://mcp.qyl.at",
+      }),
+    ),
+    false,
+    "a public deployment must not persist every caller's tools/call into one " +
+      "container-local file under $HOME",
+  );
 });
 
 test("a non-loopback bind fails closed without a public URL", () => {
