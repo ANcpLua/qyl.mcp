@@ -256,7 +256,9 @@ Health: /healthz
 ```
 
 The start command is Bun, not Node: the HTTP entry exports a fetch handler and
-refuses to serve under Node. `railway.toml` carries both commands already.
+refuses to serve under Node. Both commands and the `/healthz` check are declared in
+`.railway/railway.ts` and applied to Railway with `railway config apply`; nothing is read
+from the repository at deploy time.
 
 Do not set `PORT`; Railway injects it. The server is stateless and needs no
 volume. Railway's 15-minute streaming limit applies to unusually long synchronous
