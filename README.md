@@ -235,7 +235,7 @@ every supported transport. An inbound server span parents off that remote contex
 and links any ambient transport span. HTTP propagation stays a separate concern
 and is never replaced by the MCP carrier.
 
-The built-in `qyl-telemetry` server reads real traces, logs, and sessions from
+The built-in `qyl-telemetry` server reads real traces, logs, metrics, and sessions from
 `QYL_COLLECTOR_URL`. Those reads run under async self-export suppression, so
 inspecting qyl evidence does not generate recursive MCP telemetry.
 
@@ -320,7 +320,7 @@ scope step-up. Self-registering clients remain read-only by default.
 
 Auth0 Dynamic Client Registration is open: anyone can register a client without
 a token. Combined with default `qyl:read`, that permits anyone who completes
-authorization to read the deployment's traces, logs, sessions, and CI evidence.
+authorization to read the deployment's traces, logs, metrics, sessions, and CI evidence.
 Set the tenant's `dynamic_client_registration_security_mode` to `strict` before
 relying on the default-grant boundary. Make read exposure deliberate or restrict
 DCR with the Auth0 Tenant ACL (`dcr` scope), which can filter by IP, CIDR, or

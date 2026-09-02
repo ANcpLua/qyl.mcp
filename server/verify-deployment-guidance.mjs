@@ -68,7 +68,7 @@ requireMatch(
 requireMatch(
   "deployment README",
   deploymentGuidance,
-  /traces, logs, sessions, and CI evidence/u,
+  /traces, logs, metrics, sessions, and CI evidence/u,
   "must enumerate the evidence exposed by an open read grant",
 );
 requireMatch(
