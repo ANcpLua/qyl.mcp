@@ -1,8 +1,0 @@
-[build]
-builder = "RAILPACK"
-buildCommand = "bun run --cwd server build"
-
-[deploy]
-startCommand = "bun server/dist/main.js"
-healthcheckPath = "/healthz"
-healthcheckTimeout = 30
