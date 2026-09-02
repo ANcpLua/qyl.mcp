@@ -1,6 +1,6 @@
 [build]
 builder = "RAILPACK"
-buildCommand = "npm run build --workspace server"
+buildCommand = "bun run --cwd server build"
 
 [deploy]
 startCommand = "bun server/dist/main.js"

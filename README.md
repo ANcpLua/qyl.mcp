@@ -17,7 +17,11 @@ not write and validates their schemas at runtime. They are separate deployables
 because a browser cannot be an MCP stdio client, which is the same split the MCP
 Inspector makes.
 
-Node.js 24 is required. Architecture and the component ledger live in
+Bun 1.3 is the runtime and the only package manager: `bun install`, `bun run
+build`, `bun run test`, one `bun.lock`. The HTTP entry is a web-standard fetch
+handler served by its default export, so serving it needs Bun; the published
+`--stdio` binary is the one thing that also runs under plain Node 24, because
+that is how `npx` clients launch it. Architecture and the component ledger live in
 [`qyl/ARCHITECTURE-1.0.0.md`](https://github.com/ANcpLua/qyl); this file does not
 restate them.
 
@@ -239,10 +243,13 @@ precedence; otherwise the base order is `QYL_OTLP_ENDPOINT`,
 `railway.toml` is included. Use `/` as the root directory:
 
 ```text
-Build:  npm run build --workspace server
-Start:  node server/dist/main.js
+Build:  bun run --cwd server build
+Start:  bun server/dist/main.js
 Health: /healthz
 ```
+
+The start command is Bun, not Node: the HTTP entry exports a fetch handler and
+refuses to serve under Node. `railway.toml` carries both commands already.
 
 Do not set `PORT`; Railway injects it. The server is stateless and needs no
 volume. Railway's 15-minute streaming limit applies to unusually long synchronous
@@ -257,7 +264,7 @@ MCP_ALLOWED_ORIGIN_HOSTS=mcp.example.com,<service>.up.railway.app \
 MCP_OAUTH_ISSUER=https://qyl-eu.eu.auth0.com/ \
 QYL_COLLECTOR_URL=http://qyl-collector.railway.internal:8080 \
 QYL_API_KEY='<collector-api-key>' \
-npm start
+bun run start
 ```
 
 `MCP_PUBLIC_URL` adds its hostname to the Host and Origin allowlists, and
