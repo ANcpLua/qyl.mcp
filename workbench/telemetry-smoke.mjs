@@ -21,8 +21,22 @@ import { Client } from "@modelcontextprotocol/client";
 import qylOpenApi from "@ancplua/qyl-api-schema/openapi" with { type: "json" };
 
 const apiKeyHeader = qylOpenApi.components.securitySchemes.ApiKeyAuth.name;
-if (Object.hasOwn(qylOpenApi.paths ?? {}, "/api/v1/metrics")) {
-  throw new Error("published Qyl contract unexpectedly exposes persisted metrics");
+
+// Contract 8.0.0 publishes the metrics read surface this repo's list_metrics,
+// get_metric_series, and query_metric tools are generated from. Until 8.0.0 the
+// assertion here was the opposite one — that no such surface existed — so it is
+// kept as an assertion rather than deleted: the tools cannot be built from
+// operations the contract does not publish, and discovering that at startup
+// beats discovering it in a tool call.
+const METRICS_OPERATIONS = [
+  "/api/v1/metrics",
+  "/api/v1/metrics/{metric_name}/series",
+  "/api/v1/metrics/{metric_name}/query",
+];
+for (const operation of METRICS_OPERATIONS) {
+  if (!Object.hasOwn(qylOpenApi.paths ?? {}, operation)) {
+    throw new Error(`published Qyl contract exposes no GET ${operation}`);
+  }
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -280,7 +294,37 @@ try {
   }
   console.log("ok official OTLP/protobuf receiver parsed and persisted the SDK export");
   console.log("ok user content and URI secrets were not exported");
-  console.log("ok generated Qyl contract exposes no discarded metrics read surface");
+  console.log("ok generated Qyl contract publishes the metrics read surface");
+
+  // The live metrics catalog. Deliberately not "at least one metric is listed":
+  // whether this run's exporter flushed a metric before the query is a race, and
+  // a smoke that fails on timing teaches people to rerun it. What is asserted is
+  // the part that cannot be flaky — a served catalog is shaped like the contract
+  // says, and a catalog this build cannot reach fails as Problem Details rather
+  // than as some other body a client would have to guess at.
+  const metricsResponse = await fetch(`${baseUrl}/api/v1/metrics?limit=10`, {
+    headers: { [apiKeyHeader]: collectorApiKey },
+  });
+  const metricsBody = await metricsResponse.json();
+  if (metricsResponse.ok) {
+    if (!Array.isArray(metricsBody.items) || typeof metricsBody.has_more !== "boolean") {
+      throw new Error("metrics catalog is not the published cursor page");
+    }
+    for (const descriptor of metricsBody.items) {
+      for (const field of ["name", "kind", "temporality", "monotonic", "series_count", "last_seen"]) {
+        if (!Object.hasOwn(descriptor, field)) {
+          throw new Error(`metrics catalog item is missing the published field ${field}`);
+        }
+      }
+    }
+    console.log(`ok live metrics catalog is contract-shaped (${metricsBody.items.length} instruments)`);
+  } else if (typeof metricsBody.title === "string" && typeof metricsBody.status === "number") {
+    console.log(`ok live metrics catalog answers Problem Details (${metricsResponse.status})`);
+  } else {
+    throw new Error(
+      `metrics catalog returned ${metricsResponse.status} without a Problem Details body`,
+    );
+  }
 
   if (!existsSync(workbenchMain)) {
     throw new Error(`qyl MCP workbench build not found at ${workbenchMain}; run npm run build`);
