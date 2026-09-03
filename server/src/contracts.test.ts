@@ -7,15 +7,10 @@ import {
   DisplayMcpDashboardOutputSchema,
   DisplayTracesInputSchema,
   DisplayTracesOutputSchema,
-  DisplayWorkflowGraphInputSchema,
-  FetchWorkflowGraphUpdatesInputSchema,
   FetchTelemetryInputSchema,
   FetchTelemetryOutputSchema,
-  GetWorkflowGraphInputSchema,
-  InspectWorkflowEventsInputSchema,
   GetTraceInputSchema,
   GetTraceOutputSchema,
-  ListWorkflowRunsInputSchema,
   ListSessionsInputSchema,
   ListSessionsOutputSchema,
   ListTracesInputSchema,
@@ -32,7 +27,6 @@ import {
   SpanSchema,
   TraceSchema,
   TracesListResponseSchema,
-  ControlWorkflowRunInputSchema,
 } from "./contract-validation.js";
 import {
   parseCollectorLog,
@@ -86,93 +80,6 @@ test("published telemetry schemas own defaults, bounds, and required tool inputs
   assert(!FetchTelemetryInputSchema.safeParse({}).success);
   assert(!FetchTelemetryInputSchema.safeParse({ view: "logs", severity_min: 25 }).success);
   assert(!FetchTelemetryInputSchema.safeParse({ view: "mcp_stats", hours: 169 }).success);
-});
-
-test("published workflow tool schemas own paging, identity, and control boundaries", () => {
-  assert.deepEqual(ListWorkflowRunsInputSchema.parse({}), { limit: 20 });
-  assert(!ListWorkflowRunsInputSchema.safeParse({ limit: 101 }).success);
-  assert(
-    !ListWorkflowRunsInputSchema.safeParse({
-      limit: 20,
-      project_id: "model-selected-project",
-    }).success,
-  );
-
-  assert.deepEqual(GetWorkflowGraphInputSchema.parse({ run_id: "run-1" }), {
-    run_id: "run-1",
-    node_limit: 250,
-    edge_limit: 500,
-  });
-  assert(!GetWorkflowGraphInputSchema.safeParse({}).success);
-  assert(!GetWorkflowGraphInputSchema.safeParse({ run_id: "run-1", node_limit: 1001 }).success);
-
-  assert.deepEqual(DisplayWorkflowGraphInputSchema.parse({}), {
-    node_limit: 250,
-    edge_limit: 500,
-  });
-
-  const contentRef = `sha256:${"a".repeat(64)}`;
-  assert.deepEqual(
-    FetchWorkflowGraphUpdatesInputSchema.parse({
-      run_id: "run-1",
-      after_sequence: "4",
-      content_ref: contentRef,
-    }),
-    {
-      run_id: "run-1",
-      after_sequence: "4",
-      limit: 250,
-      wait_ms: 20_000,
-      node_limit: 250,
-      edge_limit: 500,
-      content_ref: contentRef,
-    },
-  );
-  assert(
-    !FetchWorkflowGraphUpdatesInputSchema.safeParse({
-      run_id: "run-1",
-      after_sequence: "4",
-      content_ref: "not-content-addressed",
-    }).success,
-  );
-
-  assert.deepEqual(
-    InspectWorkflowEventsInputSchema.parse({
-      run_id: "run-1",
-      after_sequence: "4",
-      content_ref: contentRef,
-    }),
-    {
-      run_id: "run-1",
-      after_sequence: "4",
-      limit: 250,
-      content_ref: contentRef,
-    },
-  );
-  for (const appOnlyField of ["wait_ms", "node_cursor", "node_limit", "edge_cursor", "edge_limit"] as const) {
-    assert(
-      !InspectWorkflowEventsInputSchema.safeParse({
-        run_id: "run-1",
-        after_sequence: "4",
-        [appOnlyField]: appOnlyField.endsWith("limit") ? 1 : appOnlyField === "wait_ms" ? 0 : "opaque",
-      }).success,
-    );
-  }
-
-  assert(
-    ControlWorkflowRunInputSchema.safeParse({
-      run_id: "run-1",
-      action: "interrupt",
-      idempotency_key: "interrupt-1",
-    }).success,
-  );
-  assert(
-    !ControlWorkflowRunInputSchema.safeParse({
-      run_id: "run-1",
-      action: "restart-agent",
-      idempotency_key: "unsupported-control",
-    }).success,
-  );
 });
 
 test("published output schemas accept the programmatically generated demo dataset", async () => {

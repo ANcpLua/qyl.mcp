@@ -52,18 +52,6 @@ button { font: inherit; }
 .site-header nav { display: flex; gap: 2rem; color: var(--muted); font-size: .76rem; }
 .site-header nav a { transition: color 120ms ease; }
 .site-header nav a:hover { color: var(--ink); }
-.release-badge {
-  justify-self: end;
-  border: 1px solid rgba(77,216,208,.35);
-  border-radius: 999px;
-  background: var(--cyan-wash);
-  color: var(--cyan-strong);
-  padding: .26rem .58rem;
-  font: 700 .62rem/1 var(--mono);
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
 .hero {
   min-height: 680px;
   display: grid;

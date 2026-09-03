@@ -3,9 +3,8 @@
  *
  * npmjs.com renders server/README.md out of the tarball, so it is the surface
  * description most consumers ever read, and nothing about shipping a tool forces
- * it to move. It drifted for five days and an entire feature: it documented 8 of
- * 13 tools, omitting every workflow tool, and asserted that "all" of them carry
- * read-only safety annotations — after control_workflow_run landed. Read-only
+ * it to move. It has drifted before — documenting a subset of the manifest while
+ * asserting that "all" tools carry read-only safety annotations. Read-only
  * annotations are precisely what an MCP client consults to decide a call is safe
  * to run without asking, so an over-broad claim on the public page is a safety
  * defect and not a documentation nit.
@@ -13,12 +12,12 @@
  * Two checks, both mechanical:
  *
  *   1. Every tool in the generated manifest is named in the README. This is what
- *      would have caught the drift at the commit that introduced it — an author
- *      adding a tool has to confront the page rather than forget it.
+ *      catches drift at the commit that introduces it — an author adding a tool
+ *      has to confront the page rather than forget it.
  *   2. No sentence may claim ALL tools are read-only while a mutating tool
- *      exists, unless it carves out the exception. "All are read-only except
- *      control_workflow_run" passes; "all published with read-only safety
- *      annotations" does not.
+ *      exists, unless it carves out the exception by name. Every tool in the
+ *      current manifest is read-only, so this check stands guard rather than
+ *      firing; it is what keeps the next mutating tool honest.
  *
  * Scope is deliberately the published README only. The root README states that
  * the manifest is authoritative and defers to it, which is a legitimate choice

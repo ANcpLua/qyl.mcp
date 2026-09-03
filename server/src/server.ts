@@ -26,11 +26,7 @@ import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/s
 import fs from "node:fs/promises";
 import path from "node:path";
 import packageMetadata from "../package.json" with { type: "json" };
-import {
-  DASHBOARD_RESOURCE_URI,
-  RESOURCE_URI,
-  WORKFLOW_GRAPH_RESOURCE_URI,
-} from "./config.js";
+import { DASHBOARD_RESOURCE_URI, RESOURCE_URI } from "./config.js";
 import { CollectorError } from "./collector.js";
 import {
   DisplayMcpDashboardInputSchema,
@@ -60,7 +56,6 @@ import {
 } from "./tools.js";
 import { registerCiTools } from "./ci.js";
 import { registerMetricsTools } from "./metrics-tools.js";
-import { registerWorkflowTools } from "./workflow-tools.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 import type { McpTelemetryTransport } from "./mcp-semconv.js";
 import {
@@ -258,7 +253,6 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
   registerTelemetryTools(server);
   registerCiTools(server);
   registerMetricsTools(server);
-  registerWorkflowTools(server);
 
   server.registerTool(
     "fetch_telemetry",
@@ -339,7 +333,6 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
 
   registerViewerResource(server, RESOURCE_URI, "mcp-app.html");
   registerViewerResource(server, DASHBOARD_RESOURCE_URI, "mcp-dashboard.html");
-  registerViewerResource(server, WORKFLOW_GRAPH_RESOURCE_URI, "observe-graph.html");
 
   if (options.nativeExecution !== false) assertNativeExecutionRecordingArmed(server);
 

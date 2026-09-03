@@ -8,7 +8,8 @@ dist-sandbox
 
 .DS_Store
 
-# Local AI agent overlays (skills, settings). Mirrors qyl/.gitignore so an
-# identical overlay file behaves the same in both repos.
+# Machine-local Claude Code settings. Mirrors qyl/.gitignore so an identical
+# settings file behaves the same in both repos. Skills under .claude/ are
+# tracked.
 .claude/settings.local.json
 .claude/settings.local.json.*
