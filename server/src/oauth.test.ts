@@ -8,7 +8,6 @@ import {
 } from "jose";
 import {
   QYL_MCP_ISSUER,
-  QYL_MCP_CONTROL_SCOPE,
   QYL_MCP_SCOPE,
   createJwtTokenVerifier,
   loadHostedOAuth,
@@ -42,11 +41,11 @@ test("hosted OAuth accepts only the pinned qyl issuer", async () => {
   }
 });
 
-test("hosted OAuth requires read access and advertises the separate control scope", async () => {
+test("hosted OAuth requires and advertises read access only", async () => {
   await withMockFetch(authMetadata(), async () => {
     const oauth = await loadHostedOAuth(resource, { MCP_OAUTH_ISSUER: issuer });
     assert.deepEqual(oauth.requiredScopes, [QYL_MCP_SCOPE]);
-    assert.deepEqual(oauth.scopesSupported, [QYL_MCP_SCOPE, QYL_MCP_CONTROL_SCOPE]);
+    assert.deepEqual(oauth.scopesSupported, [QYL_MCP_SCOPE]);
     assert.equal(oauth.oauthMetadata.issuer, issuer);
   });
 });

@@ -74,62 +74,11 @@ generated from the contract and checked in. Tools marked
 `meta.ui.visibility: ["app"]` are called by the bundled MCP Apps, not by a model.
 
 Traces, logs, and sessions have readers and an explorer; CI runs have `ci_log`;
-agent runs have the workflow journal and its debugger; metrics have
-`list_metrics`, `get_metric_series`, and `query_metric`.
+metrics have `list_metrics`, `get_metric_series`, and `query_metric`.
 
 Telemetry: `list_traces`, `get_trace`, `list_sessions`, `search_logs`, `ci_log`,
 `list_metrics`, `get_metric_series`, `query_metric`, `display_traces`,
-`display_mcp_dashboard`. Workflow graph: see below.
-
-## Observe Graph
-
-Watch an agent run as a graph while it executes, and steer it.
-
-| Tool | Role |
-| --- | --- |
-| `list_workflow_runs` | Bounded historical run selection |
-| `get_workflow_graph` | Deterministic graph projection at one journal cursor |
-| `inspect_workflow_events` | Bounded journal read of one run's events, protected content by `content_ref` |
-| `display_workflow_graph` | Opens the fullscreen MCP App |
-| `fetch_workflow_graph_updates` | App-only journal polling, gap recovery, paging, lazy content |
-| `control_workflow_run` | Steer, interrupt, resume — approval-gated, needs `qyl:control` |
-
-`plugins/observe-graph` packages the `$observe-graph` skill together with the
-remote `mcp.qyl.at` connection and the local `qyl observer-bridge`. When Codex is
-running under `qyl codex`, the bridge identifies the one active run and the live
-controls are available; otherwise the skill opens a durable run and labels it
-historical.
-
-Failed attempts stay visible after an interrupt or resume, because controls
-append journal events rather than rewriting history. The graph is a projection
-of that journal and nothing else — the same events always produce the same
-graph. The layered DAG is authoritative; the radial layout only suits small
-fan-out runs. The app keeps a bounded node and event window and fetches captured
-content only when you open its reference.
-
-Project identity is server-owned. No tool input accepts a project ID:
-`QYL_PROJECT` selects it at deployment and the collector scopes every run,
-event, command, projection, and content lookup to it.
-
-### Extending it
-
-Boundary changes start in [`qyl-api-schema`](https://github.com/ANcpLua/qyl-api-schema),
-then flow through the collector and this repository at the same published schema
-version. Projection behavior goes in the collector; tool behavior in
-`server/src/workflow-*.ts`; replay and layout in `server/ui/observe-graph-*.ts`;
-skill routing in `plugins/observe-graph/skills/observe-graph/SKILL.md`.
-Regenerate the tool manifest whenever a tool or resource changes:
-
-```bash
-bun run --cwd server snapshot:tools
-```
-
-Read that diff rather than regenerating to make a red test green. The plugin has
-its own gate:
-
-```bash
-python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugins/observe-graph
-```
+`display_mcp_dashboard`. Every one is read-only.
 
 ## The workbench
 
@@ -295,28 +244,17 @@ resource audience and the `qyl:read` scope, and publishes only the RFC 9728
 protected-resource document.
 
 Configure an authorization server with an API whose identifier is your
-`<public-url>/mcp`, RS256, the RFC 9068 access-token profile, and permissions
-`qyl:read` and `qyl:control`. On Auth0 that means enabling **Dynamic Client
+`<public-url>/mcp`, RS256, the RFC 9068 access-token profile, and the single
+permission `qyl:read`. On Auth0 that means enabling **Dynamic Client
 Registration**, **Client ID Metadata Document Registration**, and the **Resource
 Parameter Compatibility Profile**, then promoting the login connection to domain
 level.
 
-**How the two scopes actually reach a client:**
-
-- **`qyl:read`** — make only this scope available in the API's default
-  third-party client grant. A self-registering client can request read access
-  within that grant; the server's initial authorization challenge requests only
-  `qyl:read`.
-- **`qyl:control`** — leave this out of the defaults. The server requires this
-  exact scope before it forwards a steer, interrupt, or resume command; approval
-  annotations alone are not an authorization boundary.
-
-A client that needs workflow control must be registered deliberately through
-CIMD or as a named first-party application and receive an explicit client grant
-containing both `qyl:read` and `qyl:control`, because a per-client grant replaces
-rather than extends the default. That client must then explicitly request and
-reauthorize with `qyl:control`; a denied tool call does not trigger automatic
-scope step-up. Self-registering clients remain read-only by default.
+`qyl:read` is the whole authorization surface. Every tool this server publishes
+reads the collector and none of them mutate it, so there is one scope to grant:
+make it available in the API's default third-party client grant, and the server's
+authorization challenge requests exactly it. Self-registering clients remain
+read-only by default because read-only is all there is.
 
 Auth0 Dynamic Client Registration is open: anyone can register a client without
 a token. Combined with default `qyl:read`, that permits anyone who completes

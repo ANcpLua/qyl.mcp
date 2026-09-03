@@ -43,29 +43,11 @@ a window, a bucket width (`step_ms`), a reducer (`avg`, `min`, `max`, `sum`,
 optional `attr` / `attr_prefix` matchers written `key=value`. One bucket
 spanning the whole window collapses the answer to a single number.
 
-**Workflow graph** — `list_workflow_runs`, `get_workflow_graph`,
-`display_workflow_graph`, `inspect_workflow_events`, `control_workflow_run`.
+**App-only** — `fetch_telemetry` is called by the bundled MCP Apps, not by a
+model.
 
-### Agent diagnostic snapshots
-
-```text
-record_diagnostic_snapshot -> validate/check -> redact/encrypt
-  -> content_captured + content_ref -> fixed OTel event -> inspect_workflow_events
-```
-
-Format `qyl.agent.diagnostic.snapshot` version `1` stores dynamic names only in
-protected JSON. Public/internal values are encrypted, sensitive values are redacted,
-and secret values are omitted before IPC. The journal and OTel event expose only a
-value-free summary; models retrieve protected evidence explicitly by `content_ref`.
-`inspect_workflow_events` performs an immediate bounded journal read; graph cursors
-and long-poll controls remain exclusive to the app-only graph update tool.
-
-**App-only** — `fetch_telemetry` and `fetch_workflow_graph_updates` are called by
-the bundled MCP Apps, not by a model.
-
-All are read-only except **`control_workflow_run`**, which steers, interrupts, or
-resumes a run. It is approval-gated and, on the hosted server, requires the
-`qyl:control` scope in addition to `qyl:read`.
+Every tool is read-only: the server queries the configured collector and never
+mutates it. On the hosted server they all sit behind the single `qyl:read` scope.
 
 The `display_*` tools return MCP Apps UI resources as single-file viewers.
 
@@ -99,6 +81,18 @@ so serving it requires Bun.
 
 ## Release notes
 
+### 4.0.0
+
+- **Breaking.** The Codex workflow tools are gone: `list_workflow_runs`,
+  `get_workflow_graph`, `display_workflow_graph`, `inspect_workflow_events`,
+  `fetch_workflow_graph_updates`, and `control_workflow_run`. The tool surface is
+  11 read-only tools; `tools/list` shrank about 31%.
+- The `ui://qyl-explorer/observe-graph.html` MCP App resource and its viewer
+  bundle are gone with them, as is the `qyl:control` OAuth scope — no tool
+  required it any more, so the hosted server advertises `qyl:read` alone.
+- These existed only to observe and control Codex runs, and were removed in one
+  wave with the qyl observer and the qyl-api-schema contract.
+
 ### 3.0.0
 
 - Metrics reading: `list_metrics`, `get_metric_series`, and `query_metric` over
@@ -110,9 +104,8 @@ so serving it requires Bun.
 ### 2.1.0
 
 - `tools/list` shrank 44.6%: shared models in the output schemas are emitted as
-  `$defs`/`$ref` where that is smaller, and the two app-only tools
-  (`fetch_telemetry`, `fetch_workflow_graph_updates`) no longer publish an
-  output schema at all.
+  `$defs`/`$ref` where that is smaller, and the app-only tools no longer publish
+  an output schema at all.
 - Native execution evidence is written only by a local server; see above.
 
 Full documentation, the workbench, and self-hosting:

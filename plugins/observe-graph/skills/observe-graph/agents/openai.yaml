@@ -1,4 +1,0 @@
-interface:
-  display_name: "Observe Graph"
-  short_description: "Inspect live and historical Codex workflows"
-  default_prompt: "Use $observe-graph to open the current Codex execution graph."

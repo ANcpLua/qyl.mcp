@@ -25,12 +25,6 @@ const failures = [];
 requireMatch(
   "built landing page",
   builtLandingHtml,
-  /Grant <code>qyl:control<\/code> separately to named clients/u,
-  "must tell operators to grant qyl:control separately to named clients",
-);
-requireMatch(
-  "built landing page",
-  builtLandingHtml,
   /2026-07-28/u,
   "must name the only protocol revision the endpoint serves",
 );
@@ -41,12 +35,6 @@ forbidMatch(
   "must not describe the endpoint by the SDK's rejected legacy serving mode",
 );
 
-requireMatch(
-  "deployment README",
-  deploymentGuidance,
-  /leave this out of the defaults/u,
-  "must keep qyl:control out of the defaults",
-);
 requireMatch(
   "deployment README",
   deploymentGuidance,
@@ -77,13 +65,6 @@ requireMatch(
   /accepts only the qyl production Auth0 issuer/u,
   "must state that arbitrary OAuth issuers are rejected",
 );
-forbidMatch(
-  "deployment README",
-  deploymentGuidance,
-  /Grant both as the API's default/u,
-  "must not grant qyl:control through the default third-party permission set",
-);
-
 if (failures.length > 0) {
   throw new Error(
     `verify:deployment-guidance failed (${failures.length} problem(s)):\n\n`
@@ -94,7 +75,7 @@ if (failures.length > 0) {
 
 console.log(
   "verify:deployment-guidance: built landing page and deployment README preserve "
-    + "separate workflow control, pinned issuer guidance, and the open-DCR warning.",
+    + "the served protocol revision, pinned issuer guidance, and the open-DCR warning.",
 );
 
 async function readRequiredBuildArtifact(url, label) {
