@@ -92,6 +92,9 @@ so serving it requires Bun.
   required it any more, so the hosted server advertises `qyl:read` alone.
 - These existed only to observe and control Codex runs, and were removed in one
   wave with the qyl observer and the qyl-api-schema contract.
+- Contract major: `@ancplua/qyl-api-schema` 9.0.0, revision
+  `sha256:d1c859393b628164`. The startup handshake refuses a collector that
+  advertises anything else, so this server and the collector move together.
 
 ### 3.0.0
 
