@@ -10,7 +10,7 @@ deliberately untrusted data and must never be executed by a client.
 Build the workbench before starting either transport:
 
 ```bash
-npm run build --workspace workbench
+bun run --cwd workbench build
 node workbench/fixtures/mcp-conformance-stdio.mjs
 ```
 

@@ -17,7 +17,7 @@ not write and validates their schemas at runtime. They are separate deployables
 because a browser cannot be an MCP stdio client, which is the same split the MCP
 Inspector makes.
 
-Bun 1.3 is the runtime and the only package manager: `bun install`, `bun run
+Bun 1.4 is the runtime and the only package manager: `bun install`, `bun run
 build`, `bun run test`, one `bun.lock`. The HTTP entry is a web-standard fetch
 handler served by its default export, so serving it needs Bun; the published
 `--stdio` binary is the one thing that also runs under plain Node 24, because
