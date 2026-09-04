@@ -7,7 +7,7 @@
       "devDependencies": {
         "@types/node": "26.4.1",
         "qyl-mcp-dashboard": "^1.1.1",
-        "qyl-mcp-server": "4.0.0",
+        "qyl-mcp-server": "4.0.1",
         "qyl-mcp-workbench": "^1.1.1",
         "typescript": "7.0.2",
         "vite": "8.2.2",
@@ -40,7 +40,7 @@
     },
     "server": {
       "name": "qyl-mcp-server",
-      "version": "4.0.0",
+      "version": "4.0.1",
       "bin": {
         "qyl-mcp-server": "dist/main.js",
       },

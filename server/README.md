@@ -81,6 +81,21 @@ so serving it requires Bun.
 
 ## Release notes
 
+### 4.0.1
+
+- Dependencies only; no tool, schema, or protocol change. The published
+  package's runtime dependencies move to their latest stable versions, so
+  the tarball no longer describes a tree that has since moved on.
+- OpenTelemetry: `@opentelemetry/api-logs`, `exporter-logs-otlp-proto`,
+  `exporter-metrics-otlp-proto`, `exporter-trace-otlp-proto` and `sdk-logs`
+  `^0.221.0` -> `^0.222.0`; `core`, `resources`, `sdk-metrics`,
+  `sdk-trace-base` and `sdk-trace-node` `^2.10.0` -> `^2.11.0`.
+- `jose` `^6.2.3` -> `^6.2.10`, `zod` `^4.5.0` -> `^4.5.4`.
+- `@ancplua/qyl-api-schema` stays 9.0.0, revision
+  `sha256:d1c859393b628164`, and `@opentelemetry/semantic-conventions`
+  stays `^1.43.0` — the contract and the startup handshake are unchanged,
+  so this server and the collector do not have to move together.
+
 ### 4.0.0
 
 - **Breaking.** The Codex workflow tools are gone: `list_workflow_runs`,

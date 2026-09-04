@@ -1,6 +1,6 @@
 {
   "name": "qyl-mcp-server",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "type": "module",
   "description": "qyl telemetry MCP Apps server: trace explorer and MCP dashboard for a live collector or explicit demo mode",
   "repository": {
