@@ -75,7 +75,7 @@ multi-tenant audit log.
 Secrets are redacted before results reach the model, structured content, or
 durable evidence.
 
-`--stdio` runs under Node.js 24 or Bun 1.3, which is what `npx` gives you.
+`--stdio` runs under Node.js 24 or Bun 1.4, which is what `npx` gives you.
 The HTTP entry is a web-standard fetch handler served by its default export,
 so serving it requires Bun.
 

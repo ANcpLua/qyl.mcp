@@ -40,7 +40,7 @@ Rules that follow from the split:
   exports a Zod schema. If you need `.parse()` on wire JSON, import the `*Schema` constant from `core`.
 - `server-legacy` and `codemod` are migration-only packages — never add them to qyl.mcp.
 
-## The three contract rules (from AGENTS.md, upheld by the SDK docs)
+## The three contract rules (upheld by the SDK docs)
 
 1. **Registration boundary.** `registerTool` / `registerResource` / `registerPrompt` take a Zod
    schema; the SDK derives the advertised JSON Schema, validates arguments before the handler runs,
