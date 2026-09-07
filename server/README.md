@@ -81,6 +81,21 @@ so serving it requires Bun.
 
 ## Release notes
 
+### 5.0.0
+
+- **Breaking.** Contract major: `@ancplua/qyl-api-schema` 9.0.0 -> 10.0.0,
+  revision `sha256:d1c859393b628164` -> `sha256:264a9e4f1d70289a`. The
+  startup handshake refuses a collector that advertises anything else, so
+  this server and the collector move together.
+- The contract's revision scheme moved to `qyl-contract-revision-v3`; the
+  revision string is read from the package at build time, so nothing in this
+  server encodes it by hand.
+- The contract's `./generated/otel-keys` TypeSpec keys projection was
+  removed upstream. This server never imported it — the tool surface,
+  schemas, and protocol are unchanged, and
+  `server/tool-manifest.snapshot.json` differs only in its
+  `contract_revision`.
+
 ### 4.0.1
 
 - Dependencies only; no tool, schema, or protocol change. The published
