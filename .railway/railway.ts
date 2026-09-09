@@ -24,7 +24,6 @@ export default defineRailway(() => {
       MCP_ALLOWED_HOSTS: preserve(),
       MCP_ALLOWED_ORIGIN_HOSTS: preserve(),
       MCP_BIND_HOST: preserve(),
-      MCP_OAUTH_ISSUER: preserve(),
       MCP_PUBLIC_URL: preserve(),
       NODE_ENV: preserve(),
       QYL_API_KEY: preserve(),

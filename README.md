@@ -220,7 +220,6 @@ MCP_BIND_HOST=0.0.0.0 \
 MCP_PUBLIC_URL=https://mcp.example.com \
 MCP_ALLOWED_HOSTS=mcp.example.com,<service>.up.railway.app,healthcheck.railway.app \
 MCP_ALLOWED_ORIGIN_HOSTS=mcp.example.com,<service>.up.railway.app \
-MCP_OAUTH_ISSUER=https://qyl-eu.eu.auth0.com/ \
 QYL_COLLECTOR_URL=http://qyl-collector.railway.internal:8080 \
 QYL_API_KEY='<collector-api-key>' \
 bun run start
@@ -230,15 +229,18 @@ bun run start
 `<public-url>/mcp` is the fixed resource identifier tokens are audience-bound to.
 A non-loopback bind requires it.
 
-This release accepts only the qyl production Auth0 issuer shown above; any other
-`MCP_OAUTH_ISSUER` fails startup. Configure the API audience for your public URL
-in that tenant rather than substituting an arbitrary OAuth issuer.
+This release accepts only the qyl production Auth0 issuer
+`https://qyl-eu.eu.auth0.com/`, which is pinned in the build and is not
+configurable: there is no environment variable that substitutes an arbitrary
+OAuth issuer. Configure the API audience for your public URL in that tenant
+instead.
 
 ### Authentication
 
 The server is a resource server only. It never mints tokens, hosts no
 authorization server, holds no client registration, and keeps no static operator
-credential. Startup fails closed when `MCP_OAUTH_ISSUER` is unset or unreachable.
+credential. It fails closed on `MCP_PUBLIC_URL`: a non-loopback bind without one
+is refused at startup, and a public URL always builds the gate.
 It verifies RFC 9068 bearer tokens against the issuer's JWKS, requires the exact
 resource audience and the `qyl:read` scope, and publishes only the RFC 9728
 protected-resource document.

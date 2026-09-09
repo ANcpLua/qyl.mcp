@@ -1,4 +1,3 @@
-import qylOpenApi from "@ancplua/qyl-api-schema/openapi" with { type: "json" };
 import type {
     LogRecord,
     WorkbenchExecutionTelemetryResponse,
@@ -13,6 +12,7 @@ import {
     WorkbenchTelemetryCorrelationSchema,
     TraceSchema,
 } from "qyl-mcp-server/contract-validation";
+import { API_KEY_HEADER, PROJECT_HEADER } from "qyl-mcp-server/contract-headers";
 import type { WorkbenchTelemetryCorrelation } from "./observability-correlation.js";
 import { runWithObservabilitySelfExportSuppressed } from "./observability-suppression.js";
 import { isCredentialKey, SecretRedactor } from "./secret-redactor.js";
@@ -67,23 +67,6 @@ interface CollectedSignal<T> {
     items: T[];
     availability: TelemetrySignalAvailability;
 }
-
-interface OpenApiMetadata {
-    components?: {
-        securitySchemes?: Record<string, { type?: string; in?: string; name?: string }>;
-        parameters?: Record<string, { in?: string; name?: string }>;
-    };
-}
-
-const openApiMetadata = qylOpenApi as OpenApiMetadata;
-const apiKeyHeader = requiredHeaderName(
-    openApiMetadata.components?.securitySchemes?.ApiKeyAuth,
-    "published Qyl API-key security scheme",
-);
-const projectHeader = requiredHeaderName(
-    openApiMetadata.components?.parameters?.ProjectScopeHeader,
-    "published Qyl project-scope parameter",
-);
 
 /**
  * Reads only real, contract-validated Qyl telemetry. It never creates demo
@@ -343,20 +326,10 @@ function normalizeBaseUrl(value: string): URL {
 function buildHeaders(apiKey?: string, projectId?: string): Readonly<Record<string, string>> {
     const headers: Record<string, string> = { accept: "application/json" };
     const normalizedApiKey = apiKey?.trim();
-    if (normalizedApiKey) headers[apiKeyHeader] = normalizedApiKey;
+    if (normalizedApiKey) headers[API_KEY_HEADER] = normalizedApiKey;
     const normalizedProject = projectId?.trim();
-    if (normalizedProject) headers[projectHeader] = normalizedProject;
+    if (normalizedProject) headers[PROJECT_HEADER] = normalizedProject;
     return headers;
-}
-
-function requiredHeaderName(
-    component: { in?: string; name?: string } | undefined,
-    description: string,
-): string {
-    if (component?.in !== "header" || typeof component.name !== "string" || component.name.length === 0) {
-        throw new Error(`${description} has no header name.`);
-    }
-    return component.name;
 }
 
 function normalizeCorrelation(

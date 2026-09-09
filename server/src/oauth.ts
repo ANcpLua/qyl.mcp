@@ -25,17 +25,6 @@ export interface HostedOAuth {
   readonly verifier: OAuthTokenVerifier;
 }
 
-function readIssuer(environment: NodeJS.ProcessEnv): URL {
-  const configured = environment.MCP_OAUTH_ISSUER;
-  if (!configured) {
-    throw new Error("MCP_OAUTH_ISSUER must name the external HTTPS OAuth issuer");
-  }
-  if (configured !== QYL_MCP_ISSUER) {
-    throw new Error(`MCP_OAUTH_ISSUER must be exactly ${QYL_MCP_ISSUER}`);
-  }
-  return new URL(QYL_MCP_ISSUER);
-}
-
 async function fetchAuthorizationServerMetadata(issuer: URL): Promise<OAuthMetadata> {
   const base = issuer.pathname.endsWith("/") ? issuer : new URL(`${issuer.pathname}/`, issuer);
   const candidates = [
@@ -137,11 +126,25 @@ export function createJwtTokenVerifier(params: {
   };
 }
 
-export async function loadHostedOAuth(
-  resourceServerUrl: URL,
-  environment: NodeJS.ProcessEnv = process.env,
-): Promise<HostedOAuth> {
-  const issuer = readIssuer(environment);
+/**
+ * Build the hosted resource-server posture against the pinned issuer.
+ *
+ * The issuer is a constant, not an operator input. It was once read from
+ * `MCP_OAUTH_ISSUER`, which accepted exactly one value — this constant — and
+ * threw the same class of error whether it was absent or wrong. That is a
+ * variable that decides nothing: it only asked an operator to retype a string
+ * the program already holds, and every deployment that got it wrong failed at
+ * startup for a reason unrelated to its own configuration.
+ *
+ * The fail-closed property it appeared to carry lives elsewhere and is
+ * unchanged: this function runs only from main()'s `hostedAuth`, which the
+ * hosted runtime builds only when `MCP_PUBLIC_URL` is configured — and a
+ * non-loopback bind without that URL is refused outright. There is therefore no
+ * configuration that serves the public transport without this gate, and no
+ * value an operator can type to weaken it.
+ */
+export async function loadHostedOAuth(resourceServerUrl: URL): Promise<HostedOAuth> {
+  const issuer = new URL(QYL_MCP_ISSUER);
   const oauthMetadata = await fetchAuthorizationServerMetadata(issuer);
   const jwksUri = oauthMetadata.jwks_uri;
   if (typeof jwksUri !== "string" || jwksUri.length === 0) {

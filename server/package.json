@@ -16,6 +16,10 @@
       "types": "./dist/server.d.ts",
       "default": "./dist/server.js"
     },
+    "./contract-headers": {
+      "types": "./dist/contract-headers.d.ts",
+      "default": "./dist/contract-headers.js"
+    },
     "./contract-validation": {
       "types": "./dist/contract-validation.d.ts",
       "default": "./dist/contract-validation.js"

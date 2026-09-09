@@ -226,7 +226,22 @@ export function createFetch(options: McpFetchOptions): (request: Request) => Pro
   };
 }
 
-async function hostedAuth(publicUrl: URL): Promise<HostedAuth> {
+/**
+ * The hosted OAuth gate for this configuration, or `undefined` when there is
+ * none to build.
+ *
+ * MCP_PUBLIC_URL is the entire decision, and it is the only one: the issuer is
+ * a pinned constant in oauth.ts rather than an operator input. The `undefined`
+ * branch is not a way to serve the public transport unauthenticated —
+ * readStreamableHTTPConfig refuses a non-loopback bind without a public URL, so
+ * only a loopback process ever reaches it.
+ */
+export async function hostedAuth(
+  config: StreamableHTTPServerConfig,
+): Promise<HostedAuth | undefined> {
+  const publicUrl = config.publicUrl;
+  if (publicUrl === undefined) return undefined;
+
   const resourceServerUrl = new URL("/mcp", publicUrl);
   const oauth = await loadHostedOAuth(resourceServerUrl);
   return {
@@ -291,12 +306,13 @@ async function createHostedRuntime(
     (error) => reportError("Standalone MCP request", error),
   );
 
+  const auth = await hostedAuth(config);
   const options: McpFetchOptions = {
     handler,
     landingPage: await readFile(new URL("./mcp-home.html", import.meta.url), "utf8"),
     ...(config.allowedHosts === undefined ? {} : { allowedHosts: config.allowedHosts }),
     ...(config.allowedOrigins === undefined ? {} : { allowedOrigins: config.allowedOrigins }),
-    ...(config.publicUrl === undefined ? {} : { auth: await hostedAuth(config.publicUrl) }),
+    ...(auth === undefined ? {} : { auth }),
   };
 
   let shuttingDown = false;
@@ -378,13 +394,19 @@ function isEntryPoint(): boolean {
 async function bootstrap(): Promise<ServeOptions | undefined> {
   if (!isEntryPoint()) return undefined;
 
+  // One reading of argv decides both the handshake's retry posture and which
+  // transport is started, so the two cannot disagree. HandshakeOptions.transport
+  // exists for exactly this; left unpassed, the handshake re-derived it from the
+  // same argv and the branch below duplicated the computation.
+  const transport = process.argv.includes("--stdio") ? "stdio" : "http";
+
   try {
     // Before either transport accepts a connection: a server that answers tool
     // calls against a contract the collector does not serve is worse than one
     // that refuses to start.
-    await assertCollectorContractRevision();
+    await assertCollectorContractRevision({ transport });
 
-    if (process.argv.includes("--stdio")) {
+    if (transport === "stdio") {
       startStdioServer(() => createServer({ transport: "stdio" }));
       return undefined;
     }

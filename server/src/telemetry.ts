@@ -42,10 +42,10 @@ import {
     METRIC_MCP_CLIENT_OPERATION_DURATION,
     METRIC_MCP_SERVER_OPERATION_DURATION,
 } from "@opentelemetry/semantic-conventions/incubating";
-import qylOpenApi from "@ancplua/qyl-api-schema/openapi" with { type: "json" };
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import packageMetadata from "../package.json" with { type: "json" };
+import { API_KEY_HEADER } from "./contract-headers.js";
 import {
     describeMcpOperationLog,
     describeMcpOperationMetric,
@@ -87,10 +87,6 @@ const STANDARD_MCP_PROPAGATOR = new CompositePropagator({
 export const MCP_DURATION_EXPLICIT_BUCKET_BOUNDARIES = [
     0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 30, 60, 120, 300,
 ] as const;
-const API_KEY_HEADER = qylOpenApi.components.securitySchemes.ApiKeyAuth.name;
-if (typeof API_KEY_HEADER !== "string" || API_KEY_HEADER.length === 0) {
-    throw new Error("published Qyl OpenAPI has no API-key header name");
-}
 
 export interface McpSpanCorrelation {
     traceId: string;

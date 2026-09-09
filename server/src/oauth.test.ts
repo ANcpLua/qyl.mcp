@@ -6,6 +6,7 @@ import {
   exportJWK,
   generateKeyPair,
 } from "jose";
+import { hostedAuth, readStreamableHTTPConfig } from "./main.js";
 import {
   QYL_MCP_ISSUER,
   QYL_MCP_SCOPE,
@@ -16,34 +17,43 @@ import {
 const resource = new URL("https://mcp.qyl.at/mcp");
 const issuer = QYL_MCP_ISSUER;
 
-test("hosted OAuth fails closed when no issuer is configured", async () => {
-  await assert.rejects(
-    () => loadHostedOAuth(resource, {}),
-    /MCP_OAUTH_ISSUER must name/u,
+// The issuer used to be read from MCP_OAUTH_ISSUER, which accepted exactly one
+// value, so there is nothing left to deviate from and nothing to reject. What
+// remains worth proving is the property that variable never carried: whether a
+// gate is built at all is decided by MCP_PUBLIC_URL alone, and no reachable
+// deployment can answer "no".
+test("no hosted OAuth gate is built without a public URL", async () => {
+  // Runs to completion without a network call: the absent public URL short-
+  // circuits before any Authorization Server discovery would be attempted.
+  assert.equal(await hostedAuth(readStreamableHTTPConfig({})), undefined);
+  assert.equal(
+    await hostedAuth(readStreamableHTTPConfig({ MCP_BIND_HOST: "::1" })),
+    undefined,
   );
 });
 
-test("hosted OAuth accepts only the pinned qyl issuer", async () => {
-  for (const configured of [
-    "http://auth.example.com",
-    "auth.example.com",
-    "https://user:secret@auth.example.com",
-    // A look-alike host is refused for the same reason as an obviously wrong one:
-    // the issuer is pinned to a single value, not merely validated for shape.
-    "https://qyl.eu.auth0.com/",
-    `${QYL_MCP_ISSUER}extra/`,
-  ]) {
-    await assert.rejects(
-      () => loadHostedOAuth(resource, { MCP_OAUTH_ISSUER: configured }),
-      /MCP_OAUTH_ISSUER must be exactly/u,
-      `expected ${configured} to be refused`,
+test("a reachable deployment cannot start without the public URL that builds the gate", () => {
+  for (const bindHost of ["0.0.0.0", "::", "10.0.0.4"]) {
+    assert.throws(
+      () => readStreamableHTTPConfig({ MCP_BIND_HOST: bindHost }),
+      /MCP_PUBLIC_URL must be set/u,
+      `expected ${bindHost} to require a public URL`,
     );
   }
+  // With one configured it is the origin the gate is built for, and
+  // `<origin>/mcp` is the resource identifier tokens are bound to.
+  assert.equal(
+    readStreamableHTTPConfig({
+      MCP_BIND_HOST: "0.0.0.0",
+      MCP_PUBLIC_URL: "https://mcp.qyl.at",
+    }).publicUrl?.href,
+    "https://mcp.qyl.at/",
+  );
 });
 
 test("hosted OAuth requires and advertises read access only", async () => {
   await withMockFetch(authMetadata(), async () => {
-    const oauth = await loadHostedOAuth(resource, { MCP_OAUTH_ISSUER: issuer });
+    const oauth = await loadHostedOAuth(resource);
     assert.deepEqual(oauth.requiredScopes, [QYL_MCP_SCOPE]);
     assert.deepEqual(oauth.scopesSupported, [QYL_MCP_SCOPE]);
     assert.equal(oauth.oauthMetadata.issuer, issuer);
@@ -53,7 +63,7 @@ test("hosted OAuth requires and advertises read access only", async () => {
 test("hosted OAuth rejects an insecure JWKS endpoint", async () => {
   await withMockFetch(authMetadata({ jwks_uri: `http://${new URL(QYL_MCP_ISSUER).host}/.well-known/jwks.json` }), async () => {
     await assert.rejects(
-      () => loadHostedOAuth(resource, { MCP_OAUTH_ISSUER: issuer }),
+      () => loadHostedOAuth(resource),
       /must advertise an HTTPS jwks_uri/u,
     );
   });
