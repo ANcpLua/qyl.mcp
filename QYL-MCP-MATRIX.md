@@ -18,8 +18,8 @@ For the `Baseline` column:
   `sha256:264a9e4f1d70289a`. The server is closed-world: a fresh runtime `tools/list` must equal the snapshot, and the
   snapshot is regenerated only deliberately with its diff inspected.
 
-Unlike the Rider inventory, there are no `VERIFY` or `GHOST` states: the generated manifest is the contract, so a tool
-either exists at the pinned revision or it does not.
+There are no `VERIFY` or `GHOST` states: the generated manifest is the contract, so a tool either exists at the
+pinned revision or it does not.
 
 Repository abbreviations:
 
