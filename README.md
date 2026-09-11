@@ -275,13 +275,19 @@ bun run build
 bun run test
 bun run smoke
 bun run smoke:otlp
+bun run smoke:live
 ```
 
 `smoke` exercises explicit demo behavior. `smoke:otlp` needs the sibling qyl
 collector checkout (or `QYL_COLLECTOR_PROJECT` pointing at it), starts an
 API-key-protected collector, and drives its real OTLP/protobuf and read surfaces
 — a fixture validated by a schema from this repository would prove nothing about
-interoperability.
+interoperability. `smoke:live` needs the published `qyl` dotnet tool on `PATH`
+(`dotnet tool install -g qyl`): it starts `qyl up` under a timeout, sends
+OTLP/JSON traces, logs and metrics, then calls every one of the eleven tools in
+live mode over stdio, reads both MCP App resources, and repeats `tools/list`
+and one call over Streamable HTTP against a second process. It is the only gate
+that proves the metrics, session, CI and display tools against real data.
 
 `bun run test` in `server` begins with `verify:shapes`, which fails on any hand-rolled
 `z.object(` outside two documented exemptions and on any module registering a tool

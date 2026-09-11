@@ -15,6 +15,7 @@
     "start": "bun server/dist/main.js",
     "start:workbench": "node workbench/dist/main.js",
     "smoke": "bun run --cwd server smoke && bun run --cwd workbench smoke",
+    "smoke:live": "bun run --cwd server smoke:live",
     "smoke:otlp": "bun run --cwd workbench smoke:otlp",
     "dev": "bun run --cwd server build && bun run --cwd dashboard dev",
     "verify:pins": "node verify-contract-pins.mjs"

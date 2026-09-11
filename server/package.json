@@ -69,6 +69,7 @@
     "snapshot:tools": "bun run build && tsc -p tsconfig.test.json && node update-tool-manifest-snapshot.mjs",
     "test": "bun run verify:shapes && bun run verify:readme && bun run build && tsc -p tsconfig.test.json && node -e \"const fs=require('node:fs'); for (const name of ['mcp-app.html','mcp-dashboard.html']) fs.copyFileSync('dist/'+name,'dist-test/'+name)\" && node --test dist-test/*.test.js",
     "smoke": "node smoke-test.mjs",
+    "smoke:live": "node live-tools-smoke.mjs",
     "prepack": "bun run build"
   },
   "dependencies": {
