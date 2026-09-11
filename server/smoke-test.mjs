@@ -47,6 +47,34 @@ const client = new Client(
 try {
   await client.connect(transport);
 
+// --- 0. stdout hygiene ---------------------------------------------------
+// A stdio MCP server owns stdout for JSON-RPC alone; every log line belongs on
+// stderr. Proven in LIVE mode against an unreachable collector, so the startup
+// warning is actually emitted, by teeing the raw stdout stream and parsing it.
+console.log("stdout hygiene");
+{
+  const rawPath = join(temp, "stdout.raw");
+  const hygieneTransport = new StdioClientTransport({
+    command: "sh",
+    args: ["-c", `exec node dist/main.js --stdio | tee "${rawPath}"`],
+    env: { ...process.env, QYL_DEMO: "", QYL_COLLECTOR_URL: "http://127.0.0.1:9", QYL_MCP_TELEMETRY: "0", QYL_MCP_NATIVE_STATE_PATH: join(temp, "hygiene-native.json") },
+    stderr: "ignore",
+  });
+  let transportErrors = 0;
+  hygieneTransport.onerror = () => transportErrors++;
+  const hygieneClient = new Client({ name: "qyl-smoke-hygiene", version: "1.0.0" }, { versionNegotiation: { mode: { pin: "2026-07-28" } } });
+  await hygieneClient.connect(hygieneTransport);
+  await hygieneClient.listTools();
+  await hygieneClient.callTool({ name: "list_traces", arguments: { limit: 1 } });
+  await hygieneClient.callTool({ name: "get_trace", arguments: { nonsense: 1 } }).catch(() => {});
+  await hygieneClient.close();
+  await new Promise((r) => setTimeout(r, 200));
+  const lines = (await readFile(rawPath, "utf8")).split("\n").filter((l) => l.trim());
+  const foreign = lines.filter((l) => { try { return JSON.parse(l).jsonrpc !== "2.0"; } catch { return true; } });
+  check("stdout carried only JSON-RPC messages in live mode with a startup warning", lines.length >= 3 && foreign.length === 0, foreign.slice(0, 3).join(" | "));
+  check("the client parsed every stdout line", transportErrors === 0, `${transportErrors} transport error(s)`);
+}
+
 // --- 1. Direct tools/list ----------------------------------------------------
 console.log("tools/list");
 const { tools } = await client.listTools();
