@@ -1,5 +1,5 @@
 {
-  "contract_revision": "sha256:264a9e4f1d70289a",
+  "contract_revision": "sha256:cd69d9c37a41916c",
   "tools": [
     {
       "name": "ci_log",
@@ -20,8 +20,6 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 128,
-            "x-csharp-type": "SessionId",
-            "x-csharp-struct": true,
             "description": "Session id of one CI run for a per-leg phase breakdown; omit to list recent runs."
           },
           "limit": {
@@ -48,8 +46,6 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 128,
-                  "x-csharp-type": "SessionId",
-                  "x-csharp-struct": true,
                   "description": "Unique session identifier"
                 },
                 "state": {
@@ -103,8 +99,6 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 128,
-            "x-csharp-type": "SessionId",
-            "x-csharp-struct": true,
             "description": "Unique session identifier"
           },
           "phases": {
@@ -455,16 +449,12 @@
             "examples": [
               "0af7651916cd43dd8448eb211c80319c"
             ],
-            "x-csharp-type": "TraceId",
-            "x-csharp-struct": true,
             "description": "Unique trace identifier (32 lowercase hex characters)"
           },
           "session_id": {
             "type": "string",
             "minLength": 1,
             "maxLength": 128,
-            "x-csharp-type": "SessionId",
-            "x-csharp-struct": true,
             "description": "Unique session identifier"
           },
           "limit": {
@@ -557,8 +547,6 @@
             "examples": [
               "0af7651916cd43dd8448eb211c80319c"
             ],
-            "x-csharp-type": "TraceId",
-            "x-csharp-struct": true,
             "description": "Unique trace identifier (32 lowercase hex characters)"
           },
           "__schema3": {
@@ -577,8 +565,6 @@
             "examples": [
               "b7ad6b7169203331"
             ],
-            "x-csharp-type": "SpanId",
-            "x-csharp-struct": true,
             "description": "Unique span identifier (16 lowercase hex characters)"
           },
           "__schema6": {
@@ -1661,8 +1647,6 @@
             "examples": [
               "0af7651916cd43dd8448eb211c80319c"
             ],
-            "x-csharp-type": "TraceId",
-            "x-csharp-struct": true,
             "description": "Unique trace identifier (32 lowercase hex characters)"
           },
           "service_name": {
@@ -1984,8 +1968,6 @@
             "examples": [
               "0af7651916cd43dd8448eb211c80319c"
             ],
-            "x-csharp-type": "TraceId",
-            "x-csharp-struct": true,
             "description": "Unique trace identifier (32 lowercase hex characters)"
           }
         },
@@ -2069,8 +2051,6 @@
             "examples": [
               "0af7651916cd43dd8448eb211c80319c"
             ],
-            "x-csharp-type": "TraceId",
-            "x-csharp-struct": true,
             "description": "Unique trace identifier (32 lowercase hex characters)"
           },
           "__schema3": {
@@ -2089,8 +2069,6 @@
             "examples": [
               "b7ad6b7169203331"
             ],
-            "x-csharp-type": "SpanId",
-            "x-csharp-struct": true,
             "description": "Unique span identifier (16 lowercase hex characters)"
           },
           "__schema6": {
@@ -3290,8 +3268,6 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 128,
-                  "x-csharp-type": "SessionId",
-                  "x-csharp-struct": true,
                   "description": "Session ID"
                 },
                 "user_id": {
@@ -3552,8 +3528,6 @@
                   "examples": [
                     "0af7651916cd43dd8448eb211c80319c"
                   ],
-                  "x-csharp-type": "TraceId",
-                  "x-csharp-struct": true,
                   "description": "Trace identifier"
                 },
                 "root_span": {
@@ -3567,8 +3541,6 @@
                       "examples": [
                         "b7ad6b7169203331"
                       ],
-                      "x-csharp-type": "SpanId",
-                      "x-csharp-struct": true,
                       "description": "Unique span identifier (16 hex chars)"
                     },
                     "trace_id": {
@@ -3579,8 +3551,6 @@
                       "examples": [
                         "0af7651916cd43dd8448eb211c80319c"
                       ],
-                      "x-csharp-type": "TraceId",
-                      "x-csharp-struct": true,
                       "description": "Trace identifier (32 hex chars)"
                     },
                     "parent_span_id": {
@@ -3591,8 +3561,6 @@
                       "examples": [
                         "b7ad6b7169203331"
                       ],
-                      "x-csharp-type": "SpanId",
-                      "x-csharp-struct": true,
                       "description": "Parent span identifier (null for root spans)"
                     },
                     "trace_state": {
@@ -3761,8 +3729,6 @@
                             "examples": [
                               "0af7651916cd43dd8448eb211c80319c"
                             ],
-                            "x-csharp-type": "TraceId",
-                            "x-csharp-struct": true,
                             "description": "Linked trace ID"
                           },
                           "span_id": {
@@ -3773,8 +3739,6 @@
                             "examples": [
                               "b7ad6b7169203331"
                             ],
-                            "x-csharp-type": "SpanId",
-                            "x-csharp-struct": true,
                             "description": "Linked span ID"
                           },
                           "trace_state": {
@@ -4790,8 +4754,6 @@
             "examples": [
               "0af7651916cd43dd8448eb211c80319c"
             ],
-            "x-csharp-type": "TraceId",
-            "x-csharp-struct": true,
             "description": "Unique trace identifier (32 lowercase hex characters)"
           },
           "service_name": {
@@ -5105,8 +5067,6 @@
                   "examples": [
                     "0af7651916cd43dd8448eb211c80319c"
                   ],
-                  "x-csharp-type": "TraceId",
-                  "x-csharp-struct": true,
                   "description": "Associated trace ID"
                 },
                 "span_id": {
@@ -5117,8 +5077,6 @@
                   "examples": [
                     "b7ad6b7169203331"
                   ],
-                  "x-csharp-type": "SpanId",
-                  "x-csharp-struct": true,
                   "description": "Associated span ID"
                 },
                 "event_name": {

@@ -81,6 +81,18 @@ so serving it requires Bun.
 
 ## Release notes
 
+### 5.1.0
+
+- Contract `@ancplua/qyl-api-schema` 10.0.0 -> 10.0.1, revision
+  `sha256:264a9e4f1d70289a` -> `sha256:cd69d9c37a41916c`. The contract's
+  operations and shapes are unchanged; the revision moved because the
+  TypeSpec toolchain that emits the canonical OpenAPI projection did. The
+  startup handshake refuses a collector on the old revision, so this server
+  pairs with `qyl` 5.1.0 and later; `server/tool-manifest.snapshot.json`
+  differs only in its `contract_revision`.
+- The workspace root package no longer pins its own members, and the matrix
+  no longer compares itself to a tool inventory that no longer exists.
+
 ### 5.0.0
 
 - **Breaking.** Contract major: `@ancplua/qyl-api-schema` 9.0.0 -> 10.0.0,
