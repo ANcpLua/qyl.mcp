@@ -36,9 +36,9 @@ import {
   summarizeMetricQuery,
   summarizeMetricSeries,
 } from "./summaries.js";
-import { requestScope } from "./request-scope.js";
+import { runTool } from "./request-scope.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
-import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, toolError } from "./tools.js";
+import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS } from "./tools.js";
 
 const METRICS_PATH = "/api/v1/metrics";
 const SERIES_PATH = "/api/v1/metrics/{metric_name}/series";
@@ -63,17 +63,15 @@ export function registerMetricsTools(server: McpServer): void {
       outputSchema: compactOutputSchema(MetricsListResponseSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
-    async (args: ListMetricsArgs, ctx: ServerContext): Promise<CallToolResult> => {
-      try {
-        const { metrics, mode } = await listMetrics(args, requestScope(ctx));
+    (args: ListMetricsArgs, ctx: ServerContext): Promise<CallToolResult> =>
+      runTool(ctx, "list_metrics", 1, async (scope) => {
+        const { metrics, mode } = await listMetrics(args, scope.collector);
+        await scope.step(`Fetched ${metrics.length} metric instrument(s)`);
         return telemetryToolResult(summarizeMetricCatalog(metrics, mode), {
           items: metrics,
           has_more: false,
         });
-      } catch (error) {
-        return toolError(error);
-      }
-    },
+      }),
   );
 
   server.registerTool(
@@ -90,17 +88,15 @@ export function registerMetricsTools(server: McpServer): void {
       outputSchema: compactOutputSchema(MetricSeriesListResponseSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
-    async (args: MetricSeriesArgs, ctx: ServerContext): Promise<CallToolResult> => {
-      try {
-        const { series, mode } = await listMetricSeries(args, requestScope(ctx));
+    (args: MetricSeriesArgs, ctx: ServerContext): Promise<CallToolResult> =>
+      runTool(ctx, "get_metric_series", 1, async (scope) => {
+        const { series, mode } = await listMetricSeries(args, scope.collector);
+        await scope.step(`Fetched ${series.length} series of ${args.metric_name}`);
         return telemetryToolResult(summarizeMetricSeries(series, mode), {
           items: series,
           has_more: false,
         });
-      } catch (error) {
-        return toolError(error);
-      }
-    },
+      }),
   );
 
   server.registerTool(
@@ -118,13 +114,14 @@ export function registerMetricsTools(server: McpServer): void {
       outputSchema: compactOutputSchema(MetricQueryResultSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
-    async (args: QueryMetricArgs, ctx: ServerContext): Promise<CallToolResult> => {
-      try {
-        const { result, mode } = await queryMetric(args, requestScope(ctx));
+    (args: QueryMetricArgs, ctx: ServerContext): Promise<CallToolResult> =>
+      runTool(ctx, "query_metric", 1, async (scope) => {
+        const { result, mode } = await queryMetric(args, scope.collector);
+        await scope.step(
+          `Queried ${args.metric_name}: ${result.series.length} series, ` +
+            `${result.series[0]?.buckets.length ?? 0} bucket(s) each`,
+        );
         return telemetryToolResult(summarizeMetricQuery(result, mode), result);
-      } catch (error) {
-        return toolError(error);
-      }
-    },
+      }),
   );
 }

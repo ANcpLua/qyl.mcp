@@ -56,11 +56,10 @@ import {
 import {
   READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
   registerTelemetryTools,
-  toolError,
 } from "./tools.js";
 import { registerCiTools } from "./ci.js";
 import { registerMetricsTools } from "./metrics-tools.js";
-import { progressReporter, requestScope } from "./request-scope.js";
+import { runTool } from "./request-scope.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 import type { McpTelemetryTransport } from "./mcp-semconv.js";
 import {
@@ -154,10 +153,12 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       version: packageMetadata.version,
     },
     {
-      // No `logging` capability, on purpose: MCP logging is deprecated as of
-      // revision 2026-07-28 (SEP-2577). Operational logging goes to stderr
-      // and OpenTelemetry; see request-scope.ts and DECISIONS.md 2026-09-12.
-      //
+      // `logging` installs `logging/setLevel` and lets every tool call send one
+      // `notifications/message` through `runTool`. Deprecated as of revision
+      // 2026-07-28 (SEP-2577), kept beside stderr and OpenTelemetry through the
+      // deprecation window at the owner's call; see request-scope.ts and the
+      // workspace DECISIONS.md entry of 2026-09-12.
+      capabilities: { logging: {} },
       // One hint per catalog method this server actually answers. McpServer
       // registers the resource trio on the first registerResource and the tool
       // handlers on the first registerTool; it never registers prompts/list,
@@ -193,20 +194,21 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
-    async (
+    (
       { trace_id, session_id, limit }: DisplayTracesInput,
       ctx: ServerContext,
-    ): Promise<CallToolResult> => {
-      try {
-        // A session's traces are the one display_traces path with two units a
-        // client can watch: the collector round trip, then the explorer
-        // payload. A single trace or the recent list is one round trip.
-        const progress = session_id === undefined ? undefined : progressReporter(ctx, 2);
+    ): Promise<CallToolResult> =>
+      runTool(ctx, "display_traces", 1, async (scope) => {
         const result = await fetchTracesForDisplay(
           { trace_id, session_id, limit: limit ?? 20 },
-          requestScope(ctx),
+          scope.collector,
         );
-        await progress?.step(`Fetched ${result.traces.length} trace(s) of session ${session_id}`);
+        const target = trace_id
+          ? `trace ${trace_id}`
+          : session_id
+            ? `session ${session_id}`
+            : "recent traces";
+        await scope.step(`Fetched ${result.traces.length} trace(s) for ${target}`);
 
         let text: string;
         if (result.selected_trace_id) {
@@ -217,9 +219,9 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
             `${result.mode === "demo" ? " (demo data)" : ""}.`;
         } else {
           const errorCount = result.traces.filter((t) => t.has_error).length;
-          const scope = session_id ? `session ${session_id}` : "recent";
+          const scopeText = session_id ? `session ${session_id}` : "recent";
           text =
-            `Showing ${result.traces.length} ${scope} traces in the qyl explorer` +
+            `Showing ${result.traces.length} ${scopeText} traces in the qyl explorer` +
             `${errorCount > 0 ? ` (${errorCount} with errors)` : ""}` +
             `${result.mode === "demo" ? " (demo data)" : ""}.`;
         }
@@ -231,13 +233,9 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
             : {}),
           mode: result.mode,
         };
-        await progress?.step("Explorer payload ready");
 
         return telemetryToolResult(text, output);
-      } catch (err) {
-        return toolError(err);
-      }
-    },
+      }),
   );
 
   server.registerTool(
@@ -255,16 +253,14 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: { ui: { resourceUri: DASHBOARD_RESOURCE_URI } },
     },
-    async ({ hours }: DisplayMcpDashboardInput, ctx: ServerContext): Promise<CallToolResult> => {
-      try {
+    ({ hours }: DisplayMcpDashboardInput, ctx: ServerContext): Promise<CallToolResult> =>
+      runTool(ctx, "display_mcp_dashboard", 1, async (scope) => {
         const window = hours ?? 24;
-        const stats = await fetchMcpStats(window, requestScope(ctx));
+        const stats = await fetchMcpStats(window, scope.collector);
+        await scope.step(`Aggregated ${stats.totals.requests} MCP request(s) over ${window}h`);
         const output: DisplayMcpDashboardOutput = { stats };
         return telemetryToolResult(summarizeMcpStats(stats, window), output);
-      } catch (err) {
-        return toolError(err);
-      }
-    },
+      }),
   );
 
   registerTelemetryTools(server);
@@ -290,14 +286,14 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: { ui: { visibility: ["app"] } },
     },
-    async (
+    (
       { view, trace_id, service_name, severity_min, query, limit, hours }: FetchTelemetryInput,
       ctx: ServerContext,
-    ): Promise<CallToolResult> => {
-      try {
-        const scope = requestScope(ctx);
+    ): Promise<CallToolResult> =>
+      runTool(ctx, "fetch_telemetry", 1, async (scope) => {
         if (view === "mcp_stats") {
-          const stats = await fetchMcpStats(hours ?? 24, scope);
+          const stats = await fetchMcpStats(hours ?? 24, scope.collector);
+          await scope.step(`Aggregated ${stats.totals.requests} MCP request(s)`);
           const output: FetchTelemetryOutput = { stats, mode: stats.mode };
           return telemetryToolResult(
             `Fetched MCP stats: ${stats.totals.requests} requests over ${hours ?? 24}h (${stats.mode} mode).`,
@@ -309,7 +305,8 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
           if (!trace_id) {
             throw new CollectorError('view "trace" requires a `trace_id`.');
           }
-          const { trace, mode } = await fetchTrace(trace_id, scope);
+          const { trace, mode } = await fetchTrace(trace_id, scope.collector);
+          await scope.step(`Fetched trace ${trace_id}`);
           const output: FetchTelemetryOutput = { trace, mode };
           return telemetryToolResult(
             `Fetched trace ${shortId(trace.trace_id)} (${trace.span_count} spans, ${mode} mode).`,
@@ -320,8 +317,9 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
         if (view === "logs") {
           const { logs, mode } = await fetchLogs(
             { trace_id, service_name, severity_min, query, limit: limit ?? 50 },
-            scope,
+            scope.collector,
           );
+          await scope.step(`Fetched ${logs.length} log record(s)`);
           const output: FetchTelemetryOutput = { logs, mode };
           return telemetryToolResult(
             `Fetched ${logs.length} logs (${mode} mode).`,
@@ -329,16 +327,14 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
           );
         }
 
-        const { traces, mode } = await fetchTraces(limit ?? 20, scope);
+        const { traces, mode } = await fetchTraces(limit ?? 20, scope.collector);
+        await scope.step(`Fetched ${traces.length} trace(s)`);
         const output: FetchTelemetryOutput = { traces, mode };
         return telemetryToolResult(
           `Fetched ${traces.length} traces (${mode} mode).`,
           output,
         );
-      } catch (err) {
-        return toolError(err);
-      }
-    },
+      }),
   );
 
   registerViewerResource(server, RESOURCE_URI, "mcp-app.html");

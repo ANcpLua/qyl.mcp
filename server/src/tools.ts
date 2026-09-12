@@ -34,12 +34,8 @@ import {
   summarizeTrace,
   summarizeTraceTable,
 } from "./summaries.js";
-import { CollectorError } from "./collector.js";
-import { requestScope } from "./request-scope.js";
-import {
-  redactTelemetryText,
-  telemetryToolResult,
-} from "./telemetry-redaction.js";
+import { runTool } from "./request-scope.js";
+import { telemetryToolResult } from "./telemetry-redaction.js";
 
 /**
  * The qyl telemetry tools only query the configured collector. They neither
@@ -52,16 +48,8 @@ export const READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS = {
   openWorldHint: false,
 } as const satisfies ToolAnnotations;
 
-/** Uniform failure result: clear text + isError, never a thrown exception. */
-export function toolError(err: unknown): CallToolResult {
-  const message = err instanceof CollectorError
-    ? err.message
-    : "Telemetry request failed.";
-  return {
-    content: [{ type: "text", text: redactTelemetryText(message) }],
-    isError: true,
-  };
-}
+/** Re-exported for the callers that learned it here; it lives with `runTool`. */
+export { toolError } from "./request-scope.js";
 
 /** Register the four model-visible read tools against published contract schemas. */
 export function registerTelemetryTools(server: McpServer): void {
@@ -77,18 +65,16 @@ export function registerTelemetryTools(server: McpServer): void {
       outputSchema: compactOutputSchema(ListTracesOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
-    async (args: ListTracesInput, ctx: ServerContext): Promise<CallToolResult> => {
-      try {
-        const { traces, mode } = await fetchTraces(args.limit ?? 20, requestScope(ctx));
+    (args: ListTracesInput, ctx: ServerContext): Promise<CallToolResult> =>
+      runTool(ctx, "list_traces", 1, async (scope) => {
+        const { traces, mode } = await fetchTraces(args.limit ?? 20, scope.collector);
+        await scope.step(`Fetched ${traces.length} trace(s)`);
         const output: ListTracesOutput = {
           traces: traces.map(({ spans: _spans, ...summary }) => summary),
           mode,
         };
         return telemetryToolResult(summarizeTraceTable(traces, mode), output);
-      } catch (err) {
-        return toolError(err);
-      }
-    },
+      }),
   );
 
   server.registerTool(
@@ -103,15 +89,13 @@ export function registerTelemetryTools(server: McpServer): void {
       outputSchema: compactOutputSchema(GetTraceOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
-    async (args: GetTraceInput, ctx: ServerContext): Promise<CallToolResult> => {
-      try {
-        const { trace, mode } = await fetchTrace(args.trace_id, requestScope(ctx));
+    (args: GetTraceInput, ctx: ServerContext): Promise<CallToolResult> =>
+      runTool(ctx, "get_trace", 1, async (scope) => {
+        const { trace, mode } = await fetchTrace(args.trace_id, scope.collector);
+        await scope.step(`Fetched trace ${args.trace_id} (${trace.span_count} spans)`);
         const output: GetTraceOutput = { trace, mode };
         return telemetryToolResult(summarizeTrace(trace, mode), output);
-      } catch (err) {
-        return toolError(err);
-      }
-    },
+      }),
   );
 
   server.registerTool(
@@ -126,19 +110,17 @@ export function registerTelemetryTools(server: McpServer): void {
       outputSchema: compactOutputSchema(ListSessionsOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
-    async (args: ListSessionsInput, ctx: ServerContext): Promise<CallToolResult> => {
-      try {
+    (args: ListSessionsInput, ctx: ServerContext): Promise<CallToolResult> =>
+      runTool(ctx, "list_sessions", 1, async (scope) => {
         const { sessions, mode } = await fetchSessions(
           args.limit ?? 20,
           args.active_only,
-          requestScope(ctx),
+          scope.collector,
         );
+        await scope.step(`Fetched ${sessions.length} session(s)`);
         const output: ListSessionsOutput = { sessions, mode };
         return telemetryToolResult(summarizeSessions(sessions, mode), output);
-      } catch (err) {
-        return toolError(err);
-      }
-    },
+      }),
   );
 
   server.registerTool(
@@ -153,8 +135,8 @@ export function registerTelemetryTools(server: McpServer): void {
       outputSchema: compactOutputSchema(SearchLogsOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
-    async (args: SearchLogsInput, ctx: ServerContext): Promise<CallToolResult> => {
-      try {
+    (args: SearchLogsInput, ctx: ServerContext): Promise<CallToolResult> =>
+      runTool(ctx, "search_logs", 1, async (scope) => {
         const { logs, mode } = await fetchLogs(
           {
             trace_id: args.trace_id,
@@ -163,13 +145,11 @@ export function registerTelemetryTools(server: McpServer): void {
             query: args.query,
             limit: args.limit ?? 50,
           },
-          requestScope(ctx),
+          scope.collector,
         );
+        await scope.step(`Fetched ${logs.length} log record(s)`);
         const output: SearchLogsOutput = { logs, mode };
         return telemetryToolResult(summarizeLogs(logs, mode), output);
-      } catch (err) {
-        return toolError(err);
-      }
-    },
+      }),
   );
 }

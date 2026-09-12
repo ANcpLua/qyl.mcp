@@ -52,14 +52,19 @@ mutates it. On the hosted server they all sit behind the single `qyl:read` scope
 
 The `display_*` tools return MCP Apps UI resources as single-file viewers.
 
-Every tool honours cancellation: a `notifications/cancelled` for the request,
-or a closed connection, aborts the in-flight collector fetch instead of
-waiting out its timeout. `ci_log` with a `run_id` and `display_traces` for a
-session send `notifications/progress` when the request carries a
-`progressToken` (two steps: the collector round trip, then the result). The
-server declares no `logging` capability: MCP logging is deprecated as of
-revision `2026-07-28` (SEP-2577), and operational logging goes to stderr and
-OpenTelemetry.
+Every tool runs inside its request scope. Cancellation: a
+`notifications/cancelled` for the request, or a closed connection, aborts the
+in-flight collector fetch instead of waiting out its timeout. Progress: a
+request that carries a `progressToken` gets `notifications/progress` per
+completed step, one per collector round trip plus a final "Result ready"
+(`ci_log` with a `run_id` reports the flatten into legs as a step of its own).
+Logging: the server declares the `logging` capability and sends one
+`notifications/message` per call, `info` on success and `warning` on failure,
+under the logger `qyl.mcp`. On revision `2026-07-28` the client's level travels
+per request in `_meta["io.modelcontextprotocol/logLevel"]`; a request without
+it gets no log line, and `logging/setLevel` does not exist in that revision.
+MCP logging is deprecated as of that revision (SEP-2577) and kept here through
+the deprecation window beside stderr and OpenTelemetry.
 
 Every inbound `tools/call` on a local server — `--stdio`, or HTTP without
 `MCP_PUBLIC_URL` — is recorded natively: validated result, lifecycle, duration,
@@ -93,20 +98,25 @@ so serving it requires Bun.
 
 ### 6.1.0
 
-- Every tool handler takes the SDK request context and forwards its
-  cancellation signal into the collector layer, which already raced a signal
-  against its timeout but had no caller passing one. A client's
-  `notifications/cancelled`, or a dropped connection, now aborts the collector
-  fetch at once. Data-layer functions (`fetchTraces`, `fetchLogs`,
-  `listMetrics`, …) gained a trailing `CollectorRequestOptions` argument;
-  existing callers are unaffected.
-- `ci_log` with a `run_id` and `display_traces` for a `session_id` report
-  `notifications/progress` to a client that sent a `progressToken`: two
-  increasing steps per call, nothing when the client did not ask.
-- No `logging` capability, on purpose: MCP logging is deprecated as of the
-  only revision this server speaks (SEP-2577); stderr and OpenTelemetry stay
-  the log channels. Tool surface, manifest snapshot and contract handshake are
-  unchanged.
+- Every tool handler runs inside `runTool`, which resolves the SDK request
+  context once and hands the work a plain scope. Cancellation: the request's
+  signal reaches every collector fetch, which already raced a signal against
+  its timeout but had no caller passing one, so a client's
+  `notifications/cancelled` or a dropped connection now aborts the fetch at
+  once. Data-layer functions (`fetchTraces`, `fetchLogs`, `listMetrics`, …)
+  gained a trailing `CollectorRequestOptions` argument; existing callers are
+  unaffected.
+- Progress on every tool: a request with a `progressToken` gets one
+  `notifications/progress` per completed collector round trip and a final
+  "Result ready"; `ci_log` with a `run_id` reports its per-leg flatten as a
+  step of its own. Progress increases per token by construction. A request
+  without a token gets nothing.
+- The `logging` capability is declared and every call sends one
+  `notifications/message` (`info` on success, `warning` on failure, logger
+  `qyl.mcp`) to a request that carries a log level in its `_meta` envelope.
+  Deprecated as of `2026-07-28` (SEP-2577), kept through the deprecation
+  window beside stderr and OpenTelemetry. Tool surface, manifest snapshot and
+  contract handshake are unchanged.
 
 ### 6.0.0
 
