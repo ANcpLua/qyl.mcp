@@ -37,6 +37,7 @@
           <span><i class="fact-dot fact-live" aria-hidden="true"></i>2026-07-28</span>
           <span><i class="fact-dot" aria-hidden="true"></i>OAuth 2.1</span>
           <span><i class="fact-dot" aria-hidden="true"></i>Per-request HTTP</span>
+          <span><i class="fact-dot" aria-hidden="true"></i>Cancel · progress · log on every call</span>
         </div>
       </div>
 
@@ -86,20 +87,38 @@
       <div class="section-intro">
         <p class="section-index">01 / TOOL SURFACE</p>
         <h2 id="tools-title">Ask from the place you’re already fixing.</h2>
-        <p><code>qyl:read</code> covers every tool: evidence and views, read-only throughout.</p>
+        <p>Eleven tools, one scope: <code>qyl:read</code> covers evidence and views, read-only throughout.</p>
       </div>
       <ol class="tool-list">
         <li><code>display_traces</code><span>Open a correlated waterfall and its logs.</span><b>MCP App</b></li>
-        <li><code>search_logs</code><span>Find runtime evidence without changing context.</span><b>Read</b></li>
-        <li><code>get_trace</code><span>Inspect the complete span tree for one trace.</span><b>Read</b></li>
         <li><code>display_mcp_dashboard</code><span>See tool traffic, latency, and failures.</span><b>MCP App</b></li>
+        <li><code>list_traces</code><span>Recent traces with root span, services, duration, errors.</span><b>Read</b></li>
+        <li><code>get_trace</code><span>Inspect the complete span tree for one trace.</span><b>Read</b></li>
+        <li><code>list_sessions</code><span>Sessions with counts, state, and GenAI token usage.</span><b>Read</b></li>
+        <li><code>search_logs</code><span>Find runtime evidence without changing context.</span><b>Read</b></li>
         <li><code>ci_log</code><span>Bring CI execution evidence into the investigation.</span><b>Read</b></li>
+        <li><code>list_metrics</code><span>The instruments recorded, with units and stream counts.</span><b>Read</b></li>
+        <li><code>get_metric_series</code><span>The attribute streams under one instrument.</span><b>Read</b></li>
         <li><code>query_metric</code><span>Answer a windowed question over an instrument.</span><b>Read</b></li>
+        <li><code>fetch_telemetry</code><span>Feeds the views above; not for the model.</span><b>App only</b></li>
       </ol>
     </section>
 
+    <section class="scope-section" aria-labelledby="scope-title">
+      <p class="section-index">02 / REQUEST SCOPE</p>
+      <div class="protocol-heading">
+        <h2 id="scope-title">Every call runs inside its request.</h2>
+        <p>One frame around all eleven tools. A tool registered outside it fails the build, so none of the three can go missing.</p>
+      </div>
+      <div class="protocol-grid scope-grid">
+        <article><span>Cancel</span><h3>Stop means stop</h3><p>A <code>notifications/cancelled</code>, or a dropped connection, aborts the in-flight collector fetch at once instead of waiting out its timeout.</p></article>
+        <article><span>Progress</span><h3>Only when you ask</h3><p>A request that carries a <code>progressToken</code> gets one <code>notifications/progress</code> per collector round trip and a final <em>Result ready</em>. No token, no noise.</p></article>
+        <article><span>Log</span><h3>One line per call</h3><p>A request that names a log level in its <code>_meta</code> envelope receives one <code>notifications/message</code>: <em>info</em> on success, <em>warning</em> on failure, logger <code>qyl.mcp</code>.</p></article>
+      </div>
+    </section>
+
     <section class="protocol-section" aria-labelledby="protocol-title">
-      <p class="section-index">02 / PROTOCOL</p>
+      <p class="section-index">03 / PROTOCOL</p>
       <div class="protocol-heading">
         <h2 id="protocol-title">Built for the 2026 MCP.</h2>
         <p>No session, no 2025 handshake, no SSE compatibility layer &mdash; a 2025-era request is refused with <code>-32022</code>.</p>
@@ -114,7 +133,7 @@
 
     <section id="install" class="install-section" aria-labelledby="install-title">
       <div class="install-copy">
-        <p class="section-index">03 / CONNECT</p>
+        <p class="section-index">04 / CONNECT</p>
         <h2 id="install-title">One URL. Your client handles OAuth.</h2>
         <p>Add qyl, follow the browser sign-in, then ask for the trace or logs you need.</p>
         <div class="client-tabs" role="tablist" aria-label="Client setup">

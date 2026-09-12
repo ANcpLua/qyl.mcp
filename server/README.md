@@ -96,6 +96,16 @@ so serving it requires Bun.
 
 ## Release notes
 
+### 6.1.2
+
+- The landing page at `mcp.qyl.at` states what 6.1.0 added: a request-scope
+  section for cancellation, progress and the per-call log line, the full
+  eleven-tool surface, and a hero fact for it. Surfaces take the ink of the
+  original qyl site (`#050706`) and its family; the cyan accent is unchanged.
+- The page no longer embeds the whole `package.json`: a default JSON import
+  inlined the dependency and export tables into every visitor's download; a
+  named import of `version` ships the one field the footer shows.
+
 ### 6.1.1
 
 - The bundled viewers no longer ask for progress they never read: the MCP

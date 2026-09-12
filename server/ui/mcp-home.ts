@@ -1,4 +1,6 @@
-import packageMetadata from "../package.json" with { type: "json" };
+// A named import: Vite tree-shakes the JSON module down to this one field, so the
+// page ships the version and not the package's dependency and export tables.
+import { version } from "../package.json" with { type: "json" };
 import "./mcp-home.css";
 
 const endpoint = "https://mcp.qyl.at/mcp";
@@ -72,5 +74,5 @@ copyInstall.addEventListener("click", () => {
   void copy(configurations[selectedClient].value, "Configuration");
 });
 
-document.getElementById("release-version")!.textContent = `v${packageMetadata.version}`;
+document.getElementById("release-version")!.textContent = `v${version}`;
 renderConfiguration();
