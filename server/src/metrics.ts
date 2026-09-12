@@ -18,6 +18,7 @@ import type {
 } from "@ancplua/qyl-api-schema/types";
 import {
   CollectorError,
+  type CollectorRequestOptions,
   collectorGet,
   parseCollectorMetricDescriptor,
   parseCollectorMetricQueryResult,
@@ -125,6 +126,7 @@ function demoSeriesId(stream: DemoMetricStream): string {
 
 export async function listMetrics(
   args: ListMetricsArgs,
+  options: CollectorRequestOptions = {},
 ): Promise<{ metrics: MetricDescriptor[]; mode: Mode }> {
   const mode = await resolveMode();
   const limit = args.limit ?? 200;
@@ -160,10 +162,11 @@ export async function listMetrics(
     return redactTelemetry({ metrics, mode });
   }
 
-  const body = await collectorGet(METRICS_PATH, {
-    name_prefix: args.name_prefix,
-    limit,
-  });
+  const body = await collectorGet(
+    METRICS_PATH,
+    { name_prefix: args.name_prefix, limit },
+    options,
+  );
   return redactTelemetry({
     metrics: parseCollectorPage(
       body,
@@ -177,6 +180,7 @@ export async function listMetrics(
 
 export async function listMetricSeries(
   args: MetricSeriesArgs,
+  options: CollectorRequestOptions = {},
 ): Promise<{ series: MetricSeries[]; mode: Mode }> {
   const mode = await resolveMode();
   const limit = args.limit ?? 200;
@@ -206,11 +210,11 @@ export async function listMetricSeries(
 
   const path = `${METRICS_PATH}/${encodeURIComponent(args.metric_name)}/series`;
   try {
-    const body = await collectorGet(path, {
-      attr: args.attr,
-      attr_prefix: args.attr_prefix,
-      limit,
-    });
+    const body = await collectorGet(
+      path,
+      { attr: args.attr, attr_prefix: args.attr_prefix, limit },
+      options,
+    );
     return redactTelemetry({
       series: parseCollectorPage(
         body,
@@ -276,6 +280,7 @@ function groupingKey(
 
 export async function queryMetric(
   args: QueryMetricArgs,
+  options: CollectorRequestOptions = {},
 ): Promise<{ result: MetricQueryResult; mode: Mode }> {
   const mode = await resolveMode();
   const stepMs = args.step_ms ?? 60_000;
@@ -344,16 +349,20 @@ export async function queryMetric(
 
   const path = `${METRICS_PATH}/${encodeURIComponent(args.metric_name)}/query`;
   try {
-    const body = await collectorGet(path, {
-      start_time: args.start_time,
-      end_time: args.end_time,
-      step_ms: stepMs,
-      aggregation,
-      group_by: args.group_by,
-      attr: args.attr,
-      attr_prefix: args.attr_prefix,
-      series_limit: seriesLimit,
-    });
+    const body = await collectorGet(
+      path,
+      {
+        start_time: args.start_time,
+        end_time: args.end_time,
+        step_ms: stepMs,
+        aggregation,
+        group_by: args.group_by,
+        attr: args.attr,
+        attr_prefix: args.attr_prefix,
+        series_limit: seriesLimit,
+      },
+      options,
+    );
     return redactTelemetry({ result: parseCollectorMetricQueryResult(body, path), mode });
   } catch (error) {
     if (error instanceof CollectorError && error.status === 404) {

@@ -52,6 +52,15 @@ mutates it. On the hosted server they all sit behind the single `qyl:read` scope
 
 The `display_*` tools return MCP Apps UI resources as single-file viewers.
 
+Every tool honours cancellation: a `notifications/cancelled` for the request,
+or a closed connection, aborts the in-flight collector fetch instead of
+waiting out its timeout. `ci_log` with a `run_id` and `display_traces` for a
+session send `notifications/progress` when the request carries a
+`progressToken` (two steps: the collector round trip, then the result). The
+server declares no `logging` capability: MCP logging is deprecated as of
+revision `2026-07-28` (SEP-2577), and operational logging goes to stderr and
+OpenTelemetry.
+
 Every inbound `tools/call` on a local server — `--stdio`, or HTTP without
 `MCP_PUBLIC_URL` — is recorded natively: validated result, lifecycle, duration,
 redacted JSON-RPC timeline, and trace/span correlation, persisted atomically to
@@ -81,6 +90,23 @@ The HTTP entry is a web-standard fetch handler served by its default export,
 so serving it requires Bun.
 
 ## Release notes
+
+### 6.1.0
+
+- Every tool handler takes the SDK request context and forwards its
+  cancellation signal into the collector layer, which already raced a signal
+  against its timeout but had no caller passing one. A client's
+  `notifications/cancelled`, or a dropped connection, now aborts the collector
+  fetch at once. Data-layer functions (`fetchTraces`, `fetchLogs`,
+  `listMetrics`, …) gained a trailing `CollectorRequestOptions` argument;
+  existing callers are unaffected.
+- `ci_log` with a `run_id` and `display_traces` for a `session_id` report
+  `notifications/progress` to a client that sent a `progressToken`: two
+  increasing steps per call, nothing when the client did not ask.
+- No `logging` capability, on purpose: MCP logging is deprecated as of the
+  only revision this server speaks (SEP-2577); stderr and OpenTelemetry stay
+  the log channels. Tool surface, manifest snapshot and contract handshake are
+  unchanged.
 
 ### 6.0.0
 

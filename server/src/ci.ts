@@ -16,13 +16,14 @@ import type {
   CiPhase,
   CiRunSummary,
 } from "@ancplua/qyl-api-schema/types";
-import type { McpServer, CallToolResult } from "@modelcontextprotocol/server";
+import type { McpServer, CallToolResult, ServerContext } from "@modelcontextprotocol/server";
 import {
   CiLogInputSchema,
   CiLogOutputSchema,
   compactOutputSchema,
 } from "./contract-validation.js";
 import { fetchSessions, fetchSessionTraces } from "./data.js";
+import { progressReporter, requestScope } from "./request-scope.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, toolError } from "./tools.js";
 import type { Mode, QylSession, QylSpan, QylTrace } from "./wire.js";
@@ -121,15 +122,22 @@ export function registerCiTools(server: McpServer): void {
       outputSchema: compactOutputSchema(CiLogOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
-    async (args: CiLogInput): Promise<CallToolResult> => {
+    async (args: CiLogInput, ctx: ServerContext): Promise<CallToolResult> => {
       try {
+        const scope = requestScope(ctx);
         if (args.run_id) {
-          const { traces, mode } = await fetchSessionTraces(args.run_id, 100);
+          // Two units of work a client can watch: the collector round trip
+          // for the run's traces, then the flatten into per-leg phases.
+          const progress = progressReporter(ctx, 2);
+          const { traces, mode } = await fetchSessionTraces(args.run_id, 100, scope);
+          await progress.step(`Fetched ${traces.length} trace(s) of CI run ${args.run_id}`);
           const phases = collectCiPhases(traces);
+          const legs = new Set(phases.map((phase) => phase.leg)).size;
+          await progress.step(`Collected ${phases.length} phase(s) across ${legs} leg(s)`);
           const output: CiLogOutput = { run_id: args.run_id, phases, mode };
           return telemetryToolResult(summarizeCiRun(args.run_id, phases, mode), output);
         }
-        const { sessions, mode } = await fetchSessions(50, undefined);
+        const { sessions, mode } = await fetchSessions(50, undefined, scope);
         const runs = filterCiSessions(sessions)
           .slice(0, args.limit ?? 10)
           .map((session): CiRunSummary => ({

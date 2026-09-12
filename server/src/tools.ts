@@ -10,7 +10,12 @@ import type {
   SearchLogsInput,
   SearchLogsOutput,
 } from "@ancplua/qyl-api-schema/types";
-import type { McpServer, CallToolResult, ToolAnnotations } from "@modelcontextprotocol/server";
+import type {
+  McpServer,
+  CallToolResult,
+  ServerContext,
+  ToolAnnotations,
+} from "@modelcontextprotocol/server";
 import {
   GetTraceInputSchema,
   GetTraceOutputSchema,
@@ -30,6 +35,7 @@ import {
   summarizeTraceTable,
 } from "./summaries.js";
 import { CollectorError } from "./collector.js";
+import { requestScope } from "./request-scope.js";
 import {
   redactTelemetryText,
   telemetryToolResult,
@@ -71,9 +77,9 @@ export function registerTelemetryTools(server: McpServer): void {
       outputSchema: compactOutputSchema(ListTracesOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
-    async (args: ListTracesInput): Promise<CallToolResult> => {
+    async (args: ListTracesInput, ctx: ServerContext): Promise<CallToolResult> => {
       try {
-        const { traces, mode } = await fetchTraces(args.limit ?? 20);
+        const { traces, mode } = await fetchTraces(args.limit ?? 20, requestScope(ctx));
         const output: ListTracesOutput = {
           traces: traces.map(({ spans: _spans, ...summary }) => summary),
           mode,
@@ -97,9 +103,9 @@ export function registerTelemetryTools(server: McpServer): void {
       outputSchema: compactOutputSchema(GetTraceOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
-    async (args: GetTraceInput): Promise<CallToolResult> => {
+    async (args: GetTraceInput, ctx: ServerContext): Promise<CallToolResult> => {
       try {
-        const { trace, mode } = await fetchTrace(args.trace_id);
+        const { trace, mode } = await fetchTrace(args.trace_id, requestScope(ctx));
         const output: GetTraceOutput = { trace, mode };
         return telemetryToolResult(summarizeTrace(trace, mode), output);
       } catch (err) {
@@ -120,9 +126,13 @@ export function registerTelemetryTools(server: McpServer): void {
       outputSchema: compactOutputSchema(ListSessionsOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
-    async (args: ListSessionsInput): Promise<CallToolResult> => {
+    async (args: ListSessionsInput, ctx: ServerContext): Promise<CallToolResult> => {
       try {
-        const { sessions, mode } = await fetchSessions(args.limit ?? 20, args.active_only);
+        const { sessions, mode } = await fetchSessions(
+          args.limit ?? 20,
+          args.active_only,
+          requestScope(ctx),
+        );
         const output: ListSessionsOutput = { sessions, mode };
         return telemetryToolResult(summarizeSessions(sessions, mode), output);
       } catch (err) {
@@ -143,15 +153,18 @@ export function registerTelemetryTools(server: McpServer): void {
       outputSchema: compactOutputSchema(SearchLogsOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
-    async (args: SearchLogsInput): Promise<CallToolResult> => {
+    async (args: SearchLogsInput, ctx: ServerContext): Promise<CallToolResult> => {
       try {
-        const { logs, mode } = await fetchLogs({
-          trace_id: args.trace_id,
-          service_name: args.service_name,
-          severity_min: args.severity_min,
-          query: args.query,
-          limit: args.limit ?? 50,
-        });
+        const { logs, mode } = await fetchLogs(
+          {
+            trace_id: args.trace_id,
+            service_name: args.service_name,
+            severity_min: args.severity_min,
+            query: args.query,
+            limit: args.limit ?? 50,
+          },
+          requestScope(ctx),
+        );
         const output: SearchLogsOutput = { logs, mode };
         return telemetryToolResult(summarizeLogs(logs, mode), output);
       } catch (err) {

@@ -5,6 +5,7 @@
 
 import {
   CollectorError,
+  type CollectorRequestOptions,
   collectorGet,
   parseCollectorLog,
   parseCollectorPage,
@@ -31,12 +32,15 @@ import type {
   QylTrace,
 } from "./wire.js";
 
-export async function fetchTraces(limit: number): Promise<{ traces: QylTrace[]; mode: Mode }> {
+export async function fetchTraces(
+  limit: number,
+  options: CollectorRequestOptions = {},
+): Promise<{ traces: QylTrace[]; mode: Mode }> {
   const mode = await resolveMode();
   if (mode === "demo") {
     return redactTelemetry({ traces: getDemo().traces.slice(0, limit), mode });
   }
-  const body = await collectorGet("/api/v1/traces", { limit });
+  const body = await collectorGet("/api/v1/traces", { limit }, options);
   return redactTelemetry({
     traces: parseCollectorPage(
       body,
@@ -48,7 +52,10 @@ export async function fetchTraces(limit: number): Promise<{ traces: QylTrace[]; 
   });
 }
 
-export async function fetchTrace(traceId: string): Promise<{ trace: QylTrace; mode: Mode }> {
+export async function fetchTrace(
+  traceId: string,
+  options: CollectorRequestOptions = {},
+): Promise<{ trace: QylTrace; mode: Mode }> {
   const mode = await resolveMode();
   if (mode === "demo") {
     const trace = getDemo().traces.find((t) => t.trace_id === traceId);
@@ -57,7 +64,7 @@ export async function fetchTrace(traceId: string): Promise<{ trace: QylTrace; mo
   }
   try {
     const trace = parseCollectorTrace(
-      await collectorGet(`/api/v1/traces/${encodeURIComponent(traceId)}`),
+      await collectorGet(`/api/v1/traces/${encodeURIComponent(traceId)}`, {}, options),
       `/api/v1/traces/${traceId}`,
     );
     return redactTelemetry({ trace, mode });
@@ -72,6 +79,7 @@ export async function fetchTrace(traceId: string): Promise<{ trace: QylTrace; mo
 export async function fetchSessionTraces(
   sessionId: string,
   limit: number,
+  options: CollectorRequestOptions = {},
 ): Promise<{ traces: QylTrace[]; mode: Mode }> {
   const mode = await resolveMode();
   if (mode === "demo") {
@@ -83,6 +91,7 @@ export async function fetchSessionTraces(
     const body = await collectorGet(
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/traces`,
       { limit },
+      options,
     );
     return redactTelemetry({
       traces: parseCollectorPage(
@@ -104,6 +113,7 @@ export async function fetchSessionTraces(
 export async function fetchSessions(
   limit: number,
   activeOnly?: boolean,
+  options: CollectorRequestOptions = {},
 ): Promise<{ sessions: QylSession[]; mode: Mode }> {
   const mode = await resolveMode();
   if (mode === "demo") {
@@ -112,10 +122,11 @@ export async function fetchSessions(
     ).slice(0, limit);
     return redactTelemetry({ sessions, mode });
   }
-  const body = await collectorGet("/api/v1/sessions", {
-    limit,
-    is_active: activeOnly ? true : undefined,
-  });
+  const body = await collectorGet(
+    "/api/v1/sessions",
+    { limit, is_active: activeOnly ? true : undefined },
+    options,
+  );
   return redactTelemetry({
     sessions: parseCollectorPage(
       body,
@@ -137,6 +148,7 @@ interface LogFilters {
 
 export async function fetchLogs(
   filters: LogFilters,
+  options: CollectorRequestOptions = {},
 ): Promise<{ logs: QylLogRecord[]; mode: Mode }> {
   const mode = await resolveMode();
   if (mode === "demo") {
@@ -157,13 +169,17 @@ export async function fetchLogs(
     }
     return redactTelemetry({ logs: logs.slice(0, filters.limit), mode });
   }
-  const body = await collectorGet("/api/v1/logs", {
-    trace_id: filters.trace_id,
-    service_name: filters.service_name,
-    severity_min: filters.severity_min,
-    query: filters.query,
-    limit: filters.limit,
-  });
+  const body = await collectorGet(
+    "/api/v1/logs",
+    {
+      trace_id: filters.trace_id,
+      service_name: filters.service_name,
+      severity_min: filters.severity_min,
+      query: filters.query,
+      limit: filters.limit,
+    },
+    options,
+  );
   return redactTelemetry({
     logs: parseCollectorPage(
       body,
@@ -176,23 +192,29 @@ export async function fetchLogs(
 }
 
 /** Shared by display_traces and fetch_telemetry (view "traces"). */
-export async function fetchTracesForDisplay(args: {
-  trace_id?: TraceId;
-  session_id?: SessionId;
-  limit: number;
-}): Promise<{ traces: QylTrace[]; selected_trace_id?: TraceId; mode: Mode }> {
+export async function fetchTracesForDisplay(
+  args: {
+    trace_id?: TraceId;
+    session_id?: SessionId;
+    limit: number;
+  },
+  options: CollectorRequestOptions = {},
+): Promise<{ traces: QylTrace[]; selected_trace_id?: TraceId; mode: Mode }> {
   if (args.trace_id) {
-    const { trace, mode } = await fetchTrace(args.trace_id);
+    const { trace, mode } = await fetchTrace(args.trace_id, options);
     return { traces: [trace], selected_trace_id: args.trace_id, mode };
   }
   if (args.session_id) {
-    return fetchSessionTraces(args.session_id, args.limit);
+    return fetchSessionTraces(args.session_id, args.limit, options);
   }
-  return fetchTraces(args.limit);
+  return fetchTraces(args.limit, options);
 }
 
 /** Shared by display_mcp_dashboard and fetch_telemetry (view "mcp_stats"). */
-export async function fetchMcpStats(hours: number): Promise<McpDashboardStats> {
+export async function fetchMcpStats(
+  hours: number,
+  options: CollectorRequestOptions = {},
+): Promise<McpDashboardStats> {
   const mode = await resolveMode();
   const windowEnd = Date.now();
   const windowStart = windowEnd - hours * 3_600_000;
@@ -208,7 +230,7 @@ export async function fetchMcpStats(hours: number): Promise<McpDashboardStats> {
     return redactTelemetry({ ...stats, truncated: false, mode });
   }
 
-  const body = await collectorGet("/api/v1/traces", { limit: 1000 });
+  const body = await collectorGet("/api/v1/traces", { limit: 1000 }, options);
   const page = parseCollectorPage(
     body,
     "/api/v1/traces",

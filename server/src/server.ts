@@ -22,7 +22,11 @@ import type {
   FetchTelemetryOutput,
 } from "@ancplua/qyl-api-schema/types";
 import { McpServer, ResourceNotFoundError } from "@modelcontextprotocol/server";
-import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/server";
+import type {
+  CallToolResult,
+  ReadResourceResult,
+  ServerContext,
+} from "@modelcontextprotocol/server";
 import fs from "node:fs/promises";
 import path from "node:path";
 import packageMetadata from "../package.json" with { type: "json" };
@@ -56,6 +60,7 @@ import {
 } from "./tools.js";
 import { registerCiTools } from "./ci.js";
 import { registerMetricsTools } from "./metrics-tools.js";
+import { progressReporter, requestScope } from "./request-scope.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 import type { McpTelemetryTransport } from "./mcp-semconv.js";
 import {
@@ -149,6 +154,10 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       version: packageMetadata.version,
     },
     {
+      // No `logging` capability, on purpose: MCP logging is deprecated as of
+      // revision 2026-07-28 (SEP-2577). Operational logging goes to stderr
+      // and OpenTelemetry; see request-scope.ts and DECISIONS.md 2026-09-12.
+      //
       // One hint per catalog method this server actually answers. McpServer
       // registers the resource trio on the first registerResource and the tool
       // handlers on the first registerTool; it never registers prompts/list,
@@ -184,13 +193,20 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
-    async ({ trace_id, session_id, limit }: DisplayTracesInput): Promise<CallToolResult> => {
+    async (
+      { trace_id, session_id, limit }: DisplayTracesInput,
+      ctx: ServerContext,
+    ): Promise<CallToolResult> => {
       try {
-        const result = await fetchTracesForDisplay({
-          trace_id,
-          session_id,
-          limit: limit ?? 20,
-        });
+        // A session's traces are the one display_traces path with two units a
+        // client can watch: the collector round trip, then the explorer
+        // payload. A single trace or the recent list is one round trip.
+        const progress = session_id === undefined ? undefined : progressReporter(ctx, 2);
+        const result = await fetchTracesForDisplay(
+          { trace_id, session_id, limit: limit ?? 20 },
+          requestScope(ctx),
+        );
+        await progress?.step(`Fetched ${result.traces.length} trace(s) of session ${session_id}`);
 
         let text: string;
         if (result.selected_trace_id) {
@@ -215,6 +231,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
             : {}),
           mode: result.mode,
         };
+        await progress?.step("Explorer payload ready");
 
         return telemetryToolResult(text, output);
       } catch (err) {
@@ -238,10 +255,10 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: { ui: { resourceUri: DASHBOARD_RESOURCE_URI } },
     },
-    async ({ hours }: DisplayMcpDashboardInput): Promise<CallToolResult> => {
+    async ({ hours }: DisplayMcpDashboardInput, ctx: ServerContext): Promise<CallToolResult> => {
       try {
         const window = hours ?? 24;
-        const stats = await fetchMcpStats(window);
+        const stats = await fetchMcpStats(window, requestScope(ctx));
         const output: DisplayMcpDashboardOutput = { stats };
         return telemetryToolResult(summarizeMcpStats(stats, window), output);
       } catch (err) {
@@ -273,18 +290,14 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({
-      view,
-      trace_id,
-      service_name,
-      severity_min,
-      query,
-      limit,
-      hours,
-    }: FetchTelemetryInput): Promise<CallToolResult> => {
+    async (
+      { view, trace_id, service_name, severity_min, query, limit, hours }: FetchTelemetryInput,
+      ctx: ServerContext,
+    ): Promise<CallToolResult> => {
       try {
+        const scope = requestScope(ctx);
         if (view === "mcp_stats") {
-          const stats = await fetchMcpStats(hours ?? 24);
+          const stats = await fetchMcpStats(hours ?? 24, scope);
           const output: FetchTelemetryOutput = { stats, mode: stats.mode };
           return telemetryToolResult(
             `Fetched MCP stats: ${stats.totals.requests} requests over ${hours ?? 24}h (${stats.mode} mode).`,
@@ -296,7 +309,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
           if (!trace_id) {
             throw new CollectorError('view "trace" requires a `trace_id`.');
           }
-          const { trace, mode } = await fetchTrace(trace_id);
+          const { trace, mode } = await fetchTrace(trace_id, scope);
           const output: FetchTelemetryOutput = { trace, mode };
           return telemetryToolResult(
             `Fetched trace ${shortId(trace.trace_id)} (${trace.span_count} spans, ${mode} mode).`,
@@ -305,13 +318,10 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
         }
 
         if (view === "logs") {
-          const { logs, mode } = await fetchLogs({
-            trace_id,
-            service_name,
-            severity_min,
-            query,
-            limit: limit ?? 50,
-          });
+          const { logs, mode } = await fetchLogs(
+            { trace_id, service_name, severity_min, query, limit: limit ?? 50 },
+            scope,
+          );
           const output: FetchTelemetryOutput = { logs, mode };
           return telemetryToolResult(
             `Fetched ${logs.length} logs (${mode} mode).`,
@@ -319,7 +329,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
           );
         }
 
-        const { traces, mode } = await fetchTraces(limit ?? 20);
+        const { traces, mode } = await fetchTraces(limit ?? 20, scope);
         const output: FetchTelemetryOutput = { traces, mode };
         return telemetryToolResult(
           `Fetched ${traces.length} traces (${mode} mode).`,

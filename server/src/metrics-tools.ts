@@ -15,7 +15,7 @@
  * exempting three hand-written objects from it.
  */
 
-import type { McpServer, CallToolResult } from "@modelcontextprotocol/server";
+import type { McpServer, CallToolResult, ServerContext } from "@modelcontextprotocol/server";
 import { operationInputSchema } from "./contract-operations.js";
 import {
   MetricQueryResultSchema,
@@ -36,6 +36,7 @@ import {
   summarizeMetricQuery,
   summarizeMetricSeries,
 } from "./summaries.js";
+import { requestScope } from "./request-scope.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, toolError } from "./tools.js";
 
@@ -62,9 +63,9 @@ export function registerMetricsTools(server: McpServer): void {
       outputSchema: compactOutputSchema(MetricsListResponseSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
-    async (args: ListMetricsArgs): Promise<CallToolResult> => {
+    async (args: ListMetricsArgs, ctx: ServerContext): Promise<CallToolResult> => {
       try {
-        const { metrics, mode } = await listMetrics(args);
+        const { metrics, mode } = await listMetrics(args, requestScope(ctx));
         return telemetryToolResult(summarizeMetricCatalog(metrics, mode), {
           items: metrics,
           has_more: false,
@@ -89,9 +90,9 @@ export function registerMetricsTools(server: McpServer): void {
       outputSchema: compactOutputSchema(MetricSeriesListResponseSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
-    async (args: MetricSeriesArgs): Promise<CallToolResult> => {
+    async (args: MetricSeriesArgs, ctx: ServerContext): Promise<CallToolResult> => {
       try {
-        const { series, mode } = await listMetricSeries(args);
+        const { series, mode } = await listMetricSeries(args, requestScope(ctx));
         return telemetryToolResult(summarizeMetricSeries(series, mode), {
           items: series,
           has_more: false,
@@ -117,9 +118,9 @@ export function registerMetricsTools(server: McpServer): void {
       outputSchema: compactOutputSchema(MetricQueryResultSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
     },
-    async (args: QueryMetricArgs): Promise<CallToolResult> => {
+    async (args: QueryMetricArgs, ctx: ServerContext): Promise<CallToolResult> => {
       try {
-        const { result, mode } = await queryMetric(args);
+        const { result, mode } = await queryMetric(args, requestScope(ctx));
         return telemetryToolResult(summarizeMetricQuery(result, mode), result);
       } catch (error) {
         return toolError(error);
