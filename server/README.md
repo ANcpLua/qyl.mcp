@@ -24,9 +24,9 @@ It is an OAuth 2.1 resource server, so an unauthenticated request answers `401`
 with an RFC 9728 protected-resource document that a stock MCP client follows on
 its own.
 
-Both speak protocol revision `2026-07-28` and serve 2025-era clients as well,
-on MCP TypeScript SDK 2.0.0 — Streamable HTTP through `createMcpHandler`
-(`legacy: "stateless"`), stdio through `serveStdio` (its default legacy serving).
+Both accept only protocol revision `2026-07-28`, on MCP TypeScript SDK 2.0.0 —
+Streamable HTTP through `createMcpHandler` and stdio through `serveStdio`, each
+with `legacy: "reject"`.
 The HTTP server serves a product page at `/`; `/mcp` is the only protocol
 endpoint.
 
@@ -81,6 +81,22 @@ The HTTP entry is a web-standard fetch handler served by its default export,
 so serving it requires Bun.
 
 ## Release notes
+
+### 6.0.0
+
+- Revision `2026-07-28` only, again, on both transports: `createMcpHandler`
+  and `serveStdio` run with `legacy: "reject"`, so a 2025-era `initialize` is
+  answered with `-32022` naming the served revision. 5.2.0 served the 2025 era
+  for one release; that serving mode is withdrawn. Breaking for any host that
+  opens with `initialize`, Claude Code's stdio client included: such a host
+  needs a client that opens with `server/discover`. On the SDK's own client that
+  is `versionNegotiation: { mode: "auto" }` (or a pin on `2026-07-28`); the
+  default `mode: "legacy"` cannot reach this server.
+- Gate for the flip: three independent agents, given only the endpoint and the
+  stdio command and forbidden to read the source, each connected over both
+  transports on their own and listed the eleven tools; each also confirmed that
+  the SDK default is refused. The tool surface, manifest snapshot and contract
+  handshake are unchanged from 5.2.0.
 
 ### 5.2.0
 

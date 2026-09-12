@@ -265,15 +265,16 @@ export interface ServeOptions {
 }
 
 /**
- * Revision 2026-07-28 natively; a 2025-era request is served statelessly by a
- * fresh instance of the same factory (the SDK's `legacy: "stateless"`, its
- * default). Sessions are a 2025 concept: a 2025 GET or DELETE answers 405.
+ * Revision 2026-07-28 only: a 2025-era request is answered with `-32022`
+ * UnsupportedProtocolVersion naming the served revision; there is no legacy
+ * serving and no session. 5.2.0 served the 2025 era statelessly for one
+ * release; 6.0.0 withdrew it, see startStdioServer.
  */
 export function createHostedHandler(
   factory: Parameters<typeof createMcpHandler>[0],
   onerror: (error: unknown) => void,
 ): McpHttpHandler {
-  return createMcpHandler(factory, { legacy: "stateless", onerror });
+  return createMcpHandler(factory, { legacy: "reject", onerror });
 }
 
 /**
@@ -339,17 +340,21 @@ async function createHostedRuntime(
 }
 
 /**
- * Both transports serve 2025-era clients. serveStdio's default pins a 2025-era
- * opening to a second instance of the same factory; the hosted handler serves
- * a 2025 request statelessly from a fresh instance. The tool surface, the
- * manifest snapshot and the contract handshake are identical at either
- * revision, so there is one contract and one README. Until 5.2.0 both
- * transports rejected the 2025 era with `-32022`, which refused every shipping
- * host of the day; that cost was paid by users, not by this server.
+ * Revision 2026-07-28 only, on every transport. serveStdio's default would
+ * serve a 2025-era opening from a second, pinned instance of the same factory;
+ * it is deliberately not taken. This server is a closed world whose whole
+ * surface — the pinned tool manifest, the startup contract handshake, the
+ * product page the deployment verifier gates — is stated at one revision, and
+ * the modern era is the one without sessions, server push or an `initialize`
+ * round trip. A 2025-era client gets `-32022` naming the revision this build
+ * serves. That is a legible failure, and the fix is a client that speaks
+ * `server/discover`: the SDK's own client does with `versionNegotiation`, and
+ * in the 6.0.0 gate three independent agents each connected to this exact
+ * build without being told about eras.
  */
 export function startStdioServer(serverFactory: () => McpServer): StdioServerHandle {
   const handle = serveStdio(serverFactory, {
-    legacy: "serve",
+    legacy: "reject",
     onerror: (error) => reportError("Standalone MCP stdio", error),
   });
   let shuttingDown = false;

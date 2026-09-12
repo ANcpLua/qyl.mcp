@@ -50,8 +50,7 @@ healthcheck. Neither is a protocol endpoint — `/mcp` is the only one.
 npx qyl-mcp-server --stdio
 ```
 
-Without `--stdio` it serves Streamable HTTP (revision `2026-07-28`, and the 2025
-revisions statelessly) on
+Without `--stdio` it serves Streamable HTTP (revision `2026-07-28` only) on
 `http://127.0.0.1:3001/mcp`; set `PORT` to change it. The local default binds to
 loopback only and accepts local or absent browser origins.
 
@@ -111,9 +110,9 @@ and persistent `Cookie` headers are rejected.
 Starting a stdio server launches code with your permissions, so review the exact
 executable, arguments, working directory, and environment references first.
 
-**Protocol.** The server speaks revision `2026-07-28` and serves the 2025
-revisions too, so a host on either era connects; a 2025 host gets stateless
-serving (no session, no server-initiated requests). There is no setting.
+**Protocol.** The server speaks revision `2026-07-28` only. A 2025-era host is
+refused with `-32022` naming that revision; a host that opens with
+`server/discover` connects. There is no fallback and no setting.
 
 **Safety.** Tool annotations are hints, not permissions. Only a tool explicitly
 marked read-only, non-destructive, and closed-world runs without confirmation.
