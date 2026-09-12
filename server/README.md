@@ -96,6 +96,17 @@ so serving it requires Bun.
 
 ## Release notes
 
+### 6.1.1
+
+- The bundled viewers no longer ask for progress they never read: the MCP
+  Apps client passed a no-op `onprogress` on every `tools/call`, which put a
+  `progressToken` on each request and, since 6.1.0, had the server answer
+  with notifications nobody consumed. A viewer that wants progress passes its
+  own callback.
+- `verify:frame` runs as a step of `bun run test`: every tool in the manifest
+  must be registered inside `runTool` under its own name, so a tool cannot
+  ship without cancellation, progress and its log line.
+
 ### 6.1.0
 
 - Every tool handler runs inside `runTool`, which resolves the SDK request

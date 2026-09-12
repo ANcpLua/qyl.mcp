@@ -72,8 +72,16 @@ run with `legacy: "reject"`, so a 2025-era `initialize` gets `-32022` naming `20
 `server/discover` — on the SDK's `Client` that is `versionNegotiation: { mode: 'auto' }` or a pin;
 the default `mode: 'legacy'` cannot connect. Proven at the 6.0.0 gate by three agents that were
 told nothing about eras.
-Sampling, roots, and the `logging/setLevel` capability are deprecated as of `2026-07-28`
-(SEP-2577) — reach for elicitation via `input_required` first.
+Sampling, roots, and the `logging` capability are deprecated as of `2026-07-28` (SEP-2577) and
+stay functional through the deprecation window — reach for elicitation via `input_required`
+first. qyl.mcp uses none of sampling, roots, tasks or SSE. It does keep MCP logging (6.1.0):
+every tool runs inside `runTool` (`server/src/request-scope.ts`), which forwards the cancellation
+signal, sends progress to a `progressToken`, and logs one `notifications/message` per call.
+Measured on SDK 2.0.0 for the modern era: `ctx.mcpReq.log` sends only when the request carried
+`_meta["io.modelcontextprotocol/logLevel"]`, `logging/setLevel` is refused with
+`METHOD_NOT_SUPPORTED_BY_PROTOCOL_VERSION`, and the SDK `Client` has no option that sets the key —
+the caller puts it in `_meta`. `verify:frame` fails the test run on a tool registered outside
+the frame.
 
 Full era matrix, serving patterns, sessions, notifications: `references/serving-and-eras.md`.
 

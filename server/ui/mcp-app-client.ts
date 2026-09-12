@@ -218,10 +218,13 @@ export class App extends Protocol<BaseContext> {
     input: { name: string; arguments?: Record<string, unknown> },
     options?: RequestOptions,
   ): Promise<CallToolResult> {
+    // No default `onprogress`: a callback here makes every call carry a
+    // progressToken, and the server answers a token with notifications the
+    // viewer never reads. A caller that wants progress passes its own.
     return this.request(
       { method: "tools/call", params: input },
       CallToolResultSchema,
-      { onprogress: () => {}, resetTimeoutOnProgress: true, ...options },
+      options,
     );
   }
 
