@@ -14,7 +14,7 @@
     "@ancplua/qyl-api-schema": "10.0.1",
     "@modelcontextprotocol/core": "2.0.0",
     "@modelcontextprotocol/server": "2.0.0",
-    "qyl-mcp-server": "^5.0.0",
+    "qyl-mcp-server": "^6.0.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^4.5.4"
