@@ -27,7 +27,7 @@ Nine published packages; qyl.mcp installs five:
 | Package | Contains | qyl.mcp uses it for |
 | --- | --- | --- |
 | `@modelcontextprotocol/server` | `McpServer`, `createMcpHandler`, `ProtocolError` + subclasses, `inputRequired`, OAuth server helpers (`requireBearerAuth`, `oauthMetadataResponse`) | the qyl MCP server |
-| `@modelcontextprotocol/server/stdio` | `serveStdio`, `StdioServerTransport` (Node-only subpath) | stdio entry (`legacy: "reject"`) |
+| `@modelcontextprotocol/server/stdio` | `serveStdio`, `StdioServerTransport` (Node-only subpath) | stdio entry (`legacy: "serve"`, since 5.2.0) |
 | `@modelcontextprotocol/client` | `Client`, `StreamableHTTPClientTransport`, `versionNegotiation` | dynamic foreign-server connections |
 | `@modelcontextprotocol/core` | **Zod schema constants only** (`CallToolResultSchema`, `OAuthMetadataSchema`, …) | validating raw wire JSON (native-execution, oauth) |
 | `@modelcontextprotocol/node` / `express` | Node/Express adapters over `createMcpHandler` | HTTP hosting |
@@ -67,7 +67,8 @@ An **era** is a behavior family decided once at connect time:
   client-opened `subscriptions/listen` stream; `_meta` envelope on every request.
 
 qyl.mcp serves **both** eras over HTTP from one `createMcpHandler` factory (the factory receives
-`{ era }`), and **rejects legacy on stdio** (`serveStdio(factory, { legacy: "reject" })`).
+`{ era }`), and **serves legacy on stdio too** (`serveStdio(factory, { legacy: "serve" })`, the SDK
+default, explicit since 5.2.0; before that both transports answered 2025-era clients with `-32022`).
 Sampling, roots, and the `logging/setLevel` capability are deprecated as of `2026-07-28`
 (SEP-2577) — reach for elicitation via `input_required` first.
 

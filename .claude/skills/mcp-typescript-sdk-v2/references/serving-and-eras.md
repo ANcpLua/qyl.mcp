@@ -45,11 +45,12 @@ const handler = createMcpHandler(({ era }) => {
 
 ```ts
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
-const handle = serveStdio(serverFactory, { legacy: 'reject', onerror: reportError });
+const handle = serveStdio(serverFactory, { legacy: 'serve', onerror: reportError });
 // handle.close() on shutdown
 ```
 
-qyl.mcp rejects legacy on stdio. `serveStdio` routes the instance's own `send*ListChanged()` /
+qyl.mcp serves legacy on stdio (`'serve'` is the SDK default, written out since 5.2.0; `'reject'`
+answers 2025-era clients with `-32022`, which refused every shipping host of the day). `serveStdio` routes the instance's own `send*ListChanged()` /
 `sendResourceUpdated()` onto its open subscription stream — no `notify` facade needed on stdio.
 
 ## Notifications on modern connections
