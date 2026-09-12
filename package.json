@@ -11,7 +11,7 @@
   "scripts": {
     "build": "bun run --cwd server build && bun run --cwd workbench build && bun run --cwd dashboard build",
     "postbuild": "node scripts/build-site.mjs",
-    "test": "bun run --cwd server test && bun run --cwd workbench test && bun run --cwd dashboard test && bun run postbuild && node --test scripts/build-site.test.mjs",
+    "test": "bun install --frozen-lockfile && bun run --cwd server test && bun run --cwd workbench test && bun run --cwd dashboard test && bun run postbuild && node --test scripts/build-site.test.mjs",
     "start": "bun server/dist/main.js",
     "start:workbench": "node workbench/dist/main.js",
     "smoke": "bun run --cwd server smoke && bun run --cwd workbench smoke",

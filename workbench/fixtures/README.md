@@ -28,3 +28,7 @@ node workbench/fixtures/mcp-conformance-http.mjs
 
 The credential is compared without logging or returning it. The HTTP server is
 loopback-bound by default and uses the SDK's MCP Express host-header protection.
+
+A third entry, `mcp-chatty-stdio.mjs`, is the same stdio fixture behind four
+megabytes of stderr noise written before it serves, so the workbench's stderr
+handling is tested against a server that floods.
