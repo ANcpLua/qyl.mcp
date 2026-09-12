@@ -24,8 +24,9 @@ It is an OAuth 2.1 resource server, so an unauthenticated request answers `401`
 with an RFC 9728 protected-resource document that a stock MCP client follows on
 its own.
 
-Both accept only protocol revision `2026-07-28`, on MCP TypeScript SDK 2.0.0 —
-Streamable HTTP through `createMcpHandler`, stdio through `serveStdio`.
+Both speak protocol revision `2026-07-28` and serve 2025-era clients as well,
+on MCP TypeScript SDK 2.0.0 — Streamable HTTP through `createMcpHandler`
+(`legacy: "stateless"`), stdio through `serveStdio` (its default legacy serving).
 The HTTP server serves a product page at `/`; `/mcp` is the only protocol
 endpoint.
 
@@ -80,6 +81,19 @@ The HTTP entry is a web-standard fetch handler served by its default export,
 so serving it requires Bun.
 
 ## Release notes
+
+### 5.2.0
+
+- 2025-era MCP clients are served again. Since 4.0.0 both transports rejected
+  any client that did not speak revision `2026-07-28` with `-32022`, which
+  refused every shipping host of the day, including Claude Code's stdio
+  client on `2025-11-25`. The hosted handler now serves those clients
+  statelessly (`legacy: "stateless"`, the SDK default) and the stdio server
+  takes `serveStdio`'s default legacy serving. Modern clients are unchanged;
+  the manifest, the contract handshake and the tool surface are the same at
+  either revision.
+- The README no longer points at `qyl/ARCHITECTURE-1.0.0.md`, which was
+  deleted on 2026-09-07; the qyl README states the architecture in place.
 
 ### 5.1.0
 

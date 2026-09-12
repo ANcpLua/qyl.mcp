@@ -265,14 +265,15 @@ export interface ServeOptions {
 }
 
 /**
- * Revision 2026-07-28 only, on every transport: a 2025-era request is answered
- * with `-32022` UnsupportedProtocolVersion; there is no legacy serving and no session.
+ * Revision 2026-07-28 natively; a 2025-era request is served statelessly by a
+ * fresh instance of the same factory (the SDK's `legacy: "stateless"`, its
+ * default). Sessions are a 2025 concept: a 2025 GET or DELETE answers 405.
  */
 export function createHostedHandler(
   factory: Parameters<typeof createMcpHandler>[0],
   onerror: (error: unknown) => void,
 ): McpHttpHandler {
-  return createMcpHandler(factory, { legacy: "reject", onerror });
+  return createMcpHandler(factory, { legacy: "stateless", onerror });
 }
 
 /**
@@ -338,27 +339,17 @@ async function createHostedRuntime(
 }
 
 /**
- * Why `legacy: "reject"` rather than the SDK's default `"serve"`.
- *
- * serveStdio defaults to serving a 2025-era opening from a second, pinned
- * instance of the same factory, so taking the default would make stdio accept
- * old clients for free. It is deliberately not taken: this server is a closed
- * world whose whole surface — the pinned tool manifest, the startup contract
- * handshake against the collector's advertised revision, and the landing page
- * the deployment verifier gates — is stated at exactly one protocol revision,
- * 2026-07-28. `createMcpHandler` cannot serve the 2025 era for the hosted
- * endpoint without also serving a second wire format for the same tools, and a
- * server that answers "only 2026-07-28" over HTTP while quietly answering 2025
- * over stdio has two contracts and one README.
- *
- * The cost is real and accepted: a 2025-era client launching this over npx gets
- * `-32022` naming the revisions this build serves, instead of a working
- * session. That is a legible failure, and the fix is a client upgrade rather
- * than a second serving mode nothing here tests.
+ * Both transports serve 2025-era clients. serveStdio's default pins a 2025-era
+ * opening to a second instance of the same factory; the hosted handler serves
+ * a 2025 request statelessly from a fresh instance. The tool surface, the
+ * manifest snapshot and the contract handshake are identical at either
+ * revision, so there is one contract and one README. Until 5.2.0 both
+ * transports rejected the 2025 era with `-32022`, which refused every shipping
+ * host of the day; that cost was paid by users, not by this server.
  */
 export function startStdioServer(serverFactory: () => McpServer): StdioServerHandle {
   const handle = serveStdio(serverFactory, {
-    legacy: "reject",
+    legacy: "serve",
     onerror: (error) => reportError("Standalone MCP stdio", error),
   });
   let shuttingDown = false;

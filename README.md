@@ -21,9 +21,9 @@ Bun 1.4 is the runtime and the only package manager: `bun install`, `bun run
 build`, `bun run test`, one `bun.lock`. The HTTP entry is a web-standard fetch
 handler served by its default export, so serving it needs Bun; the published
 `--stdio` binary is the one thing that also runs under plain Node 24, because
-that is how `npx` clients launch it. Architecture and the component ledger live in
-[`qyl/ARCHITECTURE-1.0.0.md`](https://github.com/ANcpLua/qyl); this file does not
-restate them.
+that is how `npx` clients launch it. Architecture lives in the
+[qyl README](https://github.com/ANcpLua/qyl#readme), which states the shape and
+names the gates that enforce it; this file does not restate it.
 
 ---
 
@@ -50,7 +50,8 @@ healthcheck. Neither is a protocol endpoint — `/mcp` is the only one.
 npx qyl-mcp-server --stdio
 ```
 
-Without `--stdio` it serves Streamable HTTP (revision `2026-07-28` only) on
+Without `--stdio` it serves Streamable HTTP (revision `2026-07-28`, and the 2025
+revisions statelessly) on
 `http://127.0.0.1:3001/mcp`; set `PORT` to change it. The local default binds to
 loopback only and accepts local or absent browser origins.
 
@@ -110,8 +111,9 @@ and persistent `Cookie` headers are rejected.
 Starting a stdio server launches code with your permissions, so review the exact
 executable, arguments, working directory, and environment references first.
 
-**Protocol.** Every user-configured connection pins revision `2026-07-28` and
-fails when a peer cannot negotiate it. There is no fallback and no setting.
+**Protocol.** The server speaks revision `2026-07-28` and serves the 2025
+revisions too, so a host on either era connects; a 2025 host gets stateless
+serving (no session, no server-initiated requests). There is no setting.
 
 **Safety.** Tool annotations are hints, not permissions. Only a tool explicitly
 marked read-only, non-destructive, and closed-world runs without confirmation.

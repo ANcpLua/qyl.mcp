@@ -6,7 +6,6 @@ import {
   McpServer,
   OAuthError,
   OAuthErrorCode,
-  ProtocolErrorCode,
   requireBearerAuth,
   type AuthInfo,
   type McpHttpHandler,
@@ -294,7 +293,7 @@ test("a modern client reaches the tools through the whole pipeline", async (cont
   assert.deepEqual(result.content, [{ type: "text", text: "strict-dcr-client" }]);
 });
 
-test("a 2025-era client is refused after the gate with the supported revision", async (context) => {
+test("a 2025-era client is served statelessly after the gate", async (context) => {
   const endpoint = hostedEndpoint();
   const client = new Client({ name: "legacy-pipeline-client", version: "1.0.0" });
   context.after(async () => {
@@ -320,17 +319,16 @@ test("a 2025-era client is refused after the gate with the supported revision", 
       },
     }),
   }));
-  assert.equal(response.status, 400);
-  const body = await response.json() as {
-    error: { code: number; data: { supported: string[]; requested: string } };
-  };
-  assert.equal(body.error.code, ProtocolErrorCode.UnsupportedProtocolVersion);
-  assert.deepEqual(body.error.data.supported, ["2026-07-28"]);
+  assert.equal(response.status, 200);
 
-  await assert.rejects(client.connect(new StreamableHTTPClientTransport(resourceServerUrl, {
+  await client.connect(new StreamableHTTPClientTransport(resourceServerUrl, {
     fetch: transportFetch(endpoint),
     requestInit: { headers: { authorization: "Bearer good" } },
-  })));
+  }));
+  assert.equal(client.getProtocolEra(), "legacy");
+  assert.deepEqual((await client.listTools()).tools.map((tool) => tool.name), ["auth_context"]);
+  const result = await client.callTool({ name: "auth_context", arguments: {} });
+  assert.deepEqual(result.content, [{ type: "text", text: "strict-dcr-client" }]);
 });
 
 function testVerifier(): OAuthTokenVerifier {
