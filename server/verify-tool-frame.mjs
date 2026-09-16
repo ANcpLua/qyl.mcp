@@ -16,7 +16,7 @@
  *      registered somewhere the scan does not see is a scan defect, and this
  *      is what makes it fail loudly instead of passing by omission.
  *
- * Run: npm run verify:frame  (also runs as a step of npm test)
+ * Run: bun run verify:frame  (also runs as a step of `bun run test`)
  */
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";

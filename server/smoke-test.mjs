@@ -5,7 +5,7 @@
  * tool surface, MCP Apps metadata, trace/log behavior, explicit mode
  * selection, generated-demo invariants, and dashboard aggregation.
  *
- * Run: node smoke-test.mjs   (after `npm run build`)
+ * Run: node smoke-test.mjs   (after `bun run build`)
  */
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { Client } from "@modelcontextprotocol/client";

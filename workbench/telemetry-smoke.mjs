@@ -244,7 +244,7 @@ try {
   }
 
   if (!existsSync(workbenchMain)) {
-    throw new Error(`qyl MCP workbench build not found at ${workbenchMain}; run npm run build`);
+    throw new Error(`qyl MCP workbench build not found at ${workbenchMain}; run bun run build`);
   }
   const workbenchEnv = {
     ...process.env,
@@ -410,7 +410,7 @@ try {
   workbench = undefined;
 
   if (!existsSync(mcpServerMain)) {
-    throw new Error(`qyl MCP server build not found at ${mcpServerMain}; run npm run build`);
+    throw new Error(`qyl MCP server build not found at ${mcpServerMain}; run bun run --cwd ../server build`);
   }
   const transport = new StdioClientTransport({
     command: process.execPath,

@@ -11,7 +11,7 @@
  * The workbench is deliberately out of scope: it is the open-world client and
  * validates servers it did not write, at runtime, by design.
  *
- * Run: npm run verify:shapes  (also runs as the first step of npm test)
+ * Run: bun run verify:shapes  (also runs as the first step of `bun run test`)
  */
 import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";

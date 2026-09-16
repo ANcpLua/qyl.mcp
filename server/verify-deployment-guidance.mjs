@@ -7,7 +7,7 @@
  * section together with the shipped HTML catches both prose drift and a build
  * that publishes guidance different from its source.
  *
- * Run after `npm run build --workspace server`.
+ * Run after `bun run --cwd server build`.
  */
 import { readFile } from "node:fs/promises";
 

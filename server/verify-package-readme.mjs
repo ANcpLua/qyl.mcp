@@ -23,7 +23,7 @@
  * the manifest is authoritative and defers to it, which is a legitimate choice
  * for a page nobody installs from; gating it too would punish that.
  *
- * Run: npm run verify:readme  (also runs as a step of npm test)
+ * Run: bun run verify:readme  (also runs as a step of `bun run test`)
  */
 import { readFile } from "node:fs/promises";
 
@@ -93,7 +93,7 @@ if (failures.length > 0) {
     `verify:readme failed (${failures.length} problem(s)):\n\n` +
       failures.map((failure) => `  ${failure}`).join("\n\n") +
       "\n\n  The manifest is the source of truth. Regenerate it with " +
-      "`npm run snapshot:tools`, then document what changed.",
+      "`bun run snapshot:tools`, then document what changed.",
   );
 }
 
