@@ -72,4 +72,4 @@ if (failures.length > 0) {
   );
 }
 
-console.log(`verify:frame ok — ${framed.size} tool(s) framed: ${[...framed.keys()].sort().join(", ")}`);
+console.log(`verify:frame ok — ${framed.size} tool(s) framed: ${[...framed.keys()].sort((a, b) => a.localeCompare(b)).join(", ")}`);

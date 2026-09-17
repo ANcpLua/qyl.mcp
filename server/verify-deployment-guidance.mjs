@@ -98,7 +98,7 @@ function markdownSection(markdown, heading) {
   const headingPattern = new RegExp(`^## ${escapeRegExp(heading)}\\s*$`, "mu");
   const match = headingPattern.exec(markdown);
   if (match === null) {
-    throw new Error(`verify:deployment-guidance: README.md has no \"## ${heading}\" section`);
+    throw new Error(`verify:deployment-guidance: README.md has no "## ${heading}" section`);
   }
 
   const start = match.index + match[0].length;

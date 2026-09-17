@@ -221,7 +221,7 @@ function ProtocolTimeline({ events, executionId }: { events: ProtocolEvent[]; ex
             <dl className="detail-grid">
               <div><dt>Direction</dt><dd>{selected.direction}</dd></div>
               <div><dt>Kind</dt><dd>{selected.kind}</dd></div>
-              <div><dt>Request id</dt><dd>{selected.request_id === undefined ? "—" : String(selected.request_id)}</dd></div>
+              <div><dt>Request id</dt><dd>{selected.request_id === undefined ? "—" : typeof selected.request_id === "string" || typeof selected.request_id === "number" ? String(selected.request_id) : JSON.stringify(selected.request_id)}</dd></div>
               <div><dt>Redacted</dt><dd>{selected.redaction_applied ? "yes" : "no"}</dd></div>
             </dl>
             <JsonCodeView value={selected.payload} label="Protocol payload" onCopy={copyText} />

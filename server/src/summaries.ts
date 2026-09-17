@@ -7,6 +7,7 @@ import type {
   MetricQueryResult,
   MetricSeries,
 } from "@ancplua/qyl-api-schema/types";
+import { formatAttributeValue } from "./lib/attribute-value.js";
 import type {
   McpDashboardStats,
   Mode,
@@ -205,7 +206,7 @@ export function summarizeMetricSeries(series: readonly MetricSeries[], mode: Mod
   if (series.length === 0) return `No series match those attributes (${mode} mode).`;
   const rows = series.map((stream) => {
     const attributes = stream.attributes
-      .map((attribute) => `${attribute.key}=${String(attribute.value)}`)
+      .map((attribute) => `${attribute.key}=${formatAttributeValue(attribute.value)}`)
       .join(" ");
     const service = stream.service_name ? `${stream.service_name} ` : "";
     return `${stream.series_id} ${service}${attributes || "(no attributes)"}`;
@@ -233,7 +234,7 @@ export function summarizeMetricQuery(result: MetricQueryResult, mode: Mode): str
       .filter((value): value is number => value !== null);
     const label = stream.attributes.length === 0
       ? "all series"
-      : stream.attributes.map((a) => `${a.key}=${String(a.value)}`).join(" ");
+      : stream.attributes.map((a) => `${a.key}=${formatAttributeValue(a.value)}`).join(" ");
     if (values.length === 0) return `${label}: no recorded values`;
     const min = Math.min(...values);
     const max = Math.max(...values);

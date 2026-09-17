@@ -870,9 +870,7 @@ function metadataOnlyMessage(
         return {
             jsonrpc: message.jsonrpc,
             id: sanitizeMetadataId(message.id, redactor),
-            result: {
-                ...(resultIsToolError(message.result) ? { isError: true } : {}),
-            },
+            result: resultIsToolError(message.result) ? { isError: true } : {},
         };
     }
     return {

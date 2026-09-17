@@ -347,7 +347,7 @@ export class ExecutionService {
         const correlation: ProtocolExecutionCorrelation = {
             executionId,
             workspaceId: request.workspaceId,
-            ...(request.correlation ?? {}),
+            ...request.correlation,
         };
         const record: ExecutionRecord = {
             id: executionId,

@@ -843,14 +843,7 @@ function reconcileExecution(execution: PersistedExecution, completedAt: string):
         || evidence.status !== execution.status) {
         throw new Error(`Interrupted execution '${execution.id}' has invalid durable evidence.`);
     }
-    const {
-        completedAt: _completedAt,
-        durationMs: _durationMs,
-        result: _result,
-        error: _error,
-        cancelledAt: _cancelledAt,
-        ...preserved
-    } = evidence;
+    const preserved = withoutCompletion(evidence);
     const startedAtMs = evidence.startedAt === undefined ? undefined : Date.parse(evidence.startedAt);
     const completedAtMs = Date.parse(completedAt);
     const recovered: ExecutionRecord = {
@@ -1106,4 +1099,13 @@ function upsert<T extends { id: string }>(values: T[], value: T): void {
 
 function defaultStatePath(): string {
     return process.env.QYL_MCP_STATE_PATH ?? join(homedir(), ".qyl", "mcp-workbench.json");
+}
+
+type CompletionFields = "completedAt" | "durationMs" | "result" | "error" | "cancelledAt";
+
+/** The record without the fields a completed run would have written; recovery rewrites those. */
+function withoutCompletion<T extends object>(evidence: T): Omit<T, CompletionFields> {
+    const copy = { ...evidence } as Record<string, unknown>;
+    for (const key of ["completedAt", "durationMs", "result", "error", "cancelledAt"]) delete copy[key];
+    return copy as Omit<T, CompletionFields>;
 }

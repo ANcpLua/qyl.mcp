@@ -40,7 +40,7 @@ export async function evaluateAssertions(
     assertions: readonly WorkbenchTestAssertion[],
     evidence: AssertionEvidence,
 ): Promise<WorkbenchAssertionResult[]> {
-    const results = new Array<WorkbenchAssertionResult>(assertions.length);
+    const results = Array.from<WorkbenchAssertionResult>({ length: assertions.length });
     let nextIndex = 0;
     const workerCount = Math.min(PATTERN_WORKER_CONCURRENCY, assertions.length);
     await Promise.all(Array.from({ length: workerCount }, async () => {
@@ -170,7 +170,7 @@ async function evaluateValueAssertion(
                 );
             }
             const flags = assertion.flags ?? "u";
-            if ([...flags].some((flag) => !ALLOWED_PATTERN_FLAGS.has(flag))) {
+            if (Array.from(flags).some((flag) => !ALLOWED_PATTERN_FLAGS.has(flag))) {
                 return result(assertion, false, "Pattern flags may contain only i, m, s, and u.");
             }
             if (new Set(flags).size !== flags.length) {

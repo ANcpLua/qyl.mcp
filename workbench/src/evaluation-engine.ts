@@ -336,8 +336,8 @@ async function mapConcurrent<T, R>(
         skipped: (value: T) => R;
     },
 ): Promise<R[]> {
-    const results = new Array<R>(values.length);
-    const completed = new Array<boolean>(values.length).fill(false);
+    const results = Array.from<R>({ length: values.length });
+    const completed = Array.from({ length: values.length }, () => false);
     let nextIndex = 0;
     let stopped = false;
     const worker = async (): Promise<void> => {

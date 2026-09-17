@@ -74,7 +74,7 @@ function preferredType(schema: JsonSchema, value: JsonValue | undefined): JsonSc
 }
 
 function domToken(value: string): string {
-  return [...value]
+  return Array.from(value)
     .map((character) => /[a-zA-Z0-9_-]/u.test(character)
       ? character
       : `_${character.codePointAt(0)!.toString(16)}_`)

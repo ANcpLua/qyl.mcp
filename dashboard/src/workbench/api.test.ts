@@ -1,5 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+
+function requestUrl(input: string | URL | Request | undefined): string {
+  if (input === undefined) return "";
+  if (typeof input === "string") return input;
+  return input instanceof URL ? input.href : input.url;
+}
+
+function bodyText(body: BodyInit | null | undefined): string {
+  if (typeof body !== "string") throw new Error(`expected a string body, got ${body === null || body === undefined ? "nothing" : typeof body}`);
+  return body;
+}
 import type {
   WorkbenchServerId,
   WorkbenchTestCaseId,
@@ -34,7 +45,7 @@ test("API requests retain loopback cookie authentication and validate envelopes"
   try {
     const session = await new WorkbenchApi("http://127.0.0.1:18888").getSession();
     assert.equal(session.active_workspace_id, "workspace-1");
-    assert.equal(String(request?.input), "http://127.0.0.1:18888/workbench/session");
+    assert.equal(requestUrl(request?.input), "http://127.0.0.1:18888/workbench/session");
     assert.equal(request?.init?.credentials, "same-origin");
     assert.match(new Headers(request?.init?.headers).get("Accept") ?? "", /application\/problem\+json/u);
   } finally {
@@ -70,8 +81,8 @@ test("API paths encode workspace identifiers and never synthesize secret values"
         headers: [{ name: "Authorization", secret: { source: "environment", environment_variable: "MCP_TOKEN" }, scheme: "bearer" }],
       },
     });
-    assert.equal(String(request?.input), "/workbench/workspaces/workspace%2Fone/servers");
-    const body = JSON.parse(String(request?.init?.body)) as Record<string, unknown>;
+    assert.equal(requestUrl(request?.input), "/workbench/workspaces/workspace%2Fone/servers");
+    const body = JSON.parse(bodyText(request?.init?.body)) as Record<string, unknown>;
     assert.doesNotMatch(JSON.stringify(body), /Bearer [A-Za-z0-9]/u);
     assert.match(JSON.stringify(body), /MCP_TOKEN/u);
   } finally {
@@ -86,8 +97,8 @@ test("PATCH clients validate generated update contracts and response envelopes",
   const serverId = "server/one" as WorkbenchServerId;
   const testCaseId = "test/one" as WorkbenchTestCaseId;
   globalThis.fetch = (input, init) => {
-    requests.push({ input: String(input), init: init ?? {} });
-    const path = String(input);
+    requests.push({ input: requestUrl(input), init: init ?? {} });
+    const path = requestUrl(input);
     if (path.endsWith("/workspaces/workspace%2Fone")) {
       return Promise.resolve(jsonResponse({
         id: "workspace/one",
@@ -171,8 +182,8 @@ test("PATCH clients validate generated update contracts and response envelopes",
       "/workbench/workspaces/workspace%2Fone/test-cases/test%2Fone",
       "/workbench/workspaces/workspace%2Fone/suites/suite%2Fone",
     ]);
-    assert.match(String(requests[1]?.init.body), /MCP_TOKEN/u);
-    assert.doesNotMatch(String(requests[1]?.init.body), /remote-service-token/u);
+    assert.match(bodyText(requests[1]?.init.body), /MCP_TOKEN/u);
+    assert.doesNotMatch(bodyText(requests[1]?.init.body), /remote-service-token/u);
 
     const requestCount = requests.length;
     await assert.rejects(
@@ -248,7 +259,7 @@ test("evaluation requests preserve explicit run-level confirmation", async () =>
       /violated the published Qyl contract/u,
     );
 
-    const bodies = requests.map((request) => JSON.parse(String(request.body)) as Record<string, unknown>);
+    const bodies = requests.map((request) => JSON.parse(bodyText(request.body)) as Record<string, unknown>);
     assert.deepEqual(bodies.map((body) => body.confirmation), [confirmation, confirmation]);
     assert.ok(bodies.every((body) => typeof body.idempotency_key === "string"));
   } finally {

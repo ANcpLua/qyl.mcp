@@ -280,7 +280,8 @@ export function validateJsonSchema(
   }
 
   if (typeof value === "string") {
-    const length = [...value].length;
+    // JSON Schema defines string length in Unicode code points, which is what code-point iteration counts.
+    const length = Array.from(value).length;
     if (schema.minLength !== undefined && length < schema.minLength) {
       issues.push(issue(pointer, "minLength", `Must contain at least ${schema.minLength} characters.`));
     }

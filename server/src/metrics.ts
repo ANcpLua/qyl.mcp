@@ -16,6 +16,7 @@ import type {
   MetricSeriesResult,
   Attribute,
 } from "@ancplua/qyl-api-schema/types";
+import { formatAttributeValue } from "./lib/attribute-value.js";
 import {
   CollectorError,
   type CollectorRequestOptions,
@@ -84,16 +85,9 @@ function parseMatchers(raw: readonly string[] | undefined, parameter: string): M
   });
 }
 
-function attributeText(attributes: readonly Attribute[], key: string): string | undefined {
+function attributeFormatted(attributes: readonly Attribute[], key: string): string | undefined {
   const found = attributes.find((attribute) => attribute.key === key);
-  if (found === undefined) return undefined;
-  const { value } = found;
-  if (typeof value === "string") return value;
-  if (typeof value === "boolean") return String(value);
-  if (value !== null && typeof value === "object" && "value" in value) {
-    return String((value as { value: unknown }).value);
-  }
-  return value === null ? undefined : String(value);
+  return found === undefined ? undefined : formatAttributeValue(found.value);
 }
 
 function matchesStream(
@@ -102,7 +96,7 @@ function matchesStream(
   prefixes: readonly Matcher[],
 ): boolean {
   const read = (key: string): string | undefined =>
-    key === "service.name" ? stream.serviceName : attributeText(stream.attributes, key);
+    key === "service.name" ? stream.serviceName : attributeFormatted(stream.attributes, key);
   return (
     exact.every((matcher) => read(matcher.key) === matcher.value) &&
     prefixes.every((matcher) => read(matcher.key)?.startsWith(matcher.value) === true)
@@ -114,7 +108,8 @@ function demoSeriesId(stream: DemoMetricStream): string {
   const identity = [
     stream.name,
     stream.serviceName,
-    ...stream.attributes.map((attribute) => `${attribute.key}=${attributeText([attribute], attribute.key) ?? ""}`),
+    // The canonical wire encoding, not the formatted text: identity must not depend on presentation.
+    ...stream.attributes.map((attribute) => `${attribute.key}=${JSON.stringify(attribute.value)}`),
   ].join("|");
   let hash = 0x811c9dc5;
   for (let index = 0; index < identity.length; index += 1) {
@@ -272,10 +267,10 @@ function groupingKey(
   for (const key of groupBy) {
     const value = key === "service.name"
       ? stream.serviceName
-      : attributeText(stream.attributes, key);
+      : attributeFormatted(stream.attributes, key);
     if (value !== undefined) attributes.push({ key, value });
   }
-  return { key: attributes.map((a) => `${a.key}=${String(a.value)}`).join("|"), attributes };
+  return { key: attributes.map((a) => `${a.key}=${formatAttributeValue(a.value)}`).join("|"), attributes };
 }
 
 export async function queryMetric(

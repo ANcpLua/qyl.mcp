@@ -216,7 +216,7 @@ test("native evidence records validation failure and bounds only the durable lar
       completeText.length,
     );
     assert.equal(
-      (completeRecord.protocolEvents[1]?.payload as { truncated?: boolean }).truncated,
+      (completeRecord.protocolEvents[1]?.payload as { truncated?: boolean } | undefined)?.truncated,
       true,
     );
     assert.equal(completeRecord.tokenUsage, undefined);

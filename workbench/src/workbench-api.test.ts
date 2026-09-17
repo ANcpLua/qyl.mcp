@@ -1399,7 +1399,7 @@ test("overlapping tool calls retain request-bound correlation through journals, 
         assert.equal(toolSpans.length, 4);
         for (const [executionId, testCaseId] of expected) {
             const correlated = toolSpans.filter((input) => input.executionId === executionId);
-            assert.deepEqual(correlated.map((input) => input.role).sort(), ["client", "server"]);
+            assert.deepEqual(correlated.map((input) => input.role).sort((a, b) => a.localeCompare(b)), ["client", "server"]);
             assert(correlated.every((input) => input.evaluationRunId === "overlap-evaluation"));
             assert(correlated.every((input) => input.testCaseId === testCaseId));
         }

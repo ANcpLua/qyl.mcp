@@ -89,7 +89,9 @@ const metrics = { resourceMetrics: [{ resource: resource("live-smoke-api"), scop
   { name: "live_smoke.requests", unit: "{request}", sum: { aggregationTemporality: 2, isMonotonic: true, dataPoints: [0, 1, 2].map((i) => ({
       startTimeUnixNano: String(t0), timeUnixNano: String(t0 + BigInt(i + 1) * 300_000_000n), asInt: String(10 * (i + 1)), attributes: [attr("http.route", "/orders")] })) } },
 ] }] }] };
-for (const [path, body] of [["traces", spans], ["logs", logs], ["metrics", metrics]]) {
+/** @type {ReadonlyArray<readonly [string, unknown]>} */
+const exports_ = [["traces", spans], ["logs", logs], ["metrics", metrics]];
+for (const [path, body] of exports_) {
   const r = await fetch(`${OTLP}/v1/${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const text = await r.text();
   ok(`OTLP /v1/${path} accepted`, r.ok, `${r.status} ${text.slice(0, 200)}`);

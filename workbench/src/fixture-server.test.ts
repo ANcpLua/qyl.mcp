@@ -39,6 +39,7 @@ test("official SDK fixture aggregates discovery and exercises tool and content b
   );
   await client.connect(transport);
 
+  let cleanupError: unknown;
   try {
     const tools = await client.listTools();
     const toolNames = tools.tools.map((tool) => tool.name);
@@ -152,7 +153,9 @@ test("official SDK fixture aggregates discovery and exercises tool and content b
     const errors = results
       .filter((result): result is PromiseRejectedResult => result.status === "rejected")
       .map((result) => result.reason);
-    if (errors.length === 1) throw errors[0];
-    if (errors.length > 1) throw new AggregateError(errors, "Fixture cleanup failed.");
+    // Recorded, not thrown: a throw inside `finally` would replace the test's own failure.
+    if (errors.length === 1) cleanupError = errors[0];
+    if (errors.length > 1) cleanupError = new AggregateError(errors, "Fixture cleanup failed.");
   }
+  if (cleanupError !== undefined) throw cleanupError;
 });

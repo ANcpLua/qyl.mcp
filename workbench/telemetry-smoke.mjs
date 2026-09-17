@@ -456,6 +456,7 @@ try {
       throw new Error("live collector 404 did not flow through generated Problem Details");
     }
 
+    /** @type {ReadonlyArray<readonly [string, Record<string, unknown>]>} */
     const remainingCalls = [
       ["ci_log", {}],
       ["display_traces", { trace_id: matched.trace_id }],

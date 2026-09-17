@@ -27,7 +27,7 @@ import type {
   WorkbenchTestSuite as TestSuite,
   WorkbenchTestSuiteCreateRequest as TestSuiteCreateRequest,
   WorkbenchTestSuiteUpdateRequest as TestSuiteUpdateRequest,
-  WorkbenchSession as WorkbenchSession,
+  WorkbenchSession,
   WorkbenchWorkspace as Workspace,
   WorkbenchWorkspaceUpdateRequest as WorkspaceUpdateRequest,
   WorkbenchWorkspacePreferences as WorkspacePreferences,

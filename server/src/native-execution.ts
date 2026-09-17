@@ -263,7 +263,7 @@ export class NativeExecutionRuntime {
 
   async execute(
     input: NativeToolCallInput,
-    invoke: () => unknown | Promise<unknown>,
+    invoke: () => unknown,
   ): Promise<CallToolResult> {
     const startedMs = this.now();
     const executionId = this.id();
@@ -423,7 +423,7 @@ export class NativeExecutionRuntime {
 type UntypedRequestHandler = (
   request: unknown,
   ctx: ServerContext,
-) => unknown | Promise<unknown>;
+) => unknown;
 type UntypedSetRequestHandler = (
   method: string,
   handlerOrSchemas: unknown,

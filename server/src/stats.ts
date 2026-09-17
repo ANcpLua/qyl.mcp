@@ -4,12 +4,13 @@
  */
 
 import type { McpDashboardStats, McpToolRow, QylSpan } from "./wire.js";
+import { formatAttributeValue } from "./lib/attribute-value.js";
 
 export function spanAttr(span: QylSpan, key: string): string | undefined {
   const attr = span.attributes?.find((a) => a.key === key);
   return attr === undefined || attr.value === undefined
     ? undefined
-    : String(attr.value);
+    : formatAttributeValue(attr.value);
 }
 
 /**

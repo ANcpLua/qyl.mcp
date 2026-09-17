@@ -9,6 +9,7 @@
  */
 
 import assert from "node:assert/strict";
+import { formatAttributeValue } from "./lib/attribute-value.js";
 import test from "node:test";
 import { operationInputSchema } from "./contract-operations.js";
 import {
@@ -176,7 +177,7 @@ test("a range query buckets, reduces, and groups the way it says it does", async
     // the two /checkout streams differ only by status code, which is not grouped.
     const grouped = await queryMetric({ ...window, group_by: ["http.route"] });
     assert.deepEqual(
-      grouped.result.series.map((stream) => stream.attributes[0]?.value).sort(),
+      grouped.result.series.map((stream) => formatAttributeValue(stream.attributes[0]?.value ?? null)).sort((a, b) => a.localeCompare(b)),
       ["/checkout", "/health", "/v1/agent/run"],
     );
 

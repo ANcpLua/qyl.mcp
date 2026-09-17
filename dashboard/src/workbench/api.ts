@@ -1,7 +1,9 @@
 import type * as QylContracts from "@ancplua/qyl-api-schema/types";
 import qylOpenApi from "@ancplua/qyl-api-schema/openapi" with { type: "json" };
 
-type ContractValidationModule = typeof import("qyl-mcp-server/contract-validation");
+import type * as ContractValidation from "qyl-mcp-server/contract-validation";
+
+type ContractValidationModule = typeof ContractValidation;
 
 let contractValidationModule: Promise<ContractValidationModule> | undefined;
 

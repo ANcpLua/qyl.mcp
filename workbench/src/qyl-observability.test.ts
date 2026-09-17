@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { LogRecord, Trace } from "@ancplua/qyl-api-schema/types";
 import { isObservabilitySelfExportSuppressed } from "./observability-suppression.js";
+
+function requestUrl(input: string | URL | Request): string {
+    if (typeof input === "string") return input;
+    return input instanceof URL ? input.href : input.url;
+}
 import {
     QylObservabilityProvider,
     type ContractParser,
@@ -49,7 +54,7 @@ test("provider returns correlated real signals, derived events, redaction, and d
     const requests: URL[] = [];
     const fetcher: typeof fetch = async (input, init) => {
         assert.equal(isObservabilitySelfExportSuppressed(), true);
-        const url = new URL(String(input));
+        const url = new URL(requestUrl(input));
         requests.push(url);
         const headers = new Headers(init?.headers);
         assert.equal(headers.get("x-otlp-api-key"), "collector-secret");
@@ -121,7 +126,7 @@ test("provider returns correlated real signals, derived events, redaction, and d
 
 test("provider reports each failed signal unavailable without leaking response content", async () => {
     const fetcher: typeof fetch = async (input) => {
-        const url = new URL(String(input));
+        const url = new URL(requestUrl(input));
         if (url.pathname.startsWith("/api/v1/traces/")) {
             return json({ detail: "Bearer trace-response-secret" }, 503);
         }
@@ -157,7 +162,7 @@ test("provider reports each failed signal unavailable without leaking response c
 
 test("provider distinguishes partial retained evidence from unavailable signals", async () => {
     const fetcher: typeof fetch = async (input) => {
-        const url = new URL(String(input));
+        const url = new URL(requestUrl(input));
         if (url.pathname === `/api/v1/traces/${traceId}`) {
             return json({ trace_id: traceId, spans: [] });
         }
