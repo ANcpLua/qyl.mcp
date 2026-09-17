@@ -7,7 +7,9 @@ import type {
   MetricQueryResult,
   MetricSeries,
 } from "@ancplua/qyl-api-schema/types";
-import { formatAttributeValue } from "@ancplua/qyl-api-schema/runtime";
+import { compareUnixNanos, formatAttributeValue, parseUnixNanos, unixNanosToIso } from "@ancplua/qyl-api-schema/runtime";
+
+export { compareUnixNanos as compareNs, parseUnixNanos as nsToBigInt, unixNanosToIso as nsToIso };
 import type {
   McpDashboardStats,
   Mode,
@@ -32,21 +34,6 @@ export function humanizeNs(ns: string): string {
 }
 
 /** Absolute nanosecond timestamps exceed Number.MAX_SAFE_INTEGER; never parse one with Number. */
-export function nsToBigInt(ns: string): bigint {
-  return BigInt(ns);
-}
-
-/** Comparator for sorting by an absolute nanosecond timestamp, exact at ns resolution. */
-export function compareNs(a: string, b: string): number {
-  const left = BigInt(a);
-  const right = BigInt(b);
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-
-/** ISO-8601 for an absolute nanosecond timestamp, via BigInt so the ms floor is exact. */
-export function nsToIso(ns: string): string {
-  return new Date(Number(BigInt(ns) / 1_000_000n)).toISOString();
-}
 
 export function shortId(id: string): string {
   return id.length > 8 ? `${id.slice(0, 8)}…` : id;
@@ -56,7 +43,7 @@ export function shortId(id: string): string {
 export function rootSpanName(trace: QylTrace): string {
   if (trace.root_span?.name) return trace.root_span.name;
   const earliest = [...(trace.spans ?? [])].sort((a, b) =>
-    compareNs(a.start_time_unix_nano, b.start_time_unix_nano),
+    compareUnixNanos(a.start_time_unix_nano, b.start_time_unix_nano),
   )[0];
   return earliest?.name ?? "unknown";
 }
@@ -145,7 +132,7 @@ export function summarizeSessions(sessions: QylSession[], mode: Mode): string {
 export function summarizeLogs(logs: QylLogRecord[], mode: Mode): string {
   if (logs.length === 0) return `No logs matched${modeNote(mode)}.`;
   const lines = logs.map((record) => {
-    const time = nsToIso(record.time_unix_nano).slice(11, 23);
+    const time = unixNanosToIso(record.time_unix_nano).slice(11, 23);
     const severity = record.severity_text ?? String(record.severity_number);
     const renderedBody = formatAttributeValue(record.body).replace(/\s+/g, " ");
     const body =

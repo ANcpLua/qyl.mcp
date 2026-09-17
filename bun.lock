@@ -20,7 +20,7 @@
       "name": "qyl-mcp-dashboard",
       "version": "1.1.1",
       "dependencies": {
-        "@ancplua/qyl-api-schema": "11.0.1",
+        "@ancplua/qyl-api-schema": "11.1.0",
         "@modelcontextprotocol/core": "2.0.0",
         "@modelcontextprotocol/server": "2.0.0",
         "qyl-mcp-server": "^6.0.0",
@@ -44,7 +44,7 @@
         "qyl-mcp-server": "dist/main.js",
       },
       "dependencies": {
-        "@ancplua/qyl-api-schema": "11.0.1",
+        "@ancplua/qyl-api-schema": "11.1.0",
         "@modelcontextprotocol/core": "2.0.0",
         "@modelcontextprotocol/server": "2.0.0",
         "@opentelemetry/api": "^1.9.1",
@@ -74,7 +74,7 @@
       "name": "qyl-mcp-workbench",
       "version": "1.1.1",
       "dependencies": {
-        "@ancplua/qyl-api-schema": "11.0.1",
+        "@ancplua/qyl-api-schema": "11.1.0",
         "@modelcontextprotocol/client": "2.0.0",
         "@modelcontextprotocol/core": "2.0.0",
         "@modelcontextprotocol/server": "2.0.0",
@@ -97,7 +97,7 @@
     },
   },
   "packages": {
-    "@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@11.0.1", "", { "peerDependencies": { "@typespec/compiler": "^1.13.0 || >=1.13.0-dev.0", "@typespec/events": "^0.83.0 || ^0.84.0 || ^0.85.0 || ^0.86.0", "@typespec/http": "^1.13.0", "@typespec/openapi": "^1.13.0", "@typespec/openapi3": "^1.13.0", "@typespec/sse": ">=0.83.0 <0.87.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-Q+6oEjnYB7E9q0auu+z5wE4mkYnTYJ5SZhFiVUYMHCUnOo8pGU9w/EYZ4h9r6WBsdE5cmKbxM5nilML9nlcrVA=="],
+    "@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@11.1.0", "", { "peerDependencies": { "@typespec/compiler": "^1.13.0 || >=1.13.0-dev.0", "@typespec/events": "^0.83.0 || ^0.84.0 || ^0.85.0 || ^0.86.0", "@typespec/http": "^1.13.0", "@typespec/openapi": "^1.13.0", "@typespec/openapi3": "^1.13.0", "@typespec/sse": ">=0.83.0 <0.87.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-bTFoNPK91y2lQJgR67qkmb5b20JW5x4jv1Hc7/kYcZaABHLLMqlPfCZdIZ2B6wlFl8RYmLWf5KUqbiYzecV5gw=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.17", "", { "peerDependencies": { "hono": "^4" } }, "sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ=="],
 

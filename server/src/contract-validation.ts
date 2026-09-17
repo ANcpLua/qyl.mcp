@@ -1,15 +1,14 @@
-import type * as QylContracts from "@ancplua/qyl-api-schema/types";
-import { publishedContractSchema, type ContractInput } from "@ancplua/qyl-api-schema/zod";
+import { contractSchema, publishedContractSchema, type ContractInput } from "@ancplua/qyl-api-schema/zod";
 import type { StandardSchemaWithJSON } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 // The JSON-Schema-to-Zod adapter that produced these validators is published by
 // the contract package itself, so this module is now only the named bindings.
 // Both names are re-exported rather than imported directly by their users:
-// workbench/ and dashboard/ reach them through "qyl-mcp-server/contract-validation",
-// and verify-generated-shapes.mjs requires every server/src module that calls
-// registerTool to import the generated shapes from contract-validation.js.
-export { publishedContractSchema, type ContractInput };
+// workbench/ and dashboard/ reach them through "qyl-mcp-server/contract-validation".
+// Every binding below is `contractSchema("<definition>")`, whose result type the contract
+// package binds to the name, so a shape cannot be paired with the wrong type.
+export { contractSchema, publishedContractSchema, type ContractInput };
 
 const JSON_SCHEMA_TARGET = "draft-2020-12" as const;
 
@@ -72,508 +71,283 @@ export function compactOutputSchema<T>(schema: z.ZodType<T>): StandardSchemaWith
   return wrapper;
 }
 
-function workbenchContractSchema<TContract>(name: string): z.ZodType<TContract> {
-  return publishedContractSchema<TContract>(`Workbench.${name}`);
-}
 
 // Qyl telemetry and installable MCP server contracts.
-export const SpanSchema = publishedContractSchema<QylContracts.Span>("OTel.Traces.Span");
-export const TraceSummarySchema = publishedContractSchema<QylContracts.TraceSummary>(
-  "OTel.Traces.TraceSummary",
-);
-export const TraceSchema = publishedContractSchema<QylContracts.Trace>("OTel.Traces.Trace");
-export const LogRecordSchema = publishedContractSchema<QylContracts.LogRecord>(
-  "OTel.Logs.LogRecord",
-);
-export const SessionSchema = publishedContractSchema<QylContracts.SessionEntity>(
-  "Domains.Observe.Session.SessionEntity",
-);
+export const SpanSchema = contractSchema("OTel.Traces.Span");
+export const TraceSummarySchema = contractSchema("OTel.Traces.TraceSummary");
+export const TraceSchema = contractSchema("OTel.Traces.Trace");
+export const LogRecordSchema = contractSchema("OTel.Logs.LogRecord");
+export const SessionSchema = contractSchema("Domains.Observe.Session.SessionEntity");
 
 // Exact operation response bodies. These are intentionally not reconstructed
 // from the generic CursorPage component: the TypeSpec operation is the public
 // HTTP boundary and therefore owns both the envelope and its concrete item.
 export const TracesListResponseSchema =
-  publishedContractSchema<QylContracts.CursorPageTrace>(
-    "Operations.TracesApi_list.Response.200",
-  );
+  contractSchema("Operations.TracesApi_list.Response.200");
 export const TraceSpansListResponseSchema =
-  publishedContractSchema<QylContracts.CursorPageSpan>(
-    "Operations.TracesApi_getSpans.Response.200",
-  );
+  contractSchema("Operations.TracesApi_getSpans.Response.200");
 export const SessionTracesListResponseSchema =
-  publishedContractSchema<QylContracts.CursorPageTrace>(
-    "Operations.SessionsApi_getTraces.Response.200",
-  );
+  contractSchema("Operations.SessionsApi_getTraces.Response.200");
 export const LogsListResponseSchema =
-  publishedContractSchema<QylContracts.CursorPageLogRecord>(
-    "Operations.LogsApi_list.Response.200",
-  );
+  contractSchema("Operations.LogsApi_list.Response.200");
 export const SessionsListResponseSchema =
-  publishedContractSchema<QylContracts.CursorPageSessionEntity>(
-    "Operations.SessionsApi_list.Response.200",
-  );
+  contractSchema("Operations.SessionsApi_list.Response.200");
 
 // Metrics read surface (contract 8.0.0). The list and series endpoints page
 // like every other reader; the query endpoint answers with the result model
 // directly, so its 200 body IS MetricQueryResult.
-export const MetricDescriptorSchema = publishedContractSchema<QylContracts.MetricDescriptor>(
-  "OTel.Metrics.MetricDescriptor",
-);
-export const MetricSeriesSchema = publishedContractSchema<QylContracts.MetricSeries>(
-  "OTel.Metrics.MetricSeries",
-);
-export const MetricQueryResultSchema = publishedContractSchema<QylContracts.MetricQueryResult>(
-  "Operations.MetricsApi_query.Response.200",
-);
+export const MetricDescriptorSchema = contractSchema("OTel.Metrics.MetricDescriptor");
+export const MetricSeriesSchema = contractSchema("OTel.Metrics.MetricSeries");
+export const MetricQueryResultSchema = contractSchema("Operations.MetricsApi_query.Response.200");
 export const MetricsListResponseSchema =
-  publishedContractSchema<QylContracts.CursorPageMetricDescriptor>(
-    "Operations.MetricsApi_list.Response.200",
-  );
+  contractSchema("Operations.MetricsApi_list.Response.200");
 export const MetricSeriesListResponseSchema =
-  publishedContractSchema<QylContracts.CursorPageMetricSeries>(
-    "Operations.MetricsApi_listSeries.Response.200",
-  );
+  contractSchema("Operations.MetricsApi_listSeries.Response.200");
 
-export const ProblemDetailsSchema = publishedContractSchema<QylContracts.ProblemDetails>(
-  "Common.Errors.ProblemDetails",
-);
-export const ModeSchema = publishedContractSchema<QylContracts.McpDataMode>(
-  "Mcp.Tools.McpDataMode",
-);
-export const McpDashboardStatsSchema = publishedContractSchema<QylContracts.McpDashboardStats>(
-  "Mcp.Tools.McpDashboardStats",
-);
+export const ProblemDetailsSchema = contractSchema("Common.Errors.ProblemDetails");
+export const ModeSchema = contractSchema("Mcp.Tools.McpDataMode");
+export const McpDashboardStatsSchema = contractSchema("Mcp.Tools.McpDashboardStats");
 
-export const DisplayTracesInputSchema = publishedContractSchema<QylContracts.DisplayTracesInput>(
-  "Mcp.Tools.DisplayTracesInput",
-);
-export const DisplayTracesOutputSchema = publishedContractSchema<QylContracts.DisplayTracesOutput>(
-  "Mcp.Tools.DisplayTracesOutput",
-);
+export const DisplayTracesInputSchema = contractSchema("Mcp.Tools.DisplayTracesInput");
+export const DisplayTracesOutputSchema = contractSchema("Mcp.Tools.DisplayTracesOutput");
 export const DisplayMcpDashboardInputSchema =
-  publishedContractSchema<QylContracts.DisplayMcpDashboardInput>(
-    "Mcp.Tools.DisplayMcpDashboardInput",
-  );
+  contractSchema("Mcp.Tools.DisplayMcpDashboardInput");
 export const DisplayMcpDashboardOutputSchema =
-  publishedContractSchema<QylContracts.DisplayMcpDashboardOutput>(
-    "Mcp.Tools.DisplayMcpDashboardOutput",
-  );
-export const ListTracesInputSchema = publishedContractSchema<QylContracts.ListTracesInput>(
-  "Mcp.Tools.ListTracesInput",
-);
-export const ListTracesOutputSchema = publishedContractSchema<QylContracts.ListTracesOutput>(
-  "Mcp.Tools.ListTracesOutput",
-);
-export const GetTraceInputSchema = publishedContractSchema<QylContracts.GetTraceInput>(
-  "Mcp.Tools.GetTraceInput",
-);
-export const GetTraceOutputSchema = publishedContractSchema<QylContracts.GetTraceOutput>(
-  "Mcp.Tools.GetTraceOutput",
-);
-export const ListSessionsInputSchema = publishedContractSchema<QylContracts.ListSessionsInput>(
-  "Mcp.Tools.ListSessionsInput",
-);
-export const ListSessionsOutputSchema = publishedContractSchema<QylContracts.ListSessionsOutput>(
-  "Mcp.Tools.ListSessionsOutput",
-);
-export const SearchLogsInputSchema = publishedContractSchema<QylContracts.SearchLogsInput>(
-  "Mcp.Tools.SearchLogsInput",
-);
-export const SearchLogsOutputSchema = publishedContractSchema<QylContracts.SearchLogsOutput>(
-  "Mcp.Tools.SearchLogsOutput",
-);
-export const FetchTelemetryInputSchema = publishedContractSchema<QylContracts.FetchTelemetryInput>(
-  "Mcp.Tools.FetchTelemetryInput",
-);
-export const FetchTelemetryOutputSchema = publishedContractSchema<QylContracts.FetchTelemetryOutput>(
-  "Mcp.Tools.FetchTelemetryOutput",
-);
-export const CiLogInputSchema = publishedContractSchema<QylContracts.CiLogInput>(
-  "Mcp.Tools.CiLogInput",
-);
-export const CiRunSummarySchema = publishedContractSchema<QylContracts.CiRunSummary>(
-  "Mcp.Tools.CiRunSummary",
-);
-export const CiPhaseSchema = publishedContractSchema<QylContracts.CiPhase>(
-  "Mcp.Tools.CiPhase",
-);
-export const CiLogOutputSchema = publishedContractSchema<QylContracts.CiLogOutput>(
-  "Mcp.Tools.CiLogOutput",
-);
+  contractSchema("Mcp.Tools.DisplayMcpDashboardOutput");
+export const ListTracesInputSchema = contractSchema("Mcp.Tools.ListTracesInput");
+export const ListTracesOutputSchema = contractSchema("Mcp.Tools.ListTracesOutput");
+export const GetTraceInputSchema = contractSchema("Mcp.Tools.GetTraceInput");
+export const GetTraceOutputSchema = contractSchema("Mcp.Tools.GetTraceOutput");
+export const ListSessionsInputSchema = contractSchema("Mcp.Tools.ListSessionsInput");
+export const ListSessionsOutputSchema = contractSchema("Mcp.Tools.ListSessionsOutput");
+export const SearchLogsInputSchema = contractSchema("Mcp.Tools.SearchLogsInput");
+export const SearchLogsOutputSchema = contractSchema("Mcp.Tools.SearchLogsOutput");
+export const FetchTelemetryInputSchema = contractSchema("Mcp.Tools.FetchTelemetryInput");
+export const FetchTelemetryOutputSchema = contractSchema("Mcp.Tools.FetchTelemetryOutput");
+export const CiLogInputSchema = contractSchema("Mcp.Tools.CiLogInput");
+export const CiRunSummarySchema = contractSchema("Mcp.Tools.CiRunSummary");
+export const CiPhaseSchema = contractSchema("Mcp.Tools.CiPhase");
+export const CiLogOutputSchema = contractSchema("Mcp.Tools.CiLogOutput");
 
-export const RunnerResourceStateSchema = publishedContractSchema<QylContracts.RunnerResourceState>(
-  "Runner.RunnerResourceState",
-);
-export const RunnerLogLineSchema = publishedContractSchema<QylContracts.RunnerLogLine>(
-  "Runner.RunnerLogLine",
-);
+export const RunnerResourceStateSchema = contractSchema("Runner.RunnerResourceState");
+export const RunnerLogLineSchema = contractSchema("Runner.RunnerLogLine");
 
 // Workbench identity, session, and workspace boundaries.
-export const WorkbenchSessionIdSchema = workbenchContractSchema<QylContracts.WorkbenchSessionId>(
-  "WorkbenchSessionId",
-);
-export const WorkbenchWorkspaceIdSchema = workbenchContractSchema<QylContracts.WorkbenchWorkspaceId>(
-  "WorkbenchWorkspaceId",
-);
-export const WorkbenchServerIdSchema = workbenchContractSchema<QylContracts.WorkbenchServerId>(
-  "WorkbenchServerId",
-);
-export const WorkbenchExecutionIdSchema = workbenchContractSchema<QylContracts.WorkbenchExecutionId>(
-  "WorkbenchExecutionId",
-);
+export const WorkbenchSessionIdSchema = contractSchema("Workbench.WorkbenchSessionId");
+export const WorkbenchWorkspaceIdSchema = contractSchema("Workbench.WorkbenchWorkspaceId");
+export const WorkbenchServerIdSchema = contractSchema("Workbench.WorkbenchServerId");
+export const WorkbenchExecutionIdSchema = contractSchema("Workbench.WorkbenchExecutionId");
 export const WorkbenchEvaluationRunIdSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationRunId>("WorkbenchEvaluationRunId");
-export const WorkbenchTestCaseIdSchema = workbenchContractSchema<QylContracts.WorkbenchTestCaseId>(
-  "WorkbenchTestCaseId",
-);
-export const WorkbenchSuiteIdSchema = workbenchContractSchema<QylContracts.WorkbenchSuiteId>(
-  "WorkbenchSuiteId",
-);
+  contractSchema("Workbench.WorkbenchEvaluationRunId");
+export const WorkbenchTestCaseIdSchema = contractSchema("Workbench.WorkbenchTestCaseId");
+export const WorkbenchSuiteIdSchema = contractSchema("Workbench.WorkbenchSuiteId");
 export const WorkbenchEvaluationExportIdSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationExportId>(
-    "WorkbenchEvaluationExportId",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationExportId");
 export const WorkbenchPrincipalIdentitySchema =
-  workbenchContractSchema<QylContracts.WorkbenchPrincipalIdentity>("WorkbenchPrincipalIdentity");
+  contractSchema("Workbench.WorkbenchPrincipalIdentity");
 export const WorkbenchSessionSchema =
-  workbenchContractSchema<QylContracts.WorkbenchSession>("WorkbenchSession");
+  contractSchema("Workbench.WorkbenchSession");
 export const WorkbenchSessionBootstrapResponseSchema =
-  workbenchContractSchema<QylContracts.WorkbenchSessionBootstrapResponse>(
-    "WorkbenchSessionBootstrapResponse",
-  );
-export const WorkbenchWorkspaceSchema = workbenchContractSchema<QylContracts.WorkbenchWorkspace>(
-  "WorkbenchWorkspace",
-);
+  contractSchema("Workbench.WorkbenchSessionBootstrapResponse");
+export const WorkbenchWorkspaceSchema = contractSchema("Workbench.WorkbenchWorkspace");
 export const WorkbenchWorkspaceCreateRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchWorkspaceCreateRequest>(
-    "WorkbenchWorkspaceCreateRequest",
-  );
+  contractSchema("Workbench.WorkbenchWorkspaceCreateRequest");
 export const WorkbenchWorkspaceUpdateRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchWorkspaceUpdateRequest>(
-    "WorkbenchWorkspaceUpdateRequest",
-  );
+  contractSchema("Workbench.WorkbenchWorkspaceUpdateRequest");
 export const WorkbenchWorkspaceListResponseSchema =
-  workbenchContractSchema<QylContracts.WorkbenchWorkspaceListResponse>(
-    "WorkbenchWorkspaceListResponse",
-  );
+  contractSchema("Workbench.WorkbenchWorkspaceListResponse");
 export const WorkbenchToolInputModeSchema =
-  workbenchContractSchema<QylContracts.WorkbenchToolInputMode>("WorkbenchToolInputMode");
+  contractSchema("Workbench.WorkbenchToolInputMode");
 export const WorkbenchWorkspacePreferencesSchema =
-  workbenchContractSchema<QylContracts.WorkbenchWorkspacePreferences>(
-    "WorkbenchWorkspacePreferences",
-  );
+  contractSchema("Workbench.WorkbenchWorkspacePreferences");
 export const WorkbenchWorkspacePreferencesUpdateRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchWorkspacePreferencesUpdateRequest>(
-    "WorkbenchWorkspacePreferencesUpdateRequest",
-  );
+  contractSchema("Workbench.WorkbenchWorkspacePreferencesUpdateRequest");
 
 // Sanitized transport configuration and connection lifecycle.
 export const WorkbenchTransportKindSchema =
-  workbenchContractSchema<QylContracts.WorkbenchTransportKind>("WorkbenchTransportKind");
+  contractSchema("Workbench.WorkbenchTransportKind");
 export const WorkbenchHeaderSecretSchemeSchema =
-  workbenchContractSchema<QylContracts.WorkbenchHeaderSecretScheme>(
-    "WorkbenchHeaderSecretScheme",
-  );
+  contractSchema("Workbench.WorkbenchHeaderSecretScheme");
 export const WorkbenchSecretReferenceSchema =
-  workbenchContractSchema<QylContracts.WorkbenchSecretReference>("WorkbenchSecretReference");
+  contractSchema("Workbench.WorkbenchSecretReference");
 export const WorkbenchEnvironmentSecretReferenceSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEnvironmentSecretReference>(
-    "WorkbenchEnvironmentSecretReference",
-  );
+  contractSchema("Workbench.WorkbenchEnvironmentSecretReference");
 export const WorkbenchHeaderSecretReferenceSchema =
-  workbenchContractSchema<QylContracts.WorkbenchHeaderSecretReference>(
-    "WorkbenchHeaderSecretReference",
-  );
+  contractSchema("Workbench.WorkbenchHeaderSecretReference");
 export const WorkbenchStdioServerConfigurationSchema =
-  workbenchContractSchema<QylContracts.WorkbenchStdioServerConfiguration>(
-    "WorkbenchStdioServerConfiguration",
-  );
+  contractSchema("Workbench.WorkbenchStdioServerConfiguration");
 export const WorkbenchStreamableHttpServerConfigurationSchema =
-  workbenchContractSchema<QylContracts.WorkbenchStreamableHttpServerConfiguration>(
-    "WorkbenchStreamableHttpServerConfiguration",
-  );
+  contractSchema("Workbench.WorkbenchStreamableHttpServerConfiguration");
 export const WorkbenchBuiltinServerConfigurationSchema =
-  workbenchContractSchema<QylContracts.WorkbenchBuiltinServerConfiguration>(
-    "WorkbenchBuiltinServerConfiguration",
-  );
+  contractSchema("Workbench.WorkbenchBuiltinServerConfiguration");
 export const WorkbenchServerConfigurationSchema =
-  workbenchContractSchema<QylContracts.WorkbenchServerConfiguration>(
-    "WorkbenchServerConfiguration",
-  );
+  contractSchema("Workbench.WorkbenchServerConfiguration");
 export const WorkbenchErrorCategorySchema =
-  workbenchContractSchema<QylContracts.WorkbenchErrorCategory>("WorkbenchErrorCategory");
-export const WorkbenchErrorSchema = workbenchContractSchema<QylContracts.WorkbenchError>(
-  "WorkbenchError",
-);
+  contractSchema("Workbench.WorkbenchErrorCategory");
+export const WorkbenchErrorSchema = contractSchema("Workbench.WorkbenchError");
 export const WorkbenchInitializationSnapshotSchema =
-  workbenchContractSchema<QylContracts.WorkbenchInitializationSnapshot>(
-    "WorkbenchInitializationSnapshot",
-  );
+  contractSchema("Workbench.WorkbenchInitializationSnapshot");
 export const WorkbenchConnectionStatusSchema =
-  workbenchContractSchema<QylContracts.WorkbenchConnectionStatus>("WorkbenchConnectionStatus");
+  contractSchema("Workbench.WorkbenchConnectionStatus");
 export const WorkbenchConnectionSnapshotSchema =
-  workbenchContractSchema<QylContracts.WorkbenchConnectionSnapshot>(
-    "WorkbenchConnectionSnapshot",
-  );
-export const WorkbenchServerSchema = workbenchContractSchema<QylContracts.WorkbenchServer>(
-  "WorkbenchServer",
-);
+  contractSchema("Workbench.WorkbenchConnectionSnapshot");
+export const WorkbenchServerSchema = contractSchema("Workbench.WorkbenchServer");
 export const WorkbenchServerCreateRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchServerCreateRequest>(
-    "WorkbenchServerCreateRequest",
-  );
+  contractSchema("Workbench.WorkbenchServerCreateRequest");
 export const WorkbenchServerUpdateRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchServerUpdateRequest>(
-    "WorkbenchServerUpdateRequest",
-  );
+  contractSchema("Workbench.WorkbenchServerUpdateRequest");
 export const WorkbenchServerListResponseSchema =
-  workbenchContractSchema<QylContracts.WorkbenchServerListResponse>(
-    "WorkbenchServerListResponse",
-  );
+  contractSchema("Workbench.WorkbenchServerListResponse");
 export const WorkbenchServerActionAcceptedSchema =
-  workbenchContractSchema<QylContracts.WorkbenchServerActionAccepted>(
-    "WorkbenchServerActionAccepted",
-  );
+  contractSchema("Workbench.WorkbenchServerActionAccepted");
 
 // MCP discovery and redacted protocol evidence. SDK payloads remain unknown.
 export const WorkbenchDiscoveryCollectionSchema =
-  workbenchContractSchema<QylContracts.WorkbenchDiscoveryCollection>(
-    "WorkbenchDiscoveryCollection",
-  );
+  contractSchema("Workbench.WorkbenchDiscoveryCollection");
 export const WorkbenchDiscoverySnapshotSchema =
-  workbenchContractSchema<QylContracts.WorkbenchDiscoverySnapshot>("WorkbenchDiscoverySnapshot");
+  contractSchema("Workbench.WorkbenchDiscoverySnapshot");
 export const WorkbenchProtocolDirectionSchema =
-  workbenchContractSchema<QylContracts.WorkbenchProtocolDirection>(
-    "WorkbenchProtocolDirection",
-  );
+  contractSchema("Workbench.WorkbenchProtocolDirection");
 export const WorkbenchProtocolEventKindSchema =
-  workbenchContractSchema<QylContracts.WorkbenchProtocolEventKind>("WorkbenchProtocolEventKind");
+  contractSchema("Workbench.WorkbenchProtocolEventKind");
 export const WorkbenchProtocolEventSchema =
-  workbenchContractSchema<QylContracts.WorkbenchProtocolEvent>("WorkbenchProtocolEvent");
+  contractSchema("Workbench.WorkbenchProtocolEvent");
 export const WorkbenchProtocolEventPageSchema =
-  workbenchContractSchema<QylContracts.WorkbenchProtocolEventPage>("WorkbenchProtocolEventPage");
+  contractSchema("Workbench.WorkbenchProtocolEventPage");
 // SSE event envelopes published alongside the page contracts they stream.
 export const WorkbenchProtocolEventsSchema =
-  workbenchContractSchema<QylContracts.WorkbenchProtocolEvents>("WorkbenchProtocolEvents");
+  contractSchema("Workbench.WorkbenchProtocolEvents");
 
 // Asynchronous execution and correlated Qyl observability evidence.
 export const WorkbenchExecutionEffectSchema =
-  workbenchContractSchema<QylContracts.WorkbenchExecutionEffect>("WorkbenchExecutionEffect");
+  contractSchema("Workbench.WorkbenchExecutionEffect");
 export const WorkbenchExecutionStatusSchema =
-  workbenchContractSchema<QylContracts.WorkbenchExecutionStatus>("WorkbenchExecutionStatus");
+  contractSchema("Workbench.WorkbenchExecutionStatus");
 export const WorkbenchExecutionConfirmationRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchExecutionConfirmationRequest>(
-    "WorkbenchExecutionConfirmationRequest",
-  );
+  contractSchema("Workbench.WorkbenchExecutionConfirmationRequest");
 export const WorkbenchExecutionConfirmationEvidenceSchema =
-  workbenchContractSchema<QylContracts.WorkbenchExecutionConfirmationEvidence>(
-    "WorkbenchExecutionConfirmationEvidence",
-  );
+  contractSchema("Workbench.WorkbenchExecutionConfirmationEvidence");
 export const WorkbenchExecutionRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchExecutionRequest>("WorkbenchExecutionRequest");
+  contractSchema("Workbench.WorkbenchExecutionRequest");
 export const WorkbenchExecutionTokenUsageSchema =
-  workbenchContractSchema<QylContracts.WorkbenchExecutionTokenUsage>(
-    "WorkbenchExecutionTokenUsage",
-  );
+  contractSchema("Workbench.WorkbenchExecutionTokenUsage");
 export const WorkbenchExecutionCostSchema =
-  workbenchContractSchema<QylContracts.WorkbenchExecutionCost>("WorkbenchExecutionCost");
+  contractSchema("Workbench.WorkbenchExecutionCost");
 export const WorkbenchTelemetryCorrelationSchema =
-  workbenchContractSchema<QylContracts.WorkbenchTelemetryCorrelation>(
-    "WorkbenchTelemetryCorrelation",
-  );
+  contractSchema("Workbench.WorkbenchTelemetryCorrelation");
 export const WorkbenchExecutionUpdateEventsSchema =
-  workbenchContractSchema<QylContracts.WorkbenchExecutionUpdateEvents>(
-    "WorkbenchExecutionUpdateEvents",
-  );
+  contractSchema("Workbench.WorkbenchExecutionUpdateEvents");
 export const WorkbenchExecutionRecordSchema =
-  workbenchContractSchema<QylContracts.WorkbenchExecutionRecord>("WorkbenchExecutionRecord");
+  contractSchema("Workbench.WorkbenchExecutionRecord");
 export const WorkbenchExecutionAcceptedSchema =
-  workbenchContractSchema<QylContracts.WorkbenchExecutionAccepted>("WorkbenchExecutionAccepted");
+  contractSchema("Workbench.WorkbenchExecutionAccepted");
 export const WorkbenchExecutionCancelRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchExecutionCancelRequest>(
-    "WorkbenchExecutionCancelRequest",
-  );
+  contractSchema("Workbench.WorkbenchExecutionCancelRequest");
 export const WorkbenchExecutionPageSchema =
-  workbenchContractSchema<QylContracts.WorkbenchExecutionPage>("WorkbenchExecutionPage");
+  contractSchema("Workbench.WorkbenchExecutionPage");
 export const WorkbenchTelemetryAvailabilitySchema =
-  workbenchContractSchema<QylContracts.WorkbenchTelemetryAvailability>(
-    "WorkbenchTelemetryAvailability",
-  );
+  contractSchema("Workbench.WorkbenchTelemetryAvailability");
 export const WorkbenchTelemetrySignalAvailabilitySchema =
-  workbenchContractSchema<QylContracts.WorkbenchTelemetrySignalAvailability>(
-    "WorkbenchTelemetrySignalAvailability",
-  );
+  contractSchema("Workbench.WorkbenchTelemetrySignalAvailability");
 export const WorkbenchTelemetrySignalSummarySchema =
-  workbenchContractSchema<QylContracts.WorkbenchTelemetrySignalSummary>(
-    "WorkbenchTelemetrySignalSummary",
-  );
+  contractSchema("Workbench.WorkbenchTelemetrySignalSummary");
 export const WorkbenchExecutionTelemetryResponseSchema =
-  workbenchContractSchema<QylContracts.WorkbenchExecutionTelemetryResponse>(
-    "WorkbenchExecutionTelemetryResponse",
-  );
+  contractSchema("Workbench.WorkbenchExecutionTelemetryResponse");
 
 // Reusable test cases, assertions, and suites.
 export const WorkbenchAssertionStatusSchema =
-  workbenchContractSchema<QylContracts.WorkbenchAssertionStatus>("WorkbenchAssertionStatus");
+  contractSchema("Workbench.WorkbenchAssertionStatus");
 export const WorkbenchStatusAssertionSchema =
-  workbenchContractSchema<QylContracts.WorkbenchStatusAssertion>("WorkbenchStatusAssertion");
+  contractSchema("Workbench.WorkbenchStatusAssertion");
 export const WorkbenchExactAssertionSchema =
-  workbenchContractSchema<QylContracts.WorkbenchExactAssertion>("WorkbenchExactAssertion");
+  contractSchema("Workbench.WorkbenchExactAssertion");
 export const WorkbenchPartialAssertionSchema =
-  workbenchContractSchema<QylContracts.WorkbenchPartialAssertion>("WorkbenchPartialAssertion");
+  contractSchema("Workbench.WorkbenchPartialAssertion");
 export const WorkbenchSchemaAssertionSchema =
-  workbenchContractSchema<QylContracts.WorkbenchSchemaAssertion>("WorkbenchSchemaAssertion");
+  contractSchema("Workbench.WorkbenchSchemaAssertion");
 export const WorkbenchPatternAssertionSchema =
-  workbenchContractSchema<QylContracts.WorkbenchPatternAssertion>("WorkbenchPatternAssertion");
+  contractSchema("Workbench.WorkbenchPatternAssertion");
 export const WorkbenchLatencyAssertionSchema =
-  workbenchContractSchema<QylContracts.WorkbenchLatencyAssertion>("WorkbenchLatencyAssertion");
+  contractSchema("Workbench.WorkbenchLatencyAssertion");
 export const WorkbenchTestAssertionSchema =
-  workbenchContractSchema<QylContracts.WorkbenchTestAssertion>("WorkbenchTestAssertion");
-export const WorkbenchTestCaseSchema = workbenchContractSchema<QylContracts.WorkbenchTestCase>(
-  "WorkbenchTestCase",
-);
+  contractSchema("Workbench.WorkbenchTestAssertion");
+export const WorkbenchTestCaseSchema = contractSchema("Workbench.WorkbenchTestCase");
 export const WorkbenchTestCaseCreateRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchTestCaseCreateRequest>(
-    "WorkbenchTestCaseCreateRequest",
-  );
+  contractSchema("Workbench.WorkbenchTestCaseCreateRequest");
 export const WorkbenchTestCaseUpdateRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchTestCaseUpdateRequest>(
-    "WorkbenchTestCaseUpdateRequest",
-  );
+  contractSchema("Workbench.WorkbenchTestCaseUpdateRequest");
 export const WorkbenchTestCasePageSchema =
-  workbenchContractSchema<QylContracts.WorkbenchTestCasePage>("WorkbenchTestCasePage");
-export const WorkbenchTestSuiteSchema = workbenchContractSchema<QylContracts.WorkbenchTestSuite>(
-  "WorkbenchTestSuite",
-);
+  contractSchema("Workbench.WorkbenchTestCasePage");
+export const WorkbenchTestSuiteSchema = contractSchema("Workbench.WorkbenchTestSuite");
 export const WorkbenchTestSuiteCreateRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchTestSuiteCreateRequest>(
-    "WorkbenchTestSuiteCreateRequest",
-  );
+  contractSchema("Workbench.WorkbenchTestSuiteCreateRequest");
 export const WorkbenchTestSuiteUpdateRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchTestSuiteUpdateRequest>(
-    "WorkbenchTestSuiteUpdateRequest",
-  );
+  contractSchema("Workbench.WorkbenchTestSuiteUpdateRequest");
 export const WorkbenchTestSuitePageSchema =
-  workbenchContractSchema<QylContracts.WorkbenchTestSuitePage>("WorkbenchTestSuitePage");
+  contractSchema("Workbench.WorkbenchTestSuitePage");
 
 // Evaluation runs, comparisons, and export artifacts.
 export const WorkbenchEvaluationResultStatusSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationResultStatus>(
-    "WorkbenchEvaluationResultStatus",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationResultStatus");
 export const WorkbenchEvaluationRunStatusSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationRunStatus>(
-    "WorkbenchEvaluationRunStatus",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationRunStatus");
 export const WorkbenchRegressionStatusSchema =
-  workbenchContractSchema<QylContracts.WorkbenchRegressionStatus>("WorkbenchRegressionStatus");
+  contractSchema("Workbench.WorkbenchRegressionStatus");
 export const WorkbenchEvaluationRunRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationRunRequest>(
-    "WorkbenchEvaluationRunRequest",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationRunRequest");
 export const WorkbenchTestCaseRunRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchTestCaseRunRequest>(
-    "WorkbenchTestCaseRunRequest",
-  );
+  contractSchema("Workbench.WorkbenchTestCaseRunRequest");
 export const WorkbenchSuiteRunRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchSuiteRunRequest>("WorkbenchSuiteRunRequest");
+  contractSchema("Workbench.WorkbenchSuiteRunRequest");
 export const WorkbenchAssertionResultSchema =
-  workbenchContractSchema<QylContracts.WorkbenchAssertionResult>("WorkbenchAssertionResult");
+  contractSchema("Workbench.WorkbenchAssertionResult");
 export const WorkbenchEvaluationTestCaseSnapshotSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationTestCaseSnapshot>(
-    "WorkbenchEvaluationTestCaseSnapshot",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationTestCaseSnapshot");
 export const WorkbenchEvaluationSuiteSnapshotSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationSuiteSnapshot>(
-    "WorkbenchEvaluationSuiteSnapshot",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationSuiteSnapshot");
 export const WorkbenchEvaluationTestResultSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationTestResult>(
-    "WorkbenchEvaluationTestResult",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationTestResult");
 export const WorkbenchEvaluationSummarySchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationSummary>("WorkbenchEvaluationSummary");
+  contractSchema("Workbench.WorkbenchEvaluationSummary");
 export const WorkbenchEvaluationRunSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationRun>("WorkbenchEvaluationRun");
+  contractSchema("Workbench.WorkbenchEvaluationRun");
 export const WorkbenchEvaluationRunAcceptedSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationRunAccepted>(
-    "WorkbenchEvaluationRunAccepted",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationRunAccepted");
 export const WorkbenchEvaluationRunPageSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationRunPage>(
-    "WorkbenchEvaluationRunPage",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationRunPage");
 export const WorkbenchEvaluationComparisonRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationComparisonRequest>(
-    "WorkbenchEvaluationComparisonRequest",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationComparisonRequest");
 export const WorkbenchEvaluationTestComparisonSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationTestComparison>(
-    "WorkbenchEvaluationTestComparison",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationTestComparison");
 export const WorkbenchEvaluationRunComparisonSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationRunComparison>(
-    "WorkbenchEvaluationRunComparison",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationRunComparison");
 export const WorkbenchEvaluationExportFormatSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationExportFormat>(
-    "WorkbenchEvaluationExportFormat",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationExportFormat");
 export const WorkbenchEvaluationExportStatusSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationExportStatus>(
-    "WorkbenchEvaluationExportStatus",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationExportStatus");
 export const WorkbenchEvaluationExportRequestSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationExportRequest>(
-    "WorkbenchEvaluationExportRequest",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationExportRequest");
 export const WorkbenchEvaluationExportSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationExport>("WorkbenchEvaluationExport");
+  contractSchema("Workbench.WorkbenchEvaluationExport");
 export const WorkbenchEvaluationJsonExportPayloadSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationJsonExportPayload>(
-    "WorkbenchEvaluationJsonExportPayload",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationJsonExportPayload");
 export const WorkbenchEvaluationReportExportPayloadSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationReportExportPayload>(
-    "WorkbenchEvaluationReportExportPayload",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationReportExportPayload");
 export const WorkbenchEvaluationExportPayloadSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationExportPayload>(
-    "WorkbenchEvaluationExportPayload",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationExportPayload");
 export const WorkbenchEvaluationExportArtifactSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationExportArtifact>(
-    "WorkbenchEvaluationExportArtifact",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationExportArtifact");
 export const WorkbenchEvaluationExportAcceptedSchema =
-  workbenchContractSchema<QylContracts.WorkbenchEvaluationExportAccepted>(
-    "WorkbenchEvaluationExportAccepted",
-  );
+  contractSchema("Workbench.WorkbenchEvaluationExportAccepted");
 
 // Generated Problem Details variants used by both workbench and Qyl tools.
-export const UnauthorizedErrorSchema = publishedContractSchema<QylContracts.UnauthorizedError>(
-  "Common.Errors.UnauthorizedError",
-);
-export const ForbiddenErrorSchema = publishedContractSchema<QylContracts.ForbiddenError>(
-  "Common.Errors.ForbiddenError",
-);
-export const NotFoundErrorSchema = publishedContractSchema<QylContracts.NotFoundError>(
-  "Common.Errors.NotFoundError",
-);
-export const ValidationErrorSchema = publishedContractSchema<QylContracts.ValidationError>(
-  "Common.Errors.ValidationError",
-);
-export const ConflictErrorSchema = publishedContractSchema<QylContracts.ConflictError>(
-  "Common.Errors.ConflictError",
-);
-export const BadGatewayErrorSchema = publishedContractSchema<QylContracts.BadGatewayError>(
-  "Common.Errors.BadGatewayError",
-);
+export const UnauthorizedErrorSchema = contractSchema("Common.Errors.UnauthorizedError");
+export const ForbiddenErrorSchema = contractSchema("Common.Errors.ForbiddenError");
+export const NotFoundErrorSchema = contractSchema("Common.Errors.NotFoundError");
+export const ValidationErrorSchema = contractSchema("Common.Errors.ValidationError");
+export const ConflictErrorSchema = contractSchema("Common.Errors.ConflictError");
+export const BadGatewayErrorSchema = contractSchema("Common.Errors.BadGatewayError");
 export const ServiceUnavailableErrorSchema =
-  publishedContractSchema<QylContracts.ServiceUnavailableError>(
-    "Common.Errors.ServiceUnavailableError",
-  );
+  contractSchema("Common.Errors.ServiceUnavailableError");
 export const InternalServerErrorSchema =
-  publishedContractSchema<QylContracts.InternalServerError>(
-    "Common.Errors.InternalServerError",
-  );
+  contractSchema("Common.Errors.InternalServerError");

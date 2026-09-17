@@ -21,14 +21,13 @@ import type {
   MetricKind,
   MetricTemporality,
   Resource,
-  SessionId,
   SessionState,
   SeverityNumber,
   SeverityText,
-  SpanId,
-  TraceId,
   UserId,
 } from "@ancplua/qyl-api-schema/types";
+import { parseSessionId, parseSpanId, parseTraceId } from "@ancplua/qyl-api-schema/types";
+import { epochMsToUnixNanos } from "@ancplua/qyl-api-schema/runtime";
 
 /** Deterministic, valid lowercase-hex trace or span id. */
 function hexId(seed: number, length: number): string {
@@ -45,9 +44,6 @@ function hexId(seed: number, length: number): string {
 let demoAnchorMs = 0;
 const minutesAgoMs = (minutes: number) => demoAnchorMs - minutes * 60_000;
 // Absolute nanosecond timestamps are decimal strings on the wire: an epoch-ns value
-// is ~1.79e18, past Number.MAX_SAFE_INTEGER, so it is built in BigInt and never
-// round-trips through a JS number.
-const toNano = (absoluteMs: number) => (BigInt(Math.round(absoluteMs)) * 1_000_000n).toString();
 const intAttribute = (value: number): AttributeValue => ({
   type: "int",
   value: String(value),
@@ -91,16 +87,16 @@ function buildDemoTrace(
   startMs: number,
   specs: DemoSpanSpec[],
 ): QylTrace {
-  const traceId = hexId(seq * 7919 + 17, 32) as TraceId;
+  const traceId = parseTraceId(hexId(seq * 7919 + 17, 32));
 
   const spans: QylSpan[] = specs.map((spec, index) => {
     const span: QylSpan = {
-      span_id: hexId(seq * 104_729 + index * 31 + 5, 16) as SpanId,
+      span_id: parseSpanId(hexId(seq * 104_729 + index * 31 + 5, 16)),
       trace_id: traceId,
       name: spec.name,
       kind: spec.kind,
-      start_time_unix_nano: toNano(startMs + spec.start),
-      end_time_unix_nano: toNano(startMs + spec.end),
+      start_time_unix_nano: epochMsToUnixNanos(startMs + spec.start),
+      end_time_unix_nano: epochMsToUnixNanos(startMs + spec.end),
       status: spec.status ?? { code: 0 },
       resource: DEMO_RESOURCES[spec.service],
     };
@@ -113,7 +109,7 @@ function buildDemoTrace(
     if (spec.events) {
       span.events = spec.events.map((event) => ({
         name: event.name,
-        time_unix_nano: toNano(startMs + event.atMs),
+        time_unix_nano: epochMsToUnixNanos(startMs + event.atMs),
         ...(event.attributes ? { attributes: event.attributes } : {}),
       }));
     }
@@ -759,7 +755,7 @@ function buildDemoData(): DemoData {
     );
     const active = state === "active";
     return {
-      "session_id": id as SessionId,
+      "session_id": parseSessionId(id),
       ...(userId ? { user_id: userId as UserId } : {}),
       start_time: new Date(startMs).toISOString(),
       ...(active ? {} : { end_time: new Date(endMs).toISOString(), duration_ms: endMs - startMs }),
@@ -973,12 +969,12 @@ function buildDemoMcpSpans(): QylSpan[] {
       );
 
       spans.push({
-        span_id: hexId(seq * 65_537 + 11, 16) as SpanId,
-        trace_id: hexId(seq * 92_821 + 3, 32) as TraceId,
+        span_id: parseSpanId(hexId(seq * 65_537 + 11, 16)),
+        trace_id: parseTraceId(hexId(seq * 92_821 + 3, 32)),
         name,
         kind: 3,
-        start_time_unix_nano: toNano(spanStartMs),
-        end_time_unix_nano: toNano(spanStartMs + ms),
+        start_time_unix_nano: epochMsToUnixNanos(spanStartMs),
+        end_time_unix_nano: epochMsToUnixNanos(spanStartMs + ms),
         attributes: attrs,
         status: isError
           ? { code: 2, message: "MCP request failed" }

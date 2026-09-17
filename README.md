@@ -290,11 +290,7 @@ live mode over stdio, reads both MCP App resources, and repeats `tools/list`
 and one call over Streamable HTTP against a second process. It is the only gate
 that proves the metrics, session, CI and display tools against real data.
 
-`bun run test` in `server` begins with `verify:shapes`, which fails on any hand-rolled
-`z.object(` outside two documented exemptions and on any module registering a tool
-without importing the generated validators. The exemption list is self-policing:
-an entry whose file no longer declares a shape fails as stale, so the list shrinks
-on its own.
+Every tool shape in `server` is `contractSchema("<definition>")` from `@ancplua/qyl-api-schema/zod`: the contract package binds each published definition name to its TypeScript type, so a shape cannot be paired with the wrong type and a hand-rolled `z.object(` has nothing to stand in for. The textual gate that used to guard this (`verify:shapes`) is gone with the reason for it.
 
 ## Limits
 

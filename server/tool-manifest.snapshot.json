@@ -1,5 +1,5 @@
 {
-  "contract_revision": "sha256:5c1aa27ccdf48067",
+  "contract_revision": "sha256:75278211aa54def8",
   "tools": [
     {
       "name": "ci_log",
@@ -20,6 +20,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 128,
+            "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
             "description": "Session id of one CI run for a per-leg phase breakdown; omit to list recent runs."
           },
           "limit": {
@@ -46,7 +47,8 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 128,
-                  "description": "Unique session identifier"
+                  "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
+                  "description": "Unique session identifier: URL-safe characters, at least one, at most 128, not only dots. The same rule the SDK enforces on the baggage header."
                 },
                 "state": {
                   "type": "string",
@@ -67,7 +69,6 @@
                 "duration_ms": {
                   "type": "number",
                   "minimum": 0,
-                  "x-csharp-type": "double",
                   "description": "Duration in milliseconds"
                 },
                 "error_count": {
@@ -99,7 +100,8 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 128,
-            "description": "Unique session identifier"
+            "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
+            "description": "Unique session identifier: URL-safe characters, at least one, at most 128, not only dots. The same rule the SDK enforces on the baggage header."
           },
           "phases": {
             "type": "array",
@@ -126,7 +128,6 @@
                 "duration_ms": {
                   "type": "number",
                   "minimum": 0,
-                  "x-csharp-type": "double",
                   "description": "Duration in milliseconds"
                 },
                 "message": {
@@ -455,7 +456,8 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 128,
-            "description": "Unique session identifier"
+            "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
+            "description": "Unique session identifier: URL-safe characters, at least one, at most 128, not only dots. The same rule the SDK enforces on the baggage header."
           },
           "limit": {
             "default": 20,
@@ -646,7 +648,6 @@
             "type": "string",
             "maxLength": 20,
             "pattern": "^(0|[1-9][0-9]*)$",
-            "x-csharp-type": "ulong",
             "description": "Unsigned Unix timestamp in nanoseconds since epoch, encoded as a decimal string"
           },
           "__schema20": {
@@ -827,7 +828,6 @@
             "type": "string",
             "maxLength": 20,
             "pattern": "^(0|-?[1-9][0-9]*)$",
-            "x-csharp-type": "long",
             "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
           },
           "__schema35": {
@@ -883,7 +883,6 @@
             "type": "number",
             "minimum": 0,
             "multipleOf": 1,
-            "x-csharp-type": "long",
             "description": "Generic non-negative counter"
           },
           "__schema45": {
@@ -1578,7 +1577,6 @@
             "type": "string",
             "maxLength": 20,
             "pattern": "^(0|[1-9][0-9]*)$",
-            "x-csharp-type": "ulong",
             "description": "Trace duration in nanoseconds"
           },
           "__schema123": {
@@ -1885,7 +1883,6 @@
                             "type": "string",
                             "maxLength": 20,
                             "pattern": "^(0|-?[1-9][0-9]*)$",
-                            "x-csharp-type": "long",
                             "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
                           }
                         },
@@ -2193,7 +2190,6 @@
             "type": "string",
             "maxLength": 20,
             "pattern": "^(0|[1-9][0-9]*)$",
-            "x-csharp-type": "ulong",
             "description": "Unsigned Unix timestamp in nanoseconds since epoch, encoded as a decimal string"
           },
           "__schema20": {
@@ -2374,7 +2370,6 @@
             "type": "string",
             "maxLength": 20,
             "pattern": "^(0|-?[1-9][0-9]*)$",
-            "x-csharp-type": "long",
             "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
           },
           "__schema35": {
@@ -2430,7 +2425,6 @@
             "type": "number",
             "minimum": 0,
             "multipleOf": 1,
-            "x-csharp-type": "long",
             "description": "Generic non-negative counter"
           },
           "__schema45": {
@@ -3125,7 +3119,6 @@
             "type": "string",
             "maxLength": 20,
             "pattern": "^(0|[1-9][0-9]*)$",
-            "x-csharp-type": "ulong",
             "description": "Trace duration in nanoseconds"
           },
           "__schema123": {
@@ -3331,6 +3324,7 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 128,
+                  "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
                   "description": "Session ID"
                 },
                 "user_id": {
@@ -3354,7 +3348,6 @@
                 "duration_ms": {
                   "type": "number",
                   "minimum": 0,
-                  "x-csharp-type": "double",
                   "description": "Session duration in milliseconds"
                 },
                 "trace_count": {
@@ -3482,14 +3475,12 @@
                       "type": "number",
                       "minimum": 0,
                       "multipleOf": 1,
-                      "x-csharp-type": "long",
                       "description": "Total input tokens consumed"
                     },
                     "total_output_tokens": {
                       "type": "number",
                       "minimum": 0,
                       "multipleOf": 1,
-                      "x-csharp-type": "long",
                       "description": "Total output tokens generated"
                     },
                     "models_used": {
@@ -3528,7 +3519,6 @@
                 "state"
               ],
               "additionalProperties": false,
-              "x-csharp-type": "SessionEntity",
               "description": "Complete session entity with aggregated data"
             }
           },
@@ -3671,14 +3661,12 @@
                       "type": "string",
                       "maxLength": 20,
                       "pattern": "^(0|[1-9][0-9]*)$",
-                      "x-csharp-type": "ulong",
                       "description": "Start timestamp in nanoseconds since epoch"
                     },
                     "end_time_unix_nano": {
                       "type": "string",
                       "maxLength": 20,
                       "pattern": "^(0|[1-9][0-9]*)$",
-                      "x-csharp-type": "ulong",
                       "description": "End timestamp in nanoseconds since epoch"
                     },
                     "attributes": {
@@ -3710,7 +3698,6 @@
                       "type": "number",
                       "minimum": 0,
                       "multipleOf": 1,
-                      "x-csharp-type": "long",
                       "description": "Dropped attributes count"
                     },
                     "events": {
@@ -3727,7 +3714,6 @@
                             "type": "string",
                             "maxLength": 20,
                             "pattern": "^(0|[1-9][0-9]*)$",
-                            "x-csharp-type": "ulong",
                             "description": "Event timestamp in nanoseconds since epoch"
                           },
                           "attributes": {
@@ -3759,7 +3745,6 @@
                             "type": "number",
                             "minimum": 0,
                             "multipleOf": 1,
-                            "x-csharp-type": "long",
                             "description": "Dropped attributes count"
                           }
                         },
@@ -3776,7 +3761,6 @@
                       "type": "number",
                       "minimum": 0,
                       "multipleOf": 1,
-                      "x-csharp-type": "long",
                       "description": "Dropped events count"
                     },
                     "links": {
@@ -3840,7 +3824,6 @@
                             "type": "number",
                             "minimum": 0,
                             "multipleOf": 1,
-                            "x-csharp-type": "long",
                             "description": "Dropped attributes count"
                           },
                           "flags": {
@@ -3863,7 +3846,6 @@
                       "type": "number",
                       "minimum": 0,
                       "multipleOf": 1,
-                      "x-csharp-type": "long",
                       "description": "Dropped links count"
                     },
                     "status": {
@@ -4137,7 +4119,6 @@
                           "type": "number",
                           "minimum": 0,
                           "multipleOf": 1,
-                          "x-csharp-type": "long",
                           "description": "Dropped attributes count"
                         },
                         "entity_refs": {
@@ -4234,7 +4215,6 @@
                           "type": "number",
                           "minimum": 0,
                           "multipleOf": 1,
-                          "x-csharp-type": "long",
                           "description": "Dropped attributes count"
                         }
                       },
@@ -4268,7 +4248,6 @@
                   "type": "string",
                   "maxLength": 20,
                   "pattern": "^(0|[1-9][0-9]*)$",
-                  "x-csharp-type": "ulong",
                   "description": "Trace duration in nanoseconds"
                 },
                 "start_time": {
@@ -4364,7 +4343,6 @@
                             "type": "string",
                             "maxLength": 20,
                             "pattern": "^(0|-?[1-9][0-9]*)$",
-                            "x-csharp-type": "long",
                             "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
                           }
                         },
@@ -4737,7 +4715,6 @@
                             "type": "string",
                             "maxLength": 20,
                             "pattern": "^(0|-?[1-9][0-9]*)$",
-                            "x-csharp-type": "long",
                             "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
                           }
                         },
@@ -4899,14 +4876,12 @@
                   "type": "string",
                   "maxLength": 20,
                   "pattern": "^(0|[1-9][0-9]*)$",
-                  "x-csharp-type": "ulong",
                   "description": "Timestamp when the event occurred (nanoseconds since epoch)"
                 },
                 "observed_time_unix_nano": {
                   "type": "string",
                   "maxLength": 20,
                   "pattern": "^(0|[1-9][0-9]*)$",
-                  "x-csharp-type": "ulong",
                   "description": "Timestamp when the log was observed/collected (nanoseconds since epoch)"
                 },
                 "severity_number": {
@@ -5059,7 +5034,6 @@
                   "type": "number",
                   "minimum": 0,
                   "multipleOf": 1,
-                  "x-csharp-type": "long",
                   "description": "Dropped attributes count"
                 },
                 "flags": {
@@ -5326,7 +5300,6 @@
                       "type": "number",
                       "minimum": 0,
                       "multipleOf": 1,
-                      "x-csharp-type": "long",
                       "description": "Dropped attributes count"
                     },
                     "entity_refs": {
@@ -5423,7 +5396,6 @@
                       "type": "number",
                       "minimum": 0,
                       "multipleOf": 1,
-                      "x-csharp-type": "long",
                       "description": "Dropped attributes count"
                     }
                   },
@@ -5501,7 +5473,6 @@
                             "type": "string",
                             "maxLength": 20,
                             "pattern": "^(0|-?[1-9][0-9]*)$",
-                            "x-csharp-type": "long",
                             "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
                           }
                         },
