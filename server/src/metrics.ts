@@ -16,7 +16,7 @@ import type {
   MetricSeriesResult,
   Attribute,
 } from "@ancplua/qyl-api-schema/types";
-import { formatAttributeValue } from "@ancplua/qyl-api-schema/runtime";
+import { attributeIdentity, formatAttributeValue } from "@ancplua/qyl-api-schema/runtime";
 import {
   CollectorError,
   type CollectorRequestOptions,
@@ -108,8 +108,8 @@ function demoSeriesId(stream: DemoMetricStream): string {
   const identity = [
     stream.name,
     stream.serviceName,
-    // The canonical wire encoding, not the formatted text: identity must not depend on presentation.
-    ...stream.attributes.map((attribute) => `${attribute.key}=${JSON.stringify(attribute.value)}`),
+    // The contract's own identity, the same string the collector computes in C#.
+    ...stream.attributes.map((attribute) => `${attribute.key}=${attributeIdentity(attribute.value)}`),
   ].join("|");
   let hash = 0x811c9dc5;
   for (let index = 0; index < identity.length; index += 1) {

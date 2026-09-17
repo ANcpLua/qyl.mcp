@@ -48,6 +48,7 @@ try {
   const tools = listing.tools.map((t) => t.name);
   check(tools.length === 11, "tools/list returns eleven tools", `${tools.length}: ${tools.join(", ")}`);
 
+  /** @type {ReadonlyArray<readonly [string, Record<string, unknown>]>} */
   const plan = [
     ["list_traces", {}],
     ["list_sessions", {}],

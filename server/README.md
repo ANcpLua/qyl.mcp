@@ -96,6 +96,14 @@ so serving it requires Bun.
 
 ## Release notes
 
+### 7.0.0
+
+- Contract `@ancplua/qyl-api-schema` 11.1.0 -> 11.2.0. Demo series ids are
+  computed with the contract's `attributeIdentity`, the same string the
+  collector computes in C#, so a demo series id and a live one are comparable;
+  every demo series id changes, which is why this is a major. A contract major
+  moves this package's major from now on.
+
 ### 6.2.1
 
 - Contract `@ancplua/qyl-api-schema` 11.0.1 -> 11.1.0. Every tool shape is

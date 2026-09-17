@@ -20,7 +20,7 @@
       "name": "qyl-mcp-dashboard",
       "version": "1.1.1",
       "dependencies": {
-        "@ancplua/qyl-api-schema": "11.1.0",
+        "@ancplua/qyl-api-schema": "11.2.0",
         "@modelcontextprotocol/core": "2.0.0",
         "@modelcontextprotocol/server": "2.0.0",
         "qyl-mcp-server": "^6.0.0",
@@ -39,12 +39,12 @@
     },
     "server": {
       "name": "qyl-mcp-server",
-      "version": "6.2.0",
+      "version": "7.0.0",
       "bin": {
         "qyl-mcp-server": "dist/main.js",
       },
       "dependencies": {
-        "@ancplua/qyl-api-schema": "11.1.0",
+        "@ancplua/qyl-api-schema": "11.2.0",
         "@modelcontextprotocol/core": "2.0.0",
         "@modelcontextprotocol/server": "2.0.0",
         "@opentelemetry/api": "^1.9.1",
@@ -74,7 +74,7 @@
       "name": "qyl-mcp-workbench",
       "version": "1.1.1",
       "dependencies": {
-        "@ancplua/qyl-api-schema": "11.1.0",
+        "@ancplua/qyl-api-schema": "11.2.0",
         "@modelcontextprotocol/client": "2.0.0",
         "@modelcontextprotocol/core": "2.0.0",
         "@modelcontextprotocol/server": "2.0.0",
@@ -97,7 +97,7 @@
     },
   },
   "packages": {
-    "@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@11.1.0", "", { "peerDependencies": { "@typespec/compiler": "^1.13.0 || >=1.13.0-dev.0", "@typespec/events": "^0.83.0 || ^0.84.0 || ^0.85.0 || ^0.86.0", "@typespec/http": "^1.13.0", "@typespec/openapi": "^1.13.0", "@typespec/openapi3": "^1.13.0", "@typespec/sse": ">=0.83.0 <0.87.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-bTFoNPK91y2lQJgR67qkmb5b20JW5x4jv1Hc7/kYcZaABHLLMqlPfCZdIZ2B6wlFl8RYmLWf5KUqbiYzecV5gw=="],
+    "@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@11.2.0", "", { "peerDependencies": { "@typespec/compiler": "^1.16.0", "@typespec/events": "^0.86.0", "@typespec/http": "^1.16.0", "@typespec/openapi": "^1.16.0", "@typespec/openapi3": "^1.16.0", "@typespec/sse": "^0.86.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-bEcd0MF4boOu2zB3mni8LJARjc/EaYVu65B+cdlHQPxb+09H99jMFqIdciZdhikIqxTXfoxjMWcoxZTtVRwf7w=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.17", "", { "peerDependencies": { "hono": "^4" } }, "sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ=="],
 
@@ -539,6 +539,14 @@
 
     "negotiator/content-type": ["content-type@2.1.0", "", {}, "sha512-mj7UPXE0jaqaOsukNZRUEfEi2AcL7C/vwmwcHV0O97eO1E1pxBZuyjlZrx5seTaNBg1U6+o35wpa35Qfcc+7ag=="],
 
+    "qyl-mcp-dashboard/qyl-mcp-server": ["qyl-mcp-server@6.2.1", "", { "dependencies": { "@ancplua/qyl-api-schema": "11.1.0", "@modelcontextprotocol/core": "2.0.0", "@modelcontextprotocol/server": "2.0.0", "@opentelemetry/api": "^1.9.1", "@opentelemetry/api-logs": "^0.222.0", "@opentelemetry/core": "^2.11.0", "@opentelemetry/exporter-logs-otlp-proto": "^0.222.0", "@opentelemetry/exporter-metrics-otlp-proto": "^0.222.0", "@opentelemetry/exporter-trace-otlp-proto": "^0.222.0", "@opentelemetry/resources": "^2.11.0", "@opentelemetry/sdk-logs": "^0.222.0", "@opentelemetry/sdk-metrics": "^2.11.0", "@opentelemetry/sdk-trace-base": "^2.11.0", "@opentelemetry/sdk-trace-node": "^2.11.0", "@opentelemetry/semantic-conventions": "^1.43.0", "jose": "^6.2.10", "zod": "^4.5.4" }, "bin": { "qyl-mcp-server": "dist/main.js" } }, "sha512-rkxkS/ilsbYnhK9AGRu3y7BOuNNCtvdBcbvmdheXnzHUO9YhsbD4GBLQmqYsqY5A6G3EgT7xUZn4xV7whsX83Q=="],
+
+    "qyl-mcp-workbench/qyl-mcp-server": ["qyl-mcp-server@6.2.1", "", { "dependencies": { "@ancplua/qyl-api-schema": "11.1.0", "@modelcontextprotocol/core": "2.0.0", "@modelcontextprotocol/server": "2.0.0", "@opentelemetry/api": "^1.9.1", "@opentelemetry/api-logs": "^0.222.0", "@opentelemetry/core": "^2.11.0", "@opentelemetry/exporter-logs-otlp-proto": "^0.222.0", "@opentelemetry/exporter-metrics-otlp-proto": "^0.222.0", "@opentelemetry/exporter-trace-otlp-proto": "^0.222.0", "@opentelemetry/resources": "^2.11.0", "@opentelemetry/sdk-logs": "^0.222.0", "@opentelemetry/sdk-metrics": "^2.11.0", "@opentelemetry/sdk-trace-base": "^2.11.0", "@opentelemetry/sdk-trace-node": "^2.11.0", "@opentelemetry/semantic-conventions": "^1.43.0", "jose": "^6.2.10", "zod": "^4.5.4" }, "bin": { "qyl-mcp-server": "dist/main.js" } }, "sha512-rkxkS/ilsbYnhK9AGRu3y7BOuNNCtvdBcbvmdheXnzHUO9YhsbD4GBLQmqYsqY5A6G3EgT7xUZn4xV7whsX83Q=="],
+
     "type-is/content-type": ["content-type@2.1.0", "", {}, "sha512-mj7UPXE0jaqaOsukNZRUEfEi2AcL7C/vwmwcHV0O97eO1E1pxBZuyjlZrx5seTaNBg1U6+o35wpa35Qfcc+7ag=="],
+
+    "qyl-mcp-dashboard/qyl-mcp-server/@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@11.1.0", "", { "peerDependencies": { "@typespec/compiler": "^1.13.0 || >=1.13.0-dev.0", "@typespec/events": "^0.83.0 || ^0.84.0 || ^0.85.0 || ^0.86.0", "@typespec/http": "^1.13.0", "@typespec/openapi": "^1.13.0", "@typespec/openapi3": "^1.13.0", "@typespec/sse": ">=0.83.0 <0.87.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-bTFoNPK91y2lQJgR67qkmb5b20JW5x4jv1Hc7/kYcZaABHLLMqlPfCZdIZ2B6wlFl8RYmLWf5KUqbiYzecV5gw=="],
+
+    "qyl-mcp-workbench/qyl-mcp-server/@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@11.1.0", "", { "peerDependencies": { "@typespec/compiler": "^1.13.0 || >=1.13.0-dev.0", "@typespec/events": "^0.83.0 || ^0.84.0 || ^0.85.0 || ^0.86.0", "@typespec/http": "^1.13.0", "@typespec/openapi": "^1.13.0", "@typespec/openapi3": "^1.13.0", "@typespec/sse": ">=0.83.0 <0.87.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-bTFoNPK91y2lQJgR67qkmb5b20JW5x4jv1Hc7/kYcZaABHLLMqlPfCZdIZ2B6wlFl8RYmLWf5KUqbiYzecV5gw=="],
   }
 }
