@@ -96,6 +96,14 @@ so serving it requires Bun.
 
 ## Release notes
 
+### 6.2.1
+
+- Contract `@ancplua/qyl-api-schema` 11.0.1 -> 11.1.0. Every tool shape is
+  `contractSchema("<definition>")`, typed by the contract at compile time, so
+  the textual shape gate is gone; trace, span and session ids are parsed
+  through the contract's generated parsers instead of cast; the nanosecond
+  helpers come from the contract's `/runtime`.
+
 ### 6.2.0
 
 - Contract `@ancplua/qyl-api-schema` 10.0.1 -> 11.0.1, revision
