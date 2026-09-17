@@ -13,3 +13,5 @@ dist-sandbox
 # tracked.
 .claude/settings.local.json
 .claude/settings.local.json.*
+tools/hosted-eval/out/
+tools/hosted-eval/node_modules

@@ -2,3 +2,26 @@
 # locally `mise install` does the same. dotnet also keeps global.json, which dotnet itself reads.
 [tools]
 "bun" = "1.4.2"
+
+[tasks.check]
+description = "The gate: what CI runs, in order"
+run = [
+  "node verify-contract-pins.mjs",
+  "bun install --frozen-lockfile",
+  "bun run build",
+  "bun run lint",
+  "bun run test",
+  "bun run smoke",
+]
+
+[tasks.smoke-otlp]
+description = "Live OTLP and MCP surface against a built collector; set QYL_COLLECTOR_PROJECT to its csproj"
+run = [
+  "bun run smoke:otlp",
+]
+
+[tasks.hosted-eval]
+description = "The eleven tools against mcp.qyl.at with a token from the Keychain"
+run = [
+  "tools/hosted-eval/run.sh",
+]
