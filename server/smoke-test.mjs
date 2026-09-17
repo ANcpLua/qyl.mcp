@@ -243,8 +243,8 @@ check(
   corrLogs?.some(
     (l) =>
       l.severity_number >= 17 &&
-      typeof l.body?.string_value === "string" &&
-      l.body.string_value.includes("   at "),
+      typeof l.body === "string" &&
+      l.body.includes("   at "),
   ),
 );
 
