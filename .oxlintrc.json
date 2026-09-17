@@ -1,0 +1,76 @@
+{
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "categories": {
+        "correctness": "error"
+    },
+    "options": {
+        "typeAware": true
+    },
+    "ignorePatterns": [
+        "dist",
+        "node_modules",
+        "**/*.d.ts",
+        "sites",
+        "coverage",
+        "playwright-report",
+        "test-results"
+    ],
+    "rules": {
+        "eqeqeq": [
+            "error",
+            "smart"
+        ],
+        "typescript/no-unused-vars": [
+            "error",
+            {
+                "argsIgnorePattern": "^_"
+            }
+        ],
+        "typescript/no-explicit-any": "warn",
+        "typescript/consistent-type-imports": [
+            "error",
+            {
+                "prefer": "type-imports",
+                "fixStyle": "separate-type-imports"
+            }
+        ],
+        "typescript/no-inferrable-types": [
+            "error",
+            {
+                "ignoreProperties": true
+            }
+        ],
+        "typescript/no-floating-promises": "error",
+        "typescript/no-misused-promises": "error",
+        "typescript/await-thenable": "error"
+    },
+    "overrides": [
+        {
+            "files": [
+                "dashboard/src/**/*.ts",
+                "dashboard/src/**/*.tsx"
+            ],
+            "rules": {
+                "no-console": "error"
+            }
+        },
+        {
+            "files": [
+                "**/*.test.ts",
+                "**/*.test.tsx",
+                "**/*.spec.ts",
+                "**/*.spec.tsx",
+                "**/test/**",
+                "**/fixtures/**",
+                "**/*.test.mjs",
+                "**/*.spec.mjs"
+            ],
+            "rules": {
+                "no-console": "off",
+                "typescript/no-explicit-any": "off",
+                "typescript/no-unused-vars": "off",
+                "typescript/no-floating-promises": "off"
+            }
+        }
+    ]
+}

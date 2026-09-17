@@ -18,13 +18,16 @@
     "smoke:live": "bun run --cwd server smoke:live",
     "smoke:otlp": "bun run --cwd workbench smoke:otlp",
     "dev": "bun run --cwd server build && bun run --cwd dashboard dev",
-    "verify:pins": "node verify-contract-pins.mjs"
+    "verify:pins": "node verify-contract-pins.mjs",
+    "lint": "oxlint ."
   },
   "engines": {
     "node": "24.x"
   },
   "devDependencies": {
     "@types/node": "26.4.1",
+    "oxlint": "^1.83.0",
+    "oxlint-tsgolint": "^7.0.2001",
     "typescript": "7.0.2",
     "vite": "8.2.2"
   },
