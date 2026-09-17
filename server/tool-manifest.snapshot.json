@@ -1,5 +1,5 @@
 {
-  "contract_revision": "sha256:cd69d9c37a41916c",
+  "contract_revision": "sha256:5c1aa27ccdf48067",
   "tools": [
     {
       "name": "ci_log",
@@ -475,10 +475,10 @@
             "$ref": "#/$defs/__schema0"
           },
           "selected_trace_id": {
-            "$ref": "#/$defs/__schema130"
+            "$ref": "#/$defs/__schema129"
           },
           "mode": {
-            "$ref": "#/$defs/__schema131"
+            "$ref": "#/$defs/__schema130"
           }
         },
         "required": [
@@ -500,25 +500,25 @@
                   "$ref": "#/$defs/__schema3"
                 },
                 "span_count": {
-                  "$ref": "#/$defs/__schema122"
+                  "$ref": "#/$defs/__schema121"
                 },
                 "duration_ns": {
-                  "$ref": "#/$defs/__schema123"
+                  "$ref": "#/$defs/__schema122"
                 },
                 "start_time": {
-                  "$ref": "#/$defs/__schema124"
+                  "$ref": "#/$defs/__schema123"
                 },
                 "end_time": {
-                  "$ref": "#/$defs/__schema125"
+                  "$ref": "#/$defs/__schema124"
                 },
                 "services": {
-                  "$ref": "#/$defs/__schema126"
+                  "$ref": "#/$defs/__schema125"
                 },
                 "has_error": {
-                  "$ref": "#/$defs/__schema128"
+                  "$ref": "#/$defs/__schema127"
                 },
                 "spans": {
-                  "$ref": "#/$defs/__schema129"
+                  "$ref": "#/$defs/__schema128"
                 }
               },
               "required": [
@@ -551,7 +551,7 @@
           },
           "__schema3": {
             "description": "Root span of the trace",
-            "$ref": "#/$defs/__schema121"
+            "$ref": "#/$defs/__schema120"
           },
           "__schema4": {
             "description": "Unique span identifier (16 hex chars)",
@@ -685,7 +685,7 @@
           },
           "__schema24": {
             "description": "Attribute value",
-            "$ref": "#/$defs/__schema40"
+            "$ref": "#/$defs/__schema29"
           },
           "__schema25": {
             "type": "null"
@@ -697,108 +697,12 @@
             "type": "boolean"
           },
           "__schema28": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "$ref": "#/$defs/__schema29"
-              },
-              "value": {
-                "$ref": "#/$defs/__schema30"
-              }
-            },
-            "required": [
-              "type",
-              "value"
-            ],
-            "additionalProperties": false,
-            "description": "Tagged OTLP signed 64-bit integer attribute."
-          },
-          "__schema29": {
-            "type": "string",
-            "const": "int"
-          },
-          "__schema30": {
-            "type": "string",
-            "maxLength": 20,
-            "pattern": "^(0|-?[1-9][0-9]*)$",
-            "x-csharp-type": "long",
-            "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
-          },
-          "__schema31": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "$ref": "#/$defs/__schema32"
-              },
-              "value": {
-                "$ref": "#/$defs/__schema33"
-              }
-            },
-            "required": [
-              "type",
-              "value"
-            ],
-            "additionalProperties": false,
-            "description": "Tagged OTLP double attribute."
-          },
-          "__schema32": {
-            "type": "string",
-            "const": "double"
-          },
-          "__schema33": {
-            "anyOf": [
-              {
-                "$ref": "#/$defs/__schema34"
-              },
-              {
-                "$ref": "#/$defs/__schema35"
-              }
-            ],
-            "description": "An OTLP attribute double encoded as a JSON number when finite or a canonical named string when non-finite."
-          },
-          "__schema34": {
-            "type": "number"
-          },
-          "__schema35": {
-            "type": "string",
-            "enum": [
-              "NaN",
-              "Infinity",
-              "-Infinity"
-            ]
-          },
-          "__schema36": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "$ref": "#/$defs/__schema37"
-              },
-              "base64": {
-                "$ref": "#/$defs/__schema38"
-              }
-            },
-            "required": [
-              "type",
-              "base64"
-            ],
-            "additionalProperties": false,
-            "description": "Base64 bytes projected by qyl without colliding with an ordinary string attribute."
-          },
-          "__schema37": {
-            "type": "string",
-            "const": "bytes"
-          },
-          "__schema38": {
-            "type": "string",
-            "contentEncoding": "base64"
-          },
-          "__schema39": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema40"
+              "$ref": "#/$defs/__schema29"
             }
           },
-          "__schema40": {
+          "__schema29": {
             "anyOf": [
               {
                 "$ref": "#/$defs/__schema25"
@@ -813,80 +717,196 @@
                 "$ref": "#/$defs/__schema28"
               },
               {
+                "$ref": "#/$defs/__schema30"
+              }
+            ],
+            "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute. Primitive variants are bare JSON values; object variants carry a `type` tag."
+          },
+          "__schema30": {
+            "allOf": [
+              {
                 "$ref": "#/$defs/__schema31"
               },
               {
-                "$ref": "#/$defs/__schema36"
-              },
-              {
-                "$ref": "#/$defs/__schema39"
-              },
-              {
-                "$ref": "#/$defs/__schema41"
+                "$ref": "#/$defs/__schema32"
               }
             ],
-            "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute."
-          },
-          "__schema41": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "$ref": "#/$defs/__schema42"
-              },
-              "values": {
-                "$ref": "#/$defs/__schema43"
+            "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+                "int": "#/components/schemas/Common.AttributeIntValue",
+                "double": "#/components/schemas/Common.AttributeDoubleValue",
+                "bytes": "#/components/schemas/Common.AttributeBytesValue",
+                "kvlist": "#/components/schemas/Common.AttributeKeyValueListValue"
               }
             },
-            "required": [
-              "type",
-              "values"
-            ],
-            "additionalProperties": false,
-            "description": "Tagged recursive OTLP key-value-list, distinct from other object-shaped attribute variants."
+            "description": "Object-shaped AttributeValue variants. The variant name is the wire `type` tag."
           },
-          "__schema42": {
+          "__schema31": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": {}
+          },
+          "__schema32": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "$ref": "#/$defs/__schema33"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/__schema34"
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged OTLP signed 64-bit integer attribute."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "$ref": "#/$defs/__schema35"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/__schema36"
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged OTLP double attribute."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "$ref": "#/$defs/__schema39"
+                  },
+                  "base64": {
+                    "$ref": "#/$defs/__schema40"
+                  }
+                },
+                "required": [
+                  "type",
+                  "base64"
+                ],
+                "additionalProperties": false,
+                "description": "Base64 bytes projected by qyl without colliding with an ordinary string attribute."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "$ref": "#/$defs/__schema41"
+                  },
+                  "values": {
+                    "$ref": "#/$defs/__schema42"
+                  }
+                },
+                "required": [
+                  "type",
+                  "values"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged recursive OTLP key-value-list, distinct from other object-shaped attribute variants."
+              }
+            ]
+          },
+          "__schema33": {
+            "type": "string",
+            "const": "int"
+          },
+          "__schema34": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(0|-?[1-9][0-9]*)$",
+            "x-csharp-type": "long",
+            "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
+          },
+          "__schema35": {
+            "type": "string",
+            "const": "double"
+          },
+          "__schema36": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/__schema37"
+              },
+              {
+                "$ref": "#/$defs/__schema38"
+              }
+            ],
+            "description": "An OTLP attribute double encoded as a JSON number when finite or a canonical named string when non-finite."
+          },
+          "__schema37": {
+            "type": "number"
+          },
+          "__schema38": {
+            "type": "string",
+            "enum": [
+              "NaN",
+              "Infinity",
+              "-Infinity"
+            ]
+          },
+          "__schema39": {
+            "type": "string",
+            "const": "bytes"
+          },
+          "__schema40": {
+            "type": "string",
+            "contentEncoding": "base64"
+          },
+          "__schema41": {
             "type": "string",
             "const": "kvlist"
           },
-          "__schema43": {
+          "__schema42": {
             "type": "object",
             "properties": {},
             "additionalProperties": {
-              "$ref": "#/$defs/__schema40"
+              "$ref": "#/$defs/__schema29"
             }
           },
-          "__schema44": {
+          "__schema43": {
             "description": "Dropped attributes count",
-            "$ref": "#/$defs/__schema45"
+            "$ref": "#/$defs/__schema44"
           },
-          "__schema45": {
+          "__schema44": {
             "type": "number",
             "minimum": 0,
             "multipleOf": 1,
             "x-csharp-type": "long",
             "description": "Generic non-negative counter"
           },
-          "__schema46": {
+          "__schema45": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema47"
+              "$ref": "#/$defs/__schema46"
             },
             "description": "Span events (logs attached to span)"
           },
-          "__schema47": {
+          "__schema46": {
             "type": "object",
             "properties": {
               "name": {
-                "$ref": "#/$defs/__schema48"
+                "$ref": "#/$defs/__schema47"
               },
               "time_unix_nano": {
-                "$ref": "#/$defs/__schema49"
+                "$ref": "#/$defs/__schema48"
               },
               "attributes": {
-                "$ref": "#/$defs/__schema50"
+                "$ref": "#/$defs/__schema49"
               },
               "dropped_attributes_count": {
-                "$ref": "#/$defs/__schema51"
+                "$ref": "#/$defs/__schema50"
               }
             },
             "required": [
@@ -896,57 +916,57 @@
             "additionalProperties": false,
             "description": "Event occurring during a span's lifetime"
           },
-          "__schema48": {
+          "__schema47": {
             "type": "string",
             "minLength": 1,
             "description": "Event name"
           },
-          "__schema49": {
+          "__schema48": {
             "description": "Event timestamp in nanoseconds since epoch",
             "$ref": "#/$defs/__schema19"
           },
-          "__schema50": {
+          "__schema49": {
             "type": "array",
             "items": {
               "$ref": "#/$defs/__schema22"
             },
             "description": "Event attributes"
           },
-          "__schema51": {
+          "__schema50": {
             "description": "Dropped attributes count",
-            "$ref": "#/$defs/__schema45"
+            "$ref": "#/$defs/__schema44"
+          },
+          "__schema51": {
+            "description": "Dropped events count",
+            "$ref": "#/$defs/__schema44"
           },
           "__schema52": {
-            "description": "Dropped events count",
-            "$ref": "#/$defs/__schema45"
-          },
-          "__schema53": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema54"
+              "$ref": "#/$defs/__schema53"
             },
             "description": "Links to other spans"
           },
-          "__schema54": {
+          "__schema53": {
             "type": "object",
             "properties": {
               "trace_id": {
-                "$ref": "#/$defs/__schema55"
+                "$ref": "#/$defs/__schema54"
               },
               "span_id": {
-                "$ref": "#/$defs/__schema56"
+                "$ref": "#/$defs/__schema55"
               },
               "trace_state": {
-                "$ref": "#/$defs/__schema57"
+                "$ref": "#/$defs/__schema56"
               },
               "attributes": {
-                "$ref": "#/$defs/__schema58"
+                "$ref": "#/$defs/__schema57"
               },
               "dropped_attributes_count": {
-                "$ref": "#/$defs/__schema59"
+                "$ref": "#/$defs/__schema58"
               },
               "flags": {
-                "$ref": "#/$defs/__schema60"
+                "$ref": "#/$defs/__schema59"
               }
             },
             "required": [
@@ -956,47 +976,47 @@
             "additionalProperties": false,
             "description": "Link to another span (e.g., batch processing)"
           },
-          "__schema55": {
+          "__schema54": {
             "description": "Linked trace ID",
             "$ref": "#/$defs/__schema2"
           },
-          "__schema56": {
+          "__schema55": {
             "description": "Linked span ID",
             "$ref": "#/$defs/__schema5"
           },
-          "__schema57": {
+          "__schema56": {
             "description": "Trace state of the linked span",
             "$ref": "#/$defs/__schema9"
           },
-          "__schema58": {
+          "__schema57": {
             "type": "array",
             "items": {
               "$ref": "#/$defs/__schema22"
             },
             "description": "Link attributes"
           },
-          "__schema59": {
+          "__schema58": {
             "description": "Dropped attributes count",
-            "$ref": "#/$defs/__schema45"
+            "$ref": "#/$defs/__schema44"
           },
-          "__schema60": {
+          "__schema59": {
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991,
             "description": "Link flags"
           },
-          "__schema61": {
+          "__schema60": {
             "description": "Dropped links count",
-            "$ref": "#/$defs/__schema45"
+            "$ref": "#/$defs/__schema44"
           },
-          "__schema62": {
+          "__schema61": {
             "type": "object",
             "properties": {
               "code": {
-                "$ref": "#/$defs/__schema63"
+                "$ref": "#/$defs/__schema62"
               },
               "message": {
-                "$ref": "#/$defs/__schema67"
+                "$ref": "#/$defs/__schema66"
               }
             },
             "required": [
@@ -1005,158 +1025,158 @@
             "additionalProperties": false,
             "description": "Span status"
           },
-          "__schema63": {
+          "__schema62": {
             "anyOf": [
+              {
+                "$ref": "#/$defs/__schema63"
+              },
               {
                 "$ref": "#/$defs/__schema64"
               },
               {
                 "$ref": "#/$defs/__schema65"
-              },
-              {
-                "$ref": "#/$defs/__schema66"
               }
             ],
             "description": "Status code"
           },
-          "__schema64": {
+          "__schema63": {
             "type": "number",
             "const": 0
           },
-          "__schema65": {
+          "__schema64": {
             "type": "number",
             "const": 1
           },
-          "__schema66": {
+          "__schema65": {
             "type": "number",
             "const": 2
           },
-          "__schema67": {
+          "__schema66": {
             "type": "string",
             "description": "Status message (only for ERROR status)"
           },
-          "__schema68": {
+          "__schema67": {
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991,
             "description": "Span flags"
           },
-          "__schema69": {
+          "__schema68": {
             "type": "object",
             "properties": {
               "service_name": {
-                "$ref": "#/$defs/__schema70"
+                "$ref": "#/$defs/__schema69"
               },
               "service_namespace": {
-                "$ref": "#/$defs/__schema71"
+                "$ref": "#/$defs/__schema70"
               },
               "service_instance_id": {
-                "$ref": "#/$defs/__schema72"
+                "$ref": "#/$defs/__schema71"
               },
               "service_version": {
-                "$ref": "#/$defs/__schema73"
+                "$ref": "#/$defs/__schema72"
               },
               "telemetry_sdk_name": {
-                "$ref": "#/$defs/__schema75"
+                "$ref": "#/$defs/__schema74"
               },
               "telemetry_sdk_language": {
-                "$ref": "#/$defs/__schema76"
+                "$ref": "#/$defs/__schema75"
               },
               "telemetry_sdk_version": {
-                "$ref": "#/$defs/__schema77"
+                "$ref": "#/$defs/__schema76"
               },
               "telemetry_distro_version": {
-                "$ref": "#/$defs/__schema78"
+                "$ref": "#/$defs/__schema77"
               },
               "deployment_environment": {
-                "$ref": "#/$defs/__schema79"
+                "$ref": "#/$defs/__schema78"
               },
               "cloud_provider": {
-                "$ref": "#/$defs/__schema80"
+                "$ref": "#/$defs/__schema79"
               },
               "cloud_region": {
-                "$ref": "#/$defs/__schema81"
+                "$ref": "#/$defs/__schema80"
               },
               "cloud_availability_zone": {
-                "$ref": "#/$defs/__schema82"
+                "$ref": "#/$defs/__schema81"
               },
               "cloud_account_id": {
-                "$ref": "#/$defs/__schema83"
+                "$ref": "#/$defs/__schema82"
               },
               "cloud_platform": {
-                "$ref": "#/$defs/__schema84"
+                "$ref": "#/$defs/__schema83"
               },
               "host_name": {
-                "$ref": "#/$defs/__schema85"
+                "$ref": "#/$defs/__schema84"
               },
               "host_id": {
-                "$ref": "#/$defs/__schema86"
+                "$ref": "#/$defs/__schema85"
               },
               "host_type": {
-                "$ref": "#/$defs/__schema87"
+                "$ref": "#/$defs/__schema86"
               },
               "host_arch": {
-                "$ref": "#/$defs/__schema88"
+                "$ref": "#/$defs/__schema87"
               },
               "os_type": {
-                "$ref": "#/$defs/__schema89"
+                "$ref": "#/$defs/__schema88"
               },
               "os_description": {
-                "$ref": "#/$defs/__schema90"
+                "$ref": "#/$defs/__schema89"
               },
               "os_version": {
-                "$ref": "#/$defs/__schema91"
+                "$ref": "#/$defs/__schema90"
               },
               "process_pid": {
-                "$ref": "#/$defs/__schema92"
+                "$ref": "#/$defs/__schema91"
               },
               "process_executable_name": {
-                "$ref": "#/$defs/__schema93"
+                "$ref": "#/$defs/__schema92"
               },
               "process_command_line": {
-                "$ref": "#/$defs/__schema94"
+                "$ref": "#/$defs/__schema93"
               },
               "process_runtime_name": {
-                "$ref": "#/$defs/__schema95"
+                "$ref": "#/$defs/__schema94"
               },
               "process_runtime_version": {
-                "$ref": "#/$defs/__schema96"
+                "$ref": "#/$defs/__schema95"
               },
               "container_id": {
-                "$ref": "#/$defs/__schema97"
+                "$ref": "#/$defs/__schema96"
               },
               "container_name": {
-                "$ref": "#/$defs/__schema98"
+                "$ref": "#/$defs/__schema97"
               },
               "container_image_name": {
-                "$ref": "#/$defs/__schema99"
+                "$ref": "#/$defs/__schema98"
               },
               "container_image_tags": {
-                "$ref": "#/$defs/__schema100"
+                "$ref": "#/$defs/__schema99"
               },
               "k8s_cluster_name": {
-                "$ref": "#/$defs/__schema102"
+                "$ref": "#/$defs/__schema101"
               },
               "k8s_namespace_name": {
-                "$ref": "#/$defs/__schema103"
+                "$ref": "#/$defs/__schema102"
               },
               "k8s_pod_name": {
-                "$ref": "#/$defs/__schema104"
+                "$ref": "#/$defs/__schema103"
               },
               "k8s_pod_uid": {
-                "$ref": "#/$defs/__schema105"
+                "$ref": "#/$defs/__schema104"
               },
               "k8s_deployment_name": {
-                "$ref": "#/$defs/__schema106"
+                "$ref": "#/$defs/__schema105"
               },
               "attributes": {
-                "$ref": "#/$defs/__schema107"
+                "$ref": "#/$defs/__schema106"
               },
               "dropped_attributes_count": {
-                "$ref": "#/$defs/__schema108"
+                "$ref": "#/$defs/__schema107"
               },
               "entity_refs": {
-                "$ref": "#/$defs/__schema109"
+                "$ref": "#/$defs/__schema108"
               }
             },
             "required": [
@@ -1165,23 +1185,23 @@
             "additionalProperties": false,
             "description": "Resource describing the entity that produced this span"
           },
-          "__schema70": {
+          "__schema69": {
             "type": "string",
             "description": "Service name (required)"
           },
-          "__schema71": {
+          "__schema70": {
             "type": "string",
             "description": "Service namespace for grouping"
           },
-          "__schema72": {
+          "__schema71": {
             "type": "string",
             "description": "Service instance ID (unique per instance)"
           },
-          "__schema73": {
+          "__schema72": {
             "description": "Service version",
-            "$ref": "#/$defs/__schema74"
+            "$ref": "#/$defs/__schema73"
           },
-          "__schema74": {
+          "__schema73": {
             "type": "string",
             "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
             "examples": [
@@ -1189,11 +1209,11 @@
             ],
             "description": "Semantic version string (e.g., 1.2.3)"
           },
-          "__schema75": {
+          "__schema74": {
             "type": "string",
             "description": "Telemetry SDK name"
           },
-          "__schema76": {
+          "__schema75": {
             "type": "string",
             "enum": [
               "cpp",
@@ -1211,19 +1231,19 @@
             ],
             "description": "Telemetry SDK language"
           },
-          "__schema77": {
+          "__schema76": {
             "description": "Telemetry SDK version",
-            "$ref": "#/$defs/__schema74"
+            "$ref": "#/$defs/__schema73"
+          },
+          "__schema77": {
+            "description": "Telemetry distribution version",
+            "$ref": "#/$defs/__schema73"
           },
           "__schema78": {
-            "description": "Telemetry distribution version",
-            "$ref": "#/$defs/__schema74"
-          },
-          "__schema79": {
             "type": "string",
             "description": "Deployment environment (e.g., production, staging)"
           },
-          "__schema80": {
+          "__schema79": {
             "type": "string",
             "enum": [
               "alibaba_cloud",
@@ -1236,35 +1256,35 @@
             ],
             "description": "Cloud provider"
           },
-          "__schema81": {
+          "__schema80": {
             "type": "string",
             "description": "Cloud region"
           },
-          "__schema82": {
+          "__schema81": {
             "type": "string",
             "description": "Cloud availability zone"
           },
-          "__schema83": {
+          "__schema82": {
             "type": "string",
             "description": "Cloud account ID"
           },
-          "__schema84": {
+          "__schema83": {
             "type": "string",
             "description": "Cloud platform (e.g., aws_ecs, gcp_cloud_run)"
           },
-          "__schema85": {
+          "__schema84": {
             "type": "string",
             "description": "Host name"
           },
-          "__schema86": {
+          "__schema85": {
             "type": "string",
             "description": "Host ID"
           },
-          "__schema87": {
+          "__schema86": {
             "type": "string",
             "description": "Host type (e.g., n1-standard-1)"
           },
-          "__schema88": {
+          "__schema87": {
             "type": "string",
             "enum": [
               "amd64",
@@ -1278,7 +1298,7 @@
             ],
             "description": "Host architecture (e.g., amd64, arm64)"
           },
-          "__schema89": {
+          "__schema88": {
             "type": "string",
             "enum": [
               "windows",
@@ -1295,109 +1315,109 @@
             ],
             "description": "Operating system type"
           },
-          "__schema90": {
+          "__schema89": {
             "type": "string",
             "description": "Operating system description"
           },
-          "__schema91": {
+          "__schema90": {
             "type": "string",
             "description": "Operating system version"
           },
-          "__schema92": {
+          "__schema91": {
             "type": "number",
             "multipleOf": 1,
             "description": "Process ID"
           },
-          "__schema93": {
+          "__schema92": {
             "type": "string",
             "description": "Process executable name"
           },
-          "__schema94": {
+          "__schema93": {
             "type": "string",
             "description": "Process command line"
           },
-          "__schema95": {
+          "__schema94": {
             "type": "string",
             "description": "Process runtime name"
           },
-          "__schema96": {
+          "__schema95": {
             "type": "string",
             "description": "Process runtime version"
           },
-          "__schema97": {
+          "__schema96": {
             "type": "string",
             "description": "Container ID"
           },
-          "__schema98": {
+          "__schema97": {
             "type": "string",
             "description": "Container name"
           },
-          "__schema99": {
+          "__schema98": {
             "type": "string",
             "description": "Container image name"
           },
-          "__schema100": {
+          "__schema99": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema101"
+              "$ref": "#/$defs/__schema100"
             },
             "description": "Container image tags"
           },
-          "__schema101": {
+          "__schema100": {
             "type": "string"
           },
-          "__schema102": {
+          "__schema101": {
             "type": "string",
             "description": "Kubernetes cluster name"
           },
-          "__schema103": {
+          "__schema102": {
             "type": "string",
             "description": "Kubernetes namespace"
           },
-          "__schema104": {
+          "__schema103": {
             "type": "string",
             "description": "Kubernetes pod name"
           },
-          "__schema105": {
+          "__schema104": {
             "type": "string",
             "description": "Kubernetes pod UID"
           },
-          "__schema106": {
+          "__schema105": {
             "type": "string",
             "description": "Kubernetes deployment name"
           },
-          "__schema107": {
+          "__schema106": {
             "type": "array",
             "items": {
               "$ref": "#/$defs/__schema22"
             },
             "description": "Additional resource attributes"
           },
-          "__schema108": {
+          "__schema107": {
             "description": "Dropped attributes count",
-            "$ref": "#/$defs/__schema45"
+            "$ref": "#/$defs/__schema44"
           },
-          "__schema109": {
+          "__schema108": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema110"
+              "$ref": "#/$defs/__schema109"
             },
             "description": "Entities participating in this Resource, keyed by attributes on the Resource."
           },
-          "__schema110": {
+          "__schema109": {
             "type": "object",
             "properties": {
               "schema_url": {
-                "$ref": "#/$defs/__schema111"
+                "$ref": "#/$defs/__schema110"
               },
               "type": {
-                "$ref": "#/$defs/__schema112"
+                "$ref": "#/$defs/__schema111"
               },
               "id_keys": {
-                "$ref": "#/$defs/__schema113"
+                "$ref": "#/$defs/__schema112"
               },
               "description_keys": {
-                "$ref": "#/$defs/__schema115"
+                "$ref": "#/$defs/__schema114"
               }
             },
             "required": [
@@ -1407,49 +1427,49 @@
             "additionalProperties": false,
             "description": "A reference to an OpenTelemetry entity described by attributes on the containing Resource."
           },
-          "__schema111": {
+          "__schema110": {
             "type": "string",
             "description": "Schema URL applying to the entity and its referenced Resource attributes, when known."
           },
-          "__schema112": {
+          "__schema111": {
             "type": "string",
             "minLength": 1,
             "description": "Stable non-empty entity type, such as service or host."
           },
-          "__schema113": {
+          "__schema112": {
             "minItems": 1,
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema114"
+              "$ref": "#/$defs/__schema113"
             },
             "description": "Non-empty set of Resource attribute keys that identify the entity."
           },
-          "__schema114": {
+          "__schema113": {
             "type": "string",
             "minLength": 1,
             "description": "A non-empty Resource attribute key referenced by an OpenTelemetry entity."
           },
-          "__schema115": {
+          "__schema114": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema114"
+              "$ref": "#/$defs/__schema113"
             },
             "description": "Resource attribute keys that describe but do not identify the entity."
           },
-          "__schema116": {
+          "__schema115": {
             "type": "object",
             "properties": {
               "name": {
-                "$ref": "#/$defs/__schema117"
+                "$ref": "#/$defs/__schema116"
               },
               "version": {
-                "$ref": "#/$defs/__schema118"
+                "$ref": "#/$defs/__schema117"
               },
               "attributes": {
-                "$ref": "#/$defs/__schema119"
+                "$ref": "#/$defs/__schema118"
               },
               "dropped_attributes_count": {
-                "$ref": "#/$defs/__schema120"
+                "$ref": "#/$defs/__schema119"
               }
             },
             "required": [
@@ -1458,26 +1478,26 @@
             "additionalProperties": false,
             "description": "Instrumentation scope"
           },
-          "__schema117": {
+          "__schema116": {
             "type": "string",
             "description": "Name of the instrumentation scope (library name)"
           },
-          "__schema118": {
+          "__schema117": {
             "description": "Version of the instrumentation scope",
-            "$ref": "#/$defs/__schema74"
+            "$ref": "#/$defs/__schema73"
           },
-          "__schema119": {
+          "__schema118": {
             "type": "array",
             "items": {
               "$ref": "#/$defs/__schema22"
             },
             "description": "Additional attributes for the scope"
           },
-          "__schema120": {
+          "__schema119": {
             "description": "Dropped attributes count",
-            "$ref": "#/$defs/__schema45"
+            "$ref": "#/$defs/__schema44"
           },
-          "__schema121": {
+          "__schema120": {
             "type": "object",
             "properties": {
               "span_id": {
@@ -1508,31 +1528,31 @@
                 "$ref": "#/$defs/__schema21"
               },
               "dropped_attributes_count": {
-                "$ref": "#/$defs/__schema44"
+                "$ref": "#/$defs/__schema43"
               },
               "events": {
-                "$ref": "#/$defs/__schema46"
+                "$ref": "#/$defs/__schema45"
               },
               "dropped_events_count": {
-                "$ref": "#/$defs/__schema52"
+                "$ref": "#/$defs/__schema51"
               },
               "links": {
-                "$ref": "#/$defs/__schema53"
+                "$ref": "#/$defs/__schema52"
               },
               "dropped_links_count": {
-                "$ref": "#/$defs/__schema61"
+                "$ref": "#/$defs/__schema60"
               },
               "status": {
-                "$ref": "#/$defs/__schema62"
+                "$ref": "#/$defs/__schema61"
               },
               "flags": {
-                "$ref": "#/$defs/__schema68"
+                "$ref": "#/$defs/__schema67"
               },
               "resource": {
-                "$ref": "#/$defs/__schema69"
+                "$ref": "#/$defs/__schema68"
               },
               "instrumentation_scope": {
-                "$ref": "#/$defs/__schema116"
+                "$ref": "#/$defs/__schema115"
               }
             },
             "required": [
@@ -1548,56 +1568,56 @@
             "additionalProperties": false,
             "description": "OpenTelemetry Span representing a single operation in a distributed trace"
           },
-          "__schema122": {
+          "__schema121": {
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991,
             "description": "Total span count"
           },
-          "__schema123": {
+          "__schema122": {
             "type": "string",
             "maxLength": 20,
             "pattern": "^(0|[1-9][0-9]*)$",
             "x-csharp-type": "ulong",
             "description": "Trace duration in nanoseconds"
           },
-          "__schema124": {
+          "__schema123": {
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
             "description": "Trace start time"
           },
-          "__schema125": {
+          "__schema124": {
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
             "description": "Trace end time"
           },
-          "__schema126": {
+          "__schema125": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema127"
+              "$ref": "#/$defs/__schema126"
             },
             "description": "Services involved in this trace"
           },
-          "__schema127": {
+          "__schema126": {
             "type": "string"
           },
-          "__schema128": {
+          "__schema127": {
             "type": "boolean",
             "description": "Whether trace contains errors"
           },
-          "__schema129": {
+          "__schema128": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema121"
+              "$ref": "#/$defs/__schema120"
             },
             "description": "All spans in this trace"
           },
-          "__schema130": {
+          "__schema129": {
             "$ref": "#/$defs/__schema2"
           },
-          "__schema131": {
+          "__schema130": {
             "type": "string",
             "enum": [
               "live",
@@ -1843,104 +1863,127 @@
                 "type": "boolean"
               },
               {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "int"
-                  },
-                  "value": {
-                    "type": "string",
-                    "maxLength": 20,
-                    "pattern": "^(0|-?[1-9][0-9]*)$",
-                    "x-csharp-type": "long",
-                    "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
-                  }
-                },
-                "required": [
-                  "type",
-                  "value"
-                ],
-                "additionalProperties": false,
-                "description": "Tagged OTLP signed 64-bit integer attribute."
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "double"
-                  },
-                  "value": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "NaN",
-                          "Infinity",
-                          "-Infinity"
-                        ]
-                      }
-                    ],
-                    "description": "An OTLP attribute double encoded as a JSON number when finite or a canonical named string when non-finite."
-                  }
-                },
-                "required": [
-                  "type",
-                  "value"
-                ],
-                "additionalProperties": false,
-                "description": "Tagged OTLP double attribute."
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "bytes"
-                  },
-                  "base64": {
-                    "type": "string",
-                    "contentEncoding": "base64"
-                  }
-                },
-                "required": [
-                  "type",
-                  "base64"
-                ],
-                "additionalProperties": false,
-                "description": "Base64 bytes projected by qyl without colliding with an ordinary string attribute."
-              },
-              {
                 "$ref": "#/$defs/__schema0"
               },
               {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "kvlist"
-                  },
-                  "values": {
+                "allOf": [
+                  {
                     "type": "object",
                     "properties": {},
-                    "additionalProperties": {
-                      "$ref": "#/$defs/__schema1"
-                    }
+                    "additionalProperties": {}
+                  },
+                  {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "int"
+                          },
+                          "value": {
+                            "type": "string",
+                            "maxLength": 20,
+                            "pattern": "^(0|-?[1-9][0-9]*)$",
+                            "x-csharp-type": "long",
+                            "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "value"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Tagged OTLP signed 64-bit integer attribute."
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "double"
+                          },
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "NaN",
+                                  "Infinity",
+                                  "-Infinity"
+                                ]
+                              }
+                            ],
+                            "description": "An OTLP attribute double encoded as a JSON number when finite or a canonical named string when non-finite."
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "value"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Tagged OTLP double attribute."
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "bytes"
+                          },
+                          "base64": {
+                            "type": "string",
+                            "contentEncoding": "base64"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "base64"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Base64 bytes projected by qyl without colliding with an ordinary string attribute."
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "kvlist"
+                          },
+                          "values": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": {
+                              "$ref": "#/$defs/__schema1"
+                            }
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "values"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Tagged recursive OTLP key-value-list, distinct from other object-shaped attribute variants."
+                      }
+                    ]
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "type",
+                  "mapping": {
+                    "int": "#/components/schemas/Common.AttributeIntValue",
+                    "double": "#/components/schemas/Common.AttributeDoubleValue",
+                    "bytes": "#/components/schemas/Common.AttributeBytesValue",
+                    "kvlist": "#/components/schemas/Common.AttributeKeyValueListValue"
                   }
                 },
-                "required": [
-                  "type",
-                  "values"
-                ],
-                "additionalProperties": false,
-                "description": "Tagged recursive OTLP key-value-list, distinct from other object-shaped attribute variants."
+                "description": "Object-shaped AttributeValue variants. The variant name is the wire `type` tag."
               }
             ],
-            "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute."
+            "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute. Primitive variants are bare JSON values; object variants carry a `type` tag."
           }
         }
       }
@@ -1985,7 +2028,7 @@
             "$ref": "#/$defs/__schema0"
           },
           "mode": {
-            "$ref": "#/$defs/__schema130"
+            "$ref": "#/$defs/__schema129"
           }
         },
         "required": [
@@ -2005,25 +2048,25 @@
                 "$ref": "#/$defs/__schema3"
               },
               "span_count": {
-                "$ref": "#/$defs/__schema122"
+                "$ref": "#/$defs/__schema121"
               },
               "duration_ns": {
-                "$ref": "#/$defs/__schema123"
+                "$ref": "#/$defs/__schema122"
               },
               "start_time": {
-                "$ref": "#/$defs/__schema124"
+                "$ref": "#/$defs/__schema123"
               },
               "end_time": {
-                "$ref": "#/$defs/__schema125"
+                "$ref": "#/$defs/__schema124"
               },
               "services": {
-                "$ref": "#/$defs/__schema126"
+                "$ref": "#/$defs/__schema125"
               },
               "has_error": {
-                "$ref": "#/$defs/__schema128"
+                "$ref": "#/$defs/__schema127"
               },
               "spans": {
-                "$ref": "#/$defs/__schema129"
+                "$ref": "#/$defs/__schema128"
               }
             },
             "required": [
@@ -2055,7 +2098,7 @@
           },
           "__schema3": {
             "description": "Root span of the trace",
-            "$ref": "#/$defs/__schema121"
+            "$ref": "#/$defs/__schema120"
           },
           "__schema4": {
             "description": "Unique span identifier (16 hex chars)",
@@ -2189,7 +2232,7 @@
           },
           "__schema24": {
             "description": "Attribute value",
-            "$ref": "#/$defs/__schema40"
+            "$ref": "#/$defs/__schema29"
           },
           "__schema25": {
             "type": "null"
@@ -2201,108 +2244,12 @@
             "type": "boolean"
           },
           "__schema28": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "$ref": "#/$defs/__schema29"
-              },
-              "value": {
-                "$ref": "#/$defs/__schema30"
-              }
-            },
-            "required": [
-              "type",
-              "value"
-            ],
-            "additionalProperties": false,
-            "description": "Tagged OTLP signed 64-bit integer attribute."
-          },
-          "__schema29": {
-            "type": "string",
-            "const": "int"
-          },
-          "__schema30": {
-            "type": "string",
-            "maxLength": 20,
-            "pattern": "^(0|-?[1-9][0-9]*)$",
-            "x-csharp-type": "long",
-            "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
-          },
-          "__schema31": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "$ref": "#/$defs/__schema32"
-              },
-              "value": {
-                "$ref": "#/$defs/__schema33"
-              }
-            },
-            "required": [
-              "type",
-              "value"
-            ],
-            "additionalProperties": false,
-            "description": "Tagged OTLP double attribute."
-          },
-          "__schema32": {
-            "type": "string",
-            "const": "double"
-          },
-          "__schema33": {
-            "anyOf": [
-              {
-                "$ref": "#/$defs/__schema34"
-              },
-              {
-                "$ref": "#/$defs/__schema35"
-              }
-            ],
-            "description": "An OTLP attribute double encoded as a JSON number when finite or a canonical named string when non-finite."
-          },
-          "__schema34": {
-            "type": "number"
-          },
-          "__schema35": {
-            "type": "string",
-            "enum": [
-              "NaN",
-              "Infinity",
-              "-Infinity"
-            ]
-          },
-          "__schema36": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "$ref": "#/$defs/__schema37"
-              },
-              "base64": {
-                "$ref": "#/$defs/__schema38"
-              }
-            },
-            "required": [
-              "type",
-              "base64"
-            ],
-            "additionalProperties": false,
-            "description": "Base64 bytes projected by qyl without colliding with an ordinary string attribute."
-          },
-          "__schema37": {
-            "type": "string",
-            "const": "bytes"
-          },
-          "__schema38": {
-            "type": "string",
-            "contentEncoding": "base64"
-          },
-          "__schema39": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema40"
+              "$ref": "#/$defs/__schema29"
             }
           },
-          "__schema40": {
+          "__schema29": {
             "anyOf": [
               {
                 "$ref": "#/$defs/__schema25"
@@ -2317,80 +2264,196 @@
                 "$ref": "#/$defs/__schema28"
               },
               {
+                "$ref": "#/$defs/__schema30"
+              }
+            ],
+            "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute. Primitive variants are bare JSON values; object variants carry a `type` tag."
+          },
+          "__schema30": {
+            "allOf": [
+              {
                 "$ref": "#/$defs/__schema31"
               },
               {
-                "$ref": "#/$defs/__schema36"
-              },
-              {
-                "$ref": "#/$defs/__schema39"
-              },
-              {
-                "$ref": "#/$defs/__schema41"
+                "$ref": "#/$defs/__schema32"
               }
             ],
-            "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute."
-          },
-          "__schema41": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "$ref": "#/$defs/__schema42"
-              },
-              "values": {
-                "$ref": "#/$defs/__schema43"
+            "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+                "int": "#/components/schemas/Common.AttributeIntValue",
+                "double": "#/components/schemas/Common.AttributeDoubleValue",
+                "bytes": "#/components/schemas/Common.AttributeBytesValue",
+                "kvlist": "#/components/schemas/Common.AttributeKeyValueListValue"
               }
             },
-            "required": [
-              "type",
-              "values"
-            ],
-            "additionalProperties": false,
-            "description": "Tagged recursive OTLP key-value-list, distinct from other object-shaped attribute variants."
+            "description": "Object-shaped AttributeValue variants. The variant name is the wire `type` tag."
           },
-          "__schema42": {
+          "__schema31": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": {}
+          },
+          "__schema32": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "$ref": "#/$defs/__schema33"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/__schema34"
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged OTLP signed 64-bit integer attribute."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "$ref": "#/$defs/__schema35"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/__schema36"
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged OTLP double attribute."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "$ref": "#/$defs/__schema39"
+                  },
+                  "base64": {
+                    "$ref": "#/$defs/__schema40"
+                  }
+                },
+                "required": [
+                  "type",
+                  "base64"
+                ],
+                "additionalProperties": false,
+                "description": "Base64 bytes projected by qyl without colliding with an ordinary string attribute."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "$ref": "#/$defs/__schema41"
+                  },
+                  "values": {
+                    "$ref": "#/$defs/__schema42"
+                  }
+                },
+                "required": [
+                  "type",
+                  "values"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged recursive OTLP key-value-list, distinct from other object-shaped attribute variants."
+              }
+            ]
+          },
+          "__schema33": {
+            "type": "string",
+            "const": "int"
+          },
+          "__schema34": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(0|-?[1-9][0-9]*)$",
+            "x-csharp-type": "long",
+            "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
+          },
+          "__schema35": {
+            "type": "string",
+            "const": "double"
+          },
+          "__schema36": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/__schema37"
+              },
+              {
+                "$ref": "#/$defs/__schema38"
+              }
+            ],
+            "description": "An OTLP attribute double encoded as a JSON number when finite or a canonical named string when non-finite."
+          },
+          "__schema37": {
+            "type": "number"
+          },
+          "__schema38": {
+            "type": "string",
+            "enum": [
+              "NaN",
+              "Infinity",
+              "-Infinity"
+            ]
+          },
+          "__schema39": {
+            "type": "string",
+            "const": "bytes"
+          },
+          "__schema40": {
+            "type": "string",
+            "contentEncoding": "base64"
+          },
+          "__schema41": {
             "type": "string",
             "const": "kvlist"
           },
-          "__schema43": {
+          "__schema42": {
             "type": "object",
             "properties": {},
             "additionalProperties": {
-              "$ref": "#/$defs/__schema40"
+              "$ref": "#/$defs/__schema29"
             }
           },
-          "__schema44": {
+          "__schema43": {
             "description": "Dropped attributes count",
-            "$ref": "#/$defs/__schema45"
+            "$ref": "#/$defs/__schema44"
           },
-          "__schema45": {
+          "__schema44": {
             "type": "number",
             "minimum": 0,
             "multipleOf": 1,
             "x-csharp-type": "long",
             "description": "Generic non-negative counter"
           },
-          "__schema46": {
+          "__schema45": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema47"
+              "$ref": "#/$defs/__schema46"
             },
             "description": "Span events (logs attached to span)"
           },
-          "__schema47": {
+          "__schema46": {
             "type": "object",
             "properties": {
               "name": {
-                "$ref": "#/$defs/__schema48"
+                "$ref": "#/$defs/__schema47"
               },
               "time_unix_nano": {
-                "$ref": "#/$defs/__schema49"
+                "$ref": "#/$defs/__schema48"
               },
               "attributes": {
-                "$ref": "#/$defs/__schema50"
+                "$ref": "#/$defs/__schema49"
               },
               "dropped_attributes_count": {
-                "$ref": "#/$defs/__schema51"
+                "$ref": "#/$defs/__schema50"
               }
             },
             "required": [
@@ -2400,57 +2463,57 @@
             "additionalProperties": false,
             "description": "Event occurring during a span's lifetime"
           },
-          "__schema48": {
+          "__schema47": {
             "type": "string",
             "minLength": 1,
             "description": "Event name"
           },
-          "__schema49": {
+          "__schema48": {
             "description": "Event timestamp in nanoseconds since epoch",
             "$ref": "#/$defs/__schema19"
           },
-          "__schema50": {
+          "__schema49": {
             "type": "array",
             "items": {
               "$ref": "#/$defs/__schema22"
             },
             "description": "Event attributes"
           },
-          "__schema51": {
+          "__schema50": {
             "description": "Dropped attributes count",
-            "$ref": "#/$defs/__schema45"
+            "$ref": "#/$defs/__schema44"
+          },
+          "__schema51": {
+            "description": "Dropped events count",
+            "$ref": "#/$defs/__schema44"
           },
           "__schema52": {
-            "description": "Dropped events count",
-            "$ref": "#/$defs/__schema45"
-          },
-          "__schema53": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema54"
+              "$ref": "#/$defs/__schema53"
             },
             "description": "Links to other spans"
           },
-          "__schema54": {
+          "__schema53": {
             "type": "object",
             "properties": {
               "trace_id": {
-                "$ref": "#/$defs/__schema55"
+                "$ref": "#/$defs/__schema54"
               },
               "span_id": {
-                "$ref": "#/$defs/__schema56"
+                "$ref": "#/$defs/__schema55"
               },
               "trace_state": {
-                "$ref": "#/$defs/__schema57"
+                "$ref": "#/$defs/__schema56"
               },
               "attributes": {
-                "$ref": "#/$defs/__schema58"
+                "$ref": "#/$defs/__schema57"
               },
               "dropped_attributes_count": {
-                "$ref": "#/$defs/__schema59"
+                "$ref": "#/$defs/__schema58"
               },
               "flags": {
-                "$ref": "#/$defs/__schema60"
+                "$ref": "#/$defs/__schema59"
               }
             },
             "required": [
@@ -2460,47 +2523,47 @@
             "additionalProperties": false,
             "description": "Link to another span (e.g., batch processing)"
           },
-          "__schema55": {
+          "__schema54": {
             "description": "Linked trace ID",
             "$ref": "#/$defs/__schema2"
           },
-          "__schema56": {
+          "__schema55": {
             "description": "Linked span ID",
             "$ref": "#/$defs/__schema5"
           },
-          "__schema57": {
+          "__schema56": {
             "description": "Trace state of the linked span",
             "$ref": "#/$defs/__schema9"
           },
-          "__schema58": {
+          "__schema57": {
             "type": "array",
             "items": {
               "$ref": "#/$defs/__schema22"
             },
             "description": "Link attributes"
           },
-          "__schema59": {
+          "__schema58": {
             "description": "Dropped attributes count",
-            "$ref": "#/$defs/__schema45"
+            "$ref": "#/$defs/__schema44"
           },
-          "__schema60": {
+          "__schema59": {
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991,
             "description": "Link flags"
           },
-          "__schema61": {
+          "__schema60": {
             "description": "Dropped links count",
-            "$ref": "#/$defs/__schema45"
+            "$ref": "#/$defs/__schema44"
           },
-          "__schema62": {
+          "__schema61": {
             "type": "object",
             "properties": {
               "code": {
-                "$ref": "#/$defs/__schema63"
+                "$ref": "#/$defs/__schema62"
               },
               "message": {
-                "$ref": "#/$defs/__schema67"
+                "$ref": "#/$defs/__schema66"
               }
             },
             "required": [
@@ -2509,158 +2572,158 @@
             "additionalProperties": false,
             "description": "Span status"
           },
-          "__schema63": {
+          "__schema62": {
             "anyOf": [
+              {
+                "$ref": "#/$defs/__schema63"
+              },
               {
                 "$ref": "#/$defs/__schema64"
               },
               {
                 "$ref": "#/$defs/__schema65"
-              },
-              {
-                "$ref": "#/$defs/__schema66"
               }
             ],
             "description": "Status code"
           },
-          "__schema64": {
+          "__schema63": {
             "type": "number",
             "const": 0
           },
-          "__schema65": {
+          "__schema64": {
             "type": "number",
             "const": 1
           },
-          "__schema66": {
+          "__schema65": {
             "type": "number",
             "const": 2
           },
-          "__schema67": {
+          "__schema66": {
             "type": "string",
             "description": "Status message (only for ERROR status)"
           },
-          "__schema68": {
+          "__schema67": {
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991,
             "description": "Span flags"
           },
-          "__schema69": {
+          "__schema68": {
             "type": "object",
             "properties": {
               "service_name": {
-                "$ref": "#/$defs/__schema70"
+                "$ref": "#/$defs/__schema69"
               },
               "service_namespace": {
-                "$ref": "#/$defs/__schema71"
+                "$ref": "#/$defs/__schema70"
               },
               "service_instance_id": {
-                "$ref": "#/$defs/__schema72"
+                "$ref": "#/$defs/__schema71"
               },
               "service_version": {
-                "$ref": "#/$defs/__schema73"
+                "$ref": "#/$defs/__schema72"
               },
               "telemetry_sdk_name": {
-                "$ref": "#/$defs/__schema75"
+                "$ref": "#/$defs/__schema74"
               },
               "telemetry_sdk_language": {
-                "$ref": "#/$defs/__schema76"
+                "$ref": "#/$defs/__schema75"
               },
               "telemetry_sdk_version": {
-                "$ref": "#/$defs/__schema77"
+                "$ref": "#/$defs/__schema76"
               },
               "telemetry_distro_version": {
-                "$ref": "#/$defs/__schema78"
+                "$ref": "#/$defs/__schema77"
               },
               "deployment_environment": {
-                "$ref": "#/$defs/__schema79"
+                "$ref": "#/$defs/__schema78"
               },
               "cloud_provider": {
-                "$ref": "#/$defs/__schema80"
+                "$ref": "#/$defs/__schema79"
               },
               "cloud_region": {
-                "$ref": "#/$defs/__schema81"
+                "$ref": "#/$defs/__schema80"
               },
               "cloud_availability_zone": {
-                "$ref": "#/$defs/__schema82"
+                "$ref": "#/$defs/__schema81"
               },
               "cloud_account_id": {
-                "$ref": "#/$defs/__schema83"
+                "$ref": "#/$defs/__schema82"
               },
               "cloud_platform": {
-                "$ref": "#/$defs/__schema84"
+                "$ref": "#/$defs/__schema83"
               },
               "host_name": {
-                "$ref": "#/$defs/__schema85"
+                "$ref": "#/$defs/__schema84"
               },
               "host_id": {
-                "$ref": "#/$defs/__schema86"
+                "$ref": "#/$defs/__schema85"
               },
               "host_type": {
-                "$ref": "#/$defs/__schema87"
+                "$ref": "#/$defs/__schema86"
               },
               "host_arch": {
-                "$ref": "#/$defs/__schema88"
+                "$ref": "#/$defs/__schema87"
               },
               "os_type": {
-                "$ref": "#/$defs/__schema89"
+                "$ref": "#/$defs/__schema88"
               },
               "os_description": {
-                "$ref": "#/$defs/__schema90"
+                "$ref": "#/$defs/__schema89"
               },
               "os_version": {
-                "$ref": "#/$defs/__schema91"
+                "$ref": "#/$defs/__schema90"
               },
               "process_pid": {
-                "$ref": "#/$defs/__schema92"
+                "$ref": "#/$defs/__schema91"
               },
               "process_executable_name": {
-                "$ref": "#/$defs/__schema93"
+                "$ref": "#/$defs/__schema92"
               },
               "process_command_line": {
-                "$ref": "#/$defs/__schema94"
+                "$ref": "#/$defs/__schema93"
               },
               "process_runtime_name": {
-                "$ref": "#/$defs/__schema95"
+                "$ref": "#/$defs/__schema94"
               },
               "process_runtime_version": {
-                "$ref": "#/$defs/__schema96"
+                "$ref": "#/$defs/__schema95"
               },
               "container_id": {
-                "$ref": "#/$defs/__schema97"
+                "$ref": "#/$defs/__schema96"
               },
               "container_name": {
-                "$ref": "#/$defs/__schema98"
+                "$ref": "#/$defs/__schema97"
               },
               "container_image_name": {
-                "$ref": "#/$defs/__schema99"
+                "$ref": "#/$defs/__schema98"
               },
               "container_image_tags": {
-                "$ref": "#/$defs/__schema100"
+                "$ref": "#/$defs/__schema99"
               },
               "k8s_cluster_name": {
-                "$ref": "#/$defs/__schema102"
+                "$ref": "#/$defs/__schema101"
               },
               "k8s_namespace_name": {
-                "$ref": "#/$defs/__schema103"
+                "$ref": "#/$defs/__schema102"
               },
               "k8s_pod_name": {
-                "$ref": "#/$defs/__schema104"
+                "$ref": "#/$defs/__schema103"
               },
               "k8s_pod_uid": {
-                "$ref": "#/$defs/__schema105"
+                "$ref": "#/$defs/__schema104"
               },
               "k8s_deployment_name": {
-                "$ref": "#/$defs/__schema106"
+                "$ref": "#/$defs/__schema105"
               },
               "attributes": {
-                "$ref": "#/$defs/__schema107"
+                "$ref": "#/$defs/__schema106"
               },
               "dropped_attributes_count": {
-                "$ref": "#/$defs/__schema108"
+                "$ref": "#/$defs/__schema107"
               },
               "entity_refs": {
-                "$ref": "#/$defs/__schema109"
+                "$ref": "#/$defs/__schema108"
               }
             },
             "required": [
@@ -2669,23 +2732,23 @@
             "additionalProperties": false,
             "description": "Resource describing the entity that produced this span"
           },
-          "__schema70": {
+          "__schema69": {
             "type": "string",
             "description": "Service name (required)"
           },
-          "__schema71": {
+          "__schema70": {
             "type": "string",
             "description": "Service namespace for grouping"
           },
-          "__schema72": {
+          "__schema71": {
             "type": "string",
             "description": "Service instance ID (unique per instance)"
           },
-          "__schema73": {
+          "__schema72": {
             "description": "Service version",
-            "$ref": "#/$defs/__schema74"
+            "$ref": "#/$defs/__schema73"
           },
-          "__schema74": {
+          "__schema73": {
             "type": "string",
             "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
             "examples": [
@@ -2693,11 +2756,11 @@
             ],
             "description": "Semantic version string (e.g., 1.2.3)"
           },
-          "__schema75": {
+          "__schema74": {
             "type": "string",
             "description": "Telemetry SDK name"
           },
-          "__schema76": {
+          "__schema75": {
             "type": "string",
             "enum": [
               "cpp",
@@ -2715,19 +2778,19 @@
             ],
             "description": "Telemetry SDK language"
           },
-          "__schema77": {
+          "__schema76": {
             "description": "Telemetry SDK version",
-            "$ref": "#/$defs/__schema74"
+            "$ref": "#/$defs/__schema73"
+          },
+          "__schema77": {
+            "description": "Telemetry distribution version",
+            "$ref": "#/$defs/__schema73"
           },
           "__schema78": {
-            "description": "Telemetry distribution version",
-            "$ref": "#/$defs/__schema74"
-          },
-          "__schema79": {
             "type": "string",
             "description": "Deployment environment (e.g., production, staging)"
           },
-          "__schema80": {
+          "__schema79": {
             "type": "string",
             "enum": [
               "alibaba_cloud",
@@ -2740,35 +2803,35 @@
             ],
             "description": "Cloud provider"
           },
-          "__schema81": {
+          "__schema80": {
             "type": "string",
             "description": "Cloud region"
           },
-          "__schema82": {
+          "__schema81": {
             "type": "string",
             "description": "Cloud availability zone"
           },
-          "__schema83": {
+          "__schema82": {
             "type": "string",
             "description": "Cloud account ID"
           },
-          "__schema84": {
+          "__schema83": {
             "type": "string",
             "description": "Cloud platform (e.g., aws_ecs, gcp_cloud_run)"
           },
-          "__schema85": {
+          "__schema84": {
             "type": "string",
             "description": "Host name"
           },
-          "__schema86": {
+          "__schema85": {
             "type": "string",
             "description": "Host ID"
           },
-          "__schema87": {
+          "__schema86": {
             "type": "string",
             "description": "Host type (e.g., n1-standard-1)"
           },
-          "__schema88": {
+          "__schema87": {
             "type": "string",
             "enum": [
               "amd64",
@@ -2782,7 +2845,7 @@
             ],
             "description": "Host architecture (e.g., amd64, arm64)"
           },
-          "__schema89": {
+          "__schema88": {
             "type": "string",
             "enum": [
               "windows",
@@ -2799,109 +2862,109 @@
             ],
             "description": "Operating system type"
           },
-          "__schema90": {
+          "__schema89": {
             "type": "string",
             "description": "Operating system description"
           },
-          "__schema91": {
+          "__schema90": {
             "type": "string",
             "description": "Operating system version"
           },
-          "__schema92": {
+          "__schema91": {
             "type": "number",
             "multipleOf": 1,
             "description": "Process ID"
           },
-          "__schema93": {
+          "__schema92": {
             "type": "string",
             "description": "Process executable name"
           },
-          "__schema94": {
+          "__schema93": {
             "type": "string",
             "description": "Process command line"
           },
-          "__schema95": {
+          "__schema94": {
             "type": "string",
             "description": "Process runtime name"
           },
-          "__schema96": {
+          "__schema95": {
             "type": "string",
             "description": "Process runtime version"
           },
-          "__schema97": {
+          "__schema96": {
             "type": "string",
             "description": "Container ID"
           },
-          "__schema98": {
+          "__schema97": {
             "type": "string",
             "description": "Container name"
           },
-          "__schema99": {
+          "__schema98": {
             "type": "string",
             "description": "Container image name"
           },
-          "__schema100": {
+          "__schema99": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema101"
+              "$ref": "#/$defs/__schema100"
             },
             "description": "Container image tags"
           },
-          "__schema101": {
+          "__schema100": {
             "type": "string"
           },
-          "__schema102": {
+          "__schema101": {
             "type": "string",
             "description": "Kubernetes cluster name"
           },
-          "__schema103": {
+          "__schema102": {
             "type": "string",
             "description": "Kubernetes namespace"
           },
-          "__schema104": {
+          "__schema103": {
             "type": "string",
             "description": "Kubernetes pod name"
           },
-          "__schema105": {
+          "__schema104": {
             "type": "string",
             "description": "Kubernetes pod UID"
           },
-          "__schema106": {
+          "__schema105": {
             "type": "string",
             "description": "Kubernetes deployment name"
           },
-          "__schema107": {
+          "__schema106": {
             "type": "array",
             "items": {
               "$ref": "#/$defs/__schema22"
             },
             "description": "Additional resource attributes"
           },
-          "__schema108": {
+          "__schema107": {
             "description": "Dropped attributes count",
-            "$ref": "#/$defs/__schema45"
+            "$ref": "#/$defs/__schema44"
           },
-          "__schema109": {
+          "__schema108": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema110"
+              "$ref": "#/$defs/__schema109"
             },
             "description": "Entities participating in this Resource, keyed by attributes on the Resource."
           },
-          "__schema110": {
+          "__schema109": {
             "type": "object",
             "properties": {
               "schema_url": {
-                "$ref": "#/$defs/__schema111"
+                "$ref": "#/$defs/__schema110"
               },
               "type": {
-                "$ref": "#/$defs/__schema112"
+                "$ref": "#/$defs/__schema111"
               },
               "id_keys": {
-                "$ref": "#/$defs/__schema113"
+                "$ref": "#/$defs/__schema112"
               },
               "description_keys": {
-                "$ref": "#/$defs/__schema115"
+                "$ref": "#/$defs/__schema114"
               }
             },
             "required": [
@@ -2911,49 +2974,49 @@
             "additionalProperties": false,
             "description": "A reference to an OpenTelemetry entity described by attributes on the containing Resource."
           },
-          "__schema111": {
+          "__schema110": {
             "type": "string",
             "description": "Schema URL applying to the entity and its referenced Resource attributes, when known."
           },
-          "__schema112": {
+          "__schema111": {
             "type": "string",
             "minLength": 1,
             "description": "Stable non-empty entity type, such as service or host."
           },
-          "__schema113": {
+          "__schema112": {
             "minItems": 1,
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema114"
+              "$ref": "#/$defs/__schema113"
             },
             "description": "Non-empty set of Resource attribute keys that identify the entity."
           },
-          "__schema114": {
+          "__schema113": {
             "type": "string",
             "minLength": 1,
             "description": "A non-empty Resource attribute key referenced by an OpenTelemetry entity."
           },
-          "__schema115": {
+          "__schema114": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema114"
+              "$ref": "#/$defs/__schema113"
             },
             "description": "Resource attribute keys that describe but do not identify the entity."
           },
-          "__schema116": {
+          "__schema115": {
             "type": "object",
             "properties": {
               "name": {
-                "$ref": "#/$defs/__schema117"
+                "$ref": "#/$defs/__schema116"
               },
               "version": {
-                "$ref": "#/$defs/__schema118"
+                "$ref": "#/$defs/__schema117"
               },
               "attributes": {
-                "$ref": "#/$defs/__schema119"
+                "$ref": "#/$defs/__schema118"
               },
               "dropped_attributes_count": {
-                "$ref": "#/$defs/__schema120"
+                "$ref": "#/$defs/__schema119"
               }
             },
             "required": [
@@ -2962,26 +3025,26 @@
             "additionalProperties": false,
             "description": "Instrumentation scope"
           },
-          "__schema117": {
+          "__schema116": {
             "type": "string",
             "description": "Name of the instrumentation scope (library name)"
           },
-          "__schema118": {
+          "__schema117": {
             "description": "Version of the instrumentation scope",
-            "$ref": "#/$defs/__schema74"
+            "$ref": "#/$defs/__schema73"
           },
-          "__schema119": {
+          "__schema118": {
             "type": "array",
             "items": {
               "$ref": "#/$defs/__schema22"
             },
             "description": "Additional attributes for the scope"
           },
-          "__schema120": {
+          "__schema119": {
             "description": "Dropped attributes count",
-            "$ref": "#/$defs/__schema45"
+            "$ref": "#/$defs/__schema44"
           },
-          "__schema121": {
+          "__schema120": {
             "type": "object",
             "properties": {
               "span_id": {
@@ -3012,31 +3075,31 @@
                 "$ref": "#/$defs/__schema21"
               },
               "dropped_attributes_count": {
-                "$ref": "#/$defs/__schema44"
+                "$ref": "#/$defs/__schema43"
               },
               "events": {
-                "$ref": "#/$defs/__schema46"
+                "$ref": "#/$defs/__schema45"
               },
               "dropped_events_count": {
-                "$ref": "#/$defs/__schema52"
+                "$ref": "#/$defs/__schema51"
               },
               "links": {
-                "$ref": "#/$defs/__schema53"
+                "$ref": "#/$defs/__schema52"
               },
               "dropped_links_count": {
-                "$ref": "#/$defs/__schema61"
+                "$ref": "#/$defs/__schema60"
               },
               "status": {
-                "$ref": "#/$defs/__schema62"
+                "$ref": "#/$defs/__schema61"
               },
               "flags": {
-                "$ref": "#/$defs/__schema68"
+                "$ref": "#/$defs/__schema67"
               },
               "resource": {
-                "$ref": "#/$defs/__schema69"
+                "$ref": "#/$defs/__schema68"
               },
               "instrumentation_scope": {
-                "$ref": "#/$defs/__schema116"
+                "$ref": "#/$defs/__schema115"
               }
             },
             "required": [
@@ -3052,53 +3115,53 @@
             "additionalProperties": false,
             "description": "OpenTelemetry Span representing a single operation in a distributed trace"
           },
-          "__schema122": {
+          "__schema121": {
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991,
             "description": "Total span count"
           },
-          "__schema123": {
+          "__schema122": {
             "type": "string",
             "maxLength": 20,
             "pattern": "^(0|[1-9][0-9]*)$",
             "x-csharp-type": "ulong",
             "description": "Trace duration in nanoseconds"
           },
-          "__schema124": {
+          "__schema123": {
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
             "description": "Trace start time"
           },
-          "__schema125": {
+          "__schema124": {
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
             "description": "Trace end time"
           },
-          "__schema126": {
+          "__schema125": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema127"
+              "$ref": "#/$defs/__schema126"
             },
             "description": "Services involved in this trace"
           },
-          "__schema127": {
+          "__schema126": {
             "type": "string"
           },
-          "__schema128": {
+          "__schema127": {
             "type": "boolean",
             "description": "Whether trace contains errors"
           },
-          "__schema129": {
+          "__schema128": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema121"
+              "$ref": "#/$defs/__schema120"
             },
             "description": "All spans in this trace"
           },
-          "__schema130": {
+          "__schema129": {
             "type": "string",
             "enum": [
               "live",
@@ -4279,104 +4342,127 @@
                 "type": "boolean"
               },
               {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "int"
-                  },
-                  "value": {
-                    "type": "string",
-                    "maxLength": 20,
-                    "pattern": "^(0|-?[1-9][0-9]*)$",
-                    "x-csharp-type": "long",
-                    "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
-                  }
-                },
-                "required": [
-                  "type",
-                  "value"
-                ],
-                "additionalProperties": false,
-                "description": "Tagged OTLP signed 64-bit integer attribute."
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "double"
-                  },
-                  "value": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "NaN",
-                          "Infinity",
-                          "-Infinity"
-                        ]
-                      }
-                    ],
-                    "description": "An OTLP attribute double encoded as a JSON number when finite or a canonical named string when non-finite."
-                  }
-                },
-                "required": [
-                  "type",
-                  "value"
-                ],
-                "additionalProperties": false,
-                "description": "Tagged OTLP double attribute."
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "bytes"
-                  },
-                  "base64": {
-                    "type": "string",
-                    "contentEncoding": "base64"
-                  }
-                },
-                "required": [
-                  "type",
-                  "base64"
-                ],
-                "additionalProperties": false,
-                "description": "Base64 bytes projected by qyl without colliding with an ordinary string attribute."
-              },
-              {
                 "$ref": "#/$defs/__schema0"
               },
               {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "kvlist"
-                  },
-                  "values": {
+                "allOf": [
+                  {
                     "type": "object",
                     "properties": {},
-                    "additionalProperties": {
-                      "$ref": "#/$defs/__schema1"
-                    }
+                    "additionalProperties": {}
+                  },
+                  {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "int"
+                          },
+                          "value": {
+                            "type": "string",
+                            "maxLength": 20,
+                            "pattern": "^(0|-?[1-9][0-9]*)$",
+                            "x-csharp-type": "long",
+                            "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "value"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Tagged OTLP signed 64-bit integer attribute."
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "double"
+                          },
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "NaN",
+                                  "Infinity",
+                                  "-Infinity"
+                                ]
+                              }
+                            ],
+                            "description": "An OTLP attribute double encoded as a JSON number when finite or a canonical named string when non-finite."
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "value"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Tagged OTLP double attribute."
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "bytes"
+                          },
+                          "base64": {
+                            "type": "string",
+                            "contentEncoding": "base64"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "base64"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Base64 bytes projected by qyl without colliding with an ordinary string attribute."
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "kvlist"
+                          },
+                          "values": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": {
+                              "$ref": "#/$defs/__schema1"
+                            }
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "values"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Tagged recursive OTLP key-value-list, distinct from other object-shaped attribute variants."
+                      }
+                    ]
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "type",
+                  "mapping": {
+                    "int": "#/components/schemas/Common.AttributeIntValue",
+                    "double": "#/components/schemas/Common.AttributeDoubleValue",
+                    "bytes": "#/components/schemas/Common.AttributeBytesValue",
+                    "kvlist": "#/components/schemas/Common.AttributeKeyValueListValue"
                   }
                 },
-                "required": [
-                  "type",
-                  "values"
-                ],
-                "additionalProperties": false,
-                "description": "Tagged recursive OTLP key-value-list, distinct from other object-shaped attribute variants."
+                "description": "Object-shaped AttributeValue variants. The variant name is the wire `type` tag."
               }
             ],
-            "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute."
+            "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute. Primitive variants are bare JSON values; object variants carry a `type` tag."
           }
         }
       }
@@ -4629,104 +4715,127 @@
                 "type": "boolean"
               },
               {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "int"
-                  },
-                  "value": {
-                    "type": "string",
-                    "maxLength": 20,
-                    "pattern": "^(0|-?[1-9][0-9]*)$",
-                    "x-csharp-type": "long",
-                    "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
-                  }
-                },
-                "required": [
-                  "type",
-                  "value"
-                ],
-                "additionalProperties": false,
-                "description": "Tagged OTLP signed 64-bit integer attribute."
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "double"
-                  },
-                  "value": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "NaN",
-                          "Infinity",
-                          "-Infinity"
-                        ]
-                      }
-                    ],
-                    "description": "An OTLP attribute double encoded as a JSON number when finite or a canonical named string when non-finite."
-                  }
-                },
-                "required": [
-                  "type",
-                  "value"
-                ],
-                "additionalProperties": false,
-                "description": "Tagged OTLP double attribute."
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "bytes"
-                  },
-                  "base64": {
-                    "type": "string",
-                    "contentEncoding": "base64"
-                  }
-                },
-                "required": [
-                  "type",
-                  "base64"
-                ],
-                "additionalProperties": false,
-                "description": "Base64 bytes projected by qyl without colliding with an ordinary string attribute."
-              },
-              {
                 "$ref": "#/$defs/__schema0"
               },
               {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "kvlist"
-                  },
-                  "values": {
+                "allOf": [
+                  {
                     "type": "object",
                     "properties": {},
-                    "additionalProperties": {
-                      "$ref": "#/$defs/__schema1"
-                    }
+                    "additionalProperties": {}
+                  },
+                  {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "int"
+                          },
+                          "value": {
+                            "type": "string",
+                            "maxLength": 20,
+                            "pattern": "^(0|-?[1-9][0-9]*)$",
+                            "x-csharp-type": "long",
+                            "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "value"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Tagged OTLP signed 64-bit integer attribute."
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "double"
+                          },
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "NaN",
+                                  "Infinity",
+                                  "-Infinity"
+                                ]
+                              }
+                            ],
+                            "description": "An OTLP attribute double encoded as a JSON number when finite or a canonical named string when non-finite."
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "value"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Tagged OTLP double attribute."
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "bytes"
+                          },
+                          "base64": {
+                            "type": "string",
+                            "contentEncoding": "base64"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "base64"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Base64 bytes projected by qyl without colliding with an ordinary string attribute."
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "kvlist"
+                          },
+                          "values": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": {
+                              "$ref": "#/$defs/__schema1"
+                            }
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "values"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Tagged recursive OTLP key-value-list, distinct from other object-shaped attribute variants."
+                      }
+                    ]
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "type",
+                  "mapping": {
+                    "int": "#/components/schemas/Common.AttributeIntValue",
+                    "double": "#/components/schemas/Common.AttributeDoubleValue",
+                    "bytes": "#/components/schemas/Common.AttributeBytesValue",
+                    "kvlist": "#/components/schemas/Common.AttributeKeyValueListValue"
                   }
                 },
-                "required": [
-                  "type",
-                  "values"
-                ],
-                "additionalProperties": false,
-                "description": "Tagged recursive OTLP key-value-list, distinct from other object-shaped attribute variants."
+                "description": "Object-shaped AttributeValue variants. The variant name is the wire `type` tag."
               }
             ],
-            "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute."
+            "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute. Primitive variants are bare JSON values; object variants carry a `type` tag."
           }
         }
       }
@@ -4918,108 +5027,8 @@
                   "description": "Severity text (DEBUG, INFO, WARN, ERROR, etc.)"
                 },
                 "body": {
-                  "allOf": [
-                    {
-                      "type": "object",
-                      "properties": {},
-                      "additionalProperties": {}
-                    },
-                    {
-                      "oneOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "string_value": {
-                              "type": "string",
-                              "description": "String value"
-                            }
-                          },
-                          "required": [
-                            "string_value"
-                          ],
-                          "additionalProperties": false,
-                          "description": "String log body"
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kv_list_value": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "key": {
-                                    "type": "string",
-                                    "minLength": 1,
-                                    "maxLength": 256,
-                                    "description": "Attribute key (dot-separated namespace)"
-                                  },
-                                  "value": {
-                                    "description": "Attribute value",
-                                    "$ref": "#/$defs/__schema1"
-                                  }
-                                },
-                                "required": [
-                                  "key",
-                                  "value"
-                                ],
-                                "additionalProperties": false,
-                                "description": "Key-value attribute pair following OTel conventions"
-                              },
-                              "description": "Key-value pairs"
-                            }
-                          },
-                          "required": [
-                            "kv_list_value"
-                          ],
-                          "additionalProperties": false,
-                          "description": "Structured key-value log body"
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "array_value": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/$defs/__schema1"
-                              },
-                              "description": "Array of values"
-                            }
-                          },
-                          "required": [
-                            "array_value"
-                          ],
-                          "additionalProperties": false,
-                          "description": "Array log body"
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "bytes_value": {
-                              "type": "string",
-                              "contentEncoding": "base64",
-                              "description": "Binary value (base64 encoded)"
-                            }
-                          },
-                          "required": [
-                            "bytes_value"
-                          ],
-                          "additionalProperties": false,
-                          "description": "Binary log body"
-                        }
-                      ]
-                    }
-                  ],
-                  "discriminator": {
-                    "propertyName": "kind",
-                    "mapping": {
-                      "stringBody": "#/components/schemas/OTel.Logs.LogBodyString",
-                      "kvListBody": "#/components/schemas/OTel.Logs.LogBodyKvList",
-                      "arrayBody": "#/components/schemas/OTel.Logs.LogBodyArray",
-                      "bytesBody": "#/components/schemas/OTel.Logs.LogBodyBytes"
-                    }
-                  },
-                  "description": "Log body - the main content"
+                  "description": "Log body: the OTLP AnyValue, projected exactly like an attribute value",
+                  "$ref": "#/$defs/__schema1"
                 },
                 "attributes": {
                   "type": "array",
@@ -5470,104 +5479,127 @@
                 "type": "boolean"
               },
               {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "int"
-                  },
-                  "value": {
-                    "type": "string",
-                    "maxLength": 20,
-                    "pattern": "^(0|-?[1-9][0-9]*)$",
-                    "x-csharp-type": "long",
-                    "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
-                  }
-                },
-                "required": [
-                  "type",
-                  "value"
-                ],
-                "additionalProperties": false,
-                "description": "Tagged OTLP signed 64-bit integer attribute."
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "double"
-                  },
-                  "value": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "NaN",
-                          "Infinity",
-                          "-Infinity"
-                        ]
-                      }
-                    ],
-                    "description": "An OTLP attribute double encoded as a JSON number when finite or a canonical named string when non-finite."
-                  }
-                },
-                "required": [
-                  "type",
-                  "value"
-                ],
-                "additionalProperties": false,
-                "description": "Tagged OTLP double attribute."
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "bytes"
-                  },
-                  "base64": {
-                    "type": "string",
-                    "contentEncoding": "base64"
-                  }
-                },
-                "required": [
-                  "type",
-                  "base64"
-                ],
-                "additionalProperties": false,
-                "description": "Base64 bytes projected by qyl without colliding with an ordinary string attribute."
-              },
-              {
                 "$ref": "#/$defs/__schema0"
               },
               {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "kvlist"
-                  },
-                  "values": {
+                "allOf": [
+                  {
                     "type": "object",
                     "properties": {},
-                    "additionalProperties": {
-                      "$ref": "#/$defs/__schema1"
-                    }
+                    "additionalProperties": {}
+                  },
+                  {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "int"
+                          },
+                          "value": {
+                            "type": "string",
+                            "maxLength": 20,
+                            "pattern": "^(0|-?[1-9][0-9]*)$",
+                            "x-csharp-type": "long",
+                            "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "value"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Tagged OTLP signed 64-bit integer attribute."
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "double"
+                          },
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "NaN",
+                                  "Infinity",
+                                  "-Infinity"
+                                ]
+                              }
+                            ],
+                            "description": "An OTLP attribute double encoded as a JSON number when finite or a canonical named string when non-finite."
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "value"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Tagged OTLP double attribute."
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "bytes"
+                          },
+                          "base64": {
+                            "type": "string",
+                            "contentEncoding": "base64"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "base64"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Base64 bytes projected by qyl without colliding with an ordinary string attribute."
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "kvlist"
+                          },
+                          "values": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": {
+                              "$ref": "#/$defs/__schema1"
+                            }
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "values"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Tagged recursive OTLP key-value-list, distinct from other object-shaped attribute variants."
+                      }
+                    ]
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "type",
+                  "mapping": {
+                    "int": "#/components/schemas/Common.AttributeIntValue",
+                    "double": "#/components/schemas/Common.AttributeDoubleValue",
+                    "bytes": "#/components/schemas/Common.AttributeBytesValue",
+                    "kvlist": "#/components/schemas/Common.AttributeKeyValueListValue"
                   }
                 },
-                "required": [
-                  "type",
-                  "values"
-                ],
-                "additionalProperties": false,
-                "description": "Tagged recursive OTLP key-value-list, distinct from other object-shaped attribute variants."
+                "description": "Object-shaped AttributeValue variants. The variant name is the wire `type` tag."
               }
             ],
-            "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute."
+            "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute. Primitive variants are bare JSON values; object variants carry a `type` tag."
           }
         }
       }

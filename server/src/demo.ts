@@ -674,7 +674,7 @@ function buildDemoData(): DemoData {
       observed_time_unix_nano: timeUnixNano,
       severity_number: severity,
       severity_text: severityText,
-      body: { string_value: body },
+      body,
       trace_id: trace.trace_id,
       span_id: span.span_id,
       resource: span.resource,

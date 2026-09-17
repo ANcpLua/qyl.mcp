@@ -9,7 +9,7 @@ while (written < 4 * 1024 * 1024) {
   if (!process.stderr.write(chunk)) await once(process.stderr, "drain");
 }
 
-const running = await startFixtureStdioServer();
+const running = startFixtureStdioServer();
 let stopping = false;
 
 async function stop() {

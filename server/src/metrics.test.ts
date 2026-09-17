@@ -9,7 +9,7 @@
  */
 
 import assert from "node:assert/strict";
-import { formatAttributeValue } from "./lib/attribute-value.js";
+import { formatAttributeValue } from "@ancplua/qyl-api-schema/runtime";
 import test from "node:test";
 import { operationInputSchema } from "./contract-operations.js";
 import {

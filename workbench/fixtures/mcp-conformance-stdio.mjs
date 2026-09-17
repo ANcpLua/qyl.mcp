@@ -1,6 +1,6 @@
 import { startFixtureStdioServer } from "../dist/src/fixture-stdio.js";
 
-const running = await startFixtureStdioServer();
+const running = startFixtureStdioServer();
 let stopping = false;
 
 async function stop() {

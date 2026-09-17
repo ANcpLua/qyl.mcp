@@ -33,21 +33,20 @@ test("telemetry tools redact secrets before model text and structured content", 
   trace.has_error = true;
 
   const textualLog = structuredClone(getDemo().logs[0]);
-  textualLog.body = {
-    string_value:
-      `token=${LogTokenSecret}; password=${LogPasswordSecret}; ` +
-      `secret=${LogSecretSecret}; ordinary-log-kept`,
-  };
+  textualLog.body =
+    `token=${LogTokenSecret}; password=${LogPasswordSecret}; ` +
+    `secret=${LogSecretSecret}; ordinary-log-kept`;
   textualLog.attributes = [
     { key: "gen_ai.usage.output_tokens", value: { type: "int", value: "17" } },
   ];
 
   const semanticLog = structuredClone(getDemo().logs[1]);
   semanticLog.body = {
-    kv_list_value: [
-      { key: "authorization", value: `Bearer ${LogAuthorizationSecret}` },
-      { key: "message", value: "ordinary-semantic-kept" },
-    ],
+    type: "kvlist",
+    values: {
+      authorization: `Bearer ${LogAuthorizationSecret}`,
+      message: "ordinary-semantic-kept",
+    },
   };
 
   const collector = createHttpServer((request, response) => {

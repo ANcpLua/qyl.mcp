@@ -4,7 +4,7 @@
  */
 
 import type { McpDashboardStats, McpToolRow, QylSpan } from "./wire.js";
-import { formatAttributeValue } from "./lib/attribute-value.js";
+import { formatAttributeValue } from "@ancplua/qyl-api-schema/runtime";
 
 export function spanAttr(span: QylSpan, key: string): string | undefined {
   const attr = span.attributes?.find((a) => a.key === key);

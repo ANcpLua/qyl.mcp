@@ -96,6 +96,16 @@ so serving it requires Bun.
 
 ## Release notes
 
+### 6.2.0
+
+- Contract `@ancplua/qyl-api-schema` 10.0.1 -> 11.0.1, revision
+  `sha256:cd69d9c37a41916c` -> `sha256:5c1aa27ccdf48067`. Attribute values are
+  decoded through the contract's own `/runtime` subpath instead of a local
+  copy of the dashboard's decoder; bytes and key-value lists render as their
+  values, never as `[object Object]`. A log body is an `AttributeValue`: a plain
+  string body is a bare string, and the three body shapes the collector never
+  produced are gone from the contract and from this server.
+
 ### 6.1.2
 
 - The landing page at `mcp.qyl.at` states what 6.1.0 added: a request-scope

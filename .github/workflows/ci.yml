@@ -23,9 +23,9 @@ jobs:
           bun-version-file: package.json
 
       - run: bun install --frozen-lockfile
-      # The workbench imports qyl-mcp-server/* types from the server's dist; the type-aware
-      # rules resolve them as error types until it is built.
-      - run: bun run --cwd server build
+      # The packages import each other's types from dist; the type-aware rules resolve them
+      # as error types (and stay silent) until everything is built.
+      - run: bun run build
       - run: bun run lint
 
   verify:

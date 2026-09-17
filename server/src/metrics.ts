@@ -16,7 +16,7 @@ import type {
   MetricSeriesResult,
   Attribute,
 } from "@ancplua/qyl-api-schema/types";
-import { formatAttributeValue } from "./lib/attribute-value.js";
+import { formatAttributeValue } from "@ancplua/qyl-api-schema/runtime";
 import {
   CollectorError,
   type CollectorRequestOptions,

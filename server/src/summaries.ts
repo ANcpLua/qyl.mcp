@@ -7,7 +7,7 @@ import type {
   MetricQueryResult,
   MetricSeries,
 } from "@ancplua/qyl-api-schema/types";
-import { formatAttributeValue } from "./lib/attribute-value.js";
+import { formatAttributeValue } from "@ancplua/qyl-api-schema/runtime";
 import type {
   McpDashboardStats,
   Mode,
@@ -16,7 +16,6 @@ import type {
   QylSpan,
   QylTrace,
 } from "./wire.js";
-import { logBodyText } from "./log-body.js";
 
 /**
  * Humanize a nanosecond duration: "1.24 s" / "87 ms" / "640 µs".
@@ -148,7 +147,7 @@ export function summarizeLogs(logs: QylLogRecord[], mode: Mode): string {
   const lines = logs.map((record) => {
     const time = nsToIso(record.time_unix_nano).slice(11, 23);
     const severity = record.severity_text ?? String(record.severity_number);
-    const renderedBody = logBodyText(record.body).replace(/\s+/g, " ");
+    const renderedBody = formatAttributeValue(record.body).replace(/\s+/g, " ");
     const body =
       renderedBody.length > 140
         ? `${renderedBody.slice(0, 140)}…`

@@ -21,7 +21,7 @@ import {
   DisplayTracesOutputSchema,
   FetchTelemetryOutputSchema,
 } from "../src/contract-validation.ts";
-import { logBodyText } from "../src/log-body.ts";
+import { formatAttributeValue } from "@ancplua/qyl-api-schema/runtime";
 import { computeWaterfall, type WaterfallRow } from "./waterfall.ts";
 import "./global.css";
 import "./mcp-app.css";
@@ -793,7 +793,7 @@ function renderLogs(logs: QylLogRecord[]) {
     row.appendChild(badge);
     const logBody = document.createElement("span");
     logBody.className = "log-body mono";
-    logBody.textContent = logBodyText(log.body);
+    logBody.textContent = formatAttributeValue(log.body);
     row.appendChild(logBody);
     fragment.appendChild(row);
   }

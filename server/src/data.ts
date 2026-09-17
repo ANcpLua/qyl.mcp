@@ -14,7 +14,7 @@ import {
   resolveMode,
 } from "./collector.js";
 import { getDemo, getDemoMcpSpans } from "./demo.js";
-import { logBodyText } from "./log-body.js";
+import { formatAttributeValue } from "@ancplua/qyl-api-schema/runtime";
 import { aggregateMcpStats, pickBucketMs } from "./stats.js";
 import { redactTelemetry } from "./telemetry-redaction.js";
 import {
@@ -165,7 +165,7 @@ export async function fetchLogs(
     }
     if (filters.query) {
       const needle = filters.query.toLowerCase();
-      logs = logs.filter((l) => logBodyText(l.body).toLowerCase().includes(needle));
+      logs = logs.filter((l) => formatAttributeValue(l.body).toLowerCase().includes(needle));
     }
     return redactTelemetry({ logs: logs.slice(0, filters.limit), mode });
   }

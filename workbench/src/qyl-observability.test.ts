@@ -44,7 +44,7 @@ function logRecord(overrides: Record<string, unknown> = {}): Record<string, unkn
         time_unix_nano: '1',
         observed_time_unix_nano: '1',
         severity_number: 9,
-        body: { string_value: "fixture log" },
+        body: "fixture log",
         resource: { service_name: "fixture" },
         ...overrides,
     };
@@ -83,7 +83,7 @@ test("provider returns correlated real signals, derived events, redaction, and d
             return json({
                 items: [logRecord({
                     trace_id: traceId,
-                    body: { string_value: "Authorization: Bearer log-secret" },
+                    body: "Authorization: Bearer log-secret",
                 })],
                 has_more: false,
             });
