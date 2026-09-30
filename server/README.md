@@ -96,6 +96,19 @@ so serving it requires Bun.
 
 ## Release notes
 
+### 7.1.0
+
+- The hosted server can sit behind Cloudflare Access Managed OAuth:
+  `MCP_AUTH_PROVIDER=cloudflare-access` with `MCP_ACCESS_TEAM_DOMAIN` and
+  `MCP_ACCESS_AUD`. Access performs the client OAuth flow and owns discovery;
+  the origin serves `/mcp` only for a `Cf-Access-Jwt-Assertion` it has verified
+  against the team's signing keys for RS256, issuer, application audience,
+  expiry and subject, so a direct request to the origin without one is
+  rejected. The default stays the pinned Auth0 issuer; unknown modes, partial
+  Access settings and non-Cloudflare team URLs fail closed.
+- The assertion header is redacted from diagnostic objects and text, like the
+  other credentials.
+
 ### 7.0.0
 
 - Contract `@ancplua/qyl-api-schema` 11.1.0 -> 11.2.0. Demo series ids are
