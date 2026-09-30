@@ -138,6 +138,7 @@ and the draft
   subscription.
 - Subscriptions are keyed by caller, callback URL, event and arguments, last one
   hour by default and one day at most, and survive restarts in the store file.
+  A caller holds at most 20 live subscriptions; a refresh always passes.
   Delivery starts from the first collector poll after subscribing (every 30 s,
   `MCP_EVENTS_POLL_MS` to change it) and carries `cursor: null`: there is no
   replay, so traces that arrive while the server is down are not delivered.
