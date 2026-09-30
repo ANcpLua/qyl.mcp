@@ -21,6 +21,7 @@ import { createResourceAuthorization } from "./authorization.js";
 import { readAuthorizationExtensions } from "./auth-extensions.js";
 import { createCloudflareAccessAuth, readAccessConfig } from "./cloudflare-access.js";
 import { closeDefaultNativeExecutionRuntime } from "./native-execution.js";
+import { EventsRuntime, createEventStore } from "./events.js";
 
 export function sanitizedErrorType(error: unknown): string {
   if (!(error instanceof Error)) return "UnknownError";
@@ -124,6 +125,26 @@ export interface McpFetchOptions {
   allowedHosts?: readonly string[] | undefined;
   allowedOrigins?: readonly string[] | undefined;
   auth?: HostedAuth | undefined;
+  /** The OpenAI plugin portal's domain-verification token (OPENAI_APPS_CHALLENGE). */
+  openaiAppsChallenge?: string | undefined;
+}
+
+/**
+ * OpenAI's plugin portal verifies the MCP domain by fetching this path and
+ * expecting its exact token as plain text, nothing else (OpenAI "Submit
+ * plugins", MCP domain verification). Without a configured token the path
+ * does not exist.
+ */
+const OPENAI_APPS_CHALLENGE_PATH = "/.well-known/openai-apps-challenge";
+
+function openaiAppsChallengeResponse(request: Request, token: string | undefined): Response {
+  if (token === undefined || (request.method !== "GET" && request.method !== "HEAD")) {
+    return notFound();
+  }
+  return new Response(request.method === "HEAD" ? null : token, {
+    status: 200,
+    headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+  });
 }
 
 function landingResponse(request: Request, html: string): Response {
@@ -223,6 +244,9 @@ export function createFetch(options: McpFetchOptions): (request: Request) => Pro
 
     const { pathname } = new URL(request.url);
     if (pathname === "/healthz") return healthResponse(request);
+    if (pathname === OPENAI_APPS_CHALLENGE_PATH) {
+      return openaiAppsChallengeResponse(request, options.openaiAppsChallenge);
+    }
     if (pathname === "/") return landingResponse(request, options.landingPage);
     if (pathname !== "/mcp") return notFound();
 
@@ -312,32 +336,66 @@ export function recordsNativeExecutionEvidence(
   return config.publicUrl === undefined;
 }
 
+/** The portal token from OPENAI_APPS_CHALLENGE, or undefined when unset or blank. */
+export function openaiAppsChallenge(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): string | undefined {
+  const token = environment["OPENAI_APPS_CHALLENGE"]?.trim();
+  return token === undefined || token === "" ? undefined : token;
+}
+
+/**
+ * MCP Events need subscription storage that survives restarts and a caller
+ * identity, so they exist only on an authenticated hosted endpoint whose
+ * operator named a store file (on a persistent volume): MCP_EVENTS_STORE.
+ */
+export async function hostedEvents(
+  auth: HostedAuth | undefined,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): Promise<EventsRuntime | undefined> {
+  const storePath = environment["MCP_EVENTS_STORE"]?.trim();
+  if (storePath === undefined || storePath === "") return undefined;
+  if (auth === undefined) {
+    throw new Error("MCP_EVENTS_STORE requires hosted authorization (MCP_PUBLIC_URL)");
+  }
+  const pollMs = Number(environment["MCP_EVENTS_POLL_MS"] ?? "");
+  const events = new EventsRuntime({
+    store: createEventStore(resolve(storePath)),
+    ...(Number.isInteger(pollMs) && pollMs >= 5_000 ? { pollIntervalMs: pollMs } : {}),
+  });
+  await events.start();
+  return events;
+}
+
 async function createHostedRuntime(
   config: StreamableHTTPServerConfig,
 ): Promise<ServeOptions> {
+  const auth = await hostedAuth(config);
+  const events = await hostedEvents(auth);
   const handler = createHostedHandler(
     () =>
       createServer({
         transport: "streamable_http",
         ...(recordsNativeExecutionEvidence(config) ? {} : { nativeExecution: false }),
+        ...(events === undefined ? {} : { events }),
       }),
     (error) => reportError("Standalone MCP request", error),
   );
 
-  const auth = await hostedAuth(config);
   const options: McpFetchOptions = {
     handler,
     landingPage: await readFile(new URL("./mcp-home.html", import.meta.url), "utf8"),
     ...(config.allowedHosts === undefined ? {} : { allowedHosts: config.allowedHosts }),
     ...(config.allowedOrigins === undefined ? {} : { allowedOrigins: config.allowedOrigins }),
     ...(auth === undefined ? {} : { auth }),
+    ...(openaiAppsChallenge() === undefined ? {} : { openaiAppsChallenge: openaiAppsChallenge() }),
   };
 
   let shuttingDown = false;
   const shutdown = (): void => {
     if (shuttingDown) return;
     shuttingDown = true;
-    void handler.close()
+    void Promise.all([handler.close(), events?.stop()])
       .then(closeDefaultNativeExecutionRuntime)
       .catch((error: unknown) => {
         reportError("Standalone MCP HTTP shutdown cleanup", error);

@@ -20,6 +20,14 @@ revision `2026-07-28` and OAuth 2.1. Never add an MCP 2025 protocol fallback.
 - [x] Pass the repository test command and local modern-protocol checks with
   Claude Code, Codex CLI, and MCP Inspector.
 
+- [x] Mark `display_traces` (global and thread) and `display_mcp_dashboard`
+  (global) as ChatGPT plugin-extension entry points, with a monochrome
+  entry-point icon and `inline`/`fullscreen` display modes on both viewers.
+- [x] Serve MCP Events (`trace.error`, webhook delivery with callback
+  verification and Standard Webhooks signatures) when `MCP_EVENTS_STORE` is set;
+  declare the `/data` volume and the store path in `.railway/railway.ts`.
+- [x] Answer `/.well-known/openai-apps-challenge` with `OPENAI_APPS_CHALLENGE`.
+
 ## Production work — requires the user's go
 
 - [ ] Push commit `f228614` and deploy qyl.mcp. Confirm the production root and
@@ -46,6 +54,18 @@ revision `2026-07-28` and OAuth 2.1. Never add an MCP 2025 protocol fallback.
   list tools and call one read tool in each. Record each client version,
   registration path, consented scopes, tool result, and any exact error in the
   README.
+
+- [ ] Merge the ChatGPT plugin branch; `railway-config` applies the new
+  volume and `MCP_EVENTS_STORE`. Confirm `server/discover` on
+  `https://mcp.qyl.at/mcp` lists `events`.
+- [ ] In the OpenAI plugin portal choose **Create plugin → With MCP** with
+  `https://mcp.qyl.at/mcp`; set `OPENAI_APPS_CHALLENGE` in Railway to the
+  portal's token and complete domain verification. Enable the `openid` and
+  `email` scopes with a verified-email UserInfo response for workspace domain
+  restrictions.
+- [ ] In ChatGPT, subscribe to `trace.error` for one service, produce an error
+  trace, and confirm the signed delivery reaches the chat; then stop
+  monitoring and confirm `events/unsubscribe`.
 
 ## Auth0 discovery decision
 

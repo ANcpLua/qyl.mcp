@@ -172,7 +172,7 @@
     },
     {
       "name": "display_mcp_dashboard",
-      "title": "Display MCP Dashboard",
+      "title": "MCP Dashboard",
       "description": "Show an aggregate dashboard of MCP traffic (spans carrying an `mcp.method.name` attribute): request/error timeline, per-server and per-transport breakdowns, and per-tool latency and error rates. Prefer this when the user asks about MCP usage, tool health, or MCP monitoring.",
       "annotations": {
         "readOnlyHint": true,
@@ -191,6 +191,13 @@
         ],
         "ui": {
           "resourceUri": "ui://qyl-explorer/mcp-dashboard.html"
+        },
+        "openai/ui": {
+          "entrypoints": [
+            {
+              "type": "global"
+            }
+          ]
         }
       },
       "inputSchema": {
@@ -442,7 +449,7 @@
     },
     {
       "name": "display_traces",
-      "title": "Display Traces",
+      "title": "Trace Explorer",
       "description": "Show qyl traces in the interactive trace explorer with a span waterfall, detail panel, and correlated logs. Pass a trace_id to open one trace, a session_id for that session's traces, or neither for recent traces. Prefer this over list_traces/get_trace whenever the user wants to look at traces.",
       "annotations": {
         "readOnlyHint": true,
@@ -461,6 +468,16 @@
         ],
         "ui": {
           "resourceUri": "ui://qyl-explorer/mcp-app.html"
+        },
+        "openai/ui": {
+          "entrypoints": [
+            {
+              "type": "global"
+            },
+            {
+              "type": "thread"
+            }
+          ]
         }
       },
       "inputSchema": {
