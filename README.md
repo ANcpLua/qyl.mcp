@@ -107,6 +107,41 @@ Telemetry: `list_traces`, `get_trace`, `list_sessions`, `search_logs`, `ci_log`,
 `list_metrics`, `get_metric_series`, `query_metric`, `display_traces`,
 `display_mcp_dashboard`. Every one is read-only.
 
+In ChatGPT the two apps are also [plugin extension](https://github.com/openai/mcp-extensions/blob/main/docs/spec.md)
+entry points: **Trace Explorer** (`display_traces`) opens from the sidebar and
+as a thread tab, and **MCP Dashboard** (`display_mcp_dashboard`) from the
+sidebar. Both open with `{}` (recent traces, the last 24 hours) and render in
+`inline` or `fullscreen`. Other clients ignore the `openai/ui` metadata.
+
+### MCP Events
+
+A hosted server with `MCP_EVENTS_STORE` set advertises `events` in
+`server/discover` and answers `events/list`, `events/subscribe` and
+`events/unsubscribe` behind the same OAuth gate as the tools, following
+[ChatGPT's MCP Events](https://developers.openai.com/plugins/build/mcp-events)
+and the draft
+[design sketch](https://github.com/modelcontextprotocol/experimental-ext-triggers-events/blob/main/docs/design-sketch-proposal.md).
+
+- One event, `trace.error`: a trace with at least one error span reached the
+  collector. The optional `service_name` argument narrows it to one service. The
+  payload carries `trace_id`, `root_span`, `services`, `span_count`,
+  `duration_ms` and `start_time`, so the model can follow up with `get_trace`
+  or `display_traces`.
+- Webhook delivery only. The callback must be `https` to a public address; it
+  is resolved and checked on every connection, and redirects are not followed.
+  Before storing a subscription the server sends a signed, single-use challenge
+  and requires it echoed; a failure is `-32015` with a `data.reason`.
+- Each event is one POST signed with
+  [Standard Webhooks](https://github.com/standard-webhooks/standard-webhooks)
+  (`webhook-id` = `eventId` = `evt_<trace_id>`, plus `X-MCP-Subscription-Id`),
+  retried with backoff on network errors, `429` and `5xx`; `410` ends the
+  subscription.
+- Subscriptions are keyed by caller, callback URL, event and arguments, last one
+  hour by default and one day at most, and survive restarts in the store file.
+  Delivery starts from the first collector poll after subscribing (every 30 s,
+  `MCP_EVENTS_POLL_MS` to change it) and carries `cursor: null`: there is no
+  replay, so traces that arrive while the server is down are not delivered.
+
 ## The workbench
 
 A local client for connecting to MCP servers you did not write, inspecting their
@@ -238,9 +273,16 @@ refuses to serve under Node. Both commands and the `/healthz` check are declared
 `.railway/railway.ts` and applied to Railway with `railway config apply`; nothing is read
 from the repository at deploy time.
 
-Do not set `PORT`; Railway injects it. The server is stateless and needs no
-volume. Railway's 15-minute streaming limit applies to unusually long synchronous
-operations.
+Do not set `PORT`; Railway injects it. The MCP endpoint is stateless; the one
+piece of state is the MCP Events subscription file named by `MCP_EVENTS_STORE`,
+which `.railway/railway.ts` keeps on the volume mounted at `/data`. Leave the
+variable unset to run without events and without a volume. Railway's 15-minute
+streaming limit applies to unusually long synchronous operations.
+
+To submit the server as a ChatGPT plugin, use the portal's **With MCP** path
+with `https://mcp.qyl.at/mcp`. When the portal shows its domain-verification
+token, set `OPENAI_APPS_CHALLENGE` to it; the server then answers
+`/.well-known/openai-apps-challenge` with exactly that token as plain text.
 
 ```bash
 NODE_ENV=production \

@@ -15,3 +15,6 @@ dist-sandbox
 .claude/settings.local.json.*
 tools/hosted-eval/out/
 tools/hosted-eval/node_modules
+
+# JetBrains IDE state (Rider/WebStorm); machine-local, never shared.
+.idea/
