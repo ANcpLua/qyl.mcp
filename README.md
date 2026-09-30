@@ -230,7 +230,7 @@ bun run start
 `<public-url>/mcp` is the fixed resource identifier tokens are audience-bound to.
 A non-loopback bind requires it.
 
-This release accepts only the qyl production Auth0 issuer
+The default Auth0 mode accepts only the qyl production Auth0 issuer
 `https://qyl-eu.eu.auth0.com/`, which is pinned in the build and is not
 configurable: there is no environment variable that substitutes an arbitrary
 OAuth issuer. Configure the API audience for your public URL in that tenant
@@ -267,6 +267,37 @@ relying on the default-grant boundary. Make read exposure deliberate or restrict
 DCR with the Auth0 Tenant ACL (`dcr` scope), which can filter by IP, CIDR, or
 geography; `/oidc/register` is also rate-limited to five requests per second per
 tenant.
+
+### Cloudflare Access Managed OAuth
+
+To switch an existing hosted server to Cloudflare Access, set all three values:
+
+```sh
+MCP_AUTH_PROVIDER=cloudflare-access
+MCP_ACCESS_TEAM_DOMAIN=https://YOUR-TEAM.cloudflareaccess.com
+MCP_ACCESS_AUD=YOUR-ACCESS-APPLICATION-AUD
+```
+
+`MCP_PUBLIC_URL` remains required. Configure a self-hosted Access application
+for that public hostname in the same Cloudflare account, enable Managed OAuth,
+and allow only the intended identities. Use its actual team domain and AUD tag.
+Do not turn on this mode until the Access application is configured.
+
+Access performs the client OAuth flow and owns its discovery endpoints. The
+server validates `Cf-Access-Jwt-Assertion` with the team's signing keys, RS256,
+issuer, application audience, expiry and subject before serving `/mcp`. A direct
+request to the Railway origin without a valid assertion is rejected. Opaque
+`oauth:` bearer tokens alone are not accepted by the origin. Access membership
+grants this server's existing read-only `qyl:read` tool surface; the assertion
+itself does not carry qyl scopes or identify the originating OAuth client.
+
+The default `MCP_AUTH_PROVIDER=auth0` retains the pinned Auth0 behavior above.
+Unknown modes, partial Access settings and non-Cloudflare team URLs fail closed.
+This mode is an available deployment configuration, not a claim that the public
+service has already switched providers. Verify the public discovery response
+and an authenticated tool call after the actual cutover.
+
+[Cloudflare Managed OAuth documentation](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/managed-oauth/)
 
 ## Verification
 

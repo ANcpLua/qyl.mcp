@@ -127,7 +127,7 @@ export function createJwtTokenVerifier(params: {
 }
 
 /**
- * Build the hosted resource-server posture against the pinned issuer.
+ * Build the default Auth0 resource-server posture against the pinned issuer.
  *
  * The issuer is a constant, not an operator input. It was once read from
  * `MCP_OAUTH_ISSUER`, which accepted exactly one value — this constant — and

@@ -65,6 +65,18 @@ requireMatch(
   /accepts only the qyl production Auth0 issuer/u,
   "must state that arbitrary OAuth issuers are rejected",
 );
+requireMatch(
+  "deployment README",
+  deploymentGuidance,
+  /MCP_AUTH_PROVIDER=cloudflare-access/u,
+  "must document the explicit Cloudflare Access mode",
+);
+requireMatch(
+  "deployment README",
+  deploymentGuidance,
+  /Cf-Access-Jwt-Assertion.*issuer, application audience, expiry and subject/u,
+  "must state the Access assertion validation requirements",
+);
 if (failures.length > 0) {
   throw new Error(
     `verify:deployment-guidance failed (${failures.length} problem(s)):\n\n`

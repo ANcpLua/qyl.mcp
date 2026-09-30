@@ -18,6 +18,7 @@ import { createServer } from "./server.js";
 import { assertCollectorContractRevision } from "./contract-handshake.js";
 import { dnsRebindingResponse, isLoopbackBindHost } from "./http-security.js";
 import { loadHostedOAuth } from "./oauth.js";
+import { createCloudflareAccessAuth, readAccessConfig } from "./cloudflare-access.js";
 import { closeDefaultNativeExecutionRuntime } from "./native-execution.js";
 
 export function sanitizedErrorType(error: unknown): string {
@@ -113,7 +114,7 @@ function urlHost(host: string): string {
 
 export interface HostedAuth {
   gate: (request: Request) => Promise<AuthInfo | Response>;
-  metadata: AuthMetadataOptions;
+  metadata?: AuthMetadataOptions;
 }
 
 export interface McpFetchOptions {
@@ -196,7 +197,7 @@ function withCors(request: Request, response: Response): Response {
  */
 export function createFetch(options: McpFetchOptions): (request: Request) => Promise<Response> {
   return async (request: Request): Promise<Response> => {
-    const discovery = options.auth === undefined
+    const discovery = options.auth?.metadata === undefined
       ? undefined
       : oauthMetadataResponse(request, options.auth.metadata);
     if (discovery !== undefined) return discovery;
@@ -226,23 +227,22 @@ export function createFetch(options: McpFetchOptions): (request: Request) => Pro
   };
 }
 
-/**
- * The hosted OAuth gate for this configuration, or `undefined` when there is
- * none to build.
- *
- * MCP_PUBLIC_URL is the entire decision, and it is the only one: the issuer is
- * a pinned constant in oauth.ts rather than an operator input. The `undefined`
- * branch is not a way to serve the public transport unauthenticated —
- * readStreamableHTTPConfig refuses a non-loopback bind without a public URL, so
- * only a loopback process ever reaches it.
+/** Build the selected hosted gate. A public bind still requires MCP_PUBLIC_URL;
+ * Access mode must be explicitly configured with its team and application AUD.
  */
 export async function hostedAuth(
   config: StreamableHTTPServerConfig,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
 ): Promise<HostedAuth | undefined> {
+  const access = readAccessConfig(environment);
   const publicUrl = config.publicUrl;
-  if (publicUrl === undefined) return undefined;
+  if (publicUrl === undefined) {
+    if (access) throw new Error("Cloudflare Access requires MCP_PUBLIC_URL");
+    return undefined;
+  }
 
   const resourceServerUrl = new URL("/mcp", publicUrl);
+  if (access) return createCloudflareAccessAuth({ ...access, resource: resourceServerUrl });
   const oauth = await loadHostedOAuth(resourceServerUrl);
   return {
     gate: requireBearerAuth({

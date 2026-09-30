@@ -4,6 +4,7 @@ const DEFAULT_MAX_STRING_LENGTH = 16_384;
 
 const SecretKeyNames = new Set([
   "authorization",
+  "cfaccessjwtassertion",
   "proxyauthorization",
   "cookie",
   "setcookie",
@@ -106,7 +107,7 @@ export class SecretRedactor {
 
     redacted = redacted
       .replace(
-        /\b(authorization|proxy-authorization|x[-_]?api[-_]?key|api[-_]?key|x[-_]?otlp[-_]?api[-_]?key)\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\r\n,;}]+)/giu,
+        /\b(authorization|proxy-authorization|cf[-_]?access[-_]?jwt[-_]?assertion|x[-_]?api[-_]?key|api[-_]?key|x[-_]?otlp[-_]?api[-_]?key)\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\r\n,;}]+)/giu,
         (_match, name: string) => `${name}: ${this.replacement}`,
       )
       .replace(
