@@ -11,6 +11,7 @@ import {
   CALLBACK_ENDPOINT_ERROR,
   DEFAULT_TTL_MS,
   EventsRuntime,
+  MAX_SUBSCRIPTIONS_PER_PRINCIPAL,
   MAX_TTL_MS,
   MIN_TTL_MS,
   TRACE_ERROR_EVENT_NAME,
@@ -212,6 +213,68 @@ test("subscribe rejects bad names, arguments, modes, secrets and callbacks", asy
     assert.equal(posted.length, 0, "nothing is sent for a rejected request");
   } finally {
     await cleanup();
+  }
+});
+
+test("a caller holds a bounded number of live subscriptions; refreshes still pass at the cap", async () => {
+  const { posted, post } = receiver();
+  const { runtime, store, cleanup } = await fixture(post);
+  try {
+    for (let index = 0; index < MAX_SUBSCRIPTIONS_PER_PRINCIPAL; index++) {
+      await runtime.subscribe(subscribeParams({ arguments: { service_name: `svc-${index}` } }), ALICE);
+    }
+    const sent = posted.length;
+    await rejectsWith(
+      runtime.subscribe(subscribeParams({ arguments: { service_name: "one-too-many" } }), ALICE),
+      -32602,
+    );
+    await rejectsWith(
+      runtime.subscribe(subscribeParams({
+        arguments: { service_name: "elsewhere" },
+        delivery: { mode: "webhook", url: "https://other.example.com/cb", secret: SECRET },
+      }), ALICE),
+      -32602,
+    );
+    assert.equal(posted.length, sent, "a rejected subscription sends no verification POST");
+
+    await runtime.subscribe(subscribeParams({ arguments: { service_name: "svc-0" }, ttlMs: 10 * 60_000 }), ALICE);
+    await runtime.subscribe(subscribeParams({ arguments: { service_name: "one-too-many" } }), { ...ALICE, subject: "auth0|bob" });
+    assert.equal((await store.read()).subscriptions.length, MAX_SUBSCRIPTIONS_PER_PRINCIPAL + 1);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("a failing poll on the timer is logged, not an unhandled rejection", async () => {
+  const logged: string[] = [];
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown): void => {
+    unhandled.push(reason);
+  };
+  process.on("unhandledRejection", onUnhandled);
+  const failing = {
+    initialize: async () => {},
+    read: async () => ({ version: 1 as const, subscriptions: [] }),
+    transact: async () => {
+      throw new Error("write_failed");
+    },
+  };
+  const runtime = new EventsRuntime({
+    store: failing as unknown as ReturnType<typeof createEventStore>,
+    post: receiver().post,
+    recentTraces: async () => [],
+    pollIntervalMs: 5,
+    log: (message) => logged.push(message),
+  });
+  try {
+    (runtime as unknown as { ensurePolling(): void }).ensurePolling();
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    await runtime.stop().catch(() => {});
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(unhandled, []);
+    assert.ok(logged.some((message) => message.includes("poll failed: write_failed")), logged.join("\n"));
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
   }
 });
 

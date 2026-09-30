@@ -57,6 +57,12 @@ const TRACES_PER_POLL = 100;
 const MAX_SEEN_TRACES = 5_000;
 const DELIVERY_ATTEMPTS = 5;
 const RETRY_BASE_MS = 1_000;
+/**
+ * Live subscriptions one caller may hold. Every subscription is a stored
+ * entry, a delivery fan-out target and, for a new callback, an outbound
+ * verification POST; without a cap one account grows all three at will.
+ */
+export const MAX_SUBSCRIPTIONS_PER_PRINCIPAL = 20;
 
 /** The one event definition `events/list` returns. */
 export const TRACE_ERROR_EVENT = {
@@ -332,12 +338,15 @@ export class EventsRuntime {
     const url = checkedCallbackUrl(params.delivery.url);
     const id = subscriptionId(principal, url.href, params.name, args);
 
+    // Checked before the verification POST, and again atomically below.
+    await this.initialized();
+    this.assertCapacity(await this.store.read(), principal, id);
     await this.verifyCallback(principal, url, id, secret);
 
     const now = this.now();
     const refreshBefore = new Date(now + grantedTtlMs(params.ttlMs)).toISOString();
-    await this.initialized();
     await this.store.transact((state) => {
+      this.assertCapacity(state, principal, id);
       const existing = state.subscriptions.find((entry) => entry.id === id);
       const rotated = existing !== undefined && existing.secret !== secret;
       const next: StoredSubscription = {
@@ -374,6 +383,20 @@ export class EventsRuntime {
       state.subscriptions = state.subscriptions.filter((entry) => entry.id !== id);
     });
     return {};
+  }
+
+  /** A refresh always passes; a new subscription needs a free slot for its caller. */
+  private assertCapacity(state: EventStoreState, principal: Principal, id: string): void {
+    if (state.subscriptions.some((entry) => entry.id === id)) return;
+    const held = state.subscriptions.filter((entry) =>
+      entry.subject === principal.subject
+      && entry.clientId === principal.clientId
+      && this.isLive(entry)).length;
+    if (held >= MAX_SUBSCRIPTIONS_PER_PRINCIPAL) {
+      throw invalidParams(
+        `at most ${MAX_SUBSCRIPTIONS_PER_PRINCIPAL} live subscriptions per caller; unsubscribe one first`,
+      );
+    }
   }
 
   /**
@@ -440,7 +463,12 @@ export class EventsRuntime {
 
   private ensurePolling(): void {
     if (this.timer !== undefined) return;
-    this.timer = setInterval(() => void this.poll(), this.pollIntervalMs);
+    // A failed store write rejects; an unhandled rejection would end the process.
+    this.timer = setInterval(() => {
+      this.poll().catch((error: unknown) => {
+        this.log(`poll failed: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }, this.pollIntervalMs);
     this.timer.unref();
   }
 
