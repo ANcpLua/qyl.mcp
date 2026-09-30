@@ -55,6 +55,7 @@ import {
 } from "./summaries.js";
 import {
   READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
+  TELEMETRY_TOOL_AUTH_META,
   registerTelemetryTools,
 } from "./tools.js";
 import { registerCiTools } from "./ci.js";
@@ -192,7 +193,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       inputSchema: DisplayTracesInputSchema,
       outputSchema: compactOutputSchema(DisplayTracesOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
-      _meta: { ui: { resourceUri: RESOURCE_URI } },
+      _meta: { ...TELEMETRY_TOOL_AUTH_META, ui: { resourceUri: RESOURCE_URI } },
     },
     (
       { trace_id, session_id, limit }: DisplayTracesInput,
@@ -251,7 +252,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       inputSchema: DisplayMcpDashboardInputSchema,
       outputSchema: compactOutputSchema(DisplayMcpDashboardOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
-      _meta: { ui: { resourceUri: DASHBOARD_RESOURCE_URI } },
+      _meta: { ...TELEMETRY_TOOL_AUTH_META, ui: { resourceUri: DASHBOARD_RESOURCE_URI } },
     },
     ({ hours }: DisplayMcpDashboardInput, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, "display_mcp_dashboard", 1, async (scope) => {
@@ -284,7 +285,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       // contract at compile time, and contracts.test.ts still parses these bodies
       // against FetchTelemetryOutputSchema, so the shape stays pinned to the contract.
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ...TELEMETRY_TOOL_AUTH_META, ui: { visibility: ["app"] } },
     },
     (
       { view, trace_id, service_name, severity_min, query, limit, hours }: FetchTelemetryInput,

@@ -3,7 +3,6 @@ import {
   createMcpHandler,
   getOAuthProtectedResourceMetadataUrl,
   oauthMetadataResponse,
-  requireBearerAuth,
   type AuthInfo,
   type AuthMetadataOptions,
   type McpHttpHandler,
@@ -18,6 +17,8 @@ import { createServer } from "./server.js";
 import { assertCollectorContractRevision } from "./contract-handshake.js";
 import { dnsRebindingResponse, isLoopbackBindHost } from "./http-security.js";
 import { loadHostedOAuth } from "./oauth.js";
+import { createResourceAuthorization } from "./authorization.js";
+import { readAuthorizationExtensions } from "./auth-extensions.js";
 import { createCloudflareAccessAuth, readAccessConfig } from "./cloudflare-access.js";
 import { closeDefaultNativeExecutionRuntime } from "./native-execution.js";
 
@@ -197,9 +198,20 @@ function withCors(request: Request, response: Response): Response {
  */
 export function createFetch(options: McpFetchOptions): (request: Request) => Promise<Response> {
   return async (request: Request): Promise<Response> => {
-    const discovery = options.auth?.metadata === undefined
+    const metadata = options.auth?.metadata;
+    // RFC 9728 permits both the resource-path and origin forms. Keep the
+    // canonical resource identical in either document and let the SDK handle
+    // GET, HEAD, OPTIONS, 405, and CORS for both routes.
+    const discoveryRequest = metadata !== undefined
+      && new URL(request.url).pathname.replace(/\/$/u, "") === "/.well-known/oauth-protected-resource"
+      ? new Request(getOAuthProtectedResourceMetadataUrl(metadata.resourceServerUrl), {
+        method: request.method,
+        headers: request.headers,
+      })
+      : request;
+    const discovery = metadata === undefined
       ? undefined
-      : oauthMetadataResponse(request, options.auth.metadata);
+      : oauthMetadataResponse(discoveryRequest, metadata);
     if (discovery !== undefined) return discovery;
 
     const rejected = dnsRebindingResponse(
@@ -235,6 +247,10 @@ export async function hostedAuth(
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): Promise<HostedAuth | undefined> {
   const access = readAccessConfig(environment);
+  const extensions = readAuthorizationExtensions(environment);
+  if (extensions.length > 0 && (access || config.publicUrl === undefined)) {
+    throw new Error("MCP_AUTH_EXTENSIONS requires hosted Auth0 resource authorization");
+  }
   const publicUrl = config.publicUrl;
   if (publicUrl === undefined) {
     if (access) throw new Error("Cloudflare Access requires MCP_PUBLIC_URL");
@@ -243,9 +259,9 @@ export async function hostedAuth(
 
   const resourceServerUrl = new URL("/mcp", publicUrl);
   if (access) return createCloudflareAccessAuth({ ...access, resource: resourceServerUrl });
-  const oauth = await loadHostedOAuth(resourceServerUrl);
+  const oauth = await loadHostedOAuth(resourceServerUrl, { extensions });
   return {
-    gate: requireBearerAuth({
+    gate: createResourceAuthorization({
       verifier: oauth.verifier,
       requiredScopes: oauth.requiredScopes,
       resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resourceServerUrl),

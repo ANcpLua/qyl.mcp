@@ -37,12 +37,39 @@ https://mcp.qyl.at/mcp
 
 It is an OAuth 2.1 resource server, so an unauthenticated request answers `401`
 with an [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728.html)
-protected-resource document. A stock MCP client reads that document, discovers
-the issuer, registers itself, and completes the flow without you configuring
-anything.
+protected-resource document. The document identifies the Auth0 issuer and
+`qyl:read` scope. Authentication also requires the client to be registered and
+granted access in Auth0; discovery alone does not establish a login.
 
 `https://mcp.qyl.at/` is a product page and `/healthz` is the platform
 healthcheck. Neither is a protocol endpoint — `/mcp` is the only one.
+
+### Connect
+
+Use `https://mcp.qyl.at/mcp` in every client. These are the settings to use
+after the Auth0 client and `qyl:read` grant are provisioned. Live OAuth and
+tool-call checks remain pending until that configuration and the server changes
+are deployed.
+
+| Client | Connection setting | OAuth client path |
+| --- | --- | --- |
+| ChatGPT web | Enable Developer mode in Settings → Security and login; in ChatGPT Plugins add an MCP connection to `https://mcp.qyl.at/mcp`, select OAuth, and include `qyl:read` in Base scopes. | CIMD at `https://chatgpt.com/oauth/client.json`, with redirect `https://chatgpt.com/connector_platform_oauth_redirect`, when the connection page shows stable callbacks. The document supports `none` and `private_key_jwt` (currently preferred). DCR is also supported when explicitly selected in the connection form. |
+| claude.ai | Customize → Connectors → Add custom connector; enter `https://mcp.qyl.at/mcp` and leave optional client ID and secret empty. | CIMD at `https://claude.ai/oauth/mcp-oauth-client-metadata`, a public client (`none`) with redirect `https://claude.ai/api/mcp/auth_callback`; DCR is the fallback. |
+| Claude Code | `claude mcp add --transport http qyl https://mcp.qyl.at/mcp`; then open `/mcp` in Claude Code to authorize. | CIMD at `https://claude.ai/oauth/claude-code-client-metadata`, a public client (`none`) with port-independent `http://localhost/callback` and `http://127.0.0.1/callback` redirects; DCR is the fallback. |
+| Codex CLI | `codex mcp add qyl --url https://mcp.qyl.at/mcp --oauth-resource https://mcp.qyl.at/mcp`; `codex mcp login qyl --enable mcp_2026_07_28 --scopes qyl:read`; start Codex with `codex --enable mcp_2026_07_28`. | CIMD or DCR as selected by the client and Auth0; `--oauth-client-registration cimd` or `dcr` can pin a test path. The installed CLI requests `2025-06-18` without that feature, and this server rejects it. |
+| MCP Inspector | Select Streamable HTTP, enter `https://mcp.qyl.at/mcp`, set protocol era to **modern**, and use Open Auth Settings → Quick OAuth Flow. For CLI checks use `npx @modelcontextprotocol/inspector@2.8.0 --cli https://mcp.qyl.at/mcp --transport http --protocol-era modern --method tools/list`. | CIMD when supported by the Inspector release, otherwise DCR. |
+
+Local `QYL_DEMO=1` v2 checks on 30 September 2026: Claude Code 2.1.285,
+Codex CLI 0.158.0-alpha.2.1 with `--enable mcp_2026_07_28`, and MCP Inspector
+2.8.0 each called `list_metrics` and received 3 instruments with
+`has_more: false`. Inspector listed all 11 tools, each with `qyl:read` in
+`_meta.securitySchemes` and `readOnlyHint: true`. These local calls did not use
+OAuth. ChatGPT web, claude.ai, and each client's production OAuth path still
+need a deployed build and Auth0 client grants before their results can be
+recorded here.
+
+This server accepts only MCP revision `2026-07-28`. A client that opens with the
+2025-era `initialize` method receives `-32022`; there is no v1 mode.
 
 ## Run the server yourself
 
@@ -238,35 +265,143 @@ instead.
 
 ### Authentication
 
-The server is a resource server only. It never mints tokens, hosts no
-authorization server, holds no client registration, and keeps no static operator
-credential. It fails closed on `MCP_PUBLIC_URL`: a non-loopback bind without one
-is refused at startup, and a public URL always builds the gate.
-It verifies RFC 9068 bearer tokens against the issuer's JWKS, requires the exact
-resource audience and the `qyl:read` scope, and publishes only the RFC 9728
-protected-resource document.
+The hosted Auth0 profile uses **CIMD or DCR + OAuth 2.1 Authorization Code with
+PKCE S256 + issuer identification**. ChatGPT's current stable CIMD supports
+`none` and `private_key_jwt` (its published preference); Claude's CIMD is a
+public client using `none`. The server is an OAuth
+resource server: Auth0 registers clients, authenticates users and clients,
+performs grant exchanges, and issues tokens. qyl.mcp never hosts a token endpoint,
+accepts a client assertion as an access token, or forwards a caller's token to
+the collector. Its outgoing collector credential remains separate.
 
-Configure an authorization server with an API whose identifier is your
-`<public-url>/mcp`, RS256, the RFC 9068 access-token profile, and the single
-permission `qyl:read`. On Auth0 that means enabling **Dynamic Client
-Registration**, **Client ID Metadata Document Registration**, and the **Resource
-Parameter Compatibility Profile**, then promoting the login connection to domain
-level.
+A public URL always builds the authentication gate. A non-loopback bind without
+`MCP_PUBLIC_URL` is refused. Startup discovers the pinned Auth0 issuer and verifies
+CIMD, DCR, S256, authorization-code, both client authentication methods and
+response issuer-identification capabilities. Missing advertised capabilities
+stop startup. Discovery does not prove that DCR is enabled, an individual client
+has been provisioned, or that an Auth0 plan permits `private_key_jwt`.
 
-`qyl:read` is the whole authorization surface. Every tool this server publishes
-reads the collector and none of them mutate it, so there is one scope to grant:
-make it available in the API's default third-party client grant, and the server's
-authorization challenge requests exactly it. Self-registering clients remain
-read-only by default because read-only is all there is.
+Configure Auth0 as follows:
 
-Auth0 Dynamic Client Registration is open: anyone can register a client without
-a token. Combined with default `qyl:read`, that permits anyone who completes
-authorization to read the deployment's traces, logs, metrics, sessions, and CI evidence.
-Set the tenant's `dynamic_client_registration_security_mode` to `strict` before
-relying on the default-grant boundary. Make read exposure deliberate or restrict
-DCR with the Auth0 Tenant ACL (`dcr` scope), which can filter by IP, CIDR, or
-geography; `/oidc/register` is also rate-limited to five requests per second per
-tenant.
+1. Register the API with identifier `<public-url>/mcp`, RS256, the RFC 9068
+   access-token profile, and the permission `qyl:read`.
+2. Enable **Client ID Metadata Document Registration**, the **Resource
+   Parameter Compatibility Profile**, and authorization response issuer
+   identification so every authorization response includes the exact `iss`.
+3. Import each CIMD URL through **Applications → Create Application → Import
+   from URL**: `https://chatgpt.com/oauth/client.json`,
+   `https://claude.ai/oauth/mcp-oauth-client-metadata`, and
+   `https://claude.ai/oauth/claude-code-client-metadata`. Use the exact ChatGPT
+   client ID and callback shown in its connection page if it selects a
+   callback-specific identity. Preserve each document's redirect URIs and
+   token method. ChatGPT publishes `private_key_jwt` as its preference and a
+   JWKS; Auth0 documents that method as Enterprise-only. Its metadata also
+   supports `none`, so verify the selected method with a real token exchange.
+   Claude uses `none`, and Claude Code needs both loopback hostnames with any port.
+4. Enable **Dynamic Client Registration** in Settings → Advanced and set
+   `dynamic_client_registration_security_mode` to `strict`. Auth0's DCR endpoint
+   is open to registration when enabled. Restrict it with a Tenant ACL where
+   practical, and keep third-party API default permissions empty. A new DCR
+   client then needs its own explicit `qyl:read` client grant before login can
+   receive that scope; use a test client ID to verify this path. Do not set a
+   tenant-wide default `qyl:read` grant.
+5. Grant each intended CIMD or DCR client `qyl:read` for the API and permit only
+   the intended users to log in. Refresh imported CIMD metadata when client
+   keys or callbacks change.
+
+`qyl:read` permits access to the deployment's traces, logs, metrics, sessions,
+and CI evidence. Every current tool is read-only, so no write permission is
+advertised. Client registration does not itself authorize API access: grant it
+only to intended clients and users. An open default `qyl:read` grant would
+expose the same evidence to anyone who completes authorization.
+
+Every MCP request passes the same verifier: RS256 signature, exact issuer,
+resource audience, expiry, not-before, RFC 9068 token type, subject, client ID,
+issued-at and token ID. ID tokens, ID-JAGs and client assertions are rejected.
+Credentials must use `Authorization: Bearer`; query tokens and malformed or
+multiple credentials receive 400. Missing/invalid/expired tokens receive 401;
+insufficient scopes receive 403 with `insufficient_scope`. Challenges contain
+`resource_metadata` and the complete required scope set. `offline_access` is
+never a resource requirement. The resource publishes RFC 9728 metadata and
+mirrors the validated provider's OAuth metadata, preserving its extension
+fields. Both `/.well-known/oauth-protected-resource/mcp` and
+`/.well-known/oauth-protected-resource` describe the same `/mcp` resource.
+Auth0 itself publishes OIDC discovery at
+`https://qyl-eu.eu.auth0.com/.well-known/openid-configuration`. This resource
+server does not publish OIDC discovery on `mcp.qyl.at`: it is not the issuer.
+If ChatGPT workspace domain claiming is needed, enable `openid` and `email` in
+Auth0 and its verified-email UserInfo response; the resource scope remains
+`qyl:read`.
+
+### Optional authorization extensions
+
+Extensions are **off by default** and enabled with exact integration versions:
+
+```sh
+MCP_AUTH_EXTENSIONS=enterprise-managed-authorization@1.0.0,oauth-client-credentials@1.0.0
+```
+
+| Integration | Upstream status | Additional provider requirement |
+| --- | --- | --- |
+| `enterprise-managed-authorization@1.0.0` | Stable | JWT bearer grant and `authorization_grant_profiles_supported` containing `urn:ietf:params:oauth:grant-profile:id-jag` |
+| `oauth-client-credentials@1.0.0` | Draft; explicitly opt in | Client credentials grant with `private_key_jwt` and advertised asymmetric signing algorithms |
+
+The version after `@` is qyl.mcp's integration version, independent of the MCP
+wire revision `2026-07-28` and the upstream specification's status. There is no
+`latest` alias. Each module records its source specification. Unknown versions,
+duplicate IDs, conflicting requirements and unsupported provider capabilities
+stop startup. These integrations apply only to hosted Auth0 mode; selecting
+them in loopback-only or Cloudflare Access mode is a configuration error.
+
+These are resource-server integrations of the
+[MCP authorization extensions](https://github.com/modelcontextprotocol/ext-auth).
+For enterprise authorization, the client exchanges its enterprise identity for
+an ID-JAG at its IdP, then exchanges that ID-JAG for an access token at Auth0.
+Configure the IdP trust, resource policy and client grants in those providers.
+For client credentials, provision the machine client and its keys at Auth0 and
+grant only the required API permissions. ChatGPT's interactive connection uses
+the core authorization-code flow; enabling an extension does not add a client
+flow that ChatGPT does not support.
+
+Both flows finish with an Auth0 access token for this resource, which passes
+exactly the same core verifier and scope gate. qyl.mcp does not consume the
+intermediate identity assertions, issue tokens, or implement an enterprise IdP.
+Extensions do not change the core MCP envelope, claim extra protocol
+capabilities, or synthesize provider discovery fields. They compose by uniting
+provider requirements; disabling every extension preserves core authorization.
+Selecting a module checks the resource server's provider contract; granting or
+revoking a client flow remains an Auth0 administrative policy, not a claim the
+resource server can infer from arbitrary token claims.
+
+Embedders can import `qyl-mcp-server/auth` and register new declarative
+`AuthorizationExtension` modules through `resolveAuthorizationExtensions` and
+`loadHostedOAuth`'s options (see the example below). Extensions cannot
+replace the core verifier or grant scopes. `createResourceAuthorization` supports
+explicit `scopeImplications` for deployments with scope hierarchies. Implications
+are transitive and cycle-safe; wildcard-looking scope names have no implicit
+meaning, and verified token claims remain unchanged. The standalone server has
+only `qyl:read`, so it does not invent a broader scope or a hierarchy.
+
+```ts
+import { authorizationExtensions, resolveAuthorizationExtensions, loadHostedOAuth }
+  from "qyl-mcp-server/auth";
+
+const extensions = resolveAuthorizationExtensions(
+  ["enterprise-managed-authorization@1.0.0"],
+  authorizationExtensions,
+);
+const oauth = await loadHostedOAuth(new URL("https://mcp.example.com/mcp"), { extensions });
+```
+
+Client refresh-token storage and step-up retry limits belong to the connecting
+MCP client. This server neither stores refresh tokens nor runs authorization
+retries. Clients should accumulate previously requested and newly challenged
+scopes and bound retries as specified by MCP. The server returns all scopes
+required for the current operation together (`qyl:read` for its current surface).
+
+References: [MCP authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization),
+[Auth0 CIMD](https://auth0.com/docs/get-started/auth0-overview/create-applications/register-applications-with-cimd),
+[ChatGPT authentication](https://developers.openai.com/plugins/build/auth).
 
 ### Cloudflare Access Managed OAuth
 

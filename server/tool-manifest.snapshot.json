@@ -11,7 +11,16 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "meta": null,
+      "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read"
+            ]
+          }
+        ]
+      },
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -172,6 +181,14 @@
         "openWorldHint": false
       },
       "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read"
+            ]
+          }
+        ],
         "ui": {
           "resourceUri": "ui://qyl-explorer/mcp-dashboard.html"
         }
@@ -434,6 +451,14 @@
         "openWorldHint": false
       },
       "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read"
+            ]
+          }
+        ],
         "ui": {
           "resourceUri": "ui://qyl-explorer/mcp-app.html"
         }
@@ -1637,6 +1662,14 @@
         "openWorldHint": false
       },
       "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read"
+            ]
+          }
+        ],
         "ui": {
           "visibility": [
             "app"
@@ -1707,7 +1740,16 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "meta": null,
+      "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read"
+            ]
+          }
+        ]
+      },
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -1995,7 +2037,16 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "meta": null,
+      "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read"
+            ]
+          }
+        ]
+      },
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -3175,7 +3226,16 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "meta": null,
+      "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read"
+            ]
+          }
+        ]
+      },
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -3293,7 +3353,16 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "meta": null,
+      "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read"
+            ]
+          }
+        ]
+      },
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -3549,7 +3618,16 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "meta": null,
+      "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read"
+            ]
+          }
+        ]
+      },
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -4455,7 +4533,16 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "meta": null,
+      "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read"
+            ]
+          }
+        ]
+      },
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -4827,7 +4914,16 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "meta": null,
+      "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read"
+            ]
+          }
+        ]
+      },
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
