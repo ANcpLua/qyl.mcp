@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@ancplua/qyl-api-schema": "11.2.0",
-    "@modelcontextprotocol/core": "2.0.0",
+    "@modelcontextprotocol/core": "2.2.0",
     "@modelcontextprotocol/server": "2.0.0",
     "qyl-mcp-server": "^6.0.0",
     "react": "^19.3.0",
