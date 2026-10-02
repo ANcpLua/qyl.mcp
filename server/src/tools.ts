@@ -36,6 +36,7 @@ import {
 } from "./summaries.js";
 import { runTool } from "./request-scope.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
+import { QYL_MCP_SCOPE } from "./oauth.js";
 
 /**
  * The qyl telemetry tools only query the configured collector. They neither
@@ -47,6 +48,14 @@ export const READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS = {
   idempotentHint: true,
   openWorldHint: false,
 } as const satisfies ToolAnnotations;
+
+/** SDK v2.0.0 preserves tool _meta, but has no top-level securitySchemes
+ * registration field. OpenAI reads this documented compatibility form;
+ * other MCP clients can follow the RFC 9728 challenge.
+ */
+export const TELEMETRY_TOOL_AUTH_META = {
+  securitySchemes: [{ type: "oauth2", scopes: [QYL_MCP_SCOPE] }],
+} as const;
 
 /** Re-exported for the callers that learned it here; it lives with `runTool`. */
 export { toolError } from "./request-scope.js";
@@ -64,6 +73,7 @@ export function registerTelemetryTools(server: McpServer): void {
       inputSchema: ListTracesInputSchema,
       outputSchema: compactOutputSchema(ListTracesOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
+      _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: ListTracesInput, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, "list_traces", 1, async (scope) => {
@@ -88,6 +98,7 @@ export function registerTelemetryTools(server: McpServer): void {
       inputSchema: GetTraceInputSchema,
       outputSchema: compactOutputSchema(GetTraceOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
+      _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: GetTraceInput, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, "get_trace", 1, async (scope) => {
@@ -109,6 +120,7 @@ export function registerTelemetryTools(server: McpServer): void {
       inputSchema: ListSessionsInputSchema,
       outputSchema: compactOutputSchema(ListSessionsOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
+      _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: ListSessionsInput, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, "list_sessions", 1, async (scope) => {
@@ -134,6 +146,7 @@ export function registerTelemetryTools(server: McpServer): void {
       inputSchema: SearchLogsInputSchema,
       outputSchema: compactOutputSchema(SearchLogsOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
+      _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: SearchLogsInput, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, "search_logs", 1, async (scope) => {

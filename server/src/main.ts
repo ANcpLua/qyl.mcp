@@ -3,7 +3,6 @@ import {
   createMcpHandler,
   getOAuthProtectedResourceMetadataUrl,
   oauthMetadataResponse,
-  requireBearerAuth,
   type AuthInfo,
   type AuthMetadataOptions,
   type McpHttpHandler,
@@ -18,7 +17,11 @@ import { createServer } from "./server.js";
 import { assertCollectorContractRevision } from "./contract-handshake.js";
 import { dnsRebindingResponse, isLoopbackBindHost } from "./http-security.js";
 import { loadHostedOAuth } from "./oauth.js";
+import { createResourceAuthorization } from "./authorization.js";
+import { readAuthorizationExtensions } from "./auth-extensions.js";
+import { createCloudflareAccessAuth, readAccessConfig } from "./cloudflare-access.js";
 import { closeDefaultNativeExecutionRuntime } from "./native-execution.js";
+import { EventsRuntime, createEventStore } from "./events.js";
 
 export function sanitizedErrorType(error: unknown): string {
   if (!(error instanceof Error)) return "UnknownError";
@@ -113,7 +116,7 @@ function urlHost(host: string): string {
 
 export interface HostedAuth {
   gate: (request: Request) => Promise<AuthInfo | Response>;
-  metadata: AuthMetadataOptions;
+  metadata?: AuthMetadataOptions;
 }
 
 export interface McpFetchOptions {
@@ -122,6 +125,26 @@ export interface McpFetchOptions {
   allowedHosts?: readonly string[] | undefined;
   allowedOrigins?: readonly string[] | undefined;
   auth?: HostedAuth | undefined;
+  /** The OpenAI plugin portal's domain-verification token (OPENAI_APPS_CHALLENGE). */
+  openaiAppsChallenge?: string | undefined;
+}
+
+/**
+ * OpenAI's plugin portal verifies the MCP domain by fetching this path and
+ * expecting its exact token as plain text, nothing else (OpenAI "Submit
+ * plugins", MCP domain verification). Without a configured token the path
+ * does not exist.
+ */
+const OPENAI_APPS_CHALLENGE_PATH = "/.well-known/openai-apps-challenge";
+
+function openaiAppsChallengeResponse(request: Request, token: string | undefined): Response {
+  if (token === undefined || (request.method !== "GET" && request.method !== "HEAD")) {
+    return notFound();
+  }
+  return new Response(request.method === "HEAD" ? null : token, {
+    status: 200,
+    headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+  });
 }
 
 function landingResponse(request: Request, html: string): Response {
@@ -196,9 +219,20 @@ function withCors(request: Request, response: Response): Response {
  */
 export function createFetch(options: McpFetchOptions): (request: Request) => Promise<Response> {
   return async (request: Request): Promise<Response> => {
-    const discovery = options.auth === undefined
+    const metadata = options.auth?.metadata;
+    // RFC 9728 permits both the resource-path and origin forms. Keep the
+    // canonical resource identical in either document and let the SDK handle
+    // GET, HEAD, OPTIONS, 405, and CORS for both routes.
+    const discoveryRequest = metadata !== undefined
+      && new URL(request.url).pathname.replace(/\/$/u, "") === "/.well-known/oauth-protected-resource"
+      ? new Request(getOAuthProtectedResourceMetadataUrl(metadata.resourceServerUrl), {
+        method: request.method,
+        headers: request.headers,
+      })
+      : request;
+    const discovery = metadata === undefined
       ? undefined
-      : oauthMetadataResponse(request, options.auth.metadata);
+      : oauthMetadataResponse(discoveryRequest, metadata);
     if (discovery !== undefined) return discovery;
 
     const rejected = dnsRebindingResponse(
@@ -210,6 +244,9 @@ export function createFetch(options: McpFetchOptions): (request: Request) => Pro
 
     const { pathname } = new URL(request.url);
     if (pathname === "/healthz") return healthResponse(request);
+    if (pathname === OPENAI_APPS_CHALLENGE_PATH) {
+      return openaiAppsChallengeResponse(request, options.openaiAppsChallenge);
+    }
     if (pathname === "/") return landingResponse(request, options.landingPage);
     if (pathname !== "/mcp") return notFound();
 
@@ -226,26 +263,29 @@ export function createFetch(options: McpFetchOptions): (request: Request) => Pro
   };
 }
 
-/**
- * The hosted OAuth gate for this configuration, or `undefined` when there is
- * none to build.
- *
- * MCP_PUBLIC_URL is the entire decision, and it is the only one: the issuer is
- * a pinned constant in oauth.ts rather than an operator input. The `undefined`
- * branch is not a way to serve the public transport unauthenticated —
- * readStreamableHTTPConfig refuses a non-loopback bind without a public URL, so
- * only a loopback process ever reaches it.
+/** Build the selected hosted gate. A public bind still requires MCP_PUBLIC_URL;
+ * Access mode must be explicitly configured with its team and application AUD.
  */
 export async function hostedAuth(
   config: StreamableHTTPServerConfig,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
 ): Promise<HostedAuth | undefined> {
+  const access = readAccessConfig(environment);
+  const extensions = readAuthorizationExtensions(environment);
+  if (extensions.length > 0 && (access || config.publicUrl === undefined)) {
+    throw new Error("MCP_AUTH_EXTENSIONS requires hosted Auth0 resource authorization");
+  }
   const publicUrl = config.publicUrl;
-  if (publicUrl === undefined) return undefined;
+  if (publicUrl === undefined) {
+    if (access) throw new Error("Cloudflare Access requires MCP_PUBLIC_URL");
+    return undefined;
+  }
 
   const resourceServerUrl = new URL("/mcp", publicUrl);
-  const oauth = await loadHostedOAuth(resourceServerUrl);
+  if (access) return createCloudflareAccessAuth({ ...access, resource: resourceServerUrl });
+  const oauth = await loadHostedOAuth(resourceServerUrl, { extensions });
   return {
-    gate: requireBearerAuth({
+    gate: createResourceAuthorization({
       verifier: oauth.verifier,
       requiredScopes: oauth.requiredScopes,
       resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resourceServerUrl),
@@ -296,32 +336,66 @@ export function recordsNativeExecutionEvidence(
   return config.publicUrl === undefined;
 }
 
+/** The portal token from OPENAI_APPS_CHALLENGE, or undefined when unset or blank. */
+export function openaiAppsChallenge(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): string | undefined {
+  const token = environment["OPENAI_APPS_CHALLENGE"]?.trim();
+  return token === undefined || token === "" ? undefined : token;
+}
+
+/**
+ * MCP Events need subscription storage that survives restarts and a caller
+ * identity, so they exist only on an authenticated hosted endpoint whose
+ * operator named a store file (on a persistent volume): MCP_EVENTS_STORE.
+ */
+export async function hostedEvents(
+  auth: HostedAuth | undefined,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): Promise<EventsRuntime | undefined> {
+  const storePath = environment["MCP_EVENTS_STORE"]?.trim();
+  if (storePath === undefined || storePath === "") return undefined;
+  if (auth === undefined) {
+    throw new Error("MCP_EVENTS_STORE requires hosted authorization (MCP_PUBLIC_URL)");
+  }
+  const pollMs = Number(environment["MCP_EVENTS_POLL_MS"] ?? "");
+  const events = new EventsRuntime({
+    store: createEventStore(resolve(storePath)),
+    ...(Number.isInteger(pollMs) && pollMs >= 5_000 ? { pollIntervalMs: pollMs } : {}),
+  });
+  await events.start();
+  return events;
+}
+
 async function createHostedRuntime(
   config: StreamableHTTPServerConfig,
 ): Promise<ServeOptions> {
+  const auth = await hostedAuth(config);
+  const events = await hostedEvents(auth);
   const handler = createHostedHandler(
     () =>
       createServer({
         transport: "streamable_http",
         ...(recordsNativeExecutionEvidence(config) ? {} : { nativeExecution: false }),
+        ...(events === undefined ? {} : { events }),
       }),
     (error) => reportError("Standalone MCP request", error),
   );
 
-  const auth = await hostedAuth(config);
   const options: McpFetchOptions = {
     handler,
     landingPage: await readFile(new URL("./mcp-home.html", import.meta.url), "utf8"),
     ...(config.allowedHosts === undefined ? {} : { allowedHosts: config.allowedHosts }),
     ...(config.allowedOrigins === undefined ? {} : { allowedOrigins: config.allowedOrigins }),
     ...(auth === undefined ? {} : { auth }),
+    ...(openaiAppsChallenge() === undefined ? {} : { openaiAppsChallenge: openaiAppsChallenge() }),
   };
 
   let shuttingDown = false;
   const shutdown = (): void => {
     if (shuttingDown) return;
     shuttingDown = true;
-    void handler.close()
+    void Promise.all([handler.close(), events?.stop()])
       .then(closeDefaultNativeExecutionRuntime)
       .catch((error: unknown) => {
         reportError("Standalone MCP HTTP shutdown cleanup", error);
