@@ -125,7 +125,8 @@ Object.assign(childEnv, {
   QYL_OTLP_PORT: "0",
   QYL_GRPC_PORT: "0",
   QYL_OTLP_AUTH_MODE: "ApiKey",
-  QYL_OTLP_PRIMARY_API_KEY: collectorApiKey,
+  // Keys are bound to projects since ANcpLua/qyl#626.
+  QYL_OTLP_PROJECT_KEYS: JSON.stringify({ [projectScope]: [collectorApiKey] }),
   QYL_DATA_PATH: join(temp, "telemetry-smoke.duckdb"),
 });
 
