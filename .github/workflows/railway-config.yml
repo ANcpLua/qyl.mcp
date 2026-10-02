@@ -31,9 +31,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      # railway.ts imports railway/iac, which .railway/package.json pins. railwayapp/config
+      # installs packages only at the repository root, so the SDK goes where railway.ts
+      # resolves it from before the action runs. bun comes from mise.toml, the toolchain pin.
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          bun-version: "1.4.2"
+          install_args: bun
       - name: Install Railway configuration dependencies
         working-directory: .railway
         run: bun install --frozen-lockfile
@@ -50,6 +53,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
+      # railway.ts imports railway/iac, which .railway/package.json pins. railwayapp/config
+      # installs packages only at the repository root, so the SDK goes where railway.ts
+      # resolves it from before the action runs. bun comes from mise.toml, the toolchain pin.
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          install_args: bun
+      - name: Install Railway configuration dependencies
+        working-directory: .railway
+        run: bun install --frozen-lockfile
       - uses: railwayapp/config@9e17d413dbe219f19d62538d9c06b5dbb5e9abf8 # v1.2.0
         with:
           command: apply
