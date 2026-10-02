@@ -212,7 +212,10 @@ function authMetadata(overrides: Record<string, unknown> = {}): Record<string, u
     registration_endpoint: `${issuer}oidc/register`,
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token"],
-    token_endpoint_auth_methods_supported: ["none"],
+    client_id_metadata_document_supported: true,
+    authorization_response_iss_parameter_supported: true,
+    token_endpoint_auth_methods_supported: ["private_key_jwt", "none"],
+    token_endpoint_auth_signing_alg_values_supported: ["RS256"],
     code_challenge_methods_supported: ["S256"],
     ...overrides,
   };

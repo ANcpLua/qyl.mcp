@@ -9,7 +9,7 @@ npx qyl-mcp-server --stdio    # stdio MCP server
 npx qyl-mcp-server            # Streamable HTTP on 127.0.0.1:3001
 ```
 
-Works with any MCP client. Point it at a collector:
+Use a client that speaks MCP revision `2026-07-28`. Point it at a collector:
 
 ```bash
 export QYL_COLLECTOR_URL=http://127.0.0.1:5100
@@ -29,6 +29,33 @@ Streamable HTTP through `createMcpHandler` and stdio through `serveStdio`, each
 with `legacy: "reject"`.
 The HTTP server serves a product page at `/`; `/mcp` is the only protocol
 endpoint.
+
+## Hosted authentication
+
+The hosted Auth0 profile requires CIMD and DCR discovery, Authorization Code
+with PKCE S256, both `private_key_jwt` and `none` for ChatGPT CIMD compatibility,
+`none` for Claude CIMD, and issuer identification. Auth0 owns registration and token
+issuance; this server validates resource-bound RFC 9068 access tokens on every
+MCP request. It rejects malformed/query credentials, invalid tokens and
+insufficient scopes with distinct 400/401/403 responses.
+
+Optional resource-server integrations are selected explicitly:
+
+```sh
+MCP_AUTH_EXTENSIONS=enterprise-managed-authorization@1.0.0,oauth-client-credentials@1.0.0
+```
+
+Enterprise-managed authorization is stable upstream; client credentials is a
+draft extension. Both preserve the core token verifier and require matching
+Auth0 capabilities and separately provisioned client grants. Integration versions
+are independent of the MCP wire version. Embedders can use the exported
+`qyl-mcp-server/auth` composition API for additional declarative modules and
+explicit scope hierarchies.
+
+See the [deployment and authentication guide](https://github.com/ANcpLua/qyl.mcp#authentication)
+for Auth0 configuration, extension responsibilities, and verification. Auth0
+requires Enterprise for `private_key_jwt`. Neither a provider capability flag nor
+an enabled module proves a client has been provisioned.
 
 ## Tools
 
@@ -95,6 +122,19 @@ The HTTP entry is a web-standard fetch handler served by its default export,
 so serving it requires Bun.
 
 ## Release notes
+
+### 7.1.0
+
+- The hosted server can sit behind Cloudflare Access Managed OAuth:
+  `MCP_AUTH_PROVIDER=cloudflare-access` with `MCP_ACCESS_TEAM_DOMAIN` and
+  `MCP_ACCESS_AUD`. Access performs the client OAuth flow and owns discovery;
+  the origin serves `/mcp` only for a `Cf-Access-Jwt-Assertion` it has verified
+  against the team's signing keys for RS256, issuer, application audience,
+  expiry and subject, so a direct request to the origin without one is
+  rejected. The default stays the pinned Auth0 issuer; unknown modes, partial
+  Access settings and non-Cloudflare team URLs fail closed.
+- The assertion header is redacted from diagnostic objects and text, like the
+  other credentials.
 
 ### 7.0.0
 

@@ -25,7 +25,7 @@ import {
 import { fetchSessions, fetchSessionTraces } from "./data.js";
 import { runTool } from "./request-scope.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
-import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS } from "./tools.js";
+import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, TELEMETRY_TOOL_AUTH_META } from "./tools.js";
 import type { Mode, QylSession, QylSpan, QylTrace } from "./wire.js";
 
 /** Resource service-name prefix that marks telemetry as CI-emitted. */
@@ -121,6 +121,7 @@ export function registerCiTools(server: McpServer): void {
       inputSchema: CiLogInputSchema,
       outputSchema: compactOutputSchema(CiLogOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
+      _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: CiLogInput, ctx: ServerContext): Promise<CallToolResult> =>
       // A run breakdown is two units a client can watch: the collector round
