@@ -38,13 +38,13 @@ forbidMatch(
 requireMatch(
   "deployment README",
   deploymentGuidance,
-  /Self-registering clients remain read-only by default/u,
-  "must state the effective default client posture",
+  /grant it only to intended clients and users/u,
+  "must require explicit client and user access",
 );
 requireMatch(
   "deployment README",
   deploymentGuidance,
-  /Dynamic Client Registration is open/u,
+  /DCR endpoint is open to registration when enabled/u,
   "must disclose that Dynamic Client Registration is open",
 );
 requireMatch(
@@ -65,6 +65,53 @@ requireMatch(
   /accepts only the qyl production Auth0 issuer/u,
   "must state that arbitrary OAuth issuers are rejected",
 );
+requireMatch(
+  "deployment README",
+  deploymentGuidance,
+  /MCP_AUTH_PROVIDER=cloudflare-access/u,
+  "must document the explicit Cloudflare Access mode",
+);
+requireMatch(
+  "deployment README",
+  deploymentGuidance,
+  /Cf-Access-Jwt-Assertion.*issuer, application audience, expiry and subject/u,
+  "must state the Access assertion validation requirements",
+);
+requireMatch(
+  "deployment README", deploymentGuidance,
+  /CIMD or DCR \+ OAuth 2\.1 Authorization Code with PKCE S256 \+ issuer identification/u,
+  "must state both client registration paths",
+);
+requireMatch(
+  "deployment README", deploymentGuidance,
+  /Enable \*\*Dynamic Client Registration\*\*/u,
+  "must provide the DCR activation setting",
+);
+requireMatch(
+  "deployment README", deploymentGuidance,
+  /keep third-party API default permissions empty/u,
+  "must not default-grant qyl:read to every dynamically registered client",
+);
+requireMatch(
+  "deployment README", deploymentGuidance,
+  /Claude's CIMD is a public client using `none`/u,
+  "must distinguish Claude's public client from ChatGPT's signed client",
+);
+requireMatch(
+  "deployment README", deploymentGuidance,
+  /\.well-known\/oauth-protected-resource` describe the same `\/mcp` resource/u,
+  "must identify the root protected-resource metadata alias",
+);
+requireMatch(
+  "deployment README", deploymentGuidance,
+  /MCP_AUTH_EXTENSIONS=enterprise-managed-authorization@1\.0\.0,oauth-client-credentials@1\.0\.0/u,
+  "must document exact opt-in extension versions",
+);
+requireMatch(
+  "deployment README", deploymentGuidance,
+  /Draft; explicitly opt in/u,
+  "must identify the client-credentials extension as draft",
+);
 if (failures.length > 0) {
   throw new Error(
     `verify:deployment-guidance failed (${failures.length} problem(s)):\n\n`
@@ -75,7 +122,7 @@ if (failures.length > 0) {
 
 console.log(
   "verify:deployment-guidance: built landing page and deployment README preserve "
-    + "the served protocol revision, pinned issuer guidance, and the open-DCR warning.",
+    + "the served protocol revision, pinned issuer, CIMD/DCR profiles, optional extensions, and DCR warning.",
 );
 
 async function readRequiredBuildArtifact(url, label) {

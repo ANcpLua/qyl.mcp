@@ -12,6 +12,7 @@ import {
 import { connectModernTestClient } from "./modern-test-client.test-helper.js";
 import { createServer, registerViewerResource } from "./server.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS } from "./tools.js";
+import { QYL_MCP_SCOPE } from "./oauth.js";
 
 test("qyl tools publish read-only safety annotations", async () => {
   const connection = await connectModernTestClient(
@@ -39,6 +40,9 @@ test("qyl tools publish read-only safety annotations", async () => {
     );
     for (const tool of tools) {
       assert.deepEqual(tool.annotations, READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, tool.name);
+      assert.deepEqual(tool._meta?.securitySchemes, [
+        { type: "oauth2", scopes: [QYL_MCP_SCOPE] },
+      ], tool.name);
     }
   } finally {
     await connection.close();

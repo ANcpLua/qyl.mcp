@@ -4,7 +4,6 @@ import {
   type JWTPayload,
   type JWTVerifyGetKey,
 } from "jose";
-import { OAuthMetadataSchema } from "@modelcontextprotocol/core";
 import {
   OAuthError,
   OAuthErrorCode,
@@ -13,7 +12,16 @@ import {
   type OAuthTokenVerifier,
 } from "@modelcontextprotocol/server";
 
-const DISCOVERY_TIMEOUT_MS = 10_000;
+import {
+  fetchAuthorizationServerMetadata,
+  secureMetadataUrl,
+  validateAuthorizationServerCapabilities,
+} from "./oauth-metadata.js";
+import {
+  validateAuthorizationExtensions,
+  type AuthorizationExtension,
+} from "./auth-extensions.js";
+
 export const QYL_MCP_ISSUER = "https://qyl-eu.eu.auth0.com/";
 export const QYL_MCP_RESOURCE = "https://mcp.qyl.at/mcp";
 export const QYL_MCP_SCOPE = "qyl:read";
@@ -23,44 +31,7 @@ export interface HostedOAuth {
   readonly scopesSupported: string[];
   readonly oauthMetadata: OAuthMetadata;
   readonly verifier: OAuthTokenVerifier;
-}
-
-async function fetchAuthorizationServerMetadata(issuer: URL): Promise<OAuthMetadata> {
-  const base = issuer.pathname.endsWith("/") ? issuer : new URL(`${issuer.pathname}/`, issuer);
-  const candidates = [
-    new URL(".well-known/oauth-authorization-server", base),
-    new URL(".well-known/openid-configuration", base),
-  ];
-  const failures: string[] = [];
-
-  for (const candidate of candidates) {
-    try {
-      const response = await fetch(candidate, {
-        headers: { accept: "application/json" },
-        signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
-      });
-      if (!response.ok) {
-        failures.push(`${candidate.href}: HTTP ${response.status}`);
-        continue;
-      }
-      const parsed = OAuthMetadataSchema.safeParse(await response.json());
-      if (!parsed.success) {
-        failures.push(`${candidate.href}: invalid metadata`);
-        continue;
-      }
-      if (parsed.data.issuer !== issuer.href) {
-        failures.push(`${candidate.href}: issuer mismatch`);
-        continue;
-      }
-      return parsed.data;
-    } catch (cause) {
-      failures.push(`${candidate.href}: ${cause instanceof Error ? cause.name : "request failed"}`);
-    }
-  }
-
-  throw new Error(
-    `Unable to load Authorization Server metadata from ${issuer.href} (${failures.join("; ")})`,
-  );
+  readonly extensions: readonly AuthorizationExtension[];
 }
 
 function invalidToken(): OAuthError {
@@ -83,6 +54,7 @@ async function verifyJwt(
       audience,
       algorithms: ["RS256"],
       typ: "at+jwt",
+      requiredClaims: ["iss", "sub", "aud", "exp", "iat", "jti", "client_id"],
     });
     return payload;
   } catch {
@@ -109,6 +81,10 @@ export function createJwtTokenVerifier(params: {
         || typeof payload.client_id !== "string"
         || payload.client_id.length === 0
         || typeof payload.exp !== "number"
+        || typeof payload.jti !== "string" || payload.jti.length === 0
+        || typeof payload.iat !== "number" || payload.iat > Math.floor(Date.now() / 1_000)
+        || (payload.scope !== undefined && (typeof payload.scope !== "string"
+          || !/^[\x21\x23-\x5B\x5D-\x7E]+(?: [\x21\x23-\x5B\x5D-\x7E]+)*$/u.test(payload.scope)))
       ) {
         throw invalidToken();
       }
@@ -126,45 +102,24 @@ export function createJwtTokenVerifier(params: {
   };
 }
 
-/**
- * Build the hosted resource-server posture against the pinned issuer.
- *
- * The issuer is a constant, not an operator input. It was once read from
- * `MCP_OAUTH_ISSUER`, which accepted exactly one value — this constant — and
- * threw the same class of error whether it was absent or wrong. That is a
- * variable that decides nothing: it only asked an operator to retype a string
- * the program already holds, and every deployment that got it wrong failed at
- * startup for a reason unrelated to its own configuration.
- *
- * The fail-closed property it appeared to carry lives elsewhere and is
- * unchanged: this function runs only from main()'s `hostedAuth`, which the
- * hosted runtime builds only when `MCP_PUBLIC_URL` is configured — and a
- * non-loopback bind without that URL is refused outright. There is therefore no
- * configuration that serves the public transport without this gate, and no
- * value an operator can type to weaken it.
+/** Auth0 remains the authorization server; every optional grant ends here as
+ * an audience-bound access token, never an ID token, ID-JAG or client assertion.
  */
-export async function loadHostedOAuth(resourceServerUrl: URL): Promise<HostedOAuth> {
+export async function loadHostedOAuth(
+  resourceServerUrl: URL,
+  options: { extensions?: readonly AuthorizationExtension[] } = {},
+): Promise<HostedOAuth> {
   const issuer = new URL(QYL_MCP_ISSUER);
   const oauthMetadata = await fetchAuthorizationServerMetadata(issuer);
-  const jwksUri = oauthMetadata.jwks_uri;
-  if (typeof jwksUri !== "string" || jwksUri.length === 0) {
-    throw new Error(`Authorization Server ${issuer.href} does not advertise a jwks_uri`);
-  }
-
-  let jwksUrl: URL;
-  try {
-    jwksUrl = new URL(jwksUri);
-  } catch {
-    throw new Error(`Authorization Server ${issuer.href} advertises an invalid jwks_uri`);
-  }
-  if (jwksUrl.protocol !== "https:") {
-    throw new Error(`Authorization Server ${issuer.href} must advertise an HTTPS jwks_uri`);
-  }
-
+  validateAuthorizationServerCapabilities(oauthMetadata);
+  const extensions = options.extensions ?? [];
+  validateAuthorizationExtensions(oauthMetadata, extensions);
+  const jwksUrl = secureMetadataUrl(oauthMetadata.jwks_uri, "jwks_uri");
   return {
     requiredScopes: [QYL_MCP_SCOPE],
     scopesSupported: [QYL_MCP_SCOPE],
     oauthMetadata,
+    extensions,
     verifier: createJwtTokenVerifier({
       issuer: oauthMetadata.issuer,
       resource: resourceServerUrl,

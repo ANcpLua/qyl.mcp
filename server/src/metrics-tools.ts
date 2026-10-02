@@ -38,7 +38,7 @@ import {
 } from "./summaries.js";
 import { runTool } from "./request-scope.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
-import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS } from "./tools.js";
+import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, TELEMETRY_TOOL_AUTH_META } from "./tools.js";
 
 const METRICS_PATH = "/api/v1/metrics";
 const SERIES_PATH = "/api/v1/metrics/{metric_name}/series";
@@ -62,6 +62,7 @@ export function registerMetricsTools(server: McpServer): void {
       inputSchema: operationInputSchema<ListMetricsArgs>(METRICS_PATH),
       outputSchema: compactOutputSchema(MetricsListResponseSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
+      _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: ListMetricsArgs, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, "list_metrics", 1, async (scope) => {
@@ -87,6 +88,7 @@ export function registerMetricsTools(server: McpServer): void {
       inputSchema: operationInputSchema<MetricSeriesArgs>(SERIES_PATH),
       outputSchema: compactOutputSchema(MetricSeriesListResponseSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
+      _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: MetricSeriesArgs, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, "get_metric_series", 1, async (scope) => {
@@ -113,6 +115,7 @@ export function registerMetricsTools(server: McpServer): void {
       inputSchema: operationInputSchema<QueryMetricArgs>(QUERY_PATH),
       outputSchema: compactOutputSchema(MetricQueryResultSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
+      _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: QueryMetricArgs, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, "query_metric", 1, async (scope) => {
