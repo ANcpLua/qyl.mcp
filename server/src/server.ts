@@ -55,10 +55,12 @@ import {
 } from "./summaries.js";
 import {
   READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
+  TELEMETRY_TOOL_AUTH_META,
   registerTelemetryTools,
 } from "./tools.js";
 import { registerCiTools } from "./ci.js";
 import { registerMetricsTools } from "./metrics-tools.js";
+import type { EventsRuntime } from "./events.js";
 import { runTool } from "./request-scope.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 import type { McpTelemetryTransport } from "./mcp-semconv.js";
@@ -84,10 +86,28 @@ const viewerHtmlByFile = new Map<string, string>();
 const PUBLIC_CATALOG_CACHE = { ttlMs: 300_000, cacheScope: "public" } as const;
 const PUBLIC_APP_CACHE = { ttlMs: 86_400_000, cacheScope: "public" } as const;
 
-/** MCP Apps viewers declare an empty CSP: the bundles are single-file and fetch nothing. */
-const SELF_CONTAINED_VIEWER_CSP = {
+/**
+ * MCP Apps viewers declare an empty CSP: the bundles are single-file and fetch
+ * nothing. `openai/ui` lists the display modes ChatGPT may render them in before
+ * `ui/initialize`; ChatGPT has no `pip` (OpenAI MCP extensions, "Display Modes").
+ */
+const SELF_CONTAINED_VIEWER_META = {
   ui: { csp: { connectDomains: [], resourceDomains: [] } },
+  "openai/ui": { availableDisplayModes: ["inline", "fullscreen"] },
 } as const;
+
+/**
+ * Monochrome span-waterfall glyph for ChatGPT's sidebar and thread tabs: a
+ * 20x20 SVG on `currentColor` with 1.33px strokes, as the OpenAI MCP
+ * extensions icon guidelines ask of every entry-point tool.
+ */
+const ENTRYPOINT_ICONS = [
+  {
+    src: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDIwIDIwIiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIxLjMzIiBzdHJva2UtbGluZWNhcD0icm91bmQiPjxwYXRoIGQ9Ik0zIDVoOU02IDEwaDhNOSAxNWg4Ii8+PC9zdmc+",
+    mimeType: "image/svg+xml",
+    sizes: ["20x20"],
+  },
+];
 
 /**
  * Register one vite-built single-file viewer as a fixed-URI resource.
@@ -130,7 +150,7 @@ export function registerViewerResource(
             uri,
             mimeType: RESOURCE_MIME_TYPE,
             text: html,
-            _meta: SELF_CONTAINED_VIEWER_CSP,
+            _meta: SELF_CONTAINED_VIEWER_META,
           },
         ],
       };
@@ -143,6 +163,8 @@ export interface CreateServerOptions {
   transport?: McpTelemetryTransport;
   /** Test/embedding override. Native evidence is automatic unless explicitly disabled. */
   nativeExecution?: NativeExecutionRuntime | false;
+  /** MCP Events (`events/*`, webhook delivery); only a hosted process with a store has one. */
+  events?: EventsRuntime;
 }
 
 /** Creates a server with automatic native execution evidence for every tool. */
@@ -182,7 +204,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
   server.registerTool(
     "display_traces",
     {
-      title: "Display Traces",
+      title: "Trace Explorer",
       description:
         "Show qyl traces in the interactive trace explorer with a span waterfall, " +
         "detail panel, and correlated logs. Pass a trace_id to open one trace, a " +
@@ -192,7 +214,14 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       inputSchema: DisplayTracesInputSchema,
       outputSchema: compactOutputSchema(DisplayTracesOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
-      _meta: { ui: { resourceUri: RESOURCE_URI } },
+      icons: ENTRYPOINT_ICONS,
+      // ChatGPT opens the explorer from the sidebar (global) and as a thread tab,
+      // calling this tool with `{}`: every input is optional, so that is recent traces.
+      _meta: {
+        ...TELEMETRY_TOOL_AUTH_META,
+        ui: { resourceUri: RESOURCE_URI },
+        "openai/ui": { entrypoints: [{ type: "global" }, { type: "thread" }] },
+      },
     },
     (
       { trace_id, session_id, limit }: DisplayTracesInput,
@@ -241,7 +270,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
   server.registerTool(
     "display_mcp_dashboard",
     {
-      title: "Display MCP Dashboard",
+      title: "MCP Dashboard",
       description:
         "Show an aggregate dashboard of MCP traffic (spans carrying an " +
         "`mcp.method.name` attribute): request/error timeline, per-server and " +
@@ -251,7 +280,13 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       inputSchema: DisplayMcpDashboardInputSchema,
       outputSchema: compactOutputSchema(DisplayMcpDashboardOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
-      _meta: { ui: { resourceUri: DASHBOARD_RESOURCE_URI } },
+      icons: ENTRYPOINT_ICONS,
+      // Sidebar entry point; `{}` means the default 24-hour window.
+      _meta: {
+        ...TELEMETRY_TOOL_AUTH_META,
+        ui: { resourceUri: DASHBOARD_RESOURCE_URI },
+        "openai/ui": { entrypoints: [{ type: "global" }] },
+      },
     },
     ({ hours }: DisplayMcpDashboardInput, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, "display_mcp_dashboard", 1, async (scope) => {
@@ -284,7 +319,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       // contract at compile time, and contracts.test.ts still parses these bodies
       // against FetchTelemetryOutputSchema, so the shape stays pinned to the contract.
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ...TELEMETRY_TOOL_AUTH_META, ui: { visibility: ["app"] } },
     },
     (
       { view, trace_id, service_name, severity_min, query, limit, hours }: FetchTelemetryInput,
@@ -339,6 +374,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
 
   registerViewerResource(server, RESOURCE_URI, "mcp-app.html");
   registerViewerResource(server, DASHBOARD_RESOURCE_URI, "mcp-dashboard.html");
+  options.events?.register(server);
 
   if (options.nativeExecution !== false) assertNativeExecutionRecordingArmed(server);
 

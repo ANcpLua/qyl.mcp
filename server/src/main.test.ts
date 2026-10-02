@@ -7,7 +7,6 @@ import {
   OAuthError,
   OAuthErrorCode,
   ProtocolErrorCode,
-  requireBearerAuth,
   type AuthInfo,
   type McpHttpHandler,
   type OAuthMetadata,
@@ -17,10 +16,13 @@ import { z } from "zod";
 import {
   createFetch,
   createHostedHandler,
+  hostedEvents,
+  openaiAppsChallenge,
   readStreamableHTTPConfig,
   recordsNativeExecutionEvidence,
   sanitizedErrorType,
 } from "./main.js";
+import { createResourceAuthorization } from "./authorization.js";
 import { QYL_MCP_RESOURCE, QYL_MCP_SCOPE } from "./oauth.js";
 
 const resourceServerUrl = new URL(QYL_MCP_RESOURCE);
@@ -47,7 +49,7 @@ interface Endpoint {
 // this function, not `handler.fetch` — going straight to the handler would
 // skip discovery, the rebinding guards, and the gate, which is most of what
 // the serving layer is.
-function hostedEndpoint(options: { authenticated?: boolean } = {}): Endpoint {
+function hostedEndpoint(options: { authenticated?: boolean; openaiAppsChallenge?: string } = {}): Endpoint {
   const handler = createHostedHandler(() => {
     const server = new McpServer({ name: "qyl-serving-test", version: "1.0.0" });
     server.registerTool(
@@ -70,9 +72,10 @@ function hostedEndpoint(options: { authenticated?: boolean } = {}): Endpoint {
       landingPage,
       allowedHosts: [resourceServerUrl.hostname],
       allowedOrigins: [resourceServerUrl.hostname],
+      ...(options.openaiAppsChallenge === undefined ? {} : { openaiAppsChallenge: options.openaiAppsChallenge }),
       ...(options.authenticated === false ? {} : {
         auth: {
-          gate: requireBearerAuth({
+          gate: createResourceAuthorization({
             verifier: testVerifier(),
             requiredScopes: [QYL_MCP_SCOPE],
             resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resourceServerUrl),
@@ -119,6 +122,26 @@ test("the public root serves the qyl MCP landing page", async (context) => {
   assert.match(await response.text(), /<main>ready<\/main>/u);
   assert.equal((await endpoint.fetch(hosted("/", { method: "POST" }))).status, 404);
   assert.equal((await endpoint.fetch(hosted("/healthz"))).status, 200);
+});
+
+test("the OpenAI domain challenge answers the configured token as plain text, before the gate", async (context) => {
+  const withToken = hostedEndpoint({ openaiAppsChallenge: "oai-token-123" });
+  const without = hostedEndpoint();
+  context.after(() => Promise.all([withToken.handler.close(), without.handler.close()]));
+
+  const response = await withToken.fetch(hosted("/.well-known/openai-apps-challenge"));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "text/plain; charset=utf-8");
+  assert.equal(await response.text(), "oai-token-123");
+  assert.equal((await withToken.fetch(hosted("/.well-known/openai-apps-challenge", { method: "POST" }))).status, 404);
+  assert.equal((await without.fetch(hosted("/.well-known/openai-apps-challenge"))).status, 404);
+  assert.equal(openaiAppsChallenge({ OPENAI_APPS_CHALLENGE: "  " }), undefined);
+  assert.equal(openaiAppsChallenge({ OPENAI_APPS_CHALLENGE: " tok " }), "tok");
+});
+
+test("MCP Events are off without a store and refuse to run unauthenticated", async () => {
+  assert.equal(await hostedEvents(undefined, {}), undefined);
+  await assert.rejects(hostedEvents(undefined, { MCP_EVENTS_STORE: "/tmp/x.json" }), /requires hosted authorization/u);
 });
 
 test("sanitized errors expose only a safe error class", () => {
@@ -220,6 +243,15 @@ test("the discovery chain is closed for a client that arrives with nothing", asy
     scopes_supported: [QYL_MCP_SCOPE],
   });
 
+  const originMetadata = await endpoint.fetch(hosted("/.well-known/oauth-protected-resource"));
+  assert.equal(originMetadata.status, 200);
+  assert.equal(originMetadata.headers.get("access-control-allow-origin"), "*");
+  assert.deepEqual(await originMetadata.json(), {
+    resource: resourceServerUrl.href,
+    authorization_servers: [oauthMetadata.issuer],
+    scopes_supported: [QYL_MCP_SCOPE],
+  });
+
   // Clients that probe the origin directly get the AS mirror rather than a 404.
   const mirror = await endpoint.fetch(hosted("/.well-known/oauth-authorization-server"));
   assert.equal(mirror.status, 200);
@@ -235,6 +267,11 @@ test("the discovery chain is closed for a client that arrives with nothing", asy
   }));
   assert.equal(rejected.status, 405);
   assert.equal(rejected.headers.get("allow"), "GET, HEAD, OPTIONS");
+  const rootRejected = await endpoint.fetch(hosted("/.well-known/oauth-protected-resource", {
+    method: "POST",
+  }));
+  assert.equal(rootRejected.status, 405);
+  assert.equal(rootRejected.headers.get("allow"), "GET, HEAD, OPTIONS");
 });
 
 test("a browser client can read the challenge and pass its preflight", async (context) => {
@@ -291,7 +328,7 @@ test("a modern client reaches the tools through the whole pipeline", async (cont
   assert.equal(client.getProtocolEra(), "modern");
   assert.deepEqual((await client.listTools()).tools.map((tool) => tool.name), ["auth_context"]);
   const result = await client.callTool({ name: "auth_context", arguments: {} });
-  assert.deepEqual(result.content, [{ type: "text", text: "strict-dcr-client" }]);
+  assert.deepEqual(result.content, [{ type: "text", text: "https://client.example/client.json" }]);
 });
 
 test("a 2025-era client is refused after the gate with the supported revision", async (context) => {
@@ -341,7 +378,7 @@ function testVerifier(): OAuthTokenVerifier {
       }
       return {
         token,
-        clientId: "strict-dcr-client",
+        clientId: "https://client.example/client.json",
         scopes: [QYL_MCP_SCOPE],
         expiresAt: Math.floor(Date.now() / 1_000) + 300,
         resource: resourceServerUrl,

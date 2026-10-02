@@ -6,11 +6,11 @@ import {
   McpServer,
   OAuthError,
   OAuthErrorCode,
-  requireBearerAuth,
   type AuthInfo,
   type OAuthTokenVerifier,
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { createResourceAuthorization } from "./authorization.js";
 import { QYL_MCP_RESOURCE, QYL_MCP_SCOPE } from "./oauth.js";
 
 const resourceMetadataUrl =
@@ -86,14 +86,14 @@ test("verified SDK AuthInfo reaches the modern tool request context", async (con
   await client.connect(transport);
   await client.callTool({ name: "auth_context", arguments: {} });
 
-  assert.equal(observed?.clientId, "strict-dcr-client");
+  assert.equal(observed?.clientId, "https://client.example/client.json");
   assert.deepEqual(observed?.scopes, [QYL_MCP_SCOPE]);
   assert.equal(observed?.resource?.href, QYL_MCP_RESOURCE);
   assert.equal(typeof observed?.expiresAt, "number");
 });
 
 function bearerGate(): (request: Request) => Promise<AuthInfo | Response> {
-  return requireBearerAuth({
+  return createResourceAuthorization({
     verifier: testVerifier(),
     requiredScopes: [QYL_MCP_SCOPE],
     resourceMetadataUrl,
@@ -112,7 +112,7 @@ function testVerifier(): OAuthTokenVerifier {
       }
       return {
         token,
-        clientId: "strict-dcr-client",
+        clientId: "https://client.example/client.json",
         scopes: token === "missing-scope" ? [] : [QYL_MCP_SCOPE],
         expiresAt: Math.floor(Date.now() / 1_000) + 300,
         resource: new URL(QYL_MCP_RESOURCE),
