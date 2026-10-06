@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import type { Server as NodeHttpServer } from "node:http";
-import { createMcpHandler } from "@modelcontextprotocol/server";
+import { createMcpHandler, legacyStatelessFallback } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import { createMcpExpressApp } from "@modelcontextprotocol/express";
 import type { NextFunction, Request, Response } from "express";
@@ -11,6 +11,8 @@ export interface FixtureHttpOptions {
   bearerToken: string;
   host?: string;
   port?: number;
+  /** Exercise SDK client negotiation against a server that only serves 2025. */
+  legacyOnly?: boolean;
 }
 
 export interface RunningFixtureHttpServer {
@@ -56,11 +58,10 @@ export async function startFixtureHttpServer(
   }
 
   const app = createMcpExpressApp({ host });
-  const modernHandler = createMcpHandler(
-    () => createFixtureMcpServer().server,
-    { legacy: "reject" },
-  );
-  const nodeHandler = toNodeHandler(modernHandler);
+  const handler = createMcpHandler(() => createFixtureMcpServer().server);
+  const nodeHandler = toNodeHandler(options.legacyOnly
+    ? { fetch: legacyStatelessFallback(() => createFixtureMcpServer().server) }
+    : handler);
   const requests: FixtureHttpRequest[] = [];
 
   app.use((request: Request, response: Response, next: NextFunction) => {
@@ -99,7 +100,7 @@ export async function startFixtureHttpServer(
       if (closed) return;
       closed = true;
 
-      await modernHandler.close();
+      await handler.close();
       await new Promise<void>((resolveClose, rejectClose) => {
         httpServer.close((error) => (error === undefined ? resolveClose() : rejectClose(error)));
       });

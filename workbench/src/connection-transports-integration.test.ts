@@ -252,3 +252,27 @@ function toolCallRequest(request: FixtureHttpRequest): ToolCallRequest | undefin
         ...(typeof meta.baggage === "string" ? { baggage: meta.baggage } : {}),
     };
 }
+
+test("automatic negotiation connects to an authenticated 2025-only HTTP server", { timeout: 15_000 }, async () => {
+    const fixture = await startFixtureHttpServer({ bearerToken: "legacy-fixture", legacyOnly: true });
+    const manager = new ConnectionManager({ environment: { FIXTURE_TOKEN: "legacy-fixture" } });
+    manager.register({
+        id: "legacy-http", kind: "streamable-http", endpoint: fixture.streamableUrl.href,
+        headers: [{ header: "Authorization", scheme: "bearer", environmentVariable: "FIXTURE_TOKEN" }],
+    });
+    try {
+        const connected = await manager.connect("legacy-http");
+        assert.equal(connected.lifecycle, "connected");
+        assert.match(connected.initialization!.protocolVersion!, /^2025-/u);
+        assert.equal(connected.initialization?.discovery.tools.length, 6);
+        const result = await manager.getClient("legacy-http").callTool({
+            name: "fixture.safe_lookup", arguments: { query: "legacy" },
+        });
+        assert.deepEqual(result.structuredContent, {
+            query: "legacy", matches: ["fixture:legacy", "fixture:deterministic"],
+        });
+    } finally {
+        await manager.disconnect("legacy-http");
+        await fixture.close();
+    }
+});

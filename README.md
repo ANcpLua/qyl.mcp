@@ -56,7 +56,7 @@ are deployed.
 | ChatGPT web | Enable Developer mode in Settings → Security and login; in ChatGPT Plugins add an MCP connection to `https://mcp.qyl.at/mcp`, select OAuth, and include `qyl:read` in Base scopes. | CIMD at `https://chatgpt.com/oauth/client.json`, with redirect `https://chatgpt.com/connector_platform_oauth_redirect`, when the connection page shows stable callbacks. The document supports `none` and `private_key_jwt` (currently preferred). DCR is also supported when explicitly selected in the connection form. |
 | claude.ai | Customize → Connectors → Add custom connector; enter `https://mcp.qyl.at/mcp` and leave optional client ID and secret empty. | CIMD at `https://claude.ai/oauth/mcp-oauth-client-metadata`, a public client (`none`) with redirect `https://claude.ai/api/mcp/auth_callback`; DCR is the fallback. |
 | Claude Code | `claude mcp add --transport http qyl https://mcp.qyl.at/mcp`; then open `/mcp` in Claude Code to authorize. | CIMD at `https://claude.ai/oauth/claude-code-client-metadata`, a public client (`none`) with port-independent `http://localhost/callback` and `http://127.0.0.1/callback` redirects; DCR is the fallback. |
-| Codex CLI | `codex mcp add qyl --url https://mcp.qyl.at/mcp --oauth-resource https://mcp.qyl.at/mcp`; `codex mcp login qyl --enable mcp_2026_07_28 --scopes qyl:read`; start Codex with `codex --enable mcp_2026_07_28`. | CIMD or DCR as selected by the client and Auth0; `--oauth-client-registration cimd` or `dcr` can pin a test path. The installed CLI requests `2025-06-18` without that feature, and this server rejects it. |
+| Codex CLI | `codex mcp add qyl --url https://mcp.qyl.at/mcp --oauth-resource https://mcp.qyl.at/mcp`; `codex mcp login qyl --enable mcp_2026_07_28 --scopes qyl:read`; start Codex with `codex --enable mcp_2026_07_28`. | CIMD or DCR as selected by the client and Auth0; `--oauth-client-registration cimd` or `dcr` can pin a test path. Ordinary tools also support the CLI's 2025-era protocol; the feature flag selects the modern path for verification. |
 | MCP Inspector | Select Streamable HTTP, enter `https://mcp.qyl.at/mcp`, set protocol era to **modern**, and use Open Auth Settings → Quick OAuth Flow. For CLI checks use `npx @modelcontextprotocol/inspector@2.8.0 --cli https://mcp.qyl.at/mcp --transport http --protocol-era modern --method tools/list`. | CIMD when supported by the Inspector release, otherwise DCR. |
 
 Local `QYL_DEMO=1` v2 checks on 30 September 2026: Claude Code 2.1.285,
@@ -68,8 +68,10 @@ OAuth. ChatGPT web, claude.ai, and each client's production OAuth path still
 need a deployed build and Auth0 client grants before their results can be
 recorded here.
 
-This server accepts only MCP revision `2026-07-28`. A client that opens with the
-2025-era `initialize` method receives `-32022`; there is no v1 mode.
+The TypeScript SDK v2 serves MCP revision `2026-07-28` and its supported
+2025-era protocols through one tool factory. HTTP uses the SDK's stateless
+compatibility default; stdio selects the era on connection. Events require
+`2026-07-28`. No SDK v1 dependency is used.
 
 ## Run the server yourself
 
@@ -77,7 +79,7 @@ This server accepts only MCP revision `2026-07-28`. A client that opens with the
 npx qyl-mcp-server --stdio
 ```
 
-Without `--stdio` it serves Streamable HTTP (revision `2026-07-28` only) on
+Without `--stdio` it serves Streamable HTTP on
 `http://127.0.0.1:3001/mcp`; set `PORT` to change it. The local default binds to
 loopback only and accepts local or absent browser origins.
 
@@ -142,6 +144,21 @@ and the draft
   Delivery starts from the first collector poll after subscribing (every 30 s,
   `MCP_EVENTS_POLL_MS` to change it) and carries `cursor: null`: there is no
   replay, so traces that arrive while the server is down are not delivered.
+- Configure `MCP_EVENTS_AUTH0_CLIENT_ID` and `MCP_EVENTS_AUTH0_CLIENT_SECRET`
+  through Railway's secret variables for a dedicated Auth0 machine application
+  with Management API `read:users`, `read:clients`, `read:client_grants` and
+  `read:grants`. CIMD URLs are resolved to Auth0 application IDs before checking
+  grants; only the two identity fields are requested from the clients API.
+  Events check the current account status, explicit application grant,
+  `qyl:read` user permission and consent. Enable RBAC for this API and assign
+  that permission to the intended users. The check caches results for at most
+  five seconds; it runs during polling and before each delivery attempt.
+  A revoked grant removes the subscription. An Auth0 outage suspends delivery.
+  Subscriber access/refresh tokens are never stored.
+- Unsubscribe cancels outstanding callback requests and retries. Expired
+  subscription records and old signing keys are removed on startup and polling.
+  The Events checker supports the Auth0 provider; Cloudflare Access deployments
+  can serve ordinary tools with Events disabled.
 
 ## The workbench
 
@@ -173,9 +190,9 @@ and persistent `Cookie` headers are rejected.
 Starting a stdio server launches code with your permissions, so review the exact
 executable, arguments, working directory, and environment references first.
 
-**Protocol.** The server speaks revision `2026-07-28` only. A 2025-era host is
-refused with `-32022` naming that revision; a host that opens with
-`server/discover` connects. There is no fallback and no setting.
+**Protocol.** The workbench uses SDK v2 automatic negotiation with external
+servers. Its built-in servers accept modern and 2025-era tool clients through
+the SDK serving defaults. Events require `2026-07-28`.
 
 **Safety.** Tool annotations are hints, not permissions. Only a tool explicitly
 marked read-only, non-destructive, and closed-world runs without confirmation.

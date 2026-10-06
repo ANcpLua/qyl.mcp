@@ -16,12 +16,13 @@ import { pathToFileURL } from "node:url";
 import { createServer } from "./server.js";
 import { assertCollectorContractRevision } from "./contract-handshake.js";
 import { dnsRebindingResponse, isLoopbackBindHost } from "./http-security.js";
-import { loadHostedOAuth } from "./oauth.js";
+import { loadHostedOAuth, QYL_MCP_ISSUER } from "./oauth.js";
 import { createResourceAuthorization } from "./authorization.js";
 import { readAuthorizationExtensions } from "./auth-extensions.js";
 import { createCloudflareAccessAuth, readAccessConfig } from "./cloudflare-access.js";
 import { closeDefaultNativeExecutionRuntime } from "./native-execution.js";
 import { EventsRuntime, createEventStore } from "./events.js";
+import { hostedEventsAuthorization } from "./events-authorization.js";
 
 export function sanitizedErrorType(error: unknown): string {
   if (!(error instanceof Error)) return "UnknownError";
@@ -304,17 +305,12 @@ export interface ServeOptions {
   fetch: (request: Request) => Promise<Response>;
 }
 
-/**
- * Revision 2026-07-28 only: a 2025-era request is answered with `-32022`
- * UnsupportedProtocolVersion naming the served revision; there is no legacy
- * serving and no session. 5.2.0 served the 2025 era statelessly for one
- * release; 6.0.0 withdrew it, see startStdioServer.
- */
+/** The SDK serves modern and stateless 2025 requests from the same factory. */
 export function createHostedHandler(
   factory: Parameters<typeof createMcpHandler>[0],
   onerror: (error: unknown) => void,
 ): McpHttpHandler {
-  return createMcpHandler(factory, { legacy: "reject", onerror });
+  return createMcpHandler(factory, { onerror });
 }
 
 /**
@@ -358,9 +354,13 @@ export async function hostedEvents(
   if (auth === undefined) {
     throw new Error("MCP_EVENTS_STORE requires hosted authorization (MCP_PUBLIC_URL)");
   }
+  if (auth.metadata?.oauthMetadata.issuer !== QYL_MCP_ISSUER) {
+    throw new Error("MCP_EVENTS_STORE requires the Auth0 authorization provider for ongoing access checks");
+  }
   const pollMs = Number(environment["MCP_EVENTS_POLL_MS"] ?? "");
   const events = new EventsRuntime({
     store: createEventStore(resolve(storePath)),
+    isAuthorized: hostedEventsAuthorization(environment),
     ...(Number.isInteger(pollMs) && pollMs >= 5_000 ? { pollIntervalMs: pollMs } : {}),
   });
   await events.start();
@@ -413,22 +413,9 @@ async function createHostedRuntime(
   return { port: config.port, hostname: config.bindHost, fetch: createFetch(options) };
 }
 
-/**
- * Revision 2026-07-28 only, on every transport. serveStdio's default would
- * serve a 2025-era opening from a second, pinned instance of the same factory;
- * it is deliberately not taken. This server is a closed world whose whole
- * surface — the pinned tool manifest, the startup contract handshake, the
- * product page the deployment verifier gates — is stated at one revision, and
- * the modern era is the one without sessions, server push or an `initialize`
- * round trip. A 2025-era client gets `-32022` naming the revision this build
- * serves. That is a legible failure, and the fix is a client that speaks
- * `server/discover`: the SDK's own client does with `versionNegotiation`, and
- * in the 6.0.0 gate three independent agents each connected to this exact
- * build without being told about eras.
- */
+/** The SDK selects the protocol era at the opening exchange of each connection. */
 export function startStdioServer(serverFactory: () => McpServer): StdioServerHandle {
   const handle = serveStdio(serverFactory, {
-    legacy: "reject",
     onerror: (error) => reportError("Standalone MCP stdio", error),
   });
   let shuttingDown = false;

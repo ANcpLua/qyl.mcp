@@ -1,6 +1,6 @@
 // Drive the hosted qyl MCP server, https://mcp.qyl.at/mcp, with the official
-// client SDK pinned to protocol revision 2026-07-28 (the only one the server
-// serves), using the bearer token hosted-mcp-login.py obtained. One line per
+// client SDK pinned to protocol revision 2026-07-28 for this modern-path check,
+// using the bearer token hosted-mcp-login.py obtained. One line per
 // expectation; exit 0 when every expectation holds. Never prints the token.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";

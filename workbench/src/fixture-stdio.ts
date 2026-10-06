@@ -6,10 +6,7 @@ export interface RunningFixtureStdioServer {
 }
 
 export function startFixtureStdioServer(): RunningFixtureStdioServer {
-  const handle = serveStdio(
-    () => createFixtureMcpServer().server,
-    { legacy: "reject" },
-  );
+  const handle = serveStdio(() => createFixtureMcpServer().server);
 
   let closed = false;
   return {

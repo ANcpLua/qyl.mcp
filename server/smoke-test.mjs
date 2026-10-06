@@ -382,6 +382,31 @@ check(
   await rm(temp, { recursive: true, force: true });
 }
 
+// A stock SDK v2 client opens with the 2025 handshake. It uses the same
+// standalone entry point and tool contract as the modern client above.
+console.log("2025-era stdio compatibility");
+const legacyTemp = await mkdtemp(join(tmpdir(), "qyl-mcp-legacy-smoke-"));
+const legacyClient = new Client({ name: "qyl-smoke-legacy", version: "1.0.0" });
+try {
+  await legacyClient.connect(new StdioClientTransport({
+    command: "node",
+    args: ["dist/main.js", "--stdio"],
+    env: {
+      ...process.env, QYL_DEMO: "1", QYL_MCP_TELEMETRY: "0",
+      QYL_MCP_NATIVE_STATE_PATH: join(legacyTemp, "native.json"),
+    },
+  }));
+  check("stock client negotiated the legacy era", legacyClient.getProtocolEra() === "legacy");
+  check("legacy catalog has all 11 tools", (await legacyClient.listTools()).tools.length === 11);
+  const metrics = await legacyClient.callTool({ name: "list_metrics", arguments: {} });
+  check("legacy read tool returns real demo metrics", !metrics.isError && metrics.structuredContent?.items?.length === 3, JSON.stringify(metrics));
+  const invalid = await legacyClient.callTool({ name: "get_trace", arguments: {} });
+  check("legacy invalid arguments remain a tool error", invalid.isError === true);
+} finally {
+  await legacyClient.close().catch(() => undefined);
+  await rm(legacyTemp, { recursive: true, force: true });
+}
+
 // --- 10. Mode selection is explicit; live failures do not become demo data ---
 console.log("explicit live/demo mode selection");
 const previousDemo = process.env.QYL_DEMO;

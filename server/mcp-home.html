@@ -120,11 +120,11 @@
     <section class="protocol-section" aria-labelledby="protocol-title">
       <p class="section-index">03 / PROTOCOL</p>
       <div class="protocol-heading">
-        <h2 id="protocol-title">Built for the 2026 MCP.</h2>
-        <p>No session, no 2025 handshake, no SSE compatibility layer &mdash; a 2025-era request is refused with <code>-32022</code>.</p>
+        <h2 id="protocol-title">Connect your MCP client.</h2>
+        <p>Tools support MCP <code>2026-07-28</code> and 2025-era clients. Events use <code>2026-07-28</code>.</p>
       </div>
       <div class="protocol-grid">
-        <article><span>01</span><h3>Per-request identity</h3><p>Every request carries its protocol, client identity, and capabilities.</p></article>
+        <article><span>01</span><h3>Per-request identity</h3><p>Modern requests declare their protocol and capabilities; authorization is checked on every HTTP request.</p></article>
         <article><span>02</span><h3>OAuth resource server</h3><p>Your client discovers authorization and opens the browser flow automatically.</p></article>
         <article><span>03</span><h3>Trace context intact</h3><p>W3C trace context follows calls from the agent through MCP into downstream work.</p></article>
         <article><span>04</span><h3>Server-rendered views</h3><p>Trace and traffic interfaces travel as MCP Apps, beside the evidence they explain.</p></article>

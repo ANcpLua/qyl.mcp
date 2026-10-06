@@ -37,6 +37,8 @@ export default defineRailway(() => {
       MCP_BIND_HOST: preserve(),
       // Not a secret, and tied to the mount above, so the value lives here.
       MCP_EVENTS_STORE: "/data/mcp-events.json",
+      MCP_EVENTS_AUTH0_CLIENT_ID: preserve(),
+      MCP_EVENTS_AUTH0_CLIENT_SECRET: preserve(),
       MCP_PUBLIC_URL: preserve(),
       NODE_ENV: preserve(),
       // The OpenAI plugin portal's domain-verification token, set when the portal shows it.

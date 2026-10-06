@@ -12,12 +12,12 @@
   },
   "dependencies": {
     "@ancplua/qyl-api-schema": "11.2.0",
-    "@modelcontextprotocol/core": "2.0.0",
-    "@modelcontextprotocol/server": "2.0.0",
-    "qyl-mcp-server": "^6.0.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "zod": "^4.5.4"
+    "@modelcontextprotocol/core": "2.3.1",
+    "@modelcontextprotocol/server": "2.3.1",
+    "qyl-mcp-server": "7.1.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@types/node": "26.6.4",

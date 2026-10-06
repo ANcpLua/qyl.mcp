@@ -9,7 +9,7 @@ npx qyl-mcp-server --stdio    # stdio MCP server
 npx qyl-mcp-server            # Streamable HTTP on 127.0.0.1:3001
 ```
 
-Use a client that speaks MCP revision `2026-07-28`. Point it at a collector:
+Use a modern or 2025-era MCP client. Point it at a collector:
 
 ```bash
 export QYL_COLLECTOR_URL=http://127.0.0.1:5100
@@ -24,9 +24,10 @@ It is an OAuth 2.1 resource server, so an unauthenticated request answers `401`
 with an RFC 9728 protected-resource document that a stock MCP client follows on
 its own.
 
-Both accept only protocol revision `2026-07-28`, on MCP TypeScript SDK 2.0.0 —
-Streamable HTTP through `createMcpHandler` and stdio through `serveStdio`, each
-with `legacy: "reject"`.
+Both use MCP TypeScript SDK v2: Streamable HTTP through `createMcpHandler`
+and stdio through `serveStdio`, with their documented compatibility defaults.
+One factory serves revision `2026-07-28` and supported 2025-era requests.
+Events require `2026-07-28`.
 The HTTP server serves a product page at `/`; `/mcp` is the only protocol
 endpoint.
 
@@ -112,6 +113,9 @@ multi-tenant audit log.
 | `QYL_MCP_TELEMETRY=0` | Disable MCP spans, metrics, and operation logs. |
 | `QYL_MCP_CAPTURE_CONTENT=1` | Include redacted, size-bounded request and response bodies in operation logs. Off by default. |
 | `QYL_MCP_NATIVE_STATE_PATH` | Override the native execution-evidence path. |
+| `MCP_EVENTS_STORE` | Persistent Events subscription file; requires Auth0 and the access-check credentials below. |
+| `MCP_EVENTS_AUTH0_CLIENT_ID` / `MCP_EVENTS_AUTH0_CLIENT_SECRET` | Dedicated Management API application with `read:users`, `read:clients`, `read:client_grants`, `read:grants`; resolves CIMD identities and keeps access checks current without storing subscriber tokens. |
+| `MCP_EVENTS_POLL_MS` | Collector polling interval, at least 5000 ms; default 30000 ms. |
 | `PORT` | HTTP listener port; default `3001`. |
 
 Secrets are redacted before results reach the model, structured content, or
@@ -122,6 +126,15 @@ The HTTP entry is a web-standard fetch handler served by its default export,
 so serving it requires Bun.
 
 ## Release notes
+
+### Unreleased
+
+- SDK v2.3.1 serving defaults accept modern and 2025-era tool clients over HTTP
+  and stdio. The workbench negotiates automatically. The strict policy described
+  under 6.0.0 below has been removed.
+- Events recheck account status, explicit client access, user permissions and
+  consent through Auth0. Unsubscribe aborts outstanding deliveries; restart
+  cleanup removes expired subscriptions and obsolete signing keys.
 
 ### 7.1.0
 

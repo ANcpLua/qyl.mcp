@@ -202,10 +202,11 @@ export type WebhookPost = (
   body: string,
   headers: Readonly<Record<string, string>>,
   timeoutMs: number,
+  signal?: AbortSignal,
 ) => Promise<WebhookResponse>;
 
 /** The production `WebhookPost`: HTTPS only, public addresses only, no redirects. */
-export const postWebhook: WebhookPost = (url, body, headers, timeoutMs) =>
+export const postWebhook: WebhookPost = (url, body, headers, timeoutMs, signal) =>
   new Promise<WebhookResponse>((resolve, reject) => {
     let checked: URL;
     try {
@@ -226,6 +227,7 @@ export const postWebhook: WebhookPost = (url, body, headers, timeoutMs) =>
         lookup: publicOnlyLookup as never,
         ...(isIP(host) === 0 ? { servername: host } : {}),
         timeout: timeoutMs,
+        signal,
       },
       (response) => {
         const chunks: Buffer[] = [];
