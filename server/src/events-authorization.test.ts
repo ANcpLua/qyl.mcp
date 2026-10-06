@@ -5,7 +5,7 @@ import { QYL_MCP_ISSUER, QYL_MCP_RESOURCE, QYL_MCP_SCOPE } from "./oauth.js";
 
 const principal = { subject: "auth0|test", clientId: "test-client" };
 
-function authority() {
+function authority(cimdClientId?: string) {
   let now = 0;
   let blocked = false;
   let consent = true;
@@ -13,6 +13,8 @@ function authority() {
   let application = true;
   let available = true;
   let tokenRequests = 0;
+  let cimdClients: { client_id: string; external_client_id?: string }[] = cimdClientId === undefined
+    ? [] : [{ client_id: principal.clientId }];
   const urls: URL[] = [];
   const check = createEventsAuthorization({
     clientId: "management-client", clientSecret: "test-secret", now: () => now,
@@ -31,6 +33,11 @@ function authority() {
       assert.equal(new Headers(init?.headers).get("authorization"), "Bearer management-token");
       urls.push(url);
       if (!available) return Response.json({ message: "api_key=must-never-escape" }, { status: 503 });
+      if (url.pathname.endsWith("/clients")) {
+        assert.equal(url.searchParams.get("external_client_id"), cimdClientId);
+        assert.equal(url.searchParams.get("fields"), "client_id,external_client_id");
+        return Response.json(cimdClients);
+      }
       if (url.pathname.endsWith("/permissions")) {
         return Response.json(permission ? [{ resource_server_identifier: QYL_MCP_RESOURCE, permission_name: QYL_MCP_SCOPE }] : []);
       }
@@ -56,6 +63,7 @@ function authority() {
       if (kind === "application") application = false;
     },
     outage: () => { available = false; },
+    mapCimd: (entries: typeof cimdClients) => { cimdClients = entries; },
   };
 }
 
@@ -74,6 +82,29 @@ test("event authorization checks the account, application, user permission and c
   auth.advance(3_600_000);
   await auth.check(principal);
   assert.equal(auth.tokenRequests(), 2);
+});
+
+test("CIMD token identity resolves to Auth0's application ID and is rechecked after removal", async () => {
+  const clientId = "https://chatgpt.com/oauth/client.json";
+  const auth = authority(clientId);
+  assert.equal(await auth.check({ ...principal, clientId }), true);
+  assert.equal(auth.urls.length, 5);
+  auth.mapCimd([]);
+  auth.advance();
+  assert.equal(await auth.check({ ...principal, clientId }), false);
+});
+
+test("CIMD lookup rejects mismatched or ambiguous application bindings", async () => {
+  const clientId = "https://chatgpt.com/oauth/client.json";
+  const auth = authority(clientId);
+  auth.mapCimd([{ client_id: principal.clientId, external_client_id: "https://other.example/client.json" }]);
+  assert.equal(await auth.check({ ...principal, clientId }), false);
+  auth.advance();
+  auth.mapCimd([
+    { client_id: principal.clientId, external_client_id: clientId },
+    { client_id: "another-application", external_client_id: clientId },
+  ]);
+  assert.equal(await auth.check({ ...principal, clientId }), false);
 });
 
 for (const kind of ["account", "application", "permission", "consent"] as const) {

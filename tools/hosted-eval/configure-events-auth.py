@@ -13,7 +13,7 @@ from urllib.parse import quote
 
 ISSUER = "https://qyl-eu.eu.auth0.com/"
 RESOURCE = "https://mcp.qyl.at/mcp"
-SCOPES = ["read:users", "read:client_grants", "read:grants"]
+SCOPES = ["read:users", "read:clients", "read:client_grants", "read:grants"]
 APPLICATION = "qyl.mcp Events access check"
 
 

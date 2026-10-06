@@ -46,7 +46,7 @@ production and client checks remain separate.
 - [x] Verify ownership, filter isolation, callback verification, signed
   delivery, refresh, key rotation, restart survival, expiration, revoked
   access, and unsubscribe. Persist only the permitted subscription state.
-- [ ] Exercise Events on the modern protocol path and verify ordinary tool
+- [x] Exercise Events on the modern protocol path and verify ordinary tool
   compatibility with clients that do not support Events.
 
 ### 4. Verify the combined build
@@ -63,7 +63,7 @@ production and client checks remain separate.
 The active goal authorizes the required production work. Inspect current
 settings and apply only the changes needed for this objective.
 
-- [ ] Recheck public endpoint reachability and diagnose any actual Cloudflare
+- [x] Recheck public endpoint reachability and diagnose any actual Cloudflare
   block. Inspect current deployment and Auth0 settings before applying changes.
 - [ ] Apply the necessary authorized settings and deploy the verified build.
   Check both resource metadata URLs, challenge, canonical audience, and scope.
@@ -116,7 +116,9 @@ identity. Set `OPENAI_APPS_CHALLENGE` from the portal when required. Verify OIDC
 - Current PRs #71/#72/#73/#62/#74 were inspected through their current diffs and
   CI step results. The combined local build passes with the versions above.
   The separate historical CI failures are not attributed to a guessed cause.
-- `bun run build`, `bun run lint`, `bun run test`: passed, 317 tests.
+- `bun run build`, `bun run lint`, `bun run test`: passed, 317 tests in the
+  combined run; the subsequent legacy HTTP test and two CIMD authorization
+  regressions bring the verified local total to 320.
 - `bun run smoke`: passed, including real modern and 2025-era stdio clients
   and the built workbench/dashboard. Hosted HTTP tests cover both eras,
   authenticated tool calls, invalid calls and 401/403 failures.
@@ -125,7 +127,7 @@ identity. Set `OPENAI_APPS_CHALLENGE` from the portal when required. Verify OIDC
   queries were disabled to honor the user's prohibition on Git-history access.
 - `bun run smoke:otlp`: passed against the real local collector, including
   protobuf ingestion, storage, redaction, metrics and trace/log correlation.
-- 27 focused Events/authorization tests pass. Added ongoing Auth0 access checks,
+- 29 focused Events/authorization tests pass. Added ongoing Auth0 access checks,
   cancellation during unsubscribe, retry-time expiry/key refresh, removal of
   stale keys/expired records on restart and late error-span detection.
 
@@ -134,12 +136,38 @@ were denied (`EPERM`), and the dashboard had not yet been built for its smoke
 test. Both passed with allowed loopback ports and the complete build. The new
 legacy metric assertion was corrected to the published `items` result field.
 
-Production inspection: Railway's qyl-mcp service is running with a `/data`
-volume. Auth0 login was renewed by the user. Auth0 currently uses RFC 9068,
-resource compatibility, CIMD and issuer identification, but RBAC is disabled
-and the third-party default grant includes both `qyl:read` and `qyl:control`.
-The necessary corrections and a dedicated read-only Events access checker are
-being prepared. No production change is claimed here yet.
+## Production progress on 7 October 2026
+
+- [PR #75](https://github.com/ANcpLua/qyl.mcp/pull/75) is open as a regular PR.
+  Its initial CI lint and verify jobs pass. The Railway plan failed because
+  its action runs npm, which rejects `workspace:7.1.0`. The consumers now use
+  exact `7.1.0`; Bun still resolves both to the local server workspace. The
+  updated CI run remains to be checked.
+- The user renewed Auth0 and Cloudflare logins and explicitly approved removal
+  of two unused `qyl-auth0-probe` applications. Both were deleted to free the
+  tenant capacity required for the dedicated Events checker.
+- Applied and verified Auth0 RBAC, required first-party consent, the existing
+  intended user's `qyl:read` permission, an explicit grant for the already
+  consented client, and an empty third-party default grant. RFC 9068, resource
+  compatibility, CIMD, and issuer identification remain configured.
+- Requested strict DCR through the documented tenant setting. Auth0 omits this
+  setting from its GET response; a fresh real DCR flow must establish the
+  effective behavior. Existing third-party clients report strict mode.
+- Created the dedicated Events Management API application and stored its
+  credentials in Railway without printing them. It has `read:users`,
+  `read:clients`, `read:client_grants`, and `read:grants`. The live checker
+  permits the existing authorized profile and rejects missing users/clients.
+  CIMD identity resolution has regression coverage; a real CIMD login and
+  subscription still need verification.
+- Railway's `/data` volume and `MCP_EVENTS_STORE=/data/mcp-events.json` are
+  present. The new runtime has not yet been deployed.
+- Registered ChatGPT's published CIMD with its stable callback and
+  `private_key_jwt`; assigned only `qyl:read`. Actual login remains pending.
+- The user approved a Cloudflare configuration rule limited to
+  `http.host eq "mcp.qyl.at"` that disables Browser Integrity Check. The rule
+  is active; OAuth, WAF, and DDoS configuration are unchanged. Fresh public
+  checks now return 200 for health and both protected-resource metadata paths,
+  and 401 with the expected `qyl:read` challenge for unauthenticated `/mcp`.
 
 ## Existing implementation on main
 

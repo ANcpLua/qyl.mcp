@@ -146,7 +146,9 @@ and the draft
   replay, so traces that arrive while the server is down are not delivered.
 - Configure `MCP_EVENTS_AUTH0_CLIENT_ID` and `MCP_EVENTS_AUTH0_CLIENT_SECRET`
   through Railway's secret variables for a dedicated Auth0 machine application
-  with Management API `read:users`, `read:client_grants` and `read:grants`.
+  with Management API `read:users`, `read:clients`, `read:client_grants` and
+  `read:grants`. CIMD URLs are resolved to Auth0 application IDs before checking
+  grants; only the two identity fields are requested from the clients API.
   Events check the current account status, explicit application grant,
   `qyl:read` user permission and consent. Enable RBAC for this API and assign
   that permission to the intended users. The check caches results for at most

@@ -114,7 +114,7 @@ multi-tenant audit log.
 | `QYL_MCP_CAPTURE_CONTENT=1` | Include redacted, size-bounded request and response bodies in operation logs. Off by default. |
 | `QYL_MCP_NATIVE_STATE_PATH` | Override the native execution-evidence path. |
 | `MCP_EVENTS_STORE` | Persistent Events subscription file; requires Auth0 and the access-check credentials below. |
-| `MCP_EVENTS_AUTH0_CLIENT_ID` / `MCP_EVENTS_AUTH0_CLIENT_SECRET` | Dedicated Management API application with `read:users`, `read:client_grants`, `read:grants`; keeps access checks current without storing subscriber tokens. |
+| `MCP_EVENTS_AUTH0_CLIENT_ID` / `MCP_EVENTS_AUTH0_CLIENT_SECRET` | Dedicated Management API application with `read:users`, `read:clients`, `read:client_grants`, `read:grants`; resolves CIMD identities and keeps access checks current without storing subscriber tokens. |
 | `MCP_EVENTS_POLL_MS` | Collector polling interval, at least 5000 ms; default 30000 ms. |
 | `PORT` | HTTP listener port; default `3001`. |
 

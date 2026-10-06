@@ -22,6 +22,7 @@ const TokenSchema = z.object({
   expires_in: z.number().positive(),
 });
 const UserSchema = z.object({ blocked: z.boolean().optional() });
+const CimdClientSchema = z.object({ client_id: z.string(), external_client_id: z.string().optional() });
 const PermissionSchema = z.object({
   resource_server_identifier: z.string(), permission_name: z.string(),
 });
@@ -101,18 +102,37 @@ export function createEventsAuthorization(options: EventsAuthorizationOptions): 
     throw new EventsAuthorizationUnavailable();
   }
 
+  async function applicationClientId(clientId: string): Promise<string | undefined> {
+    if (!clientId.startsWith("https://")) return clientId;
+    // Auth0 puts the CIMD URL in the token, but its Management API grants use
+    // the internal application ID. Resolve through the trusted issuer only.
+    const body = await get("clients", {
+      external_client_id: clientId, fields: "client_id,external_client_id",
+      include_fields: "true", per_page: "2",
+    });
+    if (body === undefined) return undefined;
+    const clients = z.array(CimdClientSchema).parse(body);
+    // Auth0's field projection can omit external_client_id. The exact query
+    // still filters by it; reject multiple matches or a conflicting value.
+    return clients.length === 1
+      && (clients[0]!.external_client_id === undefined || clients[0]!.external_client_id === clientId)
+      ? clients[0]!.client_id : undefined;
+  }
+
   async function check(principal: Principal): Promise<boolean> {
     const userPath = `users/${encodeURIComponent(principal.subject)}`;
     const body = await get(userPath, { fields: "blocked", include_fields: "true" });
     if (body === undefined || UserSchema.parse(body).blocked === true) return false;
+    const clientId = await applicationClientId(principal.clientId);
+    if (clientId === undefined) return false;
     const [permission, application, consent] = await Promise.all([
       any(`${userPath}/permissions`, {}, PermissionSchema, (entry) =>
         entry.resource_server_identifier === QYL_MCP_RESOURCE && entry.permission_name === QYL_MCP_SCOPE),
-      any("client-grants", { client_id: principal.clientId, audience: QYL_MCP_RESOURCE, subject_type: "user" }, ClientGrantSchema, (entry) =>
-        entry.client_id === principal.clientId && entry.audience === QYL_MCP_RESOURCE
+      any("client-grants", { client_id: clientId, audience: QYL_MCP_RESOURCE, subject_type: "user" }, ClientGrantSchema, (entry) =>
+        entry.client_id === clientId && entry.audience === QYL_MCP_RESOURCE
         && entry.subject_type === "user" && entry.scope.includes(QYL_MCP_SCOPE)),
-      any("grants", { user_id: principal.subject, client_id: principal.clientId, audience: QYL_MCP_RESOURCE }, UserGrantSchema, (entry) =>
-        entry.user_id === principal.subject && entry.clientID === principal.clientId
+      any("grants", { user_id: principal.subject, client_id: clientId, audience: QYL_MCP_RESOURCE }, UserGrantSchema, (entry) =>
+        entry.user_id === principal.subject && entry.clientID === clientId
         && entry.audience === QYL_MCP_RESOURCE && entry.organization_id === undefined
         && entry.scope.includes(QYL_MCP_SCOPE)),
     ]);
