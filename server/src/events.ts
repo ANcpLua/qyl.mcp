@@ -6,7 +6,7 @@
  * Contract: developers.openai.com/plugins/build/mcp-events (ChatGPT supports
  * webhook delivery with callback verification only) and the draft MCP Events
  * design sketch in modelcontextprotocol/experimental-ext-triggers-events.
- * `@modelcontextprotocol/server` 2.0.0 ships no `events/*` methods, so the
+ * `@modelcontextprotocol/server` 2.3.1 ships no `events/*` methods, so the
  * three are custom request handlers and the capability is added by hand.
  *
  * Delivery source: the collector's recent-trace list, polled only while a
@@ -15,12 +15,13 @@
  * traces that arrive while the server is down are not delivered.
  *
  * Access: subscribing, refreshing and unsubscribing each pass the same OAuth
- * gate as every tool call. A server-side recheck between refreshes is not
- * possible without the caller's token, so grants stay short (one hour by
- * default, one day at most) and a revoked grant ends at the next refresh.
+ * gate as every tool call. The required authorization callback rechecks the
+ * owner's current access while polling and before delivery, including retries.
+ * Authorization outages suspend delivery; revoked access removes the record.
  */
 
 import { createHash, timingSafeEqual } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import type { McpServer, ServerCapabilities, ServerContext } from "@modelcontextprotocol/server";
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { z } from "zod";
@@ -259,13 +260,15 @@ function matches(subscription: StoredSubscription, trace: QylTrace): boolean {
 
 export interface EventsRuntimeOptions {
   store: AtomicJsonStore<EventStoreState>;
+  /** Live access check. False revokes; errors suspend delivery without deleting state. */
+  isAuthorized: (principal: Principal) => Promise<boolean>;
   /** Network seam; defaults to the public-HTTPS-only `postWebhook`. */
   post?: WebhookPost;
   /** Trace source; defaults to the collector's most recent traces. */
   recentTraces?: () => Promise<readonly QylTrace[]>;
   pollIntervalMs?: number;
   now?: () => number;
-  sleep?: (ms: number) => Promise<void>;
+  sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   log?: (message: string) => void;
 }
 
@@ -275,26 +278,30 @@ export interface EventsRuntimeOptions {
  */
 export class EventsRuntime {
   private readonly store: AtomicJsonStore<EventStoreState>;
+  private readonly isAuthorized: EventsRuntimeOptions["isAuthorized"];
   private readonly post: WebhookPost;
   private readonly recentTraces: () => Promise<readonly QylTrace[]>;
   private readonly pollIntervalMs: number;
   private readonly now: () => number;
-  private readonly sleep: (ms: number) => Promise<void>;
+  private readonly sleep: NonNullable<EventsRuntimeOptions["sleep"]>;
   private readonly log: (message: string) => void;
   private readonly verified = new Map<string, number>();
   private seen: Set<string> | undefined;
   private ready: Promise<void> | undefined;
   private timer: NodeJS.Timeout | undefined;
   private polling: Promise<void> | undefined;
+  private stopped = false;
+  private readonly deliveries = new Map<string, Set<{ controller: AbortController; done: Promise<void> }>>();
 
   constructor(options: EventsRuntimeOptions) {
     this.store = options.store;
+    this.isAuthorized = options.isAuthorized;
     this.post = options.post ?? postWebhook;
     this.recentTraces = options.recentTraces
       ?? (async () => (await fetchTraces(TRACES_PER_POLL)).traces);
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.now = options.now ?? Date.now;
-    this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+    this.sleep = options.sleep ?? ((ms, signal) => delay(ms, undefined, { signal }));
     this.log = options.log ?? ((message) => process.stderr.write(`qyl.mcp events: ${message}\n`));
   }
 
@@ -338,6 +345,16 @@ export class EventsRuntime {
     const url = checkedCallbackUrl(params.delivery.url);
     const id = subscriptionId(principal, url.href, params.name, args);
 
+    let allowed: boolean;
+    try {
+      allowed = await this.isAuthorized(principal);
+    } catch {
+      throw new ProtocolError(ProtocolErrorCode.InternalError, "Event authorization is temporarily unavailable");
+    }
+    if (!allowed) {
+      throw new ProtocolError(ProtocolErrorCode.InvalidRequest, "Event access has been revoked");
+    }
+
     // Checked before the verification POST, and again atomically below.
     await this.initialized();
     this.assertCapacity(await this.store.read(), principal, id);
@@ -346,6 +363,7 @@ export class EventsRuntime {
     const now = this.now();
     const refreshBefore = new Date(now + grantedTtlMs(params.ttlMs)).toISOString();
     await this.store.transact((state) => {
+      this.pruneState(state);
       this.assertCapacity(state, principal, id);
       const existing = state.subscriptions.find((entry) => entry.id === id);
       const rotated = existing !== undefined && existing.secret !== secret;
@@ -382,6 +400,9 @@ export class EventsRuntime {
     await this.store.transact((state) => {
       state.subscriptions = state.subscriptions.filter((entry) => entry.id !== id);
     });
+    const active = this.deliveries.get(id);
+    for (const delivery of active ?? []) delivery.controller.abort();
+    await Promise.allSettled([...(active ?? [])].map((delivery) => delivery.done));
     return {};
   }
 
@@ -450,19 +471,24 @@ export class EventsRuntime {
 
   /** Start the poller if a live subscription exists; `stop` ends it. */
   async start(): Promise<void> {
+    this.stopped = false;
     await this.initialized();
-    const state = await this.store.read();
+    const { state } = await this.store.transact((draft) => this.pruneState(draft));
     if (state.subscriptions.some((entry) => this.isLive(entry))) this.ensurePolling();
   }
 
   async stop(): Promise<void> {
+    this.stopped = true;
     if (this.timer !== undefined) clearInterval(this.timer);
     this.timer = undefined;
+    for (const active of this.deliveries.values()) {
+      for (const delivery of active) delivery.controller.abort();
+    }
     await this.polling;
   }
 
   private ensurePolling(): void {
-    if (this.timer !== undefined) return;
+    if (this.stopped || this.timer !== undefined) return;
     // A failed store write rejects; an unhandled rejection would end the process.
     this.timer = setInterval(() => {
       this.poll().catch((error: unknown) => {
@@ -476,6 +502,32 @@ export class EventsRuntime {
     return Date.parse(entry.refreshBefore) > this.now();
   }
 
+  private pruneState(state: EventStoreState): void {
+    state.subscriptions = state.subscriptions.filter((entry) => this.isLive(entry));
+    for (const entry of state.subscriptions) {
+      if (entry.previousSecretUntil === undefined || Date.parse(entry.previousSecretUntil) <= this.now()) {
+        delete entry.previousSecret;
+        delete entry.previousSecretUntil;
+      }
+    }
+  }
+
+  private async authorized(subscription: StoredSubscription): Promise<boolean> {
+    let allowed: boolean;
+    try {
+      allowed = await this.isAuthorized(subscription);
+    } catch {
+      this.log(`authorization unavailable for ${subscription.id}; delivery suspended`);
+      return false;
+    }
+    if (!allowed) {
+      await this.store.transact((state) => {
+        state.subscriptions = state.subscriptions.filter((entry) => entry.id !== subscription.id);
+      });
+    }
+    return allowed;
+  }
+
   /** One poll: drop lapsed subscriptions, then deliver each new error trace. */
   poll(): Promise<void> {
     this.polling ??= this.pollOnce().finally(() => {
@@ -485,9 +537,10 @@ export class EventsRuntime {
   }
 
   private async pollOnce(): Promise<void> {
+    if (this.stopped) return;
     await this.initialized();
     const { state } = await this.store.transact((draft) => {
-      draft.subscriptions = draft.subscriptions.filter((entry) => this.isLive(entry));
+      this.pruneState(draft);
     });
     if (state.subscriptions.length === 0) {
       if (this.timer !== undefined) clearInterval(this.timer);
@@ -495,6 +548,12 @@ export class EventsRuntime {
       this.seen = undefined;
       return;
     }
+
+    const subscriptions: StoredSubscription[] = [];
+    for (const subscription of state.subscriptions) {
+      if (await this.authorized(subscription)) subscriptions.push(subscription);
+    }
+    if (subscriptions.length === 0) return;
 
     let traces: readonly QylTrace[];
     try {
@@ -505,11 +564,11 @@ export class EventsRuntime {
     }
 
     if (this.seen === undefined) {
-      this.seen = new Set(traces.map((trace) => trace.trace_id));
+      this.seen = new Set(traces.filter((trace) => trace.has_error).map((trace) => trace.trace_id));
       return;
     }
 
-    const fresh = traces.filter((trace) => !this.seen!.has(trace.trace_id));
+    const fresh = traces.filter((trace) => trace.has_error && !this.seen!.has(trace.trace_id));
     for (const trace of fresh) this.seen.add(trace.trace_id);
     if (this.seen.size > MAX_SEEN_TRACES) {
       this.seen = new Set([...this.seen].slice(-MAX_SEEN_TRACES));
@@ -518,15 +577,33 @@ export class EventsRuntime {
     const deliveries: Promise<void>[] = [];
     for (const trace of fresh) {
       if (!trace.has_error) continue;
-      for (const subscription of state.subscriptions) {
+      for (const subscription of subscriptions) {
         if (matches(subscription, trace)) deliveries.push(this.deliver(subscription, trace));
       }
     }
-    await Promise.allSettled(deliveries);
+    const results = await Promise.allSettled(deliveries);
+    for (const result of results) {
+      if (result.status === "rejected") this.log("event delivery failed");
+    }
+  }
+
+  private deliver(subscription: StoredSubscription, trace: QylTrace): Promise<void> {
+    const controller = new AbortController();
+    const done = this.deliverWhileActive(subscription, trace, controller.signal);
+    const active = this.deliveries.get(subscription.id) ?? new Set();
+    this.deliveries.set(subscription.id, active);
+    const delivery = { controller, done };
+    active.add(delivery);
+    return done.finally(() => {
+      active.delete(delivery);
+      if (active.size === 0) this.deliveries.delete(subscription.id);
+    });
   }
 
   /** POST one signed event, retrying transient failures with backoff. */
-  private async deliver(subscription: StoredSubscription, trace: QylTrace): Promise<void> {
+  private async deliverWhileActive(
+    subscription: StoredSubscription, trace: QylTrace, signal: AbortSignal,
+  ): Promise<void> {
     const event = {
       eventId: `evt_${trace.trace_id}`,
       name: subscription.name,
@@ -541,6 +618,12 @@ export class EventsRuntime {
     }
 
     for (let attempt = 1; attempt <= DELIVERY_ATTEMPTS; attempt++) {
+      if (this.stopped || signal.aborted || !await this.authorized(subscription)) return;
+      // Re-read after the async access check: unsubscribe, expiry and key
+      // rotation must also take effect during retries and in-flight polls.
+      const current = (await this.store.read()).subscriptions.find((entry) => entry.id === subscription.id);
+      if (this.stopped || signal.aborted || current === undefined || !this.isLive(current)) return;
+      subscription = current;
       const timestamp = Math.floor(this.now() / 1000);
       const secrets = subscription.previousSecret !== undefined
         && subscription.previousSecretUntil !== undefined
@@ -555,8 +638,9 @@ export class EventsRuntime {
           "webhook-timestamp": String(timestamp),
           "webhook-signature": signWebhook(secrets, event.eventId, timestamp, body),
           "x-mcp-subscription-id": subscription.id,
-        }, CALLBACK_TIMEOUT_MS)).status;
+        }, CALLBACK_TIMEOUT_MS, signal)).status;
       } catch (error) {
+        if (signal.aborted) return;
         if (error instanceof CallbackAddressError) {
           this.log(`dropped ${event.eventId} for ${subscription.id}: ${error.message}`);
           return;
@@ -575,7 +659,14 @@ export class EventsRuntime {
         this.log(`dropped ${event.eventId} for ${subscription.id}: HTTP ${status}`);
         return;
       }
-      if (attempt < DELIVERY_ATTEMPTS) await this.sleep(RETRY_BASE_MS * 2 ** (attempt - 1));
+      if (attempt < DELIVERY_ATTEMPTS) {
+        try {
+          await this.sleep(RETRY_BASE_MS * 2 ** (attempt - 1), signal);
+        } catch (error) {
+          if (signal.aborted) return;
+          throw error;
+        }
+      }
     }
     this.log(`gave up on ${event.eventId} for ${subscription.id} after ${DELIVERY_ATTEMPTS} attempts`);
   }

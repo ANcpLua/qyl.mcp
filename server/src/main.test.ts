@@ -6,7 +6,6 @@ import {
   McpServer,
   OAuthError,
   OAuthErrorCode,
-  ProtocolErrorCode,
   type AuthInfo,
   type McpHttpHandler,
   type OAuthMetadata,
@@ -309,77 +308,65 @@ test("a browser client can read the challenge and pass its preflight", async (co
   );
 });
 
-test("a modern client reaches the tools through the whole pipeline", async (context) => {
-  const endpoint = hostedEndpoint();
-  const client = new Client(
-    { name: "modern-pipeline-client", version: "1.0.0" },
-    { versionNegotiation: { mode: "auto" } },
-  );
-  context.after(async () => {
-    await client.close().catch(() => undefined);
-    await endpoint.handler.close();
+for (const era of ["modern", "legacy"] as const) {
+  test(`${era} clients share authenticated tools through the whole pipeline`, async (context) => {
+    const endpoint = hostedEndpoint();
+    const client = new Client(
+      { name: `${era}-pipeline-client`, version: "1.0.0" },
+      era === "modern" ? { versionNegotiation: { mode: "auto" } } : {},
+    );
+    context.after(async () => {
+      await client.close().catch(() => undefined);
+      await endpoint.handler.close();
+    });
+
+    await client.connect(new StreamableHTTPClientTransport(resourceServerUrl, {
+      fetch: transportFetch(endpoint),
+      requestInit: { headers: { authorization: "Bearer good" } },
+    }));
+
+    assert.equal(client.getProtocolEra(), era);
+    assert.deepEqual((await client.listTools()).tools.map((tool) => tool.name), ["auth_context"]);
+    const result = await client.callTool({ name: "auth_context", arguments: {} });
+    assert.deepEqual(result.content, [{ type: "text", text: "https://client.example/client.json" }]);
+    await assert.rejects(client.callTool({ name: "unknown_tool", arguments: {} }));
   });
 
-  await client.connect(new StreamableHTTPClientTransport(resourceServerUrl, {
-    fetch: transportFetch(endpoint),
-    requestInit: { headers: { authorization: "Bearer good" } },
-  }));
-
-  assert.equal(client.getProtocolEra(), "modern");
-  assert.deepEqual((await client.listTools()).tools.map((tool) => tool.name), ["auth_context"]);
-  const result = await client.callTool({ name: "auth_context", arguments: {} });
-  assert.deepEqual(result.content, [{ type: "text", text: "https://client.example/client.json" }]);
-});
-
-test("a 2025-era client is refused after the gate with the supported revision", async (context) => {
-  const endpoint = hostedEndpoint();
-  const client = new Client({ name: "legacy-pipeline-client", version: "1.0.0" });
-  context.after(async () => {
-    await client.close().catch(() => undefined);
-    await endpoint.handler.close();
+  test(`${era} requests cannot bypass authorization`, async (context) => {
+    const endpoint = hostedEndpoint();
+    context.after(() => endpoint.handler.close());
+    for (const token of [undefined, "bad", "missing-scope"]) {
+      const response = await endpoint.fetch(hosted("/mcp", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: 1, method: "tools/list",
+          params: era === "modern" ? { _meta: {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientCapabilities": {},
+          } } : {},
+        }),
+      }));
+      assert.equal(response.status, token === "missing-scope" ? 403 : 401);
+      assert.match(response.headers.get("www-authenticate") ?? "", /qyl:read/u);
+    }
   });
-
-  const response = await endpoint.fetch(hosted("/mcp", {
-    method: "POST",
-    headers: {
-      authorization: "Bearer good",
-      "content-type": "application/json",
-      accept: "application/json, text/event-stream",
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: "2025-11-25",
-        capabilities: {},
-        clientInfo: { name: "legacy-pipeline-client", version: "1.0.0" },
-      },
-    }),
-  }));
-  assert.equal(response.status, 400);
-  const body = await response.json() as {
-    error: { code: number; data: { supported: string[]; requested: string } };
-  };
-  assert.equal(body.error.code, ProtocolErrorCode.UnsupportedProtocolVersion);
-  assert.deepEqual(body.error.data.supported, ["2026-07-28"]);
-
-  await assert.rejects(client.connect(new StreamableHTTPClientTransport(resourceServerUrl, {
-    fetch: transportFetch(endpoint),
-    requestInit: { headers: { authorization: "Bearer good" } },
-  })));
-});
+}
 
 function testVerifier(): OAuthTokenVerifier {
   return {
     async verifyAccessToken(token: string): Promise<AuthInfo> {
-      if (token !== "good") {
+      if (token !== "good" && token !== "missing-scope") {
         throw new OAuthError(OAuthErrorCode.InvalidToken, "Access token verification failed");
       }
       return {
         token,
         clientId: "https://client.example/client.json",
-        scopes: [QYL_MCP_SCOPE],
+        scopes: token === "missing-scope" ? [] : [QYL_MCP_SCOPE],
         expiresAt: Math.floor(Date.now() / 1_000) + 300,
         resource: resourceServerUrl,
       };

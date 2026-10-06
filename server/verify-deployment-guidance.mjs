@@ -26,13 +26,19 @@ requireMatch(
   "built landing page",
   builtLandingHtml,
   /2026-07-28/u,
-  "must name the only protocol revision the endpoint serves",
+  "must name the modern protocol revision",
 );
-forbidMatch(
+requireMatch(
   "built landing page",
   builtLandingHtml,
-  /stateless/iu,
-  "must not describe the endpoint by the SDK's rejected legacy serving mode",
+  /2025-era clients/u,
+  "must describe compatibility with 2025-era tool clients",
+);
+requireMatch(
+  "built landing page",
+  builtLandingHtml,
+  /Events use <code>2026-07-28<\/code>/u,
+  "must distinguish the protocol required for Events",
 );
 
 requireMatch(
@@ -160,8 +166,4 @@ function escapeRegExp(value) {
 
 function requireMatch(surface, content, pattern, requirement) {
   if (!pattern.test(content)) failures.push(`${surface} ${requirement}`);
-}
-
-function forbidMatch(surface, content, pattern, requirement) {
-  if (pattern.test(content)) failures.push(`${surface} ${requirement}`);
 }

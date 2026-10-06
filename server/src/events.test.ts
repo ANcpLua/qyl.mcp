@@ -20,6 +20,7 @@ import {
   grantedTtlMs,
   type Principal,
   type SubscribeParams,
+  type EventsRuntimeOptions,
 } from "./events.js";
 import { createServer } from "./server.js";
 import type { WebhookPost, WebhookResponse } from "./webhook.js";
@@ -78,17 +79,20 @@ function trace(id: string, services: string[], hasError: boolean): QylTrace {
 async function fixture(
   post: WebhookPost,
   traces: () => readonly QylTrace[] = () => [],
+  overrides: Partial<EventsRuntimeOptions> = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), "qyl-events-"));
   const storePath = join(dir, "events.json");
   const store = createEventStore(storePath);
   const runtime = new EventsRuntime({
     store,
+    isAuthorized: async () => true,
     post,
     recentTraces: async () => traces(),
     now: () => NOW,
     sleep: async () => {},
     log: () => {},
+    ...overrides,
   });
   return {
     runtime,
@@ -260,6 +264,7 @@ test("a failing poll on the timer is logged, not an unhandled rejection", async 
     },
   };
   const runtime = new EventsRuntime({
+    isAuthorized: async () => true,
     store: failing as unknown as ReturnType<typeof createEventStore>,
     post: receiver().post,
     recentTraces: async () => [],
@@ -407,7 +412,7 @@ test("over MCP: server/discover advertises events and the three methods answer",
   const { post } = receiver();
   const { runtime, cleanup } = await fixture(post);
   const authInfo: AuthInfo = { token: "t", clientId: "chatgpt", scopes: ["qyl:read"], extra: { subject: "auth0|alice" } };
-  const handler = createMcpHandler(() => createServer({ nativeExecution: false, events: runtime }), { legacy: "reject" });
+  const handler = createMcpHandler(() => createServer({ nativeExecution: false, events: runtime }));
   const client = new Client({ name: "events-test", version: "0.0.0" }, {
     versionNegotiation: { mode: { pin: "2026-07-28" } },
   });
@@ -465,4 +470,155 @@ test("over MCP: server/discover advertises events and the three methods answer",
     await handler.close();
     await cleanup();
   }
+});
+
+test("revoked access removes the subscription and never reaches its callback", async () => {
+  let allowed = true;
+  let traces: QylTrace[] = [];
+  const { posted, post } = receiver();
+  const { runtime, store, cleanup } = await fixture(post, () => traces, {
+    isAuthorized: async () => allowed,
+  });
+  try {
+    await runtime.subscribe(subscribeParams(), ALICE);
+    await runtime.poll();
+    posted.length = 0;
+    allowed = false;
+    traces = [trace("revoked", ["checkout"], true)];
+    await runtime.poll();
+    assert.equal(posted.length, 0);
+    assert.equal((await store.read()).subscriptions.length, 0);
+    await rejectsWith(runtime.subscribe(subscribeParams(), ALICE), -32600);
+  } finally { await cleanup(); }
+});
+
+test("access-check outages suspend delivery while keeping subscription state", async () => {
+  let unavailable = false;
+  let traces: QylTrace[] = [];
+  const { posted, post } = receiver();
+  const { runtime, store, cleanup } = await fixture(post, () => traces, {
+    isAuthorized: async () => {
+      if (unavailable) throw new Error("access_token=secret");
+      return true;
+    },
+  });
+  try {
+    await runtime.subscribe(subscribeParams(), ALICE);
+    await runtime.poll();
+    posted.length = 0;
+    unavailable = true;
+    traces = [trace("outage", ["checkout"], true)];
+    await runtime.poll();
+    assert.equal(posted.length, 0);
+    assert.equal((await store.read()).subscriptions.length, 1);
+    await assert.rejects(runtime.subscribe(subscribeParams(), ALICE), /temporarily unavailable/u);
+    unavailable = false;
+    await runtime.poll();
+    assert.equal(posted.length, 1);
+  } finally { await cleanup(); }
+});
+
+test("unsubscribe cancels a webhook in flight and prevents retries", async () => {
+  let traces: QylTrace[] = [];
+  let deliveries = 0;
+  let entered!: () => void;
+  const delivering = new Promise<void>((resolve) => { entered = resolve; });
+  const verification = receiver();
+  const post: WebhookPost = async (url, body, headers, timeout, signal) => {
+    if (JSON.parse(body).type === "verification") return verification.post(url, body, headers, timeout);
+    deliveries++;
+    entered();
+    return new Promise((_resolve, reject) => {
+      signal!.addEventListener("abort", () => reject(signal!.reason), { once: true });
+    });
+  };
+  const { runtime, store, cleanup } = await fixture(post, () => traces);
+  try {
+    await runtime.subscribe(subscribeParams(), ALICE);
+    await runtime.poll();
+    traces = [trace("cancel", ["checkout"], true)];
+    const polling = runtime.poll();
+    await delivering;
+    await runtime.unsubscribe(subscribeParams(), ALICE);
+    await polling;
+    assert.equal(deliveries, 1);
+    assert.equal((await store.read()).subscriptions.length, 0);
+    await runtime.poll();
+    assert.equal(deliveries, 1);
+  } finally { await cleanup(); }
+});
+
+test("retry uses refreshed signing keys and rechecks subscription expiry", async () => {
+  let now = NOW;
+  let traces: QylTrace[] = [];
+  const { posted, post } = receiver([503, 503]);
+  let runtime!: EventsRuntime;
+  let sleeps = 0;
+  const fixtureResult = await fixture(post, () => traces, {
+    now: () => now,
+    sleep: async () => {
+      sleeps++;
+      if (sleeps === 1) {
+        await runtime.subscribe(subscribeParams({ delivery: { mode: "webhook", url: CALLBACK, secret: NEXT_SECRET } }), ALICE);
+      } else now += DEFAULT_TTL_MS + 1;
+    },
+  });
+  runtime = fixtureResult.runtime;
+  try {
+    await runtime.subscribe(subscribeParams(), ALICE);
+    await runtime.poll();
+    posted.length = 0;
+    traces = [trace("refresh", ["checkout"], true)];
+    await runtime.poll();
+    assert.equal(posted.length, 2, "expiry stops the third retry");
+    assert.ok(verifies(SECRET, posted[0]!));
+    assert.ok(verifies(NEXT_SECRET, posted[1]!));
+    assert.ok(verifies(SECRET, posted[1]!));
+    await runtime.poll();
+    assert.equal((await fixtureResult.store.read()).subscriptions.length, 0);
+  } finally { await fixtureResult.cleanup(); }
+});
+
+test("restart removes expired records and obsolete rotation keys", async () => {
+  const { post } = receiver();
+  const { runtime, store, storePath, cleanup } = await fixture(post);
+  try {
+    await runtime.subscribe(subscribeParams(), ALICE);
+    await runtime.subscribe(subscribeParams({ delivery: { mode: "webhook", url: CALLBACK, secret: NEXT_SECRET } }), ALICE);
+    await runtime.stop();
+    const restarted = new EventsRuntime({
+      store: createEventStore(storePath), isAuthorized: async () => true,
+      now: () => NOW + 11 * 60_000, post,
+    });
+    await restarted.start();
+    await restarted.stop();
+    const reloaded = createEventStore(storePath);
+    const [live] = (await reloaded.read()).subscriptions;
+    assert.equal(live?.secret, NEXT_SECRET);
+    assert.equal(live?.previousSecret, undefined);
+    assert.equal(live?.previousSecretUntil, undefined);
+    const expired = new EventsRuntime({
+      store: createEventStore(storePath), isAuthorized: async () => true,
+      now: () => NOW + DEFAULT_TTL_MS + 1, post,
+    });
+    await expired.start();
+    await expired.stop();
+    assert.equal((await createEventStore(storePath).read()).subscriptions.length, 0);
+    assert.equal((await store.read()).subscriptions.length, 1, "only the original instance has its old in-memory state");
+  } finally { await cleanup(); }
+});
+
+test("a late error span on an already observed trace still emits its event", async () => {
+  let traces = [trace("late", ["checkout"], false)];
+  const { posted, post } = receiver();
+  const { runtime, cleanup } = await fixture(post, () => traces);
+  try {
+    await runtime.subscribe(subscribeParams(), ALICE);
+    await runtime.poll();
+    posted.length = 0;
+    traces = [trace("late", ["checkout"], true)];
+    await runtime.poll();
+    await runtime.poll();
+    assert.equal(posted.length, 1);
+  } finally { await cleanup(); }
 });

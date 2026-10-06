@@ -41,7 +41,6 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 60_000;
 const DEFAULT_DISCONNECT_TIMEOUT_MS = 5_000;
 const DEFAULT_MAX_DISCOVERY_PAGES = 100;
 const DEFAULT_MAX_OBSERVER_ERRORS = 100;
-const MODERN_PROTOCOL_REVISION = "2026-07-28";
 
 export type ConnectionTransportKind =
     | "stdio"
@@ -479,7 +478,7 @@ export class ConnectionManager {
             client = new Client(this.clientInfo, {
                 listMaxPages: this.maxDiscoveryPages,
                 versionNegotiation: {
-                    mode: { pin: MODERN_PROTOCOL_REVISION },
+                    mode: "auto",
                 },
             });
             client.onclose = () => this.handleUnexpectedClose(entry, client!, journal);
@@ -726,7 +725,6 @@ export class ConnectionManager {
             }
             return server;
         }, {
-            legacy: "reject",
             onerror: (error) => serverJournal.recordTransportError(
                 error,
                 this.correlation?.(connectionId),

@@ -21,6 +21,10 @@ For the `Baseline` column:
 There are no `VERIFY` or `GHOST` states: the generated manifest is the contract, so a tool either exists at the
 pinned revision or it does not.
 
+Protocol compatibility uses SDK v2 defaults: modern `2026-07-28` and supported
+2025-era tool clients share the same catalog and authorization requirements.
+Events require the modern protocol. The workbench negotiates automatically.
+
 Repository abbreviations:
 
 - `qyl.mcp` — MCP server, Workbench and dashboard
