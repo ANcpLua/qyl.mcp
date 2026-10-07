@@ -13,9 +13,11 @@ state they need. The current requirements are in
 - [x] Replace the modern-only protocol requirement with SDK v2 compatibility
   and permit necessary Events subscription storage in the working objective.
 
-The active branch `codex/mcp-client-events` now implements the SDK serving
-defaults and ongoing Events authorization. The local results below are verified;
-production and client checks remain separate.
+PR #75 merged the SDK serving defaults and ongoing Events authorization into
+`main`. Production runs that implementation with the collector credential
+configured. ChatGPT web, claude.ai, Codex CLI and Inspector have completed
+personal OAuth and a read-tool call. Claude Code's read call and ChatGPT Events
+delivery remain open; verified results are recorded below.
 
 ## Execution sequence
 
@@ -25,8 +27,8 @@ production and client checks remain separate.
   SDK v2 updates across server, client, core, and adapters as one tested set.
 - [x] Align dashboard/workbench with the current qyl-mcp-server workspace
   package; use exact dependency versions and regenerate the affected lockfiles.
-- [ ] Resolve the known test/OTLP failures and lockfile conflicts. Recheck their
-  causes; the dated PR review below is a starting point.
+- [x] Resolve the combined test/OTLP checks and lockfile conflicts. Current
+  local and CI verification passes; superseded dependency PRs are closed.
 
 ### 2. Adopt SDK serving and negotiation
 
@@ -41,7 +43,7 @@ production and client checks remain separate.
 
 ### 3. Make Events operational locally
 
-- [ ] Verify `MCP_EVENTS_STORE` configuration, persistent storage, and Events
+- [x] Verify `MCP_EVENTS_STORE` configuration, persistent storage, and Events
   discovery when enabled; ordinary tools must also work when Events is off.
 - [x] Verify ownership, filter isolation, callback verification, signed
   delivery, refresh, key rotation, restart survival, expiration, revoked
@@ -65,10 +67,11 @@ settings and apply only the changes needed for this objective.
 
 - [x] Recheck public endpoint reachability and diagnose any actual Cloudflare
   block. Inspect current deployment and Auth0 settings before applying changes.
-- [ ] Apply the necessary authorized settings and deploy the verified build.
+- [x] Apply the necessary authorized settings and deploy the verified build.
   Check both resource metadata URLs, challenge, canonical audience, and scope.
-- [ ] Verify the persistent volume and `MCP_EVENTS_STORE`; complete required
-  plugin domain verification and scan the deployed tools/events.
+- [x] Verify the persistent volume and `MCP_EVENTS_STORE`; discover the deployed
+  tools and Events through an authenticated SDK client.
+- [ ] Complete required plugin domain verification and the client/portal scan.
 
 Auth0 settings to verify: API identifier `https://mcp.qyl.at/mcp`, RFC 9068
 RS256 tokens, `qyl:read`, CIMD, Resource Parameter Compatibility Profile, issuer
@@ -86,7 +89,7 @@ identity. Set `OPENAI_APPS_CHALLENGE` from the portal when required. Verify OIDC
 
 ### 6. Verify real client connections
 
-- [ ] Complete actual CIMD and DCR logins and verify token audience/scope.
+- [x] Complete actual CIMD and DCR logins and verify token audience/scope.
 - [ ] In ChatGPT web, claude.ai, Claude Code, Codex CLI, and MCP Inspector,
   authenticate, list tools, and complete one read-tool call.
 - [ ] Record client version, negotiated protocol, registration path, scopes,
@@ -138,11 +141,16 @@ legacy metric assertion was corrected to the published `items` result field.
 
 ## Production progress on 7 October 2026
 
-- [PR #75](https://github.com/ANcpLua/qyl.mcp/pull/75) is open as a regular PR.
-  Its initial CI lint and verify jobs pass. The Railway plan failed because
-  its action runs npm, which rejects `workspace:7.1.0`. The consumers now use
-  exact `7.1.0`; Bun still resolves both to the local server workspace. The
-  updated CI run remains to be checked.
+- [PR #75](https://github.com/ANcpLua/qyl.mcp/pull/75) was created as a regular
+  PR and merged as `b47221547acf851ad55104139e474eb3619dafe3`. Its final lint,
+  verify, Railway plan and preflight checks passed; main lint/verify passed too.
+  The initial Railway plan failure came from its action running npm, which
+  rejects `workspace:7.1.0`. Both consumers now use exact `7.1.0`; Bun resolves
+  them to the local server workspace.
+- Renovate closed #62/#71/#72/#73 after integration. Closed obsolete #74 after
+  comparing its current patch: the merged locks already contain tsx 4.23.15,
+  proxy-addr 2.0.8, rolldown 1.2.12 and @oxc-project/types 0.152.0, meeting or
+  exceeding all of its updates. No older lockfile was applied.
 - The user renewed Auth0 and Cloudflare logins and explicitly approved removal
   of two unused `qyl-auth0-probe` applications. Both were deleted to free the
   tenant capacity required for the dedicated Events checker.
@@ -151,23 +159,79 @@ legacy metric assertion was corrected to the published `items` result field.
   consented client, and an empty third-party default grant. RFC 9068, resource
   compatibility, CIMD, and issuer identification remain configured.
 - Requested strict DCR through the documented tenant setting. Auth0 omits this
-  setting from its GET response; a fresh real DCR flow must establish the
-  effective behavior. Existing third-party clients report strict mode.
+  setting from its GET response. Codex CLI's fresh DCR application reports
+  strict mode and completed authorization after its explicit `qyl:read` grant
+  was provisioned; automatic third-party permissions remain empty.
 - Created the dedicated Events Management API application and stored its
   credentials in Railway without printing them. It has `read:users`,
   `read:clients`, `read:client_grants`, and `read:grants`. The live checker
   permits the existing authorized profile and rejects missing users/clients.
-  CIMD identity resolution has regression coverage; a real CIMD login and
-  subscription still need verification.
+  CIMD identity resolution has regression coverage. ChatGPT completed a real
+  CIMD login and created the native `trace.error` monitoring task below.
 - Railway's `/data` volume and `MCP_EVENTS_STORE=/data/mcp-events.json` are
-  present. The new runtime has not yet been deployed.
+  present. Deployment `2327f29e-590a-4821-aac7-00af5f17e767` successfully deployed
+  the merged runtime. The first authenticated read probe then found a real
+  upstream failure: `collector request failed (401 Unauthorized)` because
+  `QYL_API_KEY` was absent from the MCP service. Configured the existing key
+  for the collector's sole `default` project through Railway stdin, without
+  printing it or changing collector permissions. The resulting deployment
+  `7eddf1c3-5601-4b60-800c-5efbf6b15777` succeeded with the same source commit.
+  The subsequent main deployment `c4cd34d4-ba86-4277-b6b4-f9f0364fa299`, source
+  `50b1e7de5314319a7a1f953af73cf409a0a5fd2f`, also succeeded and includes the
+  separate Hono 4.13.12 update.
+- A production SDK probe authenticated with the existing Auth0 machine test
+  application and verified audience `https://mcp.qyl.at/mcp`. Its existing
+  machine grant returns `qyl:read qyl:control`; only read tools were called.
+  Both `2026-07-28` and `2025-11-25` listed 11 tools and successfully called
+  `list_metrics` and `list_traces`. Modern `events/list` returned `trace.error`.
+  Requests used the default user agent. This verifies production transport,
+  token validation and collector access, not personal OAuth or Event delivery.
 - Registered ChatGPT's published CIMD with its stable callback and
-  `private_key_jwt`; assigned only `qyl:read`. Actual login remains pending.
+  `private_key_jwt`; assigned only `qyl:read`. The user completed login and
+  consent. ChatGPT displayed live traces and successfully called `list_metrics`.
 - The user approved a Cloudflare configuration rule limited to
   `http.host eq "mcp.qyl.at"` that disables Browser Integrity Check. The rule
   is active; OAuth, WAF, and DDoS configuration are unchanged. Fresh public
   checks now return 200 for health and both protected-resource metadata paths,
   and 401 with the expected `qyl:read` challenge for unauthenticated `/mcp`.
+  Removed the obsolete curl user-agent override from the hosted evaluator.
+
+### Real clients and remaining interactive checks
+
+| Client | Registration and authorization | Observed result |
+| --- | --- | --- |
+| ChatGPT web | Published CIMD, stable redirect, `private_key_jwt`, `qyl:read` | Connected; live trace viewer; `list_metrics({})` succeeded with 0 metrics. Native Events monitoring is active. Its Events path requires `2026-07-28`; the web client does not display a build version. |
+| claude.ai | Published web CIMD, public client, `qyl:read` and `offline_access` | Connected; 11 tools shown (2 interactive, 8 read-only, 1 app-only). A real `list_metrics({})` call returned `items: []`, `has_more: false`. Web build and negotiated revision are not exposed by this UI. |
+| Codex CLI 0.158.0-alpha.2.1 | Fresh strict DCR, PKCE S256, canonical resource, `qyl:read` | Modern feature enabled; 10 model-visible tools; `list_metrics({})` returned `items: []`, `has_more: false` with modern server identity metadata (`qyl.mcp`, 7.1.0). |
+| Claude Code 2.1.291 | Published Claude Code CIMD; qyl OAuth completed | qyl connection and 10 model-visible tools confirmed. The model call stopped because Claude Code's own Anthropic session expired; renewal and the real read call remain pending. |
+| MCP Inspector 2.8.0 | Existing authorized hosted-eval DCR client; PKCE S256, canonical resource, `qyl:read offline_access` | OAuth completed after user consent. UI confirms MCP `2026-07-28`, lists all 11 tools and returns “No metrics recorded (live mode).” for `list_metrics({})`. Added the actual `http://127.0.0.1:6274/oauth/callback` alongside the existing evaluator callback. |
+
+- With explicit user approval, deleted three additional obsolete hosted-eval
+  duplicate applications ending in `5ryBna`, `iY9cDn` and `zmQxHq`. Retained the
+  functional `qyl:read` evaluation client. The freed slots were used for the
+  two Claude CIMD clients and Codex's DCR registration.
+- Codex's automatic add/login initially requested unwanted OIDC scopes. The
+  working configuration specifies `scopes = ["qyl:read"]`. Removed the explicit
+  `oauth_resource` override because this CLI also adds the discovered resource;
+  the successful authorization URL contains one canonical `resource` value.
+- ChatGPT's task `qyl-Testfehler melden` is native Events monitoring for
+  `trace.error`, filtered by `service_name = qyl-mcp-interop-oct7`. Its UI shows
+  an active event trigger. Stored subscription inspection, signed delivery,
+  refresh/restart and unsubscribe verification remain pending.
+- The first attempt to ingest the marked test trace at `api.qyl.at/v1/traces`
+  received Cloudflare 403 / error 1010. No test trace was stored by that attempt.
+  The approved Browser Integrity Check exception covers only `mcp.qyl.at`.
+  Automatic approval rejected registration of a temporary Railway SSH key;
+  that specific additional access is awaiting the user's decision.
+- OpenAI portal authentication is complete. The Plugins pages in both
+  `ancplua` and Personal organizations have no public package/draft, so no
+  domain-verification token is available. No
+  `OPENAI_APPS_CHALLENGE` is configured. The private ChatGPT connection works;
+  public submission verification is not claimed.
+- The user-linked Railway job `112557449308` is attempt 2 of run `37544569134`
+  at the old `50ea32b` source containing `workspace:7.1.0`. Rerunning that job
+  still uses that source. The corrected PR's lint, verify and Railway apply
+  checks succeeded; this old rerun is not a failure of the deployed manifest.
 
 ## Existing implementation on main
 

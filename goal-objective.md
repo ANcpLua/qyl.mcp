@@ -1,7 +1,7 @@
 # qyl.mcp interoperability and Events objective
 
 Updated from the user's requirements on 7 October 2026. This is the working
-objective for the next goal run. It supersedes the older attachment's
+objective for the active goal. It supersedes the older attachment's
 modern-protocol-only and no-user-data requirements. Later user instructions
 take precedence over this document.
 
