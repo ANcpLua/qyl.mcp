@@ -5,7 +5,9 @@ It is **incomplete and has not been uploaded or submitted**. Keep the existing
 private ChatGPT connection; this draft does not create another private plugin.
 
 The plugin package version starts at 1.0.0. The service it connects to reports
-7.1.1 after the prepared patch release; these versions identify different artifacts.
+7.1.1 after the verified patch release; these versions identify different artifacts.
+The published npm artifact passed fresh modern and 2025-era consumer checks
+in release run `37569590560`.
 
 ## Prepared
 
@@ -28,13 +30,12 @@ The plugin package version starts at 1.0.0. The service it connects to reports
 
 ## Finish preparation in order
 
-1. **Confirm publisher identity.** The verified developer identity remains
-   unconfirmed; its field is absent. A GitHub owner name is not
-   evidence of the selected verified publishing identity. The owner completed
-   the phone identity flow, and the `ancplua` organization page now shows
-   **Identity in review** for Individual. Wait for its result; do not press
-   Start again. No identity document was handled by the agent, and no reliable
-   review-duration commitment was found in the official plugin documentation.
+1. **Select the approved publisher identity.** The owner completed the phone
+   flow, and a fresh read of the `ancplua` organization page confirms
+   **Approved** for Individual identity. Do not press Start again. Select that
+   verified identity for the package in the portal; the draft's developer
+   identity field is still absent. A GitHub username is not evidence of its
+   public display name. No identity document was handled by the agent.
 2. **Complete the listing pages.** `https://qyl.at/` is an accessible
    product website. The current [privacy page](https://qyl.at/privacy/) covers
    website performance telemetry and its optional chat widget; it does not
