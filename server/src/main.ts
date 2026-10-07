@@ -376,6 +376,7 @@ async function createHostedRuntime(
     () =>
       createServer({
         transport: "streamable_http",
+        ...(config.publicUrl === undefined ? {} : { uiDomain: config.publicUrl.origin }),
         ...(recordsNativeExecutionEvidence(config) ? {} : { nativeExecution: false }),
         ...(events === undefined ? {} : { events }),
       }),

@@ -337,7 +337,9 @@ bun run start
 
 `MCP_PUBLIC_URL` adds its hostname to the Host and Origin allowlists, and
 `<public-url>/mcp` is the fixed resource identifier tokens are audience-bound to.
-A non-loopback bind requires it.
+A non-loopback bind requires it. Its origin is also advertised as `_meta.ui.domain`
+on both viewer resources for public plugin review. Use a dedicated origin for
+this plugin; local and stdio servers leave the host's default UI origin in place.
 
 The default Auth0 mode accepts only the qyl production Auth0 issuer
 `https://qyl-eu.eu.auth0.com/`, which is pinned in the build and is not
