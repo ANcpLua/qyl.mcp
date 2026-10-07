@@ -79,8 +79,12 @@ live metrics. ChatGPT and both Claude clients used their published CIMD
 identities; Codex used a fresh strict DCR registration and the modern protocol.
 Claude Code's successful response also included the modern server identity
 metadata. Inspector used the existing DCR evaluation client, confirmed MCP
-`2026-07-28` and listed all 11 tools. Signed ChatGPT Events delivery and public
-plugin verification remain open in the checklist.
+`2026-07-28` and listed all 11 tools. The production ChatGPT Events test also
+passed: a matching error reached the subscribed chat, a different service's
+error did not, the subscription survived deployment and automatically renewed,
+and stopping monitoring removed it. A subsequent matching error produced no
+chat notification during more than three polling intervals. Public plugin
+preparation and portal verification remain open in the checklist.
 
 The TypeScript SDK v2 serves MCP revision `2026-07-28` and its supported
 2025-era protocols through one tool factory. HTTP uses the SDK's stateless

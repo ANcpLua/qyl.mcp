@@ -8,8 +8,9 @@ The repository recommendations come from those sources. Production checks on
 and `list_traces` with an Auth0 machine token over both `2026-07-28` and
 `2025-11-25`. Modern Events discovery returned `trace.error`. Personal client
 OAuth and a real read call succeeded in ChatGPT web, claude.ai, Claude Code,
-Codex CLI and Inspector. ChatGPT Events delivery and public plugin verification
-remain pending; see
+Codex CLI and Inspector. Production ChatGPT Events delivery, service filtering,
+automatic renewal, survival across deployment and unsubscribe passed. Public
+plugin preparation and portal verification remain pending; see
 [the verification checklist](MCP-V2-INTEROP-TODO.md).
 
 `+` means the tool should be directly available and is preferred for suitable work.

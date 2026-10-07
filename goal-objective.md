@@ -31,9 +31,11 @@ requests without a qyl call. PR #81 adds the dedicated public UI origin and
 versions both viewer resources; it is merged and deployed with successful main
 CI. Inspector reads both new resource versions, and ChatGPT renders both
 viewers at the dedicated sandbox origin. The production Events store and
-matching ChatGPT delivery are now verified, including service filtering and
-survival across deployment. Continue with automatic subscription renewal,
-unsubscribe and public plugin preparation.
+matching ChatGPT delivery are now verified, including service filtering,
+survival across deployment, automatic renewal and unsubscribe. The task is
+paused, the Events store is empty, and a subsequent matching error produced
+no notification during more than three polling intervals. Continue with the
+evidence PR and public plugin preparation.
 
 The public plugin remains an incomplete local draft. Free use and all eligible
 countries are confirmed. Individual publisher identity is **in review** after

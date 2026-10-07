@@ -108,6 +108,13 @@ Sources: [event payload](../server/src/events.ts),
   or physical deletion. No backup or schedule was created or changed.
 - Removing an Events subscription does not delete Collector telemetry,
   Auth0 account/consent records or copies already returned to a client.
+- The production lifecycle test on 7 October observed the same subscription
+  survive deployment and renew automatically. Pausing its ChatGPT task removed
+  it from the persistent store before expiration. A later controlled error was
+  stored in the Collector but produced no notification over more than three
+  polling intervals; the Events store stayed empty. This demonstrates logical
+  record removal and stopped delivery, not physical erasure. The three
+  synthetic test traces remain subject to Collector retention.
 
 Collector sources inspected in the available checkout:
 `services/qyl.collector/Retention/RetentionOptions.cs`,
