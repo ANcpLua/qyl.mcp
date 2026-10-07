@@ -30,11 +30,11 @@ The plugin package version starts at 1.0.0. The service it connects to reports
 
 1. **Confirm publisher identity.** The verified developer identity remains
    unconfirmed; its field is absent. A GitHub owner name is not
-   evidence of the selected verified publishing identity. The `ancplua`
-   organization page offers **Start** for both individual and business
-   verification; the open identity dialog offers **Start ID Check**, without
-   showing completed verification. The owner was asked to complete individual
-   verification themselves; no identity document was handled by the agent.
+   evidence of the selected verified publishing identity. The owner completed
+   the phone identity flow, and the `ancplua` organization page now shows
+   **Identity in review** for Individual. Wait for its result; do not press
+   Start again. No identity document was handled by the agent, and no reliable
+   review-duration commitment was found in the official plugin documentation.
 2. **Complete the listing pages.** `https://qyl.at/` is an accessible
    product website. The current [privacy page](https://qyl.at/privacy/) covers
    website performance telemetry and its optional chat widget; it does not
@@ -44,14 +44,20 @@ The plugin package version starts at 1.0.0. The service it connects to reports
    support route. A usable support page, applicable published privacy policy
    and terms, and verified publisher details remain to be supplied. Do not
    guess URL paths or substitute the source-code license for service terms.
+   [The service data inventory](service-data-inventory.md) records source-backed
+   fields, destinations, deletion behavior and the selected production settings
+   needed for this work. It is preparation evidence, not a published policy.
 3. **Run review cases and record the demonstration.** Use a dedicated account
-   and sample telemetry. All five positive natural-language cases have been
-   rehearsed using the existing owner's production connection: trace lookup,
-   metrics and sessions behaved as expected; filtered logs and viewer refresh
-   exposed defects that require production rechecking. This does not replace the
-   dedicated reviewer run. Earlier explicit tool tests do not prove that the
-   remaining prompts select the expected tools. Complete the table below against the
-   version to be submitted, then record and verify the actual walkthrough.
+   and sample telemetry. A separate Auth0 login does not itself isolate the
+   configured Collector data; verify reviewer scope before granting access.
+   All five positive natural-language cases have been
+   rehearsed using the existing owner's production connection, and all three
+   negative cases passed. The log-filter, viewer-refresh and deletion-routing
+   defects found during rehearsal were fixed, deployed and successfully
+   rechecked in ChatGPT. This does not replace the dedicated reviewer run.
+   The public UI-origin deployment is also verified: both viewers render at
+   the dedicated sandbox origin and trace Refresh retains its limit. Record
+   and verify the actual walkthrough against the version to be submitted.
    No recording link or reviewer credentials have been supplied.
 4. **Finalize and inspect the ZIP.** After the missing fields and evidence are
    ready, archive only `qyl/`, inspect the resulting archive and validate its
@@ -70,18 +76,19 @@ The plugin package version starts at 1.0.0. The service it connects to reports
 | Case | Status | Evidence needed |
 | --- | --- | --- |
 | Recent traces and one detail lookup | Owner-account rehearsal passed; reviewer run pending | UI listed ten traces and inspected the newest matching ID with service, duration and error status; raw argument JSON was not inspected |
-| Filtered error logs | Owner-account rehearsal found a defect; correction not yet deployed | Service/ERROR query returned unrelated INFO records; repeat after the Collector snake_case query correction and add the MCP regression |
+| Filtered error logs | Owner-account production retest passed; reviewer run pending | After Collector PR #640 deployed, the request for service qyl-mcp-interop-oct7, minimum ERROR and limit 20 returned 0 matches and no unrelated records. Direct service/limit probes also passed; the matching ERROR fixture is covered locally, not yet by production ingestion |
 | Metric discovery | Owner-account rehearsal passed; reviewer run pending | UI reports metric catalog lookup, 0 instruments and no more pages; raw arguments were not exposed |
 | Recent sessions | Owner-account rehearsal passed; reviewer run pending | UI lists five actual session IDs, ended status, zero recorded errors and trace/span counts |
-| Interactive Trace Explorer | Initial display passed; refresh defect found | Ten live traces initially; Refresh broadened to twenty. Local correction preserves the display query, with production recheck pending |
-| Reject deletion request | Owner-account rehearsal failed routing requirement; retest pending | ChatGPT correctly declined deletion, but first queried telemetry and opened the viewer. Added shared server instructions to decline unsupported action-only requests without qyl calls; verify after deployment |
+| Interactive Trace Explorer | Owner-account production retest passed; reviewer run pending | After MCP PR #80 deployed, a fresh chat displayed ten live traces and the viewer's own Refresh completed with ten traces again |
+| Reject deletion request | Owner-account production retest passed; reviewer run pending | After refreshing qyl metadata, a fresh chat directly explained that deletion is unavailable; no qyl activity or viewer appeared before the refusal |
 | Reject production rollback | Owner-account rehearsal passed; reviewer run pending | Visible response explains that no rollback action exists; no qyl invocation or fabricated deployment |
 | Reject public price search | Owner-account rehearsal passed; reviewer run pending | Visible response explains that qyl has no public-search/pricing capability; no qyl invocation or fabricated internet results |
 
 The existing [ChatGPT rehearsal](https://chatgpt.com/c/6ac594cc-4ac8-8332-b3f6-e43418e1a9ce)
-is owner-account evidence, not a public reviewer-access link. See
-[the current checkpoint](../MCP-CHECKPOINT.md) for the pushed Collector correction
-and remaining execution order.
+and [fresh retest chat](https://chatgpt.com/c/6ac59e68-2d94-8326-b7e1-da76b736aabf)
+are owner-account evidence, not public reviewer-access links. See
+[the current checkpoint](../MCP-CHECKPOINT.md) for deployment evidence and the
+remaining execution order.
 
 ## Demonstration outline
 

@@ -10,16 +10,18 @@ state they need. The current requirements are in
 
 [MCP-CHECKPOINT.md](MCP-CHECKPOINT.md) is the current resume summary. SDK and
 dependency integration, local Events tests and all five real client logins/read
-calls are complete. The remaining order is: deploy the Collector/MCP corrections
-and repeat three ChatGPT review cases; demonstrate the complete production
+calls are complete. Collector/MCP corrections are deployed and all eight
+owner-account review cases pass. The dedicated public UI-origin deployment is
+also verified. The remaining order is: demonstrate the complete production
 Events lifecycle; finish public plugin preparation and portal verification.
 
-The 01:09 UTC checkpoint confirms public health/resource metadata HTTP 200,
-Collector PR #640 merged with its deployment waiting on running main CI, and
-MCP PR #80 open with green CI at `acb0872`. The expanded log-filter smoke and
-local Trace Explorer refresh checks pass. The `ancplua` identity dialog still
-offers **Start ID Check**, without a verified result. These checks do not
-replace the remaining production demonstrations.
+Collector PR #640 (`d07c45ad`) and MCP PR #80 (`a82e1786`) passed main CI and
+Railway deployment. ChatGPT rechecks verify the service/ERROR filter, ten-trace
+viewer refresh and deletion-only routing. PR #81 (`3ae30b52`) is merged and
+deployed with green main CI; both viewers render at the dedicated origin.
+Individual publisher identity now
+shows **Identity in review** after the owner's phone flow; do not restart it.
+These results do not replace the remaining Events and public-review evidence.
 
 ## Established starting point
 
@@ -76,17 +78,21 @@ public plugin verification remain open; verified results are recorded below.
   deliberate changes. Resolve failures without weakening valid requirements.
 - [x] Correct the Collector filter defect found in the later natural ChatGPT
   review; [PR #640](https://github.com/ANcpLua/qyl/pull/640) passed PR CI and merged.
-- [ ] Verify the Collector deployment and repeat the filtered production
+- [x] Verify the Collector deployment and repeat the filtered production
   request. The earlier broad smoke only checked
   an unfiltered `search_logs` call and did not detect this defect. The expanded
   MCP-to-Collector filter regression now passes locally against the correction.
-- [ ] Deploy and recheck the Trace Explorer refresh correction in ChatGPT.
+- [x] Deploy and recheck the Trace Explorer refresh correction in ChatGPT.
   Local browser checks confirm that the original limit, trace ID and session
   ID survive refresh; the new `mcp-app-v2.html` resource and snapshot are built.
-- [ ] Complete MCP PR #80's remaining merge/review and deployment gates, then
+- [x] Complete MCP PR #80's remaining merge/review and deployment gates, then
   refresh ChatGPT's connection and repeat the deletion-only routing check.
   Its lint/verify/security checks passed at `acb0872`; the CodeRabbit success
   status reported a rate limit and is not evidence of a completed review.
+- [x] Verify PR #81's production deployment and both viewers after refreshing
+  ChatGPT metadata. Hosted resources use the validated public origin and new
+  `mcp-app-v3.html` / `mcp-dashboard-v2.html` URIs. Local build, four focused
+  tests, lint and the full server smoke pass; PR CI passed before merge.
 
 ### 5. Prepare and verify production
 
@@ -260,10 +266,11 @@ legacy metric assertion was corrected to the published `items` result field.
   manifests, listing copy, release notes and five positive/three negative
   review cases. The owner confirmed all eligible countries, free use and no
   purchases or planned buy-ins. The verified publisher identity is still
-  unconfirmed; the `ancplua` portal offers **Start** for both verification
-  types. The draft manifests pass schema/field checks and contain a verified
+  unconfirmed; after the owner's phone flow, the `ancplua` portal shows
+  **Identity in review** for Individual. Do not start the flow again while
+  review is pending. The draft manifests pass schema/field checks and contain a verified
   square PNG for the logo and composer. Listing policy/support pages, a
-  recorded demo, reviewer access and case execution remain open before a
+  recorded demo and dedicated reviewer access/case execution remain open before a
   complete package can enter the portal verification flow.
 - The user-linked Railway job `112557449308` is attempt 2 of run `37544569134`
   at the old `50ea32b` source containing `workspace:7.1.0`. Rerunning that job
@@ -287,9 +294,12 @@ legacy metric assertion was corrected to the published `items` result field.
   HTTP tests passed in the implementation run. Existing analyzer warnings and
   a RouteHandlerAnalyzer AD0001 warning were emitted; the run was not warning
   free. Regular [PR #640](https://github.com/ANcpLua/qyl/pull/640) passed PR CI
-  and merged as `d07c45ad` at 01:04 UTC. At 01:09 UTC, main CI is running and
-  deployment `8f3afed5-52c2-415e-92d4-0fc1262cb63b` is waiting. Production
-  retesting remains open.
+  and merged as `d07c45ad` at 01:04 UTC. Main CI `37555254964` and deployment
+  `8f3afed5-52c2-415e-92d4-0fc1262cb63b` succeeded. A real ChatGPT request for
+  service `qyl-mcp-interop-oct7`, minimum ERROR and limit 20 returned 0 matching
+  records, with no unrelated INFO logs. Direct authenticated service/limit
+  probes returned the requested service and count; the controlled matching
+  production ERROR fixture remains part of the pending Events demonstration.
 - The expanded `smoke:otlp` passes against the corrected real Collector. It
   persists five log fixtures differing by service, severity, trace or body;
   the actual MCP tool must return exactly the matching record, an empty result
@@ -308,14 +318,18 @@ legacy metric assertion was corrected to the published `items` result field.
   preserve limit 10, one exact trace ID and a session filter with limit 2.
   The UI resource is versioned to `ui://qyl-explorer/mcp-app-v2.html`; deliberate
   snapshot regeneration changes only that URI/name. Build, lint and all 14
-  affected schema/resource/catalog tests pass. Production rechecking remains
-  open.
+  affected schema/resource/catalog tests pass. PR #80 merged as `a82e1786`;
+  main CI `37556048053` and deployment
+  `726f1c53-4612-4616-b711-f612599e623f` succeeded. After refreshing qyl metadata,
+  a fresh ChatGPT chat opened ten live traces, and its viewer's own Refresh
+  completed with ten traces again.
 - The deletion-only negative case was not a pass: ChatGPT correctly reported
   that deletion is unavailable, but queried traces/sessions and opened a viewer
   first. Shared server instructions now explicitly scope qyl to telemetry
   investigation and direct unsupported action-only requests to a concise
-  limitation response without qyl calls. This guidance still needs a fresh
-  production connection and negative-case retest; it is not authorization.
+  limitation response without qyl calls. After PR #80 deployed, the fresh-chat
+  retest passed: direct refusal with no visible qyl activity or viewer. This
+  guidance is not authorization.
   Both `2026-07-28` and `2025-11-25` local SDK clients received the full
   368-character instruction text; build and lint pass.
 - The rollback-only and public-price-search negative rehearsals passed in the
@@ -323,6 +337,22 @@ legacy metric assertion was corrected to the published `items` result field.
   capability without a qyl invocation or fabricated result. The public-search
   response was confirmed complete during the 01:09 UTC checkpoint. These UI
   observations do not replace the dedicated reviewer/sample-data run.
+- All eight owner-account rehearsals now pass. The three formerly failing
+  cases were rechecked against deployed corrections; this does not establish
+  public-review readiness or the Events delivery lifecycle.
+- [PR #81](https://github.com/ANcpLua/qyl.mcp/pull/81) sets `_meta.ui.domain`
+  from the validated `MCP_PUBLIC_URL` origin for both hosted resources. Local
+  and stdio resources omit it; their empty self-contained CSP is preserved.
+  Resource URIs are versioned to `mcp-app-v3.html` and
+  `mcp-dashboard-v2.html`. Build, lint, four resource/annotation/manifest tests
+  and the full server smoke passed. PR lint, verify and security checks passed
+  before merging as `3ae30b52`. Main CI `37557011340` and deployment
+  `cf19d6da-2feb-491a-95d3-9809ad461575` succeeded. A reconnected Inspector
+  lists and reads both new resource versions. After refreshing qyl metadata,
+  ChatGPT renders both viewers at `mcp-qyl-at.web-sandbox.oaiusercontent.com`.
+  Trace Refresh again retains ten results; the dashboard shows the valid
+  empty state for its 24-hour window. The exact resource payload metadata
+  was verified locally; production origin behavior is observed in the browser.
 
 ## Existing implementation on main
 
