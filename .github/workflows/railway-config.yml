@@ -34,7 +34,7 @@ jobs:
       # railway.ts imports railway/iac, which .railway/package.json pins. railwayapp/config
       # installs packages only at the repository root, so the SDK goes where railway.ts
       # resolves it from before the action runs. bun comes from mise.toml, the toolchain pin.
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           install_args: bun
       - name: Install Railway configuration dependencies
@@ -56,7 +56,7 @@ jobs:
       # railway.ts imports railway/iac, which .railway/package.json pins. railwayapp/config
       # installs packages only at the repository root, so the SDK goes where railway.ts
       # resolves it from before the action runs. bun comes from mise.toml, the toolchain pin.
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           install_args: bun
       - name: Install Railway configuration dependencies
