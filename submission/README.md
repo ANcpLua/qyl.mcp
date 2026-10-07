@@ -5,7 +5,7 @@ It is **incomplete and has not been uploaded or submitted**. Keep the existing
 private ChatGPT connection; this draft does not create another private plugin.
 
 The plugin package version starts at 1.0.0. The service it connects to reports
-7.1.0; these versions identify different artifacts.
+7.1.1 after the prepared patch release; these versions identify different artifacts.
 
 ## Prepared
 
