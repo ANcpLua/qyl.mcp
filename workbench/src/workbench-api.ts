@@ -216,6 +216,10 @@ export class WorkbenchApi {
     private startProtocolOperation(
         operation: StartedConnectionProtocolOperation,
     ): ActiveConnectionProtocolOperation | undefined {
+        if (operation.role === "server" && operation.method === "tools/call"
+            && operation.nativeExecutionTelemetry === true) {
+            return undefined;
+        }
         // ExecutionService owns the correlated client tools/call span because it
         // also classifies CallToolResult.isError. The journal still injects its
         // execution-local carrier and records the request/response evidence.
@@ -263,20 +267,6 @@ export class WorkbenchApi {
                 this.correlations.linkTelemetry(executionId, span.traceId, span.spanId);
             }
         };
-        if (operation.role === "server" && operation.method === "tools/call"
-            && (operation.transport === "inproc" || operation.transport === "builtin")) {
-            // SDK v2 constructs the server during this request. Decide after
-            // dispatch, using that request's instance, so construction failures
-            // retain a fallback span and successful native calls have one span.
-            return {
-                run: (dispatch) => dispatch(),
-                complete: (completed) => {
-                    if (completed.nativeExecutionTelemetry !== true) {
-                        complete(startTelemetry(), completed);
-                    }
-                },
-            };
-        }
         const active = startTelemetry();
         return {
             ...(active.propagation === undefined ? {} : { propagation: active.propagation }),
