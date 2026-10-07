@@ -14,16 +14,20 @@ calls are complete. Collector/MCP corrections are deployed and all eight
 owner-account review cases pass. The dedicated public UI-origin deployment is
 also verified. Production Events delivery, service filtering, restart survival,
 automatic renewal and unsubscribe now pass. Evidence PR #83 is merged and
-deployed. The npm 7.1.0 artifact still has the former rejection policy; publish
-the prepared 7.1.1 patch before merging the matching website guidance in qyl.at
-PR #16. Public plugin preparation and portal verification remain open.
+deployed. Release PR #84 is merged and deployed; npm `qyl-mcp-server@7.1.1`
+now contains the correction and SDK 2.3.1. The trusted publication run passed
+fresh npx consumer checks in both protocol eras. The earlier GitHub connection
+failure and terminal handoff are resolved. qyl.at PR #16's final landing-panel
+correction passed full CI `37570288959`. Automatic approval rejected its
+production merge; the single explicit rollout request remains pending.
+Public plugin preparation and portal verification remain open.
 
 Collector PR #640 (`d07c45ad`) and MCP PR #80 (`a82e1786`) passed main CI and
 Railway deployment. ChatGPT rechecks verify the service/ERROR filter, ten-trace
 viewer refresh and deletion-only routing. PR #81 (`3ae30b52`) is merged and
 deployed with green main CI; both viewers render at the dedicated origin.
-Individual publisher identity now
-shows **Identity in review** after the owner's phone flow; do not restart it.
+The `ancplua` organization's Individual publisher identity now shows
+**Approved**; do not restart the identity flow.
 These results complete the requested Events lifecycle; dedicated reviewer
 access, a recording and public submission evidence remain open.
 
@@ -110,6 +114,9 @@ settings and apply only the changes needed for this objective.
   Check both resource metadata URLs, challenge, canonical audience, and scope.
 - [x] Verify the persistent volume and `MCP_EVENTS_STORE`; discover the deployed
   tools and Events through an authenticated SDK client.
+- [x] Publish corrected npm 7.1.1 and verify fresh consumers in both eras.
+- [x] Confirm the organization's Individual identity is Approved.
+- [ ] Deploy and verify the matching qyl.at protocol and release guidance.
 - [ ] Complete required plugin domain verification and the client/portal scan.
 
 Auth0 settings to verify: API identifier `https://mcp.qyl.at/mcp`, RFC 9068
@@ -309,10 +316,9 @@ legacy metric assertion was corrected to the published `items` result field.
 - [The public package draft](submission/README.md) now contains portable
   manifests, listing copy, release notes and five positive/three negative
   review cases. The owner confirmed all eligible countries, free use and no
-  purchases or planned buy-ins. The verified publisher identity is still
-  unconfirmed; after the owner's phone flow, the `ancplua` portal shows
-  **Identity in review** for Individual. Do not start the flow again while
-  review is pending. The draft manifests pass schema/field checks and contain a verified
+  purchases or planned buy-ins. After the owner's phone flow, a fresh read of
+  the `ancplua` portal confirms **Approved** for Individual identity. The identity
+  must still be selected for the public package. The draft manifests pass schema/field checks and contain a verified
   square PNG for the logo and composer. Listing policy/support pages, a
   recorded demo and dedicated reviewer access/case execution remain open before a
   complete package can enter the portal verification flow.
@@ -398,6 +404,25 @@ legacy metric assertion was corrected to the published `items` result field.
   Trace Refresh again retains ten results; the dashboard shows the valid
   empty state for its 24-hour window. The exact resource payload metadata
   was verified locally; production origin behavior is observed in the browser.
+
+## npm release verification on 7 October 2026
+
+- Inspection found npm 7.1.0 still carried SDK 2.0.0 and the obsolete blanket
+  rejection. [PR #84](https://github.com/ANcpLua/qyl.mcp/pull/84) aligns the
+  package and workspace consumers at 7.1.1, regenerates the lockfile and adds
+  an SDK-based published-consumer check for both protocol eras.
+- PR CI `37563027397` passed before merge as `2073dc2d`. Main CI `37567884322`
+  and Railway deployment `50e768c7-90f8-4333-9b41-ea11baff94cb` succeeded.
+  Public health/resource-metadata probes returned 200 and unauthenticated MCP
+  returned 401 after deployment.
+- Trusted npm publication [run 37569590560](https://github.com/ANcpLua/qyl.mcp/actions/runs/37569590560)
+  completed successfully. It ran the full build/test gate and published with
+  OIDC/provenance, then installed the actual package from fresh temporary
+  directories. Independent SDK v2 clients passed modern and 2025-era discovery,
+  the expected version, tool listing and a labelled demo-metrics call.
+- The npm `latest` metadata now reports `qyl-mcp-server@7.1.1`, gitHead
+  `2073dc2d2bcc9e70c75f93056867ba790965c7ce`, and exact core/server 2.3.1.
+  The old terminal merge/publish handoff is resolved and must not be repeated.
 
 ## Existing implementation on main
 

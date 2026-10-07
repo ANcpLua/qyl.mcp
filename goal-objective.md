@@ -35,15 +35,19 @@ matching ChatGPT delivery are now verified, including service filtering,
 survival across deployment, automatic renewal and unsubscribe. The task is
 paused, the Events store is empty, and a subsequent matching error produced
 no notification during more than three polling intervals. Evidence PR #83 is
-merged and deployed with successful main CI. A registry-artifact check found
-that npm 7.1.0 still rejects 2025 clients; publish the prepared 7.1.1 correction,
-then finish qyl.at PR #16 and public plugin preparation.
+merged and deployed with successful main CI. Release PR #84 is also merged
+and deployed. npm `qyl-mcp-server@7.1.1` is published with SDK 2.3.1, and fresh
+npx consumers passed discovery, tool listing and demo metrics in both protocol
+eras. The earlier GitHub connection failure is resolved; its terminal handoff
+is no longer needed. qyl.at PR #16's final CI passed; automatic approval rejected
+its production merge, and one explicit rollout request is pending. Finish that
+rollout after approval, then continue public plugin preparation.
 
 The public plugin remains an incomplete local draft. Free use and all eligible
-countries are confirmed. Individual publisher identity is **in review** after
-the owner completed the phone flow; do not restart the identity check. Verified
-identity, listing/reviewer/demo evidence and the portal challenge/scan remain
-open. Do not equate successful private client
+countries are confirmed. The `ancplua` organization now shows Individual
+identity **Approved**. Select that verified identity when preparing the portal
+entry; do not restart the identity check. Public listing/support/policy details,
+reviewer/demo evidence and the portal challenge/scan remain open. Do not equate successful private client
 connections with completed public submission.
 
 ## SDK and protocol requirements

@@ -8,9 +8,10 @@ directory `submission/qyl/`.
 
 ## Verified service boundary
 
-- Production MCP is `https://mcp.qyl.at/mcp`. Documentation PR #83
-  (`7157a08c`) is deployed as `27aefb63-0e09-40ef-96bf-c9ef3ce73f43`;
-  its runtime code is unchanged from the verified PR #81 (`3ae30b52`).
+- Production MCP is `https://mcp.qyl.at/mcp`. Release PR #84 (`2073dc2d`) is
+  deployed as `50e768c7-90f8-4333-9b41-ea11baff94cb`, reporting service version
+  7.1.1. This version/publication change preserves the data-handling runtime
+  verified with PR #81 (`3ae30b52`).
 - Auth0 validates callers for the qyl MCP audience and `qyl:read`. The server
   authorizes each request. Clients receive telemetry returned by the configured
   Collector through read-only tools and optional viewers.
@@ -127,7 +128,8 @@ The public policy and support pages still need the verified publishing identity,
 a confirmed public contact/support route, account/data-deletion handling,
 provider retention, and any additional data uses outside the code
 above. Do not infer these from a GitHub username, free pricing or an open-source
-license. The individual identity check is currently in review.
+license. The `ancplua` organization now shows the Individual identity check as
+Approved; the public package still needs its selected publisher identity.
 
 Reviewer access needs an explicitly authorized account scoped to sample data.
 The existing owner-account rehearsals do not supply that isolation or reviewer
