@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { McpServer } from "@modelcontextprotocol/server";
+import { z } from "zod";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
@@ -1415,6 +1418,43 @@ test("overlapping tool calls retain request-bound correlation through journals, 
             assert(entries.every((entry) => entry.correlation?.evaluationRunId === "overlap-evaluation"));
             assert(entries.every((entry) => entry.correlation?.testCaseId === testCaseId));
         }
+    } finally {
+        await harness.close();
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test("non-native tool handlers execute inside the fallback server context", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "qyl-workbench-server-context-"));
+    const operationContext = new AsyncLocalStorage<string>();
+    const harness = await startHarness(join(directory, "state.json"), {
+        serverFactory: () => {
+            const server = new McpServer({ name: "context-fixture", version: "1.0.0" });
+            server.registerTool("fixture.context", { inputSchema: z.object({}), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } }, async () => {
+                await Promise.resolve();
+                const role = operationContext.getStore() ?? "none";
+                return { content: [{ type: "text", text: role }], structuredContent: { role } };
+            });
+            return server;
+        },
+    });
+    try {
+        const serverId = await fixtureServerId(harness);
+        const spans: McpOperationInput[] = [];
+        harness.workbench.telemetry.startOperation = (input) => ({
+            run: (dispatch) => operationContext.run(input.role, dispatch),
+            end(completion) { spans.push({ ...input, ...completion }); return undefined; },
+        });
+        const accepted = await postJson(harness, `/workbench/workspaces/default/servers/${serverId}/executions`, {
+            tool_name: "fixture.context", arguments: {}, timeout_ms: 5_000,
+            idempotency_key: "fallback-server-context",
+        });
+        assert.equal(accepted.response.status, 202);
+        const executionId = String(record(accepted.body.execution).id);
+        const execution = await waitForExecution(harness, serverId, executionId);
+        assert.equal(execution.status, "succeeded");
+        assert.equal(record(record(execution.result).structuredContent).role, "server");
+        assert.equal(spans.filter(span => span.role === "server" && span.method === "tools/call").length, 1);
     } finally {
         await harness.close();
         await rm(directory, { recursive: true, force: true });

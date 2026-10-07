@@ -270,7 +270,10 @@ export function resolveEnvironmentHeaders(
 }
 
 export class ConnectionManager {
-    private readonly inProcessRequestScope = new AsyncLocalStorage<{ nativeExecutionTelemetry: boolean }>();
+    private readonly inProcessRequestScope = new AsyncLocalStorage<{
+        nativeExecutionTelemetry: boolean;
+        runDispatch?: <T>(dispatch: () => T) => T;
+    }>();
     private readonly entries = new Map<string, ConnectionEntry>();
     private readonly builtins = new Map<string, InProcessMcpServerFactory>();
     private readonly subscribers = new Set<(snapshot: ConnectionSnapshot) => void>();
@@ -730,9 +733,25 @@ export class ConnectionManager {
                 throw new Error("In-process MCP handler is closed.");
             }
             const requestScope = this.inProcessRequestScope.getStore();
-            if (requestScope !== undefined) {
-                requestScope.nativeExecutionTelemetry = hasNativeExecutionTelemetry(server);
-            }
+            const nativeExecutionTelemetry = hasNativeExecutionTelemetry(server);
+            const connect = server.server.connect.bind(server.server);
+            server.server.connect = async (transport) => {
+                await connect(transport);
+                const dispatch = transport.onmessage;
+                // Both SDK serving paths connect the underlying server before
+                // delivering a message. Start the journal span at that boundary,
+                // once the actual instance's telemetry ownership is known.
+                transport.onmessage = (message, extra) => {
+                    if (requestScope !== undefined) {
+                        requestScope.nativeExecutionTelemetry = nativeExecutionTelemetry;
+                        if (requestScope.runDispatch !== undefined) {
+                            requestScope.runDispatch(() => dispatch?.(message, extra));
+                            return;
+                        }
+                    }
+                    dispatch?.(message, extra);
+                };
+            };
             return server;
         }, {
             onerror: (error) => serverJournal.recordTransportError(
@@ -773,29 +792,39 @@ export class ConnectionManager {
     ): Promise<Response> {
         const correlation = this.correlation?.(connectionId);
         const requestMessage = await parseJsonRpcMessage(request.clone());
-        const activeOperation = requestMessage === undefined
-            ? undefined
-            : journal.startOperation("inbound", requestMessage, correlation);
-        if (requestMessage !== undefined) {
+        let activeOperation: ActiveProtocolOperation | undefined;
+        let started = false;
+        const start = () => {
+            if (started || requestMessage === undefined) return;
+            started = true;
+            activeOperation = journal.startOperation("inbound", requestMessage, correlation);
             journal.recordMessage(
                 "inbound",
                 requestMessage,
                 correlation,
                 activeOperation === undefined ? {} : { activeOperation },
             );
+        };
+        const requestScope = this.inProcessRequestScope.getStore();
+        if (requestScope !== undefined) {
+            requestScope.runDispatch = (dispatch) => {
+                start();
+                return activeOperation === undefined ? dispatch() : activeOperation.run(dispatch);
+            };
         }
 
         try {
-            const response = await (
-                activeOperation?.run(() => fetchHandler(request))
-                ?? fetchHandler(request)
-            );
+            const response = await fetchHandler(request);
+            // Factory and pre-dispatch failures still need a journaled error,
+            // even though no SDK transport message reached the instance.
+            start();
             const responseMessage = await parseJsonRpcMessage(response.clone());
             if (responseMessage !== undefined) {
                 journal.recordMessage("outbound", responseMessage, correlation);
             }
             return response;
         } catch (error) {
+            start();
             journal.recordTransportError(error, correlation);
             throw error;
         }

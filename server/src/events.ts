@@ -288,7 +288,7 @@ export class EventsRuntime {
   private readonly sleep: NonNullable<EventsRuntimeOptions["sleep"]>;
   private readonly log: (message: string) => void;
   private readonly verified = new Map<string, number>();
-  private readonly seen = new Map<string, Set<string>>();
+  private readonly seen = new Map<string, { source: string; traces: Set<string> }>();
   private ready: Promise<void> | undefined;
   private timer: NodeJS.Timeout | undefined;
   private polling: Promise<void> | undefined;
@@ -579,7 +579,8 @@ export class EventsRuntime {
     const retainedKeys = new Set<string>();
     for (const subscription of state.subscriptions) {
       try {
-        retainedKeys.add(this.sourceKey(subscription));
+        this.sourceKey(subscription);
+        retainedKeys.add(subscription.id);
       } catch (error) {
         if (!(error instanceof CollectorAccessError)) throw error;
       }
@@ -596,19 +597,24 @@ export class EventsRuntime {
         return [];
       }
 
-      const seen = this.seen.get(key);
-      if (seen === undefined) {
-        this.seen.set(key, new Set(traces.filter((trace) => trace.has_error).map((trace) => trace.trace_id)));
-        return [];
-      }
-      const fresh = traces.filter((trace) => trace.has_error && !seen.has(trace.trace_id));
-      for (const trace of fresh) seen.add(trace.trace_id);
-      if (seen.size > MAX_SEEN_TRACES) {
-        this.seen.set(key, new Set([...seen].slice(-MAX_SEEN_TRACES)));
-      }
       const deliveries: Promise<void>[] = [];
-      for (const trace of fresh) {
-        for (const subscription of group) {
+      for (const subscription of group) {
+        const previous = this.seen.get(subscription.id);
+        if (previous === undefined || previous.source !== key) {
+          this.seen.set(subscription.id, {
+            source: key,
+            traces: new Set(traces.filter((trace) => trace.has_error).map((trace) => trace.trace_id)),
+          });
+          continue;
+        }
+        // Fetch once per project; authorization outages must not advance the
+        // delivery baseline belonging to a different subscription.
+        const fresh = traces.filter((trace) => trace.has_error && !previous.traces.has(trace.trace_id));
+        for (const trace of fresh) previous.traces.add(trace.trace_id);
+        if (previous.traces.size > MAX_SEEN_TRACES) {
+          previous.traces = new Set([...previous.traces].slice(-MAX_SEEN_TRACES));
+        }
+        for (const trace of fresh) {
           if (matches(subscription, trace)) deliveries.push(this.deliver(subscription, trace, key));
         }
       }

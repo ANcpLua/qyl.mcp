@@ -275,7 +275,7 @@ test("Events poll and deduplicate within each account's Collector scope", { time
 });
 
 for (const configured of [false, true]) {
-  test(`Events share one poll for accounts reading the same ${configured ? "assigned" : "default"} project`, async (context) => {
+  test(`Events share a ${configured ? "assigned" : "default"} project poll while retaining each account's outage cursor`, async (context) => {
     environment(context, {
       MCP_COLLECTOR_PROJECTS: configured
         ? JSON.stringify([{ ...PROJECTS[0], subjects: [OWNER, REVIEWER] }]) : undefined,
@@ -284,9 +284,15 @@ for (const configured of [false, true]) {
     context.after(() => rm(dir, { recursive: true, force: true }));
     let reads = 0;
     let phase = 0;
+    let ownerUnavailable = false;
     const deliveries: string[] = [];
     const runtime = new EventsRuntime({
-      store: createEventStore(join(dir, "events.json")), isAuthorized: async () => true, log: () => {},
+      store: createEventStore(join(dir, "events.json")),
+      isAuthorized: async (principal) => {
+        if (ownerUnavailable && principal.subject === OWNER) throw new Error("temporary authorization outage");
+        return true;
+      },
+      log: () => {},
       recentTraces: async () => {
         reads++;
         return phase === 0 ? [] : [{ ...getDemo().traces[0]!, has_error: true }];
@@ -308,8 +314,15 @@ for (const configured of [false, true]) {
     await runtime.poll();
     assert.equal(reads, 1);
     phase = 1;
+    ownerUnavailable = true;
     await runtime.poll();
     assert.equal(reads, 2);
+    assert.deepEqual(deliveries, ["/1"]);
+    ownerUnavailable = false;
+    await runtime.poll();
+    assert.equal(reads, 3);
     assert.deepEqual(deliveries.sort(), ["/0", "/1"]);
+    await runtime.poll();
+    assert.equal(deliveries.length, 2, "recovery must not duplicate another account's delivery");
   });
 }
