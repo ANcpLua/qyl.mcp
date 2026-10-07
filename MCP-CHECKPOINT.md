@@ -12,8 +12,8 @@ evidence in [MCP-V2-INTEROP-TODO.md](MCP-V2-INTEROP-TODO.md).
 | SDK and dependencies | SDK v2 defaults serve both supported wire eras. PRs #75 and #78 are merged. The earlier build/test/smoke evidence includes 320 tests. | Preserve these requirements while fixing the newly discovered filter regression. |
 | Five real clients | ChatGPT web, claude.ai, Claude Code, Codex CLI and Inspector completed personal OAuth, catalog discovery and a real read call during this goal. | The basic connection milestone is complete; do not repeat all five logins. |
 | Production endpoint | Fresh checkpoint probes returned HTTP 200 for `/healthz` and protected-resource metadata. | These checks do not prove that every query filter works. |
-| Collector filters | A natural ChatGPT request for service-specific error logs returned unrelated INFO records. The Collector consumed camelCase query names where contract 11.2 requires snake_case. Correction `889244fa` is in regular [PR #640](https://github.com/ANcpLua/qyl/pull/640); 21 targeted tests passed. The added MCP-to-Collector regression also passes against that build. | Finish CI, merge/deploy the Collector correction and repeat the real filtered request. |
-| Trace Explorer refresh | The ChatGPT viewer initially showed the requested ten traces but refreshed to twenty. The local correction reuses the original display query. Browser checks preserve limit 10, a specific trace ID and a session filter with limit 2. Fourteen affected schema/resource/catalog tests pass. | Publish/deploy the MCP change, refresh the connection for the versioned UI resource and repeat the ChatGPT check. |
+| Collector filters | A natural ChatGPT request for service-specific error logs returned unrelated INFO records. The Collector consumed camelCase query names where contract 11.2 requires snake_case. [PR #640](https://github.com/ANcpLua/qyl/pull/640) passed CI and merged as `d07c45ad`. Twenty-one targeted tests and the expanded MCP-to-Collector regression passed. | Track deployment `8f3afed5-52c2-415e-92d4-0fc1262cb63b` and repeat the real filtered request. |
+| Trace Explorer refresh | The ChatGPT viewer initially showed the requested ten traces but refreshed to twenty. The correction is in [PR #80](https://github.com/ANcpLua/qyl.mcp/pull/80). Browser checks preserve limit 10, a specific trace ID and a session filter with limit 2. Fourteen affected schema/resource/catalog tests pass. | Finish CI/deployment, refresh the connection for the versioned UI resource and repeat the ChatGPT check. |
 | ChatGPT Events | Local lifecycle tests passed; a native `trace.error` task was created for `service_name = qyl-mcp-interop-oct7`. | Stored subscription, signed delivery, filtering, refresh/restart and unsubscribe still lack the complete production demonstration. |
 | Public plugin | A local package draft, icon and eight review prompts exist. Free use and availability in all eligible countries are confirmed by the owner. | Publisher verification, applicable public policy/support pages, reviewer access, demo, remaining review cases, domain verification and portal scan. No package has been uploaded or submitted. |
 
@@ -34,12 +34,14 @@ branch, absent filter PR, merged MCP PRs, endpoint health and the portal status.
 ## Resume in this order
 
 1. **Finish the two verified corrections.** Complete Collector PR #640 through
-   the required CI checks, merge and deployment, then repeat the failing
-   natural-language request. The expanded MCP OTLP smoke already verifies
+   deployment (CI and merge are complete), then repeat the failing
+   natural-language request. Finish MCP PR #80 and its deployment. The expanded MCP OTLP smoke already verifies
    service/severity/trace/body filters, an empty result and the requested limit.
    Publish the MCP regression, Trace Explorer refresh correction and review
    documentation after the corrected Collector is available to CI. Refresh
-   ChatGPT's connection and verify the new UI resource in production.
+   ChatGPT's connection and verify the new UI resource in production. Recheck
+   the deletion-only negative case after the new shared server instructions;
+   its first rehearsal declined deletion but made unnecessary telemetry calls.
 2. **Complete the real Events lifecycle.** After the pending access decision,
    inspect the owner-scoped stored subscription, ingest a controlled matching
    trace, verify the chat notification and exact trace ID, then test filtering,

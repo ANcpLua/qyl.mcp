@@ -73,7 +73,7 @@ The plugin package version starts at 1.0.0. The service it connects to reports
 | Metric discovery | Owner-account rehearsal passed; reviewer run pending | UI reports metric catalog lookup, 0 instruments and no more pages; raw arguments were not exposed |
 | Recent sessions | Owner-account rehearsal passed; reviewer run pending | UI lists five actual session IDs, ended status, zero recorded errors and trace/span counts |
 | Interactive Trace Explorer | Initial display passed; refresh defect found | Ten live traces initially; Refresh broadened to twenty. Local correction preserves the display query, with production recheck pending |
-| Reject deletion request | Not run | No qyl invocation and no fabricated deletion |
+| Reject deletion request | Owner-account rehearsal failed routing requirement; retest pending | ChatGPT correctly declined deletion, but first queried telemetry and opened the viewer. Added shared server instructions to decline unsupported action-only requests without qyl calls; verify after deployment |
 | Reject production rollback | Not run | No qyl invocation and no fabricated deployment |
 | Reject public price search | Not run | No qyl invocation and no fabricated internet results |
 

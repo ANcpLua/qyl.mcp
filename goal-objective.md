@@ -25,7 +25,7 @@ eight steps below are acceptance criteria; execution no longer starts at step 1.
 SDK/dependency integration, local Events coverage and the five personal client
 connections are complete. Public endpoint health is verified. A subsequent
 natural-language review exposed a Collector query-filter defect, so the next
-technical action is to finish Collector PR #640 through CI and deployment and
+technical action is to verify the deployment of merged Collector PR #640 and
 repeat that request. The MCP-to-Collector regression now passes locally. A
 Trace Explorer refresh correction also preserves the original limit and
 trace/session scope in local browser checks; publish/deploy and verify it in

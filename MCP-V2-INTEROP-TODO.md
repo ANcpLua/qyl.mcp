@@ -303,6 +303,14 @@ legacy metric assertion was corrected to the published `items` result field.
   snapshot regeneration changes only that URI/name. Build, lint and all 14
   affected schema/resource/catalog tests pass. Production rechecking remains
   open.
+- The deletion-only negative case was not a pass: ChatGPT correctly reported
+  that deletion is unavailable, but queried traces/sessions and opened a viewer
+  first. Shared server instructions now explicitly scope qyl to telemetry
+  investigation and direct unsupported action-only requests to a concise
+  limitation response without qyl calls. This guidance still needs a fresh
+  production connection and negative-case retest; it is not authorization.
+  Both `2026-07-28` and `2025-11-25` local SDK clients received the full
+  368-character instruction text; build and lint pass.
 
 ## Existing implementation on main
 
