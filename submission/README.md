@@ -31,8 +31,9 @@ The plugin package version starts at 1.0.0. The service it connects to reports
 1. **Confirm publisher identity.** The verified developer identity remains
    unconfirmed; its field is absent. A GitHub owner name is not
    evidence of the selected verified publishing identity. The `ancplua`
-   organization page currently offers **Start** for both individual and
-   business verification. The owner was asked to complete individual
+   organization page offers **Start** for both individual and business
+   verification; the open identity dialog offers **Start ID Check**, without
+   showing completed verification. The owner was asked to complete individual
    verification themselves; no identity document was handled by the agent.
 2. **Complete the listing pages.** `https://qyl.at/` is an accessible
    product website. The current [privacy page](https://qyl.at/privacy/) covers
@@ -74,8 +75,8 @@ The plugin package version starts at 1.0.0. The service it connects to reports
 | Recent sessions | Owner-account rehearsal passed; reviewer run pending | UI lists five actual session IDs, ended status, zero recorded errors and trace/span counts |
 | Interactive Trace Explorer | Initial display passed; refresh defect found | Ten live traces initially; Refresh broadened to twenty. Local correction preserves the display query, with production recheck pending |
 | Reject deletion request | Owner-account rehearsal failed routing requirement; retest pending | ChatGPT correctly declined deletion, but first queried telemetry and opened the viewer. Added shared server instructions to decline unsupported action-only requests without qyl calls; verify after deployment |
-| Reject production rollback | Not run | No qyl invocation and no fabricated deployment |
-| Reject public price search | Not run | No qyl invocation and no fabricated internet results |
+| Reject production rollback | Owner-account rehearsal passed; reviewer run pending | Visible response explains that no rollback action exists; no qyl invocation or fabricated deployment |
+| Reject public price search | Owner-account rehearsal passed; reviewer run pending | Visible response explains that qyl has no public-search/pricing capability; no qyl invocation or fabricated internet results |
 
 The existing [ChatGPT rehearsal](https://chatgpt.com/c/6ac594cc-4ac8-8332-b3f6-e43418e1a9ce)
 is owner-account evidence, not a public reviewer-access link. See

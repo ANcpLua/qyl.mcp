@@ -10,15 +10,16 @@ state they need. The current requirements are in
 
 [MCP-CHECKPOINT.md](MCP-CHECKPOINT.md) is the current resume summary. SDK and
 dependency integration, local Events tests and all five real client logins/read
-calls are complete. The remaining order is: finish the newly discovered
-Collector filter correction; demonstrate the complete production Events
-lifecycle; finish public plugin preparation and portal verification.
+calls are complete. The remaining order is: deploy the Collector/MCP corrections
+and repeat three ChatGPT review cases; demonstrate the complete production
+Events lifecycle; finish public plugin preparation and portal verification.
 
-Initial checkpoint checks confirmed merged PRs #75/#78, public health/resource
-metadata HTTP 200, and the `ancplua` portal still offering **Start** for
-Individual verification. The Collector correction has since entered PR #640;
-the expanded log-filter smoke and local Trace Explorer refresh checks pass.
-These checks do not replace the remaining production demonstrations.
+The 01:09 UTC checkpoint confirms public health/resource metadata HTTP 200,
+Collector PR #640 merged with its deployment waiting on running main CI, and
+MCP PR #80 open with green CI at `acb0872`. The expanded log-filter smoke and
+local Trace Explorer refresh checks pass. The `ancplua` identity dialog still
+offers **Start ID Check**, without a verified result. These checks do not
+replace the remaining production demonstrations.
 
 ## Established starting point
 
@@ -73,15 +74,19 @@ public plugin verification remain open; verified results are recorded below.
   HTTP and stdio. Check authenticated HTTP access and authorization failures.
 - [x] Compare the runtime tool catalog to its snapshot; regenerate only for
   deliberate changes. Resolve failures without weakening valid requirements.
-- [ ] Follow up on the Collector filter defect found in the later natural
-  ChatGPT review: finish regular [PR #640](https://github.com/ANcpLua/qyl/pull/640),
-  pass CI, merge/deploy and
-  repeat the filtered production request. The earlier broad smoke only checked
+- [x] Correct the Collector filter defect found in the later natural ChatGPT
+  review; [PR #640](https://github.com/ANcpLua/qyl/pull/640) passed PR CI and merged.
+- [ ] Verify the Collector deployment and repeat the filtered production
+  request. The earlier broad smoke only checked
   an unfiltered `search_logs` call and did not detect this defect. The expanded
   MCP-to-Collector filter regression now passes locally against the correction.
 - [ ] Deploy and recheck the Trace Explorer refresh correction in ChatGPT.
   Local browser checks confirm that the original limit, trace ID and session
   ID survive refresh; the new `mcp-app-v2.html` resource and snapshot are built.
+- [ ] Complete MCP PR #80's remaining merge/review and deployment gates, then
+  refresh ChatGPT's connection and repeat the deletion-only routing check.
+  Its lint/verify/security checks passed at `acb0872`; the CodeRabbit success
+  status reported a rate limit and is not evidence of a completed review.
 
 ### 5. Prepare and verify production
 
@@ -281,8 +286,10 @@ legacy metric assertion was corrected to the published `items` result field.
   `889244faf211b6bf7b2ebbcb96476bbb11df51c0`. Twenty-one targeted parser and real
   HTTP tests passed in the implementation run. Existing analyzer warnings and
   a RouteHandlerAnalyzer AD0001 warning were emitted; the run was not warning
-  free. Regular [PR #640](https://github.com/ANcpLua/qyl/pull/640) is now open;
-  CI/deployment/production retesting of this correction are not complete.
+  free. Regular [PR #640](https://github.com/ANcpLua/qyl/pull/640) passed PR CI
+  and merged as `d07c45ad` at 01:04 UTC. At 01:09 UTC, main CI is running and
+  deployment `8f3afed5-52c2-415e-92d4-0fc1262cb63b` is waiting. Production
+  retesting remains open.
 - The expanded `smoke:otlp` passes against the corrected real Collector. It
   persists five log fixtures differing by service, severity, trace or body;
   the actual MCP tool must return exactly the matching record, an empty result
@@ -311,6 +318,11 @@ legacy metric assertion was corrected to the published `items` result field.
   production connection and negative-case retest; it is not authorization.
   Both `2026-07-28` and `2025-11-25` local SDK clients received the full
   368-character instruction text; build and lint pass.
+- The rollback-only and public-price-search negative rehearsals passed in the
+  owner's ChatGPT connection: the visible responses explain the missing
+  capability without a qyl invocation or fabricated result. The public-search
+  response was confirmed complete during the 01:09 UTC checkpoint. These UI
+  observations do not replace the dedicated reviewer/sample-data run.
 
 ## Existing implementation on main
 

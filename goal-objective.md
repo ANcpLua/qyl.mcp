@@ -23,14 +23,14 @@ verified progress, pending owner actions and remaining sequence. The original
 eight steps below are acceptance criteria; execution no longer starts at step 1.
 
 SDK/dependency integration, local Events coverage and the five personal client
-connections are complete. Public endpoint health is verified. A subsequent
-natural-language review exposed a Collector query-filter defect, so the next
-technical action is to verify the deployment of merged Collector PR #640 and
-repeat that request. The MCP-to-Collector regression now passes locally. A
-Trace Explorer refresh correction also preserves the original limit and
-trace/session scope in local browser checks; publish/deploy and verify it in
-ChatGPT. Then complete the production Events lifecycle and public plugin
-verification.
+connections are complete. At the 01:09 UTC checkpoint, public endpoint health
+is verified; Collector PR #640 is merged, but its deployment is still waiting
+while main CI runs. MCP PR #80 is open with green CI at `acb0872` and contains
+the log-filter regression, Trace Explorer refresh correction and unsupported
+request guidance. Complete the remaining merge/review and deployment gates,
+then recheck filtered logs, viewer refresh and deletion-only routing in ChatGPT.
+Five of eight owner-account review rehearsals passed; these three need retests.
+Then complete the production Events lifecycle and public plugin verification.
 
 The public plugin remains an incomplete local draft. Free use and all eligible
 countries are confirmed; publisher identity, listing/reviewer/demo evidence and
