@@ -108,6 +108,7 @@ multi-tenant audit log.
 | `QYL_COLLECTOR_URL` | Collector read API base; default `http://127.0.0.1:5100`. Also the OTLP base when set. |
 | `QYL_API_KEY` | Collector read and OTLP credential. Outgoing only. |
 | `QYL_PROJECT` | Server-owned collector project scope; defaults to `default`. Never accepted as tool input. |
+| `MCP_COLLECTOR_PROJECTS` | Optional secret JSON mapping validated Auth0 subjects to project-bound Collector keys; see account isolation below. |
 | `QYL_OTLP_ENDPOINT` | Optional OTLP base for self-telemetry. |
 | `QYL_DEMO=1` | Explicit, visibly labelled demo telemetry. A collector failure never silently substitutes demo data. |
 | `QYL_MCP_TELEMETRY=0` | Disable MCP spans, metrics, and operation logs. |
@@ -125,7 +126,48 @@ durable evidence.
 The HTTP entry is a web-standard fetch handler served by its default export,
 so serving it requires Bun.
 
+### Account isolation for hosted Auth0
+
+To give a reviewer access to sample data, provision a separate Collector
+project/key through the Collector's `QYL_OTLP_PROJECT_KEYS` configuration and
+assign that key to the reviewer's validated Auth0 subject. Configure the MCP
+service's secret `MCP_COLLECTOR_PROJECTS` with this shape (placeholder values):
+
+```json
+[
+  { "project": "default", "apiKey": "OWNER_COLLECTOR_KEY", "subjects": ["auth0|owner-example"] },
+  { "project": "review", "apiKey": "REVIEW_COLLECTOR_KEY", "subjects": ["auth0|reviewer-example"] }
+]
+```
+
+Include every account that should retain access, including the owner. An
+enabled map rejects unmapped callers and never falls back to `QYL_API_KEY`.
+Missing, malformed, duplicate or conflicting entries fail validation. The
+feature requires the hosted Auth0 configuration; local stdio and Cloudflare
+Access deployments cannot enable this map. When the variable is absent, the
+existing deployment-wide credential behavior is retained.
+
+Only the verified SDK `AuthInfo.extra.subject` selects the project. Tool inputs
+and request metadata cannot override it. All telemetry tools, viewer refreshes
+and Events queries use that account's project credential. Removing the account
+assignment revokes its Events subscription on the next access check. Project
+keys are redacted from text and structured results, including keys nested in
+this JSON configuration. Keep the map in host secrets and out of the plugin ZIP.
+
+`bun run smoke:projects` from the repository root checks all eleven tools,
+viewer query paths, both protocol eras and Events against a real local
+Collector with two temporary projects. Set `QYL_COLLECTOR_PROJECT` to its
+`.csproj` when using a different checkout. The script uses local test identities
+and an in-process signed webhook receiver; the hosted reviewer OAuth login and
+real ChatGPT demonstration are separate checks before upload.
+
 ## Release notes
+
+### 7.2.0
+
+- Optional Auth0-account-to-Collector project isolation, also applied to Events.
+- Workbench telemetry recognizes the SDK's per-request server factory so native
+  tool spans are not duplicated by the surrounding protocol journal.
 
 ### 7.1.1
 

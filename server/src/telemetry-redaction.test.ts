@@ -5,6 +5,7 @@ import { CallToolResultSchema } from "@modelcontextprotocol/core";
 import { getDemo } from "./demo.js";
 import { connectModernTestClient } from "./modern-test-client.test-helper.js";
 import { createServer } from "./server.js";
+import { redactTelemetry, redactTelemetryText } from "./telemetry-redaction.js";
 
 const TraceAuthorizationSecret = "TRACE_AUTHORIZATION_SENTINEL";
 const TracePasswordSecret = "TRACE_PASSWORD_SENTINEL";
@@ -14,6 +15,20 @@ const LogTokenSecret = "LOG_TOKEN_SENTINEL";
 const LogPasswordSecret = "LOG_PASSWORD_SENTINEL";
 const LogSecretSecret = "LOG_SECRET_SENTINEL";
 const LogAuthorizationSecret = "LOG_AUTHORIZATION_SENTINEL";
+
+test("JSON-configured project credentials are redacted in free text and structured results", (context) => {
+  const previous = process.env.MCP_COLLECTOR_PROJECTS;
+  context.after(() => restoreEnvironment("MCP_COLLECTOR_PROJECTS", previous));
+  const keys = ["PROJECT_OWNER_KEY_SENTINEL", "PROJECT_REVIEWER_KEY_SENTINEL"];
+  process.env.MCP_COLLECTOR_PROJECTS = JSON.stringify(keys.map((apiKey, index) => ({
+    project: `project-${index}`, apiKey, subjects: [`auth0|test-${index}`],
+  })));
+  assertResultIsRedacted(redactTelemetry({ body: `ordinary-text ${keys.join(" ")}` }), keys);
+  assert.equal(redactTelemetryText(`ordinary-text ${keys.join(" ")}`),
+    "ordinary-text [REDACTED] [REDACTED]");
+  process.env.MCP_COLLECTOR_PROJECTS = "invalid";
+  assert.equal(redactTelemetryText("Telemetry request failed."), "Telemetry request failed.");
+});
 
 test("telemetry tools redact secrets before model text and structured content", async () => {
   const trace = structuredClone(getDemo().traces[0]);

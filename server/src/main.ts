@@ -23,6 +23,7 @@ import { createCloudflareAccessAuth, readAccessConfig } from "./cloudflare-acces
 import { closeDefaultNativeExecutionRuntime } from "./native-execution.js";
 import { EventsRuntime, createEventStore } from "./events.js";
 import { hostedEventsAuthorization } from "./events-authorization.js";
+import { readCollectorProjects } from "./collector-access.js";
 
 export function sanitizedErrorType(error: unknown): string {
   if (!(error instanceof Error)) return "UnknownError";
@@ -272,6 +273,10 @@ export async function hostedAuth(
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): Promise<HostedAuth | undefined> {
   const access = readAccessConfig(environment);
+  const projects = readCollectorProjects(environment);
+  if (projects !== undefined && (access || config.publicUrl === undefined)) {
+    throw new Error("MCP_COLLECTOR_PROJECTS requires hosted Auth0 resource authorization");
+  }
   const extensions = readAuthorizationExtensions(environment);
   if (extensions.length > 0 && (access || config.publicUrl === undefined)) {
     throw new Error("MCP_AUTH_EXTENSIONS requires hosted Auth0 resource authorization");

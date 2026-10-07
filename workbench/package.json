@@ -21,7 +21,7 @@
     "@opentelemetry/sdk-trace-base": "2.11.0",
     "@opentelemetry/semantic-conventions": "1.43.0",
     "express": "5.2.1",
-    "qyl-mcp-server": "7.1.1",
+    "qyl-mcp-server": "7.2.0",
     "zod": "4.6.5"
   },
   "devDependencies": {

@@ -7,6 +7,7 @@
  */
 
 import { API_KEY_HEADER, PROJECT_HEADER } from "./contract-headers.js";
+import type { CollectorAccess } from "./collector-access.js";
 
 /** URI of the trace explorer UI resource. */
 export const RESOURCE_URI = "ui://qyl-explorer/mcp-app-v3.html";
@@ -34,9 +35,9 @@ export function collectorUrl(): string {
 }
 
 /** Optional collector credential and project scope, under the contract's headers. */
-export function collectorHeaders(): Record<string, string> {
-  const apiKey = process.env.QYL_API_KEY?.trim();
-  const project = process.env.QYL_PROJECT?.trim();
+export function collectorHeaders(access?: CollectorAccess): Record<string, string> {
+  const apiKey = access?.apiKey ?? process.env.QYL_API_KEY?.trim();
+  const project = access?.project ?? process.env.QYL_PROJECT?.trim();
   return {
     ...(apiKey ? { [API_KEY_HEADER]: apiKey } : {}),
     ...(project ? { [PROJECT_HEADER]: project } : {}),

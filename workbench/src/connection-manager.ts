@@ -211,10 +211,15 @@ export class ConnectionManagerError extends Error {
     }
 }
 
+interface InProcessServerLifetime {
+    close(): Promise<void>;
+    readonly nativeExecutionTelemetry?: boolean;
+}
+
 interface ActiveConnection {
     client: Client;
     transport: JournaledTransport;
-    server?: { close(): Promise<void> };
+    server?: InProcessServerLifetime;
 }
 
 interface ConnectionEntry {
@@ -233,7 +238,7 @@ interface ConnectionEntry {
 
 interface CreatedTransport {
     transport: Transport;
-    server?: { close(): Promise<void> };
+    server?: InProcessServerLifetime;
 }
 
 /** Resolve HTTP header values exclusively from server-side environment keys. */
@@ -462,7 +467,7 @@ export class ConnectionManager {
         this.transition(entry, "connecting");
 
         let client: Client | undefined;
-        let server: { close(): Promise<void> } | undefined;
+        let server: InProcessServerLifetime | undefined;
         try {
             const created = await this.createTransport(
                 entry.definition,
@@ -717,12 +722,14 @@ export class ConnectionManager {
         serverJournal: ProtocolJournal,
     ): Promise<CreatedTransport> {
         let closed = false;
+        let nativeExecutionTelemetry = false;
         const handler = createMcpHandler(async () => {
             const server = await factory();
             if (closed) {
                 await server.close();
                 throw new Error("In-process MCP handler is closed.");
             }
+            nativeExecutionTelemetry = hasNativeExecutionTelemetry(server);
             return server;
         }, {
             onerror: (error) => serverJournal.recordTransportError(
@@ -744,6 +751,9 @@ export class ConnectionManager {
         return {
             transport,
             server: {
+                // SDK v2 owns fresh instances per request. The lifetime wrapper
+                // is not itself a McpServer and cannot be checked in its WeakSet.
+                get nativeExecutionTelemetry() { return nativeExecutionTelemetry; },
                 close: async () => {
                     closed = true;
                     await handler.close();
@@ -893,7 +903,7 @@ export class ConnectionManager {
         if (protocolVersion !== undefined) enriched.protocolVersion = protocolVersion;
         if (peer?.address !== undefined) enriched.peerAddress = peer.address;
         if (peer?.port !== undefined) enriched.peerPort = peer.port;
-        if (operation.role === "server" && hasNativeExecutionTelemetry(entry.active?.server)) {
+        if (operation.role === "server" && entry.active?.server?.nativeExecutionTelemetry === true) {
             enriched.nativeExecutionTelemetry = true;
         }
         return enriched;
