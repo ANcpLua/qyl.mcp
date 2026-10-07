@@ -457,6 +457,89 @@ try {
       throw new Error("live collector 404 did not flow through generated Problem Details");
     }
 
+    // Every distractor differs in one filter, so silently ignoring any of the
+    // published query names produces more than one row through the real MCP tool.
+    const logMarker = `${marker}_log_filter`;
+    const logService = `${logMarker}_service`;
+    const logBody = `${logMarker} matching error`;
+    const logTime = BigInt(Date.now()) * 1_000_000n;
+    const matchingLog = {
+      severityNumber: 17,
+      severityText: "ERROR",
+      traceId: matched.trace_id,
+      body: { stringValue: logBody },
+    };
+    const logFixtures = [
+      { service: logService, record: matchingLog },
+      { service: `${logService}_other`, record: matchingLog },
+      { service: logService, record: { ...matchingLog, severityNumber: 9, severityText: "INFO" } },
+      { service: logService, record: { ...matchingLog, traceId: randomUUID().replaceAll("-", "") } },
+      { service: logService, record: { ...matchingLog, body: { stringValue: `${logMarker} unrelated body` } } },
+    ];
+    const logExport = await fetch(`${baseUrl}/v1/logs`, {
+      method: "POST",
+      headers: { [apiKeyHeader]: collectorApiKey, "content-type": "application/json" },
+      body: JSON.stringify({
+        resourceLogs: logFixtures.map(({ service, record }, index) => ({
+          resource: { attributes: [{ key: "service.name", value: { stringValue: service } }] },
+          scopeLogs: [{
+            scope: { name: "qyl-mcp-filter-smoke" },
+            logRecords: [{
+              ...record,
+              timeUnixNano: String(logTime + BigInt(index)),
+              spanId: randomUUID().replaceAll("-", "").slice(0, 16),
+            }],
+          }],
+        })),
+      }),
+    });
+    if (!logExport.ok) throw new Error(`log filter fixture export returned ${logExport.status}`);
+    await waitUntil(async () => {
+      const response = await fetch(
+        `${baseUrl}/api/v1/logs?${new URLSearchParams({ query: logMarker, limit: "100" })}`,
+        { headers: { [apiKeyHeader]: collectorApiKey } },
+      );
+      if (!response.ok) throw new Error(`log fixture query returned ${response.status}`);
+      const body = await response.json();
+      if (body.items?.length !== logFixtures.length) {
+        throw new Error(`expected ${logFixtures.length} log fixtures, found ${body.items?.length}`);
+      }
+      return true;
+    }, 15_000, "all log filter fixtures to be persisted");
+
+    const logFilters = {
+      service_name: logService,
+      severity_min: 17,
+      trace_id: matched.trace_id,
+      query: logBody,
+      limit: 20,
+    };
+    const filteredLogs = await client.callTool({ name: "search_logs", arguments: logFilters });
+    const logs = filteredLogs.structuredContent?.logs;
+    if (filteredLogs.isError || filteredLogs.structuredContent?.mode !== "live"
+        || !Array.isArray(logs) || logs.length !== 1
+        || logs[0].resource?.service_name !== logService
+        || logs[0].severity_number !== 17 || logs[0].trace_id !== matched.trace_id
+        || logs[0].body !== logBody) {
+      throw new Error(`live search_logs did not honor its combined filters: ${JSON.stringify(filteredLogs)}`);
+    }
+    const noLogs = await client.callTool({
+      name: "search_logs",
+      arguments: { ...logFilters, service_name: `${logService}_missing` },
+    });
+    if (noLogs.isError || noLogs.structuredContent?.logs?.length !== 0) {
+      throw new Error(`live search_logs returned logs for a missing service: ${JSON.stringify(noLogs)}`);
+    }
+    const limitedLogs = await client.callTool({
+      name: "search_logs",
+      arguments: { query: logMarker, limit: 2 },
+    });
+    if (limitedLogs.isError || limitedLogs.structuredContent?.logs?.length !== 2) {
+      throw new Error(`live search_logs did not honor its limit: ${JSON.stringify(limitedLogs)}`);
+    }
+    console.log("ok live MCP log filters exclude unrelated services, severities, traces and bodies");
+    console.log("ok live MCP log searches preserve empty results and the requested limit");
+
     /** @type {ReadonlyArray<readonly [string, Record<string, unknown>]>} */
     const remainingCalls = [
       ["ci_log", {}],
