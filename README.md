@@ -57,7 +57,7 @@ is deployed. Personal OAuth and client-specific tool-call checks are tracked in
 | claude.ai | Customize → Connectors → Add custom connector; enter `https://mcp.qyl.at/mcp` and leave optional client ID and secret empty. | CIMD at `https://claude.ai/oauth/mcp-oauth-client-metadata`, a public client (`none`) with redirect `https://claude.ai/api/mcp/auth_callback`; DCR is the fallback. |
 | Claude Code | `claude mcp add --transport http qyl https://mcp.qyl.at/mcp`; then open `/mcp` in Claude Code to authorize. | CIMD at `https://claude.ai/oauth/claude-code-client-metadata`, a public client (`none`) with port-independent `http://localhost/callback` and `http://127.0.0.1/callback` redirects; DCR is the fallback. |
 | Codex CLI | Configure `[mcp_servers.qyl]` with `url = "https://mcp.qyl.at/mcp"` and `scopes = ["qyl:read"]`; then `codex mcp login qyl --enable mcp_2026_07_28 --scopes qyl:read`. Start Codex with `codex --enable mcp_2026_07_28` for the modern path. | CIMD or DCR as selected by the client and Auth0; `codex mcp add` supports `--oauth-client-registration cimd` or `dcr` for a targeted registration test. For CLI 0.158.0-alpha.2.1, leave `oauth_resource` unset: discovery supplies it, and the explicit override produced duplicate resource parameters. Ordinary tools also support the CLI's 2025-era protocol. |
-| MCP Inspector | Select Streamable HTTP, enter `https://mcp.qyl.at/mcp`, set protocol era to **modern**, and use Open Auth Settings → Quick OAuth Flow. For CLI checks use `npx @modelcontextprotocol/inspector@2.8.0 --cli https://mcp.qyl.at/mcp --transport http --protocol-era modern --method tools/list`. | CIMD when supported by the Inspector release, otherwise DCR. |
+| MCP Inspector | In Inspector 2.8.0, add an HTTP server at `https://mcp.qyl.at/mcp`, set protocol era to **modern**, configure `qyl:read` and the provisioned OAuth client, then connect. OAuth opens automatically when required; the web callback is `http://127.0.0.1:6274/oauth/callback` on the default port. For CLI checks use `npx @modelcontextprotocol/inspector@2.8.0 --cli https://mcp.qyl.at/mcp --transport http --protocol-era modern --method tools/list`. | The production test reused an existing authorized DCR evaluation client. Fresh registrations need an explicit Auth0 `qyl:read` grant; registration alone grants no access. |
 
 Local `QYL_DEMO=1` v2 checks on 30 September 2026: Claude Code 2.1.285,
 Codex CLI 0.158.0-alpha.2.1 with `--enable mcp_2026_07_28`, and MCP Inspector
@@ -73,12 +73,13 @@ returned `trace.error`. The collector's required project key is configured in
 Railway; the prior upstream 401 is resolved.
 
 Separate real authorization-code tests on the same day passed in ChatGPT web,
-claude.ai and Codex CLI 0.158.0-alpha.2.1: each completed OAuth and a successful
-`list_metrics({})` call with zero live metrics. ChatGPT and claude.ai used their
+claude.ai, Codex CLI 0.158.0-alpha.2.1 and MCP Inspector 2.8.0: each completed
+OAuth and a successful `list_metrics({})` call with zero live metrics. ChatGPT and claude.ai used their
 published CIMD identities; Codex used a fresh strict DCR registration and the
-modern protocol. Claude Code completed qyl OAuth and tool discovery, but its
-own Claude login expired before the model could call a tool. That read call,
-Inspector OAuth and signed ChatGPT Events delivery remain open in the checklist.
+modern protocol. Inspector used the existing DCR evaluation client, confirmed
+MCP `2026-07-28` and listed all 11 tools. Claude Code completed qyl OAuth and tool
+discovery, but its own Claude login expired before the model could call a tool. That read call
+and signed ChatGPT Events delivery remain open in the checklist.
 
 The TypeScript SDK v2 serves MCP revision `2026-07-28` and its supported
 2025-era protocols through one tool factory. HTTP uses the SDK's stateless

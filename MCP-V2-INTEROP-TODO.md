@@ -15,8 +15,8 @@ state they need. The current requirements are in
 
 PR #75 merged the SDK serving defaults and ongoing Events authorization into
 `main`. Production runs that implementation with the collector credential
-configured. ChatGPT web, claude.ai and Codex CLI have completed personal OAuth
-and a read-tool call. Claude Code's read call, Inspector OAuth and ChatGPT Events
+configured. ChatGPT web, claude.ai, Codex CLI and Inspector have completed
+personal OAuth and a read-tool call. Claude Code's read call and ChatGPT Events
 delivery remain open; verified results are recorded below.
 
 ## Execution sequence
@@ -204,7 +204,7 @@ legacy metric assertion was corrected to the published `items` result field.
 | claude.ai | Published web CIMD, public client, `qyl:read` and `offline_access` | Connected; 11 tools shown (2 interactive, 8 read-only, 1 app-only). A real `list_metrics({})` call returned `items: []`, `has_more: false`. Web build and negotiated revision are not exposed by this UI. |
 | Codex CLI 0.158.0-alpha.2.1 | Fresh strict DCR, PKCE S256, canonical resource, `qyl:read` | Modern feature enabled; 10 model-visible tools; `list_metrics({})` returned `items: []`, `has_more: false` with modern server identity metadata (`qyl.mcp`, 7.1.0). |
 | Claude Code 2.1.291 | Published Claude Code CIMD; qyl OAuth completed | qyl connection and 10 model-visible tools confirmed. The model call stopped because Claude Code's own Anthropic session expired; renewal and the real read call remain pending. |
-| MCP Inspector 2.8.0 | Existing authorized hosted-eval DCR client; PKCE S256 and canonical resource | Added the actual `http://127.0.0.1:6274/oauth/callback` alongside the existing evaluator callback. OAuth now reaches consent for `qyl:read offline_access`; consent and the tool call remain pending. |
+| MCP Inspector 2.8.0 | Existing authorized hosted-eval DCR client; PKCE S256, canonical resource, `qyl:read offline_access` | OAuth completed after user consent. UI confirms MCP `2026-07-28`, lists all 11 tools and returns “No metrics recorded (live mode).” for `list_metrics({})`. Added the actual `http://127.0.0.1:6274/oauth/callback` alongside the existing evaluator callback. |
 
 - With explicit user approval, deleted three additional obsolete hosted-eval
   duplicate applications ending in `5ryBna`, `iY9cDn` and `zmQxHq`. Retained the
@@ -223,8 +223,9 @@ legacy metric assertion was corrected to the published `items` result field.
   The approved Browser Integrity Check exception covers only `mcp.qyl.at`.
   Automatic approval rejected registration of a temporary Railway SSH key;
   that specific additional access is awaiting the user's decision.
-- OpenAI portal authentication is complete. The Plugins page has no public
-  package/draft, so it has issued no domain-verification token. No
+- OpenAI portal authentication is complete. The Plugins pages in both
+  `ancplua` and Personal organizations have no public package/draft, so no
+  domain-verification token is available. No
   `OPENAI_APPS_CHALLENGE` is configured. The private ChatGPT connection works;
   public submission verification is not claimed.
 - The user-linked Railway job `112557449308` is attempt 2 of run `37544569134`
