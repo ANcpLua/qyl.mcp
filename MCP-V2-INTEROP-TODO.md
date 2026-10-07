@@ -13,8 +13,10 @@ dependency integration, local Events tests and all five real client logins/read
 calls are complete. Collector/MCP corrections are deployed and all eight
 owner-account review cases pass. The dedicated public UI-origin deployment is
 also verified. Production Events delivery, service filtering, restart survival,
-automatic renewal and unsubscribe now pass. Finish the evidence PR, public
-plugin preparation and portal verification.
+automatic renewal and unsubscribe now pass. Evidence PR #83 is merged and
+deployed. The npm 7.1.0 artifact still has the former rejection policy; publish
+the prepared 7.1.1 patch before merging the matching website guidance in qyl.at
+PR #16. Public plugin preparation and portal verification remain open.
 
 Collector PR #640 (`d07c45ad`) and MCP PR #80 (`a82e1786`) passed main CI and
 Railway deployment. ChatGPT rechecks verify the service/ERROR filter, ten-trace
@@ -22,7 +24,8 @@ viewer refresh and deletion-only routing. PR #81 (`3ae30b52`) is merged and
 deployed with green main CI; both viewers render at the dedicated origin.
 Individual publisher identity now
 shows **Identity in review** after the owner's phone flow; do not restart it.
-These results do not replace the remaining Events and public-review evidence.
+These results complete the requested Events lifecycle; dedicated reviewer
+access, a recording and public submission evidence remain open.
 
 ## Established starting point
 
@@ -35,7 +38,8 @@ PR #75 merged the SDK serving defaults and ongoing Events authorization into
 `main`. Production runs that implementation with the collector credential
 configured. ChatGPT web, claude.ai, Claude Code, Codex CLI and Inspector have
 completed personal OAuth and a read-tool call. ChatGPT Events delivery and
-public plugin verification remain open; verified results are recorded below.
+lifecycle are now verified; public plugin verification remains open. Results
+are recorded below.
 
 ## Execution sequence
 
@@ -338,8 +342,9 @@ legacy metric assertion was corrected to the published `items` result field.
   `8f3afed5-52c2-415e-92d4-0fc1262cb63b` succeeded. A real ChatGPT request for
   service `qyl-mcp-interop-oct7`, minimum ERROR and limit 20 returned 0 matching
   records, with no unrelated INFO logs. Direct authenticated service/limit
-  probes returned the requested service and count; the controlled matching
-  production ERROR fixture remains part of the pending Events demonstration.
+  probes returned the requested service and count. Controlled production
+  trace-error fixtures were subsequently verified in the Events demonstration;
+  the positive matching-log fixture assertions below remain local evidence.
 - The expanded `smoke:otlp` passes against the corrected real Collector. It
   persists five log fixtures differing by service, severity, trace or body;
   the actual MCP tool must return exactly the matching record, an empty result

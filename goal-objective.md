@@ -34,8 +34,10 @@ viewers at the dedicated sandbox origin. The production Events store and
 matching ChatGPT delivery are now verified, including service filtering,
 survival across deployment, automatic renewal and unsubscribe. The task is
 paused, the Events store is empty, and a subsequent matching error produced
-no notification during more than three polling intervals. Continue with the
-evidence PR and public plugin preparation.
+no notification during more than three polling intervals. Evidence PR #83 is
+merged and deployed with successful main CI. A registry-artifact check found
+that npm 7.1.0 still rejects 2025 clients; publish the prepared 7.1.1 correction,
+then finish qyl.at PR #16 and public plugin preparation.
 
 The public plugin remains an incomplete local draft. Free use and all eligible
 countries are confirmed. Individual publisher identity is **in review** after

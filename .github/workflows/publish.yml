@@ -156,70 +156,20 @@ jobs:
             npm publish --workspace server --access public --provenance --tag "$NPM_DIST_TAG"
           fi
 
-      # Publish -> index -> restore-verify: drive the published package's stdio MCP discovery from
-      # a clean npx consumer outside the repository. The registry is eventually consistent — the
-      # version endpoint can serve 200 while the packument npx resolves against still lacks the
-      # version (observed on the 0.1.1 release: ETARGET seconds after publish) — so the retry loop
-      # wraps the npx handshake itself, and a child exit fails the attempt fast instead of
-      # burning the whole timeout.
-      - name: Wait for the index and smoke a clean npx consumer
+      # Verify the actual registry artifact from fresh consumer directories.
+      # Both supported eras must discover the published version and call a tool;
+      # a successful source build alone cannot establish what npx installs.
+      - name: Wait for the index and smoke clean npx consumers in both eras
         shell: bash
         run: |
           set -euo pipefail
-          cd "$(mktemp -d)"
           for attempt in $(seq 1 20); do
-            if node - "$RELEASE_VERSION" <<'EOF'
-          const { spawn } = require("node:child_process");
-          const version = process.argv[2];
-          const child = spawn("npx", ["--yes", `qyl-mcp-server@${version}`, "--stdio"], {
-            stdio: ["pipe", "pipe", "inherit"],
-          });
-          const timer = setTimeout(() => {
-            console.error("no server/discover response within 120s");
-            child.kill("SIGKILL");
-            process.exit(1);
-          }, 120_000);
-          child.on("exit", (code, signal) => {
-            console.error(`npx exited before answering (code=${code} signal=${signal})`);
-            clearTimeout(timer);
-            process.exit(1);
-          });
-          let buffer = "";
-          child.stdout.on("data", (chunk) => {
-            buffer += chunk;
-            for (const line of buffer.split("\n")) {
-              if (!line.trim()) continue;
-              let message;
-              try { message = JSON.parse(line); } catch { continue; }
-              const serverInfo = message.result?._meta?.["io.modelcontextprotocol/serverInfo"];
-              if (
-                message.id === 1 &&
-                message.result?.supportedVersions?.includes("2026-07-28") &&
-                serverInfo?.name === "qyl.mcp"
-              ) {
-                console.log(`server/discover ok: ${serverInfo.name} ${serverInfo.version}`);
-                clearTimeout(timer);
-                child.removeAllListeners("exit");
-                child.kill("SIGTERM");
-                process.exit(0);
-              }
-            }
-          });
-          child.stdin.write(JSON.stringify({
-            jsonrpc: "2.0", id: 1, method: "server/discover",
-            params: { _meta: {
-              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-              "io.modelcontextprotocol/clientInfo": { name: "publish-smoke", version: "0.0.0" },
-              "io.modelcontextprotocol/clientCapabilities": {},
-            } },
-          }) + "\n");
-          EOF
-            then
-              echo "npx consumer smoke passed on attempt ${attempt}"
+            if node server/published-smoke.mjs "$RELEASE_VERSION"; then
+              echo "npx consumers passed on attempt $attempt"
               exit 0
             fi
-            echo "attempt ${attempt} failed; registry may still be propagating — retrying in 30s"
+            echo "attempt $attempt failed; registry may still be propagating — retrying in 30s"
             sleep 30
           done
-          echo "::error::npx consumer smoke never passed for ${RELEASE_VERSION}"
+          echo "::error::npx consumer smoke never passed for $RELEASE_VERSION"
           exit 1

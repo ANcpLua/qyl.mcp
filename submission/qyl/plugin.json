@@ -74,7 +74,7 @@
       },
       "publication": {
         "countries": [],
-        "release_notes": "Initial plugin package for the qyl.mcp 7.1.0 service: OAuth-protected telemetry tools, interactive trace and MCP viewers, and optional trace-error subscriptions."
+        "release_notes": "Initial plugin package for the qyl.mcp 7.1.1 service: OAuth-protected telemetry tools, interactive trace and MCP viewers, and optional trace-error subscriptions."
       }
     }
   }

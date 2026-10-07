@@ -8,8 +8,8 @@ directory `submission/qyl/`.
 
 ## Verified service boundary
 
-- Production MCP is `https://mcp.qyl.at/mcp`. Documentation PR #82
-  (`27a0bf73`) is deployed as `de261a52-aba4-4899-8e0a-94044e088d1e`;
+- Production MCP is `https://mcp.qyl.at/mcp`. Documentation PR #83
+  (`7157a08c`) is deployed as `27aefb63-0e09-40ef-96bf-c9ef3ce73f43`;
   its runtime code is unchanged from the verified PR #81 (`3ae30b52`).
 - Auth0 validates callers for the qyl MCP audience and `qyl:read`. The server
   authorizes each request. Clients receive telemetry returned by the configured
@@ -136,6 +136,7 @@ Keep login credentials in the portal's secure reviewer fields, never this file,
 the public manifest, a recording or the ZIP.
 
 No public policy URL, retention promise or reviewer-access completion is
-established by this technical inventory. Website sources and the confirmation
-of a public/private support route remain pending. The existing Railway browser
+established by this technical inventory. Current website source files are now
+available locally through the approved GitHub file API; confirmation of a
+public/private support route remains pending. The existing Railway browser
 console supplied the needed inspection access without a new SSH key.
