@@ -17,6 +17,7 @@ import type {
 } from "@ancplua/qyl-api-schema/types";
 import { z } from "zod";
 import { collectorHeaders, collectorUrl } from "./config.js";
+import { CollectorAccessError, readCollectorProjects, type CollectorAccess } from "./collector-access.js";
 import {
   LogRecordSchema,
   MetricDescriptorSchema,
@@ -178,6 +179,8 @@ interface ParsedCollectorPage<T> {
 export interface CollectorRequestOptions {
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** Host-selected access for the verified caller; never a tool input. */
+  access?: CollectorAccess;
 }
 
 /**
@@ -238,6 +241,9 @@ async function collectorRequest(
   body: unknown,
   options: CollectorRequestOptions,
 ): Promise<unknown> {
+  if (readCollectorProjects() !== undefined && options.access === undefined) {
+    throw new CollectorAccessError();
+  }
   const url = new URL(pathname, collectorUrl());
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined) continue;
@@ -257,7 +263,7 @@ async function collectorRequest(
     : timeout;
   const headers = {
     accept: "application/json",
-    ...collectorHeaders(),
+    ...collectorHeaders(options.access),
     ...(body === undefined ? {} : { "content-type": "application/json" }),
   };
 

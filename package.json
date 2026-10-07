@@ -19,7 +19,8 @@
     "smoke:otlp": "bun run --cwd workbench smoke:otlp",
     "dev": "bun run --cwd server build && bun run --cwd dashboard dev",
     "verify:pins": "node verify-contract-pins.mjs",
-    "lint": "oxlint ."
+    "lint": "oxlint .",
+    "smoke:projects": "bun run --cwd server smoke:projects"
   },
   "engines": {
     "node": "24.x"

@@ -25,6 +25,7 @@
  */
 import type { CallToolResult, ServerContext } from "@modelcontextprotocol/server";
 import { CollectorError, type CollectorRequestOptions } from "./collector.js";
+import { CollectorAccessError, collectorAccessForSubject } from "./collector-access.js";
 import { redactTelemetryText } from "./telemetry-redaction.js";
 
 /** The logger name every `notifications/message` from this server carries. */
@@ -43,7 +44,7 @@ export interface ToolScope {
 
 /** Uniform failure result: clear text + isError, never a thrown exception. */
 export function toolError(err: unknown): CallToolResult {
-  const message = err instanceof CollectorError
+  const message = err instanceof CollectorError || err instanceof CollectorAccessError
     ? err.message
     : "Telemetry request failed.";
   return {
@@ -94,7 +95,11 @@ export async function runTool(
   };
 
   try {
-    const result = await work({ collector: { signal }, step });
+    const access = collectorAccessForSubject(ctx.http?.authInfo?.extra?.["subject"]);
+    const result = await work({
+      collector: { signal, ...(access === undefined ? {} : { access }) },
+      step,
+    });
     await step("Result ready");
     await log(result.isError ? "warning" : "info", { summary: summaryOf(result) });
     return result;

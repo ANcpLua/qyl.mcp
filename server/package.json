@@ -1,6 +1,6 @@
 {
   "name": "qyl-mcp-server",
-  "version": "7.1.1",
+  "version": "7.2.0",
   "type": "module",
   "description": "qyl telemetry MCP Apps server: trace explorer and MCP dashboard for a live collector or explicit demo mode",
   "repository": {
@@ -74,7 +74,8 @@
     "test": "bun run verify:readme && bun run verify:frame && bun run build && tsc -p tsconfig.test.json && node -e \"const fs=require('node:fs'); for (const name of ['mcp-app.html','mcp-dashboard.html']) fs.copyFileSync('dist/'+name,'dist-test/'+name)\" && node --test dist-test/*.test.js",
     "smoke": "node smoke-test.mjs",
     "smoke:live": "node live-tools-smoke.mjs",
-    "prepack": "bun run build"
+    "prepack": "bun run build",
+    "smoke:projects": "node project-access-smoke.mjs"
   },
   "dependencies": {
     "@ancplua/qyl-api-schema": "11.2.0",

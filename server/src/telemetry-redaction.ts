@@ -1,4 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
+import { readCollectorProjects } from "./collector-access.js";
 import { isCredentialKey, SecretRedactor } from "./secret-redactor.js";
 
 // The standalone server and the runner share this implementation through the
@@ -12,6 +13,17 @@ function registerCurrentEnvironmentSecrets(): void {
       .filter(([name, value]) => value !== undefined && isCredentialKey(name))
       .map(([, value]) => value as string),
   );
+  // Project credentials live inside JSON rather than individual *_KEY variables.
+  // Invalid configuration is rejected at startup/request authorization; reporting
+  // that failure must not itself throw from the final redaction guard.
+  try {
+    const projects = readCollectorProjects();
+    if (projects !== undefined) {
+      redactor.registerSecretValues([...projects.values()].map((access) => access.apiKey));
+    }
+  } catch {
+    // Keep existing secret registrations when the host configuration is invalid.
+  }
 }
 
 /** Redact already-validated telemetry while preserving its published shape. */

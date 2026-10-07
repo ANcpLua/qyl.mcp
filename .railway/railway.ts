@@ -35,6 +35,7 @@ export default defineRailway(() => {
       MCP_ALLOWED_ORIGIN_HOSTS: preserve(),
       MCP_AUTH_EXTENSIONS: preserve(),
       MCP_BIND_HOST: preserve(),
+      MCP_COLLECTOR_PROJECTS: preserve(),
       // Not a secret, and tied to the mount above, so the value lives here.
       MCP_EVENTS_STORE: "/data/mcp-events.json",
       MCP_EVENTS_AUTH0_CLIENT_ID: preserve(),

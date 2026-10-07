@@ -27,6 +27,7 @@ import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { AtomicJsonStore } from "./atomic-json-store.js";
 import { fetchTraces } from "./data.js";
+import { CollectorAccessError, collectorAccessForSubject } from "./collector-access.js";
 import { rootSpanName } from "./summaries.js";
 import type { QylTrace } from "./wire.js";
 import {
@@ -264,8 +265,8 @@ export interface EventsRuntimeOptions {
   isAuthorized: (principal: Principal) => Promise<boolean>;
   /** Network seam; defaults to the public-HTTPS-only `postWebhook`. */
   post?: WebhookPost;
-  /** Trace source; defaults to the collector's most recent traces. */
-  recentTraces?: () => Promise<readonly QylTrace[]>;
+  /** Trace source scoped to the authenticated subscriber's project. */
+  recentTraces?: (principal: Principal) => Promise<readonly QylTrace[]>;
   pollIntervalMs?: number;
   now?: () => number;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
@@ -280,13 +281,13 @@ export class EventsRuntime {
   private readonly store: AtomicJsonStore<EventStoreState>;
   private readonly isAuthorized: EventsRuntimeOptions["isAuthorized"];
   private readonly post: WebhookPost;
-  private readonly recentTraces: () => Promise<readonly QylTrace[]>;
+  private readonly recentTraces: NonNullable<EventsRuntimeOptions["recentTraces"]>;
   private readonly pollIntervalMs: number;
   private readonly now: () => number;
   private readonly sleep: NonNullable<EventsRuntimeOptions["sleep"]>;
   private readonly log: (message: string) => void;
   private readonly verified = new Map<string, number>();
-  private seen: Set<string> | undefined;
+  private readonly seen = new Map<string, Set<string>>();
   private ready: Promise<void> | undefined;
   private timer: NodeJS.Timeout | undefined;
   private polling: Promise<void> | undefined;
@@ -298,7 +299,10 @@ export class EventsRuntime {
     this.isAuthorized = options.isAuthorized;
     this.post = options.post ?? postWebhook;
     this.recentTraces = options.recentTraces
-      ?? (async () => (await fetchTraces(TRACES_PER_POLL)).traces);
+      ?? (async (principal) => {
+        const access = collectorAccessForSubject(principal.subject);
+        return (await fetchTraces(TRACES_PER_POLL, access === undefined ? {} : { access })).traces;
+      });
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.now = options.now ?? Date.now;
     this.sleep = options.sleep ?? ((ms, signal) => delay(ms, undefined, { signal }));
@@ -347,8 +351,12 @@ export class EventsRuntime {
 
     let allowed: boolean;
     try {
+      collectorAccessForSubject(principal.subject);
       allowed = await this.isAuthorized(principal);
-    } catch {
+    } catch (error) {
+      if (error instanceof CollectorAccessError) {
+        throw new ProtocolError(ProtocolErrorCode.InvalidRequest, error.message);
+      }
       throw new ProtocolError(ProtocolErrorCode.InternalError, "Event authorization is temporarily unavailable");
     }
     if (!allowed) {
@@ -515,10 +523,15 @@ export class EventsRuntime {
   private async authorized(subscription: StoredSubscription): Promise<boolean> {
     let allowed: boolean;
     try {
+      collectorAccessForSubject(subscription.subject);
       allowed = await this.isAuthorized(subscription);
-    } catch {
-      this.log(`authorization unavailable for ${subscription.id}; delivery suspended`);
-      return false;
+    } catch (error) {
+      if (error instanceof CollectorAccessError) {
+        allowed = false;
+      } else {
+        this.log(`authorization unavailable for ${subscription.id}; delivery suspended`);
+        return false;
+      }
     }
     if (!allowed) {
       await this.store.transact((state) => {
@@ -545,7 +558,7 @@ export class EventsRuntime {
     if (state.subscriptions.length === 0) {
       if (this.timer !== undefined) clearInterval(this.timer);
       this.timer = undefined;
-      this.seen = undefined;
+      this.seen.clear();
       return;
     }
 
@@ -553,32 +566,50 @@ export class EventsRuntime {
     for (const subscription of state.subscriptions) {
       if (await this.authorized(subscription)) subscriptions.push(subscription);
     }
-    if (subscriptions.length === 0) return;
-
-    let traces: readonly QylTrace[];
-    try {
-      traces = await this.recentTraces();
-    } catch (error) {
-      this.log(`collector poll failed: ${error instanceof Error ? error.message : String(error)}`);
-      return;
+    const groups = new Map<string, StoredSubscription[]>();
+    for (const subscription of subscriptions) {
+      const key = this.sourceKey(subscription);
+      const group = groups.get(key) ?? [];
+      group.push(subscription);
+      groups.set(key, group);
     }
-
-    if (this.seen === undefined) {
-      this.seen = new Set(traces.filter((trace) => trace.has_error).map((trace) => trace.trace_id));
-      return;
+    // An authorization outage suspends a live subscription; retain its baseline
+    // so recovery can still deliver errors that arrived during the outage.
+    const retainedKeys = new Set<string>();
+    for (const subscription of state.subscriptions) {
+      try {
+        retainedKeys.add(this.sourceKey(subscription));
+      } catch (error) {
+        if (!(error instanceof CollectorAccessError)) throw error;
+      }
     }
-
-    const fresh = traces.filter((trace) => trace.has_error && !this.seen!.has(trace.trace_id));
-    for (const trace of fresh) this.seen.add(trace.trace_id);
-    if (this.seen.size > MAX_SEEN_TRACES) {
-      this.seen = new Set([...this.seen].slice(-MAX_SEEN_TRACES));
+    for (const key of this.seen.keys()) {
+      if (!retainedKeys.has(key)) this.seen.delete(key);
     }
-
     const deliveries: Promise<void>[] = [];
-    for (const trace of fresh) {
-      if (!trace.has_error) continue;
-      for (const subscription of subscriptions) {
-        if (matches(subscription, trace)) deliveries.push(this.deliver(subscription, trace));
+    for (const [key, group] of groups) {
+      let traces: readonly QylTrace[];
+      try {
+        traces = await this.recentTraces(group[0]!);
+      } catch {
+        this.log("collector poll failed; delivery suspended for this account");
+        continue;
+      }
+
+      const seen = this.seen.get(key);
+      if (seen === undefined) {
+        this.seen.set(key, new Set(traces.filter((trace) => trace.has_error).map((trace) => trace.trace_id)));
+        continue;
+      }
+      const fresh = traces.filter((trace) => trace.has_error && !seen.has(trace.trace_id));
+      for (const trace of fresh) seen.add(trace.trace_id);
+      if (seen.size > MAX_SEEN_TRACES) {
+        this.seen.set(key, new Set([...seen].slice(-MAX_SEEN_TRACES)));
+      }
+      for (const trace of fresh) {
+        for (const subscription of group) {
+          if (matches(subscription, trace)) deliveries.push(this.deliver(subscription, trace, key));
+        }
       }
     }
     const results = await Promise.allSettled(deliveries);
@@ -587,9 +618,13 @@ export class EventsRuntime {
     }
   }
 
-  private deliver(subscription: StoredSubscription, trace: QylTrace): Promise<void> {
+  private sourceKey(principal: Principal): string {
+    return canonicalJson([principal.subject, collectorAccessForSubject(principal.subject)?.project ?? null]);
+  }
+
+  private deliver(subscription: StoredSubscription, trace: QylTrace, sourceKey: string): Promise<void> {
     const controller = new AbortController();
-    const done = this.deliverWhileActive(subscription, trace, controller.signal);
+    const done = this.deliverWhileActive(subscription, trace, sourceKey, controller.signal);
     const active = this.deliveries.get(subscription.id) ?? new Set();
     this.deliveries.set(subscription.id, active);
     const delivery = { controller, done };
@@ -602,7 +637,7 @@ export class EventsRuntime {
 
   /** POST one signed event, retrying transient failures with backoff. */
   private async deliverWhileActive(
-    subscription: StoredSubscription, trace: QylTrace, signal: AbortSignal,
+    subscription: StoredSubscription, trace: QylTrace, sourceKey: string, signal: AbortSignal,
   ): Promise<void> {
     const event = {
       eventId: `evt_${trace.trace_id}`,
@@ -624,6 +659,7 @@ export class EventsRuntime {
       const current = (await this.store.read()).subscriptions.find((entry) => entry.id === subscription.id);
       if (this.stopped || signal.aborted || current === undefined || !this.isLive(current)) return;
       subscription = current;
+      if (this.sourceKey(subscription) !== sourceKey) return;
       const timestamp = Math.floor(this.now() / 1000);
       const secrets = subscription.previousSecret !== undefined
         && subscription.previousSecretUntil !== undefined

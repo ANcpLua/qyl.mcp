@@ -77,3 +77,7 @@ jobs:
         run: bun run smoke:otlp
         env:
           QYL_COLLECTOR_PROJECT: ${{ github.workspace }}/qyl/services/qyl.collector/qyl.collector.csproj
+      - name: Verify account and Events project isolation
+        run: bun run smoke:projects
+        env:
+          QYL_COLLECTOR_PROJECT: ${{ github.workspace }}/qyl/services/qyl.collector/qyl.collector.csproj
