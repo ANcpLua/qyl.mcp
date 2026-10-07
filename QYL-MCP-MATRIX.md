@@ -106,7 +106,7 @@ content, and the snapshot still pins its input schema and UI metadata.
 
 | Resource                               | Backs                                       |
 |----------------------------------------|---------------------------------------------|
-| `ui://qyl-explorer/mcp-app-v3.html`       | `display_traces` trace explorer             |
+| `ui://qyl-explorer/mcp-app-v4.html`       | `display_traces` trace explorer             |
 | `ui://qyl-explorer/mcp-dashboard-v2.html` | `display_mcp_dashboard` aggregate dashboard |
 
 Hosted deployments advertise their validated `MCP_PUBLIC_URL` origin as
