@@ -3,7 +3,13 @@
 The following tables define which qyl MCP server tools should be used for work in each qyl repository.
 
 This is a recommendation based on the generated tool manifest snapshot, repository architecture and project contracts.
-None of the qyl MCP tools was executed while producing this matrix.
+The repository recommendations come from those sources. Production checks on
+7 October 2026 listed the 11-tool catalog and successfully called `list_metrics`
+and `list_traces` with an Auth0 machine token over both `2026-07-28` and
+`2025-11-25`. Modern Events discovery returned `trace.error`. Personal client
+OAuth succeeded in ChatGPT web, claude.ai and Codex CLI; Claude Code's read call,
+Inspector OAuth and ChatGPT Events delivery remain pending; see
+[the verification checklist](MCP-V2-INTEROP-TODO.md).
 
 `+` means the tool should be directly available and is preferred for suitable work.
 `C` means conditional — applicable only in the scenario named in the section notes.
