@@ -12,8 +12,9 @@ state they need. The current requirements are in
 dependency integration, local Events tests and all five real client logins/read
 calls are complete. Collector/MCP corrections are deployed and all eight
 owner-account review cases pass. The dedicated public UI-origin deployment is
-also verified. The remaining order is: demonstrate the complete production
-Events lifecycle; finish public plugin preparation and portal verification.
+also verified. Production Events delivery, service filtering and restart
+survival now pass. The remaining order is: verify automatic renewal and
+unsubscribe; finish public plugin preparation and portal verification.
 
 Collector PR #640 (`d07c45ad`) and MCP PR #80 (`a82e1786`) passed main CI and
 Railway deployment. ChatGPT rechecks verify the service/ERROR filter, ten-trace
@@ -131,10 +132,11 @@ identity. Set `OPENAI_APPS_CHALLENGE` from the portal when required. Verify OIDC
 
 ### 7. Verify Events in ChatGPT
 
-- [ ] On a supported modern-protocol ChatGPT surface, subscribe to `trace.error`
+- [x] On a supported modern-protocol ChatGPT surface, subscribe to `trace.error`
   for one service and verify the callback and saved subscription.
-- [ ] Produce a matching error trace and confirm its signed delivery reaches
-  the chat. Verify filtering, refresh, and survival across restart.
+- [x] Produce a matching error trace and confirm its signed delivery reaches
+  the chat. Verify filtering and survival across deployment/restart.
+- [ ] Verify renewal of the existing subscription and its new expiration.
 - [ ] Stop monitoring; confirm `events/unsubscribe`, record removal, and no
   further delivery to that subscription.
 
@@ -250,13 +252,34 @@ legacy metric assertion was corrected to the published `items` result field.
   the successful authorization URL contains one canonical `resource` value.
 - ChatGPT's task `qyl-Testfehler melden` is native Events monitoring for
   `trace.error`, filtered by `service_name = qyl-mcp-interop-oct7`. Its UI shows
-  an active event trigger. Stored subscription inspection, signed delivery,
-  refresh/restart and unsubscribe verification remain pending.
+  an active event trigger. The existing authenticated Railway browser console
+  allowed a redacted store inspection without creating an SSH key. The store
+  has one subscription with this filter, owner/client binding and a configured
+  signing key. Its `updatedAt` is `2026-10-07T01:15:12.041Z`, with expiration
+  `2026-10-07T02:15:12.041Z`.
+- The stored subscription survived deployment
+  `de261a52-aba4-4899-8e0a-94044e088d1e` (created at `01:41:15.189Z`) and
+  subsequently delivered the matching error. At `01:51:33.649Z`, the configured
+  internal Collector accepted nonmatching-service trace
+  `0299b2592ecb7a6122e7da3adee62083`. At `01:52:32.694Z`, it accepted matching
+  trace `e70ecd31c3bbf6ac02a07919e3c4d558`, named
+  `qyl-matching-error-20261007`, for `qyl-mcp-interop-oct7`.
+  Both OTLP requests returned 200; the same `fetchTraces(100)` path used by
+  the Events poller returned both with `has_error: true`.
+- [The subscribed ChatGPT chat](https://chatgpt.com/c/6ac5880a-bea8-8333-9632-7cdff64601e4)
+  reported the exact matching trace ID, service, error text, timestamp and
+  one-millisecond duration. It did not report the nonmatching-service error.
+  This is observed production delivery through the signed webhook path;
+  the callback response status itself was not separately logged. Renewal and
+  final unsubscribe verification are still in progress.
 - The first attempt to ingest the marked test trace at `api.qyl.at/v1/traces`
   received Cloudflare 403 / error 1010. No test trace was stored by that attempt.
   The approved Browser Integrity Check exception covers only `mcp.qyl.at`.
-  Automatic approval rejected registration of a temporary Railway SSH key;
-  that specific additional access is awaiting the user's decision.
+  Automatic approval rejected registration of a temporary Railway SSH key,
+  and the CLI volume reader also required a key. The already-authenticated
+  browser console resolved access without registering one. No edge-security
+  setting was changed: injection used the service's configured internal
+  Collector URL and existing credential.
 - OpenAI portal authentication is complete. The Plugins pages in both
   `ancplua` and Personal organizations have no public package/draft, so no
   domain-verification token is available. No

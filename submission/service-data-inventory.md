@@ -8,17 +8,21 @@ directory `submission/qyl/`.
 
 ## Verified service boundary
 
-- Production MCP is `https://mcp.qyl.at/mcp`, running source `3ae30b52` from
-  PR #81. Railway reports deployment
-  `cf19d6da-2feb-491a-95d3-9809ad461575` as successful.
+- Production MCP is `https://mcp.qyl.at/mcp`. Documentation PR #82
+  (`27a0bf73`) is deployed as `de261a52-aba4-4899-8e0a-94044e088d1e`;
+  its runtime code is unchanged from the verified PR #81 (`3ae30b52`).
 - Auth0 validates callers for the qyl MCP audience and `qyl:read`. The server
   authorizes each request. Clients receive telemetry returned by the configured
   Collector through read-only tools and optional viewers.
 - The Collector endpoint, API key and optional project header are deployment
   configuration. Production has a Collector credential and no `QYL_PROJECT`
-  override. The code does not create a separate Collector/project for each
-  Auth0 user. Confirm the Collector credential's actual data scope before
-  granting reviewer access; a new login alone does not establish isolation.
+  override. The Collector runs in `ApiKey` mode with one configured project;
+  an in-memory comparison confirmed that the MCP credential maps to that
+  project. No key values were printed. The Collector derives project scope
+  from the credential and rejects conflicting project headers. The MCP code
+  does not assign a different Collector credential/project to each Auth0 user.
+  A new reviewer login would therefore share the deployment's existing data
+  scope; it would not create a sample-only project.
 - Events are enabled at `/data/mcp-events.json`. Their Auth0 access checker is
   configured. Production uses the default 30-second polling interval.
 
@@ -27,6 +31,12 @@ Sources: [request authorization](../server/src/authorization.ts),
 [Collector configuration](../server/src/config.ts),
 [hosted startup](../server/src/main.ts), and
 [Railway service declaration](../.railway/railway.ts).
+
+Collector project-scope sources inspected in the available checkout:
+`services/qyl.collector/ApiKeys/CollectorApiKeyMiddleware.cs`,
+`services/qyl.collector/ApiKeys/AuthenticatedProject.cs`,
+`services/qyl.collector/ApiKeys/OtlpApiKeyValidator.cs`, and
+`services/qyl.collector/Hosting/CollectorAuthExtensions.cs`.
 
 ## Data used and retained by the MCP service
 
@@ -88,8 +98,14 @@ Sources: [event payload](../server/src/events.ts),
   Its source defaults to hourly retention cycles when no interval override is
   present, as in the inspected settings. Source deletes expired logs, spans and
   metric data in batches and performs a database checkpoint after deletion.
-  A live retention cycle, physical erasure, derived-data retention and backup
-  retention were not demonstrated in this goal.
+  A live retention cycle, physical erasure and derived-data retention were not
+  demonstrated in this goal.
+- On 7 October at about 01:50 UTC, the authenticated Railway Backups pages for
+  both production services, `qyl-mcp` and `qyl-collector`, displayed
+  **No backup schedule** and **No Backups** for their attached volumes.
+  This establishes the visible service-volume backup configuration at that
+  time. It does not establish provider-internal recovery copies, log retention
+  or physical deletion. No backup or schedule was created or changed.
 - Removing an Events subscription does not delete Collector telemetry,
   Auth0 account/consent records or copies already returned to a client.
 
@@ -102,7 +118,7 @@ Collector sources inspected in the available checkout:
 
 The public policy and support pages still need the verified publishing identity,
 a confirmed public contact/support route, account/data-deletion handling,
-provider and backup retention, and any additional data uses outside the code
+provider retention, and any additional data uses outside the code
 above. Do not infer these from a GitHub username, free pricing or an open-source
 license. The individual identity check is currently in review.
 
@@ -113,5 +129,6 @@ Keep login credentials in the portal's secure reviewer fields, never this file,
 the public manifest, a recording or the ZIP.
 
 No public policy URL, retention promise or reviewer-access completion is
-established by this technical inventory. The website source and temporary SSH
-access decisions already requested from the owner remain pending.
+established by this technical inventory. Website sources and the confirmation
+of a public/private support route remain pending. The existing Railway browser
+console supplied the needed inspection access without a new SSH key.
