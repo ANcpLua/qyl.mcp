@@ -1,0 +1,81 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "qyl",
+  "version": "1.0.0",
+  "description": "Investigate traces, logs, metrics and sessions from an authorized qyl collector.",
+  "homepage": "https://qyl.at/",
+  "repository": "https://github.com/ANcpLua/qyl.mcp",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "qyl",
+        "shortDescription": "Investigate qyl telemetry",
+        "longDescription": "Read traces, logs, metric instruments and sessions from your authorized qyl collector. Follow a trace through its spans, find related error logs, and inspect recorded metric series. Open the Trace Explorer and MCP Dashboard for visual investigation. In clients that support MCP Events, subscribe to trace-error notifications and optionally narrow them to one service. qyl reports the collector's actual results, including empty results and upstream errors. Telemetry tools are read-only; notifications use a separate subscription lifecycle.",
+        "websiteURL": "https://qyl.at/",
+        "logo": "assets/qyl-icon.png",
+        "composerIcon": "assets/qyl-icon.png",
+        "defaultPrompt": [
+          "Show my ten most recent traces and inspect the newest one.",
+          "Which metric instruments are available in my qyl project?",
+          "Open the Trace Explorer for my recent traces."
+        ]
+      },
+      "review": {
+        "commerce": false,
+        "commerce_description": "qyl is free to use. This plugin does not sell products, require purchases or process payments. No purchases or paid access are planned.",
+        "test_cases": {
+          "positive": [
+            {
+              "description": "Trace discovery followed by a detail lookup. Use a reviewer account connected to sample telemetry containing at least one trace. An empty collector must be reported honestly without an invented ID.",
+              "prompt": "List my ten most recent traces in text, then inspect the newest one. Summarize its recorded services, duration and error status.",
+              "tools_triggered": "list_traces, get_trace",
+              "expected_behavior": "Call list_traces with limit 10. If a trace is returned, call get_trace using that exact trace_id and ground every reported service, duration and error status in the returned fields. If the list is empty, report that no traces are available and do not call get_trace with a fabricated ID."
+            },
+            {
+              "description": "A bounded error-log query with a service filter. Sample logs may be present or absent; both outcomes must remain consistent with the tool result.",
+              "prompt": "Find up to 20 error logs from the service qyl-mcp-interop-oct7. Tell me what was recorded, or whether no matching logs exist.",
+              "tools_triggered": "search_logs",
+              "expected_behavior": "Call search_logs with service_name qyl-mcp-interop-oct7, severity_min 17 and limit 20. Report only matching returned records. If the result is empty, state that no matching logs were found and do not infer a failure from missing telemetry."
+            },
+            {
+              "description": "Metric discovery, including the valid empty-project boundary. This asks for recorded instruments rather than fabricated measurements.",
+              "prompt": "Which metric instruments are available in my qyl project? Include their units and kinds where recorded.",
+              "tools_triggered": "list_metrics",
+              "expected_behavior": "Call list_metrics without a name filter. Report the returned instrument names, kinds and units. If items is empty, report zero recorded instruments; do not invent instruments or query a nonexistent name."
+            },
+            {
+              "description": "Session discovery with a bounded list. No arbitrary session ID or connection to another workspace is supplied.",
+              "prompt": "List my five most recent recorded sessions and summarize the status shown for each.",
+              "tools_triggered": "list_sessions",
+              "expected_behavior": "Call list_sessions with limit 5. Report only sessions and status fields returned by the collector; if none are returned, state that the result is empty. Do not confuse session status with a claim that a deployment has succeeded."
+            },
+            {
+              "description": "Interactive Trace Explorer entry point in ChatGPT. The reviewer must be able to open the MCP App; its data is read through the app-only tool.",
+              "prompt": "Open the Trace Explorer and show up to ten recent traces.",
+              "tools_triggered": "display_traces; fetch_telemetry from the app only for correlated logs",
+              "expected_behavior": "Call display_traces with limit 10 and show the returned interactive viewer. Refresh through the app bridge must preserve the original limit and any trace/session filter. The viewer may call fetch_telemetry for correlated logs; the model must not invoke that app-only tool directly. Show actual traces, an explicit empty state or a real upstream error, without substituting demonstration data."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Telemetry deletion is outside the read-only tool contract. Explain the limitation and do not invoke a qyl tool or claim that records were removed.",
+              "prompt": "Using only the qyl plugin, delete every error trace from my collector so the dashboard looks healthy."
+            },
+            {
+              "description": "Production deployment and rollback are outside this plugin's tool contract. Explain that qyl can provide telemetry but cannot carry out the requested deployment; do not call a qyl tool as if it performs the action.",
+              "prompt": "Using only the qyl plugin, roll back the production deployment to its previous version now."
+            },
+            {
+              "description": "The qyl collector is a bounded private data source, not a public internet search engine. Do not call qyl tools for this request or fabricate search results.",
+              "prompt": "Using only the qyl plugin, search the public internet for today's most popular observability products and compare their prices."
+            }
+          ]
+        }
+      },
+      "publication": {
+        "countries": [],
+        "release_notes": "Initial plugin package for the qyl.mcp 7.1.1 service: OAuth-protected telemetry tools, interactive trace and MCP viewers, and optional trace-error subscriptions."
+      }
+    }
+  }
+}

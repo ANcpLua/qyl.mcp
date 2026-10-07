@@ -7,6 +7,7 @@ import {
   type McpUiHostContext,
 } from "./mcp-app-client.ts";
 import type {
+  DisplayTracesInput,
   DisplayTracesOutput,
   FetchTelemetryOutput,
   LogRecord as QylLogRecord,
@@ -18,6 +19,7 @@ import type {
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import packageMetadata from "../package.json";
 import {
+  DisplayTracesInputSchema,
   DisplayTracesOutputSchema,
   FetchTelemetryOutputSchema,
 } from "../src/contract-validation.ts";
@@ -33,6 +35,7 @@ type LogsPayload = Required<Pick<FetchTelemetryOutput, "logs" | "mode">>;
 type Tab = "waterfall" | "logs";
 
 const state = {
+  traceQuery: DisplayTracesInputSchema.parse({}),
   mode: undefined as Mode | undefined,
   traces: [] as QylTrace[],
   selectedTraceId: undefined as string | undefined,
@@ -43,6 +46,7 @@ const state = {
   // Prevent an older response from replacing the active trace's logs.
   logsRequestSeq: 0,
 };
+let pendingTraceQuery: DisplayTracesInput | undefined;
 
 
 const mainEl = document.querySelector(".main") as HTMLElement;
@@ -226,7 +230,14 @@ app.onteardown = async () => {
 };
 
 app.ontoolinput = (params) => {
-  const args = (params.arguments ?? {}) as { trace_id?: string; session_id?: string };
+  const parsed = DisplayTracesInputSchema.safeParse(params.arguments ?? {});
+  if (!parsed.success) {
+    pendingTraceQuery = undefined;
+    showError("Received invalid trace query parameters.");
+    return;
+  }
+  const args = parsed.data;
+  pendingTraceQuery = args;
   if (typeof args.trace_id === "string" && args.trace_id) {
     loadingTextEl.textContent = `Loading trace ${shortId(args.trace_id)}…`;
   } else if (typeof args.session_id === "string" && args.session_id) {
@@ -240,13 +251,17 @@ app.ontoolinput = (params) => {
 app.ontoolresult = (result) => {
   const payload = parseTracesPayload(result);
   if (!payload) {
+    pendingTraceQuery = undefined;
     showError(toolErrorText(result) ?? "Received an invalid tool result.");
     return;
   }
+  if (pendingTraceQuery) state.traceQuery = pendingTraceQuery;
+  pendingTraceQuery = undefined;
   applyTraces(payload);
 };
 
 app.ontoolcancelled = () => {
+  pendingTraceQuery = undefined;
   // Restore the prior view after a cancelled call.
   showView(state.traces.length > 0 ? "explorer" : "empty");
 };
@@ -847,15 +862,17 @@ async function refreshTraces() {
   }
   try {
     const result = await app.callServerTool({
-      name: "fetch_telemetry",
-      arguments: { view: "traces", limit: 20 },
+      // Reuse the display query so limit, trace and session scope all survive
+      // refresh. The app receives the result through the normal tool bridge.
+      name: "display_traces",
+      arguments: { ...state.traceQuery },
     });
     if (result.isError) {
-      throw new Error(toolErrorText(result) ?? "fetch_telemetry failed");
+      throw new Error(toolErrorText(result) ?? "display_traces failed");
     }
     const payload = parseTracesPayload(result);
     if (!payload) {
-      throw new Error("fetch_telemetry returned an invalid payload");
+      throw new Error("display_traces returned an invalid payload");
     }
     applyTraces(payload);
   } catch (err) {

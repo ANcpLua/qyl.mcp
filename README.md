@@ -47,26 +47,44 @@ healthcheck. Neither is a protocol endpoint — `/mcp` is the only one.
 ### Connect
 
 Use `https://mcp.qyl.at/mcp` in every client. These are the settings to use
-after the Auth0 client and `qyl:read` grant are provisioned. Live OAuth and
-tool-call checks remain pending until that configuration and the server changes
-are deployed.
+after the Auth0 client and `qyl:read` grant are provisioned. The SDK v2 runtime
+is deployed. Personal OAuth and client-specific tool-call checks are tracked in
+[MCP-V2-INTEROP-TODO.md](MCP-V2-INTEROP-TODO.md).
 
 | Client | Connection setting | OAuth client path |
 | --- | --- | --- |
 | ChatGPT web | Enable Developer mode in Settings → Security and login; in ChatGPT Plugins add an MCP connection to `https://mcp.qyl.at/mcp`, select OAuth, and include `qyl:read` in Base scopes. | CIMD at `https://chatgpt.com/oauth/client.json`, with redirect `https://chatgpt.com/connector_platform_oauth_redirect`, when the connection page shows stable callbacks. The document supports `none` and `private_key_jwt` (currently preferred). DCR is also supported when explicitly selected in the connection form. |
 | claude.ai | Customize → Connectors → Add custom connector; enter `https://mcp.qyl.at/mcp` and leave optional client ID and secret empty. | CIMD at `https://claude.ai/oauth/mcp-oauth-client-metadata`, a public client (`none`) with redirect `https://claude.ai/api/mcp/auth_callback`; DCR is the fallback. |
 | Claude Code | `claude mcp add --transport http qyl https://mcp.qyl.at/mcp`; then open `/mcp` in Claude Code to authorize. | CIMD at `https://claude.ai/oauth/claude-code-client-metadata`, a public client (`none`) with port-independent `http://localhost/callback` and `http://127.0.0.1/callback` redirects; DCR is the fallback. |
-| Codex CLI | `codex mcp add qyl --url https://mcp.qyl.at/mcp --oauth-resource https://mcp.qyl.at/mcp`; `codex mcp login qyl --enable mcp_2026_07_28 --scopes qyl:read`; start Codex with `codex --enable mcp_2026_07_28`. | CIMD or DCR as selected by the client and Auth0; `--oauth-client-registration cimd` or `dcr` can pin a test path. Ordinary tools also support the CLI's 2025-era protocol; the feature flag selects the modern path for verification. |
-| MCP Inspector | Select Streamable HTTP, enter `https://mcp.qyl.at/mcp`, set protocol era to **modern**, and use Open Auth Settings → Quick OAuth Flow. For CLI checks use `npx @modelcontextprotocol/inspector@2.8.0 --cli https://mcp.qyl.at/mcp --transport http --protocol-era modern --method tools/list`. | CIMD when supported by the Inspector release, otherwise DCR. |
+| Codex CLI | Configure `[mcp_servers.qyl]` with `url = "https://mcp.qyl.at/mcp"` and `scopes = ["qyl:read"]`; then `codex mcp login qyl --enable mcp_2026_07_28 --scopes qyl:read`. Start Codex with `codex --enable mcp_2026_07_28` for the modern path. | CIMD or DCR as selected by the client and Auth0; `codex mcp add` supports `--oauth-client-registration cimd` or `dcr` for a targeted registration test. For CLI 0.158.0-alpha.2.1, leave `oauth_resource` unset: discovery supplies it, and the explicit override produced duplicate resource parameters. Ordinary tools also support the CLI's 2025-era protocol. |
+| MCP Inspector | In Inspector 2.8.0, add an HTTP server at `https://mcp.qyl.at/mcp`, set protocol era to **modern**, configure `qyl:read` and the provisioned OAuth client, then connect. OAuth opens automatically when required; the web callback is `http://127.0.0.1:6274/oauth/callback` on the default port. For CLI checks use `npx @modelcontextprotocol/inspector@2.8.0 --cli https://mcp.qyl.at/mcp --transport http --protocol-era modern --method tools/list`. | The production test reused an existing authorized DCR evaluation client. Fresh registrations need an explicit Auth0 `qyl:read` grant; registration alone grants no access. |
 
 Local `QYL_DEMO=1` v2 checks on 30 September 2026: Claude Code 2.1.285,
 Codex CLI 0.158.0-alpha.2.1 with `--enable mcp_2026_07_28`, and MCP Inspector
 2.8.0 each called `list_metrics` and received 3 instruments with
 `has_more: false`. Inspector listed all 11 tools, each with `qyl:read` in
 `_meta.securitySchemes` and `readOnlyHint: true`. These local calls did not use
-OAuth. ChatGPT web, claude.ai, and each client's production OAuth path still
-need a deployed build and Auth0 client grants before their results can be
-recorded here.
+OAuth.
+
+Production verification on 7 October 2026 used the existing Auth0 machine test
+application: both `2026-07-28` and `2025-11-25` listed all 11 tools and
+successfully called `list_metrics` and `list_traces`. Modern `events/list`
+returned `trace.error`. The collector's required project key is configured in
+Railway; the prior upstream 401 is resolved.
+
+Separate real authorization-code tests on the same day passed in ChatGPT web,
+claude.ai, Claude Code 2.1.292, Codex CLI 0.158.0-alpha.2.1 and MCP Inspector
+2.8.0: each completed OAuth and a successful `list_metrics({})` call with zero
+live metrics. ChatGPT and both Claude clients used their published CIMD
+identities; Codex used a fresh strict DCR registration and the modern protocol.
+Claude Code's successful response also included the modern server identity
+metadata. Inspector used the existing DCR evaluation client, confirmed MCP
+`2026-07-28` and listed all 11 tools. The production ChatGPT Events test also
+passed: a matching error reached the subscribed chat, a different service's
+error did not, the subscription survived deployment and automatically renewed,
+and stopping monitoring removed it. A subsequent matching error produced no
+chat notification during more than three polling intervals. Public plugin
+preparation and portal verification remain open in the checklist.
 
 The TypeScript SDK v2 serves MCP revision `2026-07-28` and its supported
 2025-era protocols through one tool factory. HTTP uses the SDK's stateless
@@ -297,10 +315,18 @@ which `.railway/railway.ts` keeps on the volume mounted at `/data`. Leave the
 variable unset to run without events and without a volume. Railway's 15-minute
 streaming limit applies to unusually long synchronous operations.
 
-To submit the server as a ChatGPT plugin, use the portal's **With MCP** path
-with `https://mcp.qyl.at/mcp`. When the portal shows its domain-verification
-token, set `OPENAI_APPS_CHALLENGE` to it; the server then answers
-`/.well-known/openai-apps-challenge` with exactly that token as plain text.
+For public plugin submission, declare `https://mcp.qyl.at/mcp` in the plugin
+package and upload its ZIP in [Plugins](https://platform.openai.com/plugins).
+Open the package's **MCPs** section to connect and scan the server. When the
+portal shows its domain-verification token, set `OPENAI_APPS_CHALLENGE` to it;
+the server then answers `/.well-known/openai-apps-challenge` with exactly that
+token as plain text. Follow the current
+[submission flow](https://developers.openai.com/plugins/deploy/submission).
+
+When the collector uses API-key authentication, configure `QYL_API_KEY` with a
+key from its intended project. `/healthz` and OAuth discovery can succeed even
+when this downstream credential is missing; verify a real authenticated read
+tool after each deployment. Do not place the collector key in client settings.
 
 ```bash
 NODE_ENV=production \
@@ -315,7 +341,9 @@ bun run start
 
 `MCP_PUBLIC_URL` adds its hostname to the Host and Origin allowlists, and
 `<public-url>/mcp` is the fixed resource identifier tokens are audience-bound to.
-A non-loopback bind requires it.
+A non-loopback bind requires it. Its origin is also advertised as `_meta.ui.domain`
+on both viewer resources for public plugin review. Use a dedicated origin for
+this plugin; local and stdio servers leave the host's default UI origin in place.
 
 The default Auth0 mode accepts only the qyl production Auth0 issuer
 `https://qyl-eu.eu.auth0.com/`, which is pinned in the build and is not
@@ -508,8 +536,9 @@ bun run smoke:live
 `smoke` exercises explicit demo behavior. `smoke:otlp` needs the sibling qyl
 collector checkout (or `QYL_COLLECTOR_PROJECT` pointing at it), starts an
 API-key-protected collector, and drives its real OTLP/protobuf and read surfaces
-— a fixture validated by a schema from this repository would prove nothing about
-interoperability. `smoke:live` needs the published `qyl` dotnet tool on `PATH`
+including MCP log queries for service, severity, trace, body, empty results and
+limits. It persists matching and deliberately nonmatching records before those
+queries. `smoke:live` needs the published `qyl` dotnet tool on `PATH`
 (`dotnet tool install -g qyl`): it starts `qyl up` under a timeout, sends
 OTLP/JSON traces, logs and metrics, then calls every one of the eleven tools in
 live mode over stdio, reads both MCP App resources, and repeats `tools/list`

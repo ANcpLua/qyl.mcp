@@ -19,7 +19,6 @@ const check = (ok, label, detail = "") => {
 const authedFetch = (url, init = {}) => {
   const headers = new Headers(init.headers ?? {});
   headers.set("authorization", `Bearer ${token}`);
-  headers.set("user-agent", "curl/8.7.1"); // Cloudflare 1010 rejects the runtime's default agent
   return fetch(url, { ...init, headers });
 };
 

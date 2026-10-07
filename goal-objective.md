@@ -1,7 +1,7 @@
 # qyl.mcp interoperability and Events objective
 
 Updated from the user's requirements on 7 October 2026. This is the working
-objective for the next goal run. It supersedes the older attachment's
+objective for the active goal. It supersedes the older attachment's
 modern-protocol-only and no-user-data requirements. Later user instructions
 take precedence over this document.
 
@@ -15,6 +15,40 @@ surface.
 
 Repository: `/Users/alexandernachtmann/RiderProjects/qyl.mcp`
 Remote: <https://github.com/ANcpLua/qyl.mcp>
+
+## Current checkpoint and resume point — 7 October 2026
+
+Use [MCP-CHECKPOINT.md](MCP-CHECKPOINT.md) for the current working copies,
+verified progress, pending owner actions and remaining sequence. The original
+eight steps below are acceptance criteria; execution no longer starts at step 1.
+
+SDK/dependency integration, local Events coverage and the five personal client
+connections are complete. Collector PR #640 and MCP PR #80 are merged, their
+main CI and Railway deployments succeeded, and all eight owner-account review
+rehearsals now pass. Production rechecks confirm service/severity filtering,
+the ten-trace limit after viewer refresh, and direct refusal of deletion-only
+requests without a qyl call. PR #81 adds the dedicated public UI origin and
+versions both viewer resources; it is merged and deployed with successful main
+CI. Inspector reads both new resource versions, and ChatGPT renders both
+viewers at the dedicated sandbox origin. The production Events store and
+matching ChatGPT delivery are now verified, including service filtering,
+survival across deployment, automatic renewal and unsubscribe. The task is
+paused, the Events store is empty, and a subsequent matching error produced
+no notification during more than three polling intervals. Evidence PR #83 is
+merged and deployed with successful main CI. Release PR #84 is also merged
+and deployed. npm `qyl-mcp-server@7.1.1` is published with SDK 2.3.1, and fresh
+npx consumers passed discovery, tool listing and demo metrics in both protocol
+eras. The earlier GitHub connection failure is resolved; its terminal handoff
+is no longer needed. qyl.at PR #16's final CI passed; automatic approval rejected
+its production merge, and one explicit rollout request is pending. Finish that
+rollout after approval, then continue public plugin preparation.
+
+The public plugin remains an incomplete local draft. Free use and all eligible
+countries are confirmed. The `ancplua` organization now shows Individual
+identity **Approved**. Select that verified identity when preparing the portal
+entry; do not restart the identity check. Public listing/support/policy details,
+reviewer/demo evidence and the portal challenge/scan remain open. Do not equate successful private client
+connections with completed public submission.
 
 ## SDK and protocol requirements
 
@@ -65,8 +99,9 @@ Source: [OpenAI MCP Events](https://developers.openai.com/plugins/build/mcp-even
 
 ## Execution sequence and completion criteria
 
-The checkout and revised requirements are established. Continue in this order,
-using [MCP-V2-INTEROP-TODO.md](MCP-V2-INTEROP-TODO.md) for the detailed checks.
+The checkout and revised requirements are established. These are the original
+completion criteria. Follow the current checkpoint's resume order and use
+[MCP-V2-INTEROP-TODO.md](MCP-V2-INTEROP-TODO.md) for the detailed checks.
 
 1. **Consolidate dependencies.** Review current PRs against main, select exact
    compatible SDK v2 and workspace dependency versions, investigate failing
