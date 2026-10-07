@@ -28,6 +28,7 @@ import { z } from "zod";
 import { AtomicJsonStore } from "./atomic-json-store.js";
 import { fetchTraces } from "./data.js";
 import { CollectorAccessError, collectorAccessForSubject } from "./collector-access.js";
+import { collectorUrl } from "./config.js";
 import { rootSpanName } from "./summaries.js";
 import type { QylTrace } from "./wire.js";
 import {
@@ -586,40 +587,42 @@ export class EventsRuntime {
     for (const key of this.seen.keys()) {
       if (!retainedKeys.has(key)) this.seen.delete(key);
     }
-    const deliveries: Promise<void>[] = [];
-    for (const [key, group] of groups) {
+    const results = (await Promise.all([...groups].map(async ([key, group]) => {
       let traces: readonly QylTrace[];
       try {
         traces = await this.recentTraces(group[0]!);
       } catch {
         this.log("collector poll failed; delivery suspended for this account");
-        continue;
+        return [];
       }
 
       const seen = this.seen.get(key);
       if (seen === undefined) {
         this.seen.set(key, new Set(traces.filter((trace) => trace.has_error).map((trace) => trace.trace_id)));
-        continue;
+        return [];
       }
       const fresh = traces.filter((trace) => trace.has_error && !seen.has(trace.trace_id));
       for (const trace of fresh) seen.add(trace.trace_id);
       if (seen.size > MAX_SEEN_TRACES) {
         this.seen.set(key, new Set([...seen].slice(-MAX_SEEN_TRACES)));
       }
+      const deliveries: Promise<void>[] = [];
       for (const trace of fresh) {
         for (const subscription of group) {
           if (matches(subscription, trace)) deliveries.push(this.deliver(subscription, trace, key));
         }
       }
-    }
-    const results = await Promise.allSettled(deliveries);
+      return Promise.allSettled(deliveries);
+    }))).flat();
     for (const result of results) {
       if (result.status === "rejected") this.log("event delivery failed");
     }
   }
 
   private sourceKey(principal: Principal): string {
-    return canonicalJson([principal.subject, collectorAccessForSubject(principal.subject)?.project ?? null]);
+    const project = collectorAccessForSubject(principal.subject)?.project
+      ?? (process.env.QYL_PROJECT?.trim() || "default");
+    return canonicalJson([collectorUrl(), project]);
   }
 
   private deliver(subscription: StoredSubscription, trace: QylTrace, sourceKey: string): Promise<void> {

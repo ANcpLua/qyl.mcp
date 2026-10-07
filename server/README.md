@@ -166,8 +166,12 @@ real ChatGPT demonstration are separate checks before upload.
 ### 7.2.0
 
 - Optional Auth0-account-to-Collector project isolation, also applied to Events.
+- Events share polling for accounts assigned to the same project; independent
+  projects are polled concurrently. Invalid stdio project configuration fails
+  before accepting a connection.
 - Workbench telemetry recognizes the SDK's per-request server factory so native
-  tool spans are not duplicated by the surrounding protocol journal.
+  tool spans are not duplicated by the surrounding protocol journal, while
+  failed server construction still produces a correlated failure span.
 
 ### 7.1.1
 

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test, { type TestContext } from "node:test";
 import { Client, StreamableHTTPClientTransport, type FetchLike } from "@modelcontextprotocol/client";
 import { createMcpHandler, type AuthInfo } from "@modelcontextprotocol/server";
@@ -67,6 +69,18 @@ test("project access configuration requires hosted Auth0", async () => {
     hostedAuth({ port: 3001, bindHost: "127.0.0.1" }, { MCP_COLLECTOR_PROJECTS: JSON.stringify(PROJECTS) }),
     /requires hosted Auth0/u,
   );
+});
+
+test("stdio rejects project mappings before accepting a connection", () => {
+  for (const mapping of [JSON.stringify(PROJECTS), "{invalid}"]) {
+    const child = spawnSync(process.execPath, [fileURLToPath(new URL("./main.js", import.meta.url)), "--stdio"], {
+      env: { ...process.env, QYL_DEMO: "1", MCP_COLLECTOR_PROJECTS: mapping },
+      input: "", encoding: "utf8", timeout: 5_000,
+    });
+    assert.equal(child.status, 1, child.stderr);
+    assert.equal(child.stdout, "");
+    assert.match(child.stderr, /Standalone MCP startup/u);
+  }
 });
 
 test("unscoped data requests cannot use the default credential when project access is enabled", async (context) => {
@@ -178,7 +192,7 @@ for (const revision of ["2026-07-28", "2025-11-25"] as const) {
   });
 }
 
-test("Events poll and deduplicate within each account's Collector scope", async (context) => {
+test("Events poll and deduplicate within each account's Collector scope", { timeout: 5_000 }, async (context) => {
   environment(context, {
     MCP_COLLECTOR_PROJECTS: JSON.stringify(PROJECTS),
     QYL_COLLECTOR_URL: "https://collector.example.test",
@@ -189,6 +203,11 @@ test("Events poll and deduplicate within each account's Collector scope", async 
   const store = createEventStore(join(dir, "events.json"));
   let phase = 0;
   let ownerUnavailable = false;
+  let releaseOwner!: () => void;
+  const ownerGate = new Promise<void>((resolve) => { releaseOwner = resolve; });
+  context.after(() => releaseOwner());
+  let markReviewDelivered!: () => void;
+  const reviewDelivered = new Promise<void>((resolve) => { markReviewDelivered = resolve; });
   const sharedId = getDemo().traces[0]!.trace_id;
   const traces = new Map<string, QylTrace>(PROJECTS.map((entry) => [entry.project, {
     ...getDemo().traces[0]!, trace_id: sharedId, has_error: true,
@@ -199,7 +218,10 @@ test("Events poll and deduplicate within each account's Collector scope", async 
     const project = request.headers.get(PROJECT_HEADER)!;
     const expected = PROJECTS.find((entry) => entry.project === project)!;
     assert.equal(request.headers.get(API_KEY_HEADER), expected.apiKey);
-    if (ownerUnavailable && project === "owner") throw new Error("upstream unavailable");
+    if (ownerUnavailable && project === "owner") {
+      await ownerGate;
+      throw new Error("upstream unavailable");
+    }
     return Response.json({ items: phase === 0 ? [] : [traces.get(project)], has_more: false });
   });
   const deliveries: Array<{ url: string; body: string }> = [];
@@ -209,6 +231,7 @@ test("Events poll and deduplicate within each account's Collector scope", async 
       const value = JSON.parse(body) as { type?: string; challenge?: string };
       if (value.type === "verification") return { status: 200, body: JSON.stringify({ challenge: value.challenge }) };
       deliveries.push({ url: url.href, body });
+      if (url.pathname === "/review") markReviewDelivered();
       return { status: 200, body: "" };
     },
   });
@@ -226,8 +249,11 @@ test("Events poll and deduplicate within each account's Collector scope", async 
   await runtime.poll();
   phase = 1;
   ownerUnavailable = true;
-  await runtime.poll();
+  const stalledPoll = runtime.poll();
+  await reviewDelivered;
   assert.equal(deliveries.length, 1, "one account's upstream failure must not block another");
+  releaseOwner();
+  await stalledPoll;
   assert.equal(deliveries[0]!.url, "https://receiver.example.test/review");
   assert.match(deliveries[0]!.body, /review-sample/u);
   assert.doesNotMatch(deliveries[0]!.body, /owner-sample|owner-test-key|review-test-key/u);
@@ -247,3 +273,43 @@ test("Events poll and deduplicate within each account's Collector scope", async 
   await assert.rejects(runtime.subscribe(params("owner"), owner), /No Collector project is assigned/u);
   assert.equal(deliveries.length, before);
 });
+
+for (const configured of [false, true]) {
+  test(`Events share one poll for accounts reading the same ${configured ? "assigned" : "default"} project`, async (context) => {
+    environment(context, {
+      MCP_COLLECTOR_PROJECTS: configured
+        ? JSON.stringify([{ ...PROJECTS[0], subjects: [OWNER, REVIEWER] }]) : undefined,
+    });
+    const dir = await mkdtemp(join(tmpdir(), "qyl-shared-project-events-"));
+    context.after(() => rm(dir, { recursive: true, force: true }));
+    let reads = 0;
+    let phase = 0;
+    const deliveries: string[] = [];
+    const runtime = new EventsRuntime({
+      store: createEventStore(join(dir, "events.json")), isAuthorized: async () => true, log: () => {},
+      recentTraces: async () => {
+        reads++;
+        return phase === 0 ? [] : [{ ...getDemo().traces[0]!, has_error: true }];
+      },
+      post: async (url, body) => {
+        const event = JSON.parse(body) as { type?: string; challenge?: string };
+        if (event.type === "verification") return { status: 200, body: JSON.stringify({ challenge: event.challenge }) };
+        deliveries.push(url.pathname);
+        return { status: 200, body: "" };
+      },
+    });
+    context.after(() => runtime.stop());
+    for (const [index, subject] of [OWNER, REVIEWER].entries()) {
+      await runtime.subscribe({ name: "trace.error", arguments: {}, delivery: {
+        mode: "webhook", url: `https://receiver.example.test/${index}`,
+        secret: `whsec_${Buffer.alloc(32, 3).toString("base64")}`,
+      } }, { subject, clientId: "shared-project-test" });
+    }
+    await runtime.poll();
+    assert.equal(reads, 1);
+    phase = 1;
+    await runtime.poll();
+    assert.equal(reads, 2);
+    assert.deepEqual(deliveries.sort(), ["/0", "/1"]);
+  });
+}

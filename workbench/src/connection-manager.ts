@@ -36,6 +36,7 @@ import {
 import { Constants } from "./constants.js";
 import { currentMcpPropagation } from "./telemetry.js";
 import type { Readable } from "node:stream";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 const DEFAULT_CONNECT_TIMEOUT_MS = 60_000;
 const DEFAULT_DISCONNECT_TIMEOUT_MS = 5_000;
@@ -213,7 +214,6 @@ export class ConnectionManagerError extends Error {
 
 interface InProcessServerLifetime {
     close(): Promise<void>;
-    readonly nativeExecutionTelemetry?: boolean;
 }
 
 interface ActiveConnection {
@@ -270,6 +270,7 @@ export function resolveEnvironmentHeaders(
 }
 
 export class ConnectionManager {
+    private readonly inProcessRequestScope = new AsyncLocalStorage<{ nativeExecutionTelemetry: boolean }>();
     private readonly entries = new Map<string, ConnectionEntry>();
     private readonly builtins = new Map<string, InProcessMcpServerFactory>();
     private readonly subscribers = new Set<(snapshot: ConnectionSnapshot) => void>();
@@ -722,14 +723,16 @@ export class ConnectionManager {
         serverJournal: ProtocolJournal,
     ): Promise<CreatedTransport> {
         let closed = false;
-        let nativeExecutionTelemetry = false;
         const handler = createMcpHandler(async () => {
             const server = await factory();
             if (closed) {
                 await server.close();
                 throw new Error("In-process MCP handler is closed.");
             }
-            nativeExecutionTelemetry = hasNativeExecutionTelemetry(server);
+            const requestScope = this.inProcessRequestScope.getStore();
+            if (requestScope !== undefined) {
+                requestScope.nativeExecutionTelemetry = hasNativeExecutionTelemetry(server);
+            }
             return server;
         }, {
             onerror: (error) => serverJournal.recordTransportError(
@@ -740,20 +743,20 @@ export class ConnectionManager {
         const transport = new StreamableHTTPClientTransport(
             new URL(`http://qyl-inproc.invalid/${encodeURIComponent(connectionId)}/mcp`),
             {
-                fetch: (url, init) => this.fetchInProcess(
-                    handler.fetch,
-                    new Request(url, init),
-                    serverJournal,
-                    connectionId,
+                fetch: (url, init) => this.inProcessRequestScope.run(
+                    { nativeExecutionTelemetry: false },
+                    () => this.fetchInProcess(
+                        handler.fetch,
+                        new Request(url, init),
+                        serverJournal,
+                        connectionId,
+                    ),
                 ),
             },
         );
         return {
             transport,
             server: {
-                // SDK v2 owns fresh instances per request. The lifetime wrapper
-                // is not itself a McpServer and cannot be checked in its WeakSet.
-                get nativeExecutionTelemetry() { return nativeExecutionTelemetry; },
                 close: async () => {
                     closed = true;
                     await handler.close();
@@ -903,7 +906,7 @@ export class ConnectionManager {
         if (protocolVersion !== undefined) enriched.protocolVersion = protocolVersion;
         if (peer?.address !== undefined) enriched.peerAddress = peer.address;
         if (peer?.port !== undefined) enriched.peerPort = peer.port;
-        if (operation.role === "server" && entry.active?.server?.nativeExecutionTelemetry === true) {
+        if (operation.role === "server" && this.inProcessRequestScope.getStore()?.nativeExecutionTelemetry === true) {
             enriched.nativeExecutionTelemetry = true;
         }
         return enriched;
