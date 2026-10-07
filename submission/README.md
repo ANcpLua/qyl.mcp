@@ -58,6 +58,10 @@ The plugin package version starts at 1.0.0. The service it connects to reports
    The public UI-origin deployment is also verified: both viewers render at
    the dedicated sandbox origin and trace Refresh retains its limit. Record
    and verify the actual walkthrough against the version to be submitted.
+   The owner-account Events rehearsal now also passed production delivery,
+   filtering, renewal, restart survival and unsubscribe. Its task is paused
+   and the subscription store is empty; this does not replace the sample-data
+   reviewer run or a recording.
    No recording link or reviewer credentials have been supplied.
 4. **Finalize and inspect the ZIP.** After the missing fields and evidence are
    ready, archive only `qyl/`, inspect the resulting archive and validate its

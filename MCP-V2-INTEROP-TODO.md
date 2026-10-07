@@ -12,8 +12,9 @@ state they need. The current requirements are in
 dependency integration, local Events tests and all five real client logins/read
 calls are complete. Collector/MCP corrections are deployed and all eight
 owner-account review cases pass. The dedicated public UI-origin deployment is
-also verified. The remaining order is: demonstrate the complete production
-Events lifecycle; finish public plugin preparation and portal verification.
+also verified. Production Events delivery, service filtering, restart survival,
+automatic renewal and unsubscribe now pass. Finish the evidence PR, public
+plugin preparation and portal verification.
 
 Collector PR #640 (`d07c45ad`) and MCP PR #80 (`a82e1786`) passed main CI and
 Railway deployment. ChatGPT rechecks verify the service/ERROR filter, ten-trace
@@ -131,18 +132,19 @@ identity. Set `OPENAI_APPS_CHALLENGE` from the portal when required. Verify OIDC
 
 ### 7. Verify Events in ChatGPT
 
-- [ ] On a supported modern-protocol ChatGPT surface, subscribe to `trace.error`
+- [x] On a supported modern-protocol ChatGPT surface, subscribe to `trace.error`
   for one service and verify the callback and saved subscription.
-- [ ] Produce a matching error trace and confirm its signed delivery reaches
-  the chat. Verify filtering, refresh, and survival across restart.
-- [ ] Stop monitoring; confirm `events/unsubscribe`, record removal, and no
+- [x] Produce a matching error trace and confirm its signed delivery reaches
+  the chat. Verify filtering and survival across deployment/restart.
+- [x] Verify renewal of the existing subscription and its new expiration.
+- [x] Stop monitoring; confirm `events/unsubscribe`, record removal, and no
   further delivery to that subscription.
 
 ### 8. Record completion
 
-- [ ] Update README, contract matrix, and this checklist with tested settings
+- [x] Update README, contract matrix, and this checklist with tested settings
   and evidence. Separate local, CI, and production results.
-- [ ] Report completed client connections, Events results, and any exact
+- [x] Report completed client connections, Events results, and any exact
   remaining failure. A source implementation alone does not complete the goal.
 
 ## Local verification on 7 October 2026
@@ -250,13 +252,51 @@ legacy metric assertion was corrected to the published `items` result field.
   the successful authorization URL contains one canonical `resource` value.
 - ChatGPT's task `qyl-Testfehler melden` is native Events monitoring for
   `trace.error`, filtered by `service_name = qyl-mcp-interop-oct7`. Its UI shows
-  an active event trigger. Stored subscription inspection, signed delivery,
-  refresh/restart and unsubscribe verification remain pending.
+  a native event trigger. The existing authenticated Railway browser console
+  allowed a redacted store inspection without creating an SSH key. The store
+  initially had one subscription with this filter, owner/client binding and a
+  configured signing key. Its `updatedAt` was `2026-10-07T01:15:12.041Z`, with
+  expiration `2026-10-07T02:15:12.041Z`.
+- The stored subscription survived deployment
+  `de261a52-aba4-4899-8e0a-94044e088d1e` (created at `01:41:15.189Z`) and
+  subsequently delivered the matching error. At `01:51:33.649Z`, the configured
+  internal Collector accepted nonmatching-service trace
+  `0299b2592ecb7a6122e7da3adee62083`. At `01:52:32.694Z`, it accepted matching
+  trace `e70ecd31c3bbf6ac02a07919e3c4d558`, named
+  `qyl-matching-error-20261007`, for `qyl-mcp-interop-oct7`.
+  Both OTLP requests returned 200; the same `fetchTraces(100)` path used by
+  the Events poller returned both with `has_error: true`.
+- [The subscribed ChatGPT chat](https://chatgpt.com/c/6ac5880a-bea8-8333-9632-7cdff64601e4)
+  reported the exact matching trace ID, service, error text, timestamp and
+  one-millisecond duration. It did not report the nonmatching-service error.
+  This is observed production delivery through the signed webhook path;
+  the callback response status itself was not separately logged.
+- ChatGPT renewed the same stored subscription automatically at
+  `2026-10-07T01:58:55.776Z`, before its old expiration. A read-only watcher
+  observed the new `refreshBefore` of `2026-10-07T02:58:55.776Z`, unchanged ID
+  and count of one. No replacement signing key was supplied in this renewal;
+  production key rotation is not claimed. Local rotation tests remain the
+  evidence for that separate behavior.
+- Pausing `qyl-Testfehler melden` in ChatGPT stopped monitoring. At
+  `02:02:01.464Z`, the persistent store contained zero subscriptions, well
+  before expiration. A final matching error,
+  `e73ab104fa2afb6d3353874fd1e8c1e5` (`qyl-after-unsubscribe-20261007`), was
+  accepted at `02:02:35.633Z`. At `02:04:52.044Z`, the Collector read path
+  confirmed that error trace, the store remained empty, and the refreshed
+  ChatGPT chat still showed Paused with no notification for it. This verifies
+  the bounded no-delivery check over more than three 30-second polling
+  intervals. The completed test leaves the task paused and no active
+  subscription; the three synthetic traces remain subject to Collector
+  retention. No SSH key, callback-secret copy or new authorization grant was
+  created for these checks.
 - The first attempt to ingest the marked test trace at `api.qyl.at/v1/traces`
   received Cloudflare 403 / error 1010. No test trace was stored by that attempt.
   The approved Browser Integrity Check exception covers only `mcp.qyl.at`.
-  Automatic approval rejected registration of a temporary Railway SSH key;
-  that specific additional access is awaiting the user's decision.
+  Automatic approval rejected registration of a temporary Railway SSH key,
+  and the CLI volume reader also required a key. The already-authenticated
+  browser console resolved access without registering one. No edge-security
+  setting was changed: injection used the service's configured internal
+  Collector URL and existing credential.
 - OpenAI portal authentication is complete. The Plugins pages in both
   `ancplua` and Personal organizations have no public package/draft, so no
   domain-verification token is available. No
