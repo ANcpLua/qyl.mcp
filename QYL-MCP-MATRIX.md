@@ -7,8 +7,10 @@ The repository recommendations come from those sources. Production checks on
 7 October 2026 listed the 11-tool catalog and successfully called `list_metrics`
 and `list_traces` with an Auth0 machine token over both `2026-07-28` and
 `2025-11-25`. Modern Events discovery returned `trace.error`. Personal client
-OAuth succeeded in ChatGPT web, claude.ai, Codex CLI and Inspector;
-Claude Code's read call and ChatGPT Events delivery remain pending; see
+OAuth and a real read call succeeded in ChatGPT web, claude.ai, Claude Code,
+Codex CLI and Inspector. Production ChatGPT Events delivery, service filtering,
+automatic renewal, survival across deployment and unsubscribe passed. Public
+plugin preparation and portal verification remain pending; see
 [the verification checklist](MCP-V2-INTEROP-TODO.md).
 
 `+` means the tool should be directly available and is preferred for suitable work.
@@ -21,7 +23,7 @@ sufficiently verified.
 For the `Baseline` column:
 
 - `Snapshot` means the tool appears in `server/tool-manifest.snapshot.json` at contract revision
-  `sha256:5c1aa27ccdf48067`. The server is closed-world: a fresh runtime `tools/list` must equal the snapshot, and the
+  `sha256:75278211aa54def8`. The server is closed-world: a fresh runtime `tools/list` must equal the snapshot, and the
   snapshot is regenerated only deliberately with its diff inspected.
 
 There are no `VERIFY` or `GHOST` states: the generated manifest is the contract, so a tool either exists at the
@@ -104,8 +106,12 @@ content, and the snapshot still pins its input schema and UI metadata.
 
 | Resource                               | Backs                                       |
 |----------------------------------------|---------------------------------------------|
-| `ui://qyl-explorer/mcp-app.html`       | `display_traces` trace explorer             |
-| `ui://qyl-explorer/mcp-dashboard.html` | `display_mcp_dashboard` aggregate dashboard |
+| `ui://qyl-explorer/mcp-app-v3.html`       | `display_traces` trace explorer             |
+| `ui://qyl-explorer/mcp-dashboard-v2.html` | `display_mcp_dashboard` aggregate dashboard |
+
+Hosted deployments advertise their validated `MCP_PUBLIC_URL` origin as
+`_meta.ui.domain` on both resources. Their CSP keeps empty connection and asset
+allowlists: the bundled viewers use the MCP bridge and load no external assets.
 
 ## Recommended direct exposure summary
 

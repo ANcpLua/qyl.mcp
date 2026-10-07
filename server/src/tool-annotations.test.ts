@@ -51,7 +51,7 @@ test("qyl tools publish read-only safety annotations", async () => {
 
 test("qyl server factory serves protocol revision 2026-07-28 over the fetch entry", async () => {
   const handler = createMcpHandler(
-    () => createServer({ nativeExecution: false }),
+    () => createServer({ nativeExecution: false, uiDomain: "https://mcp.qyl.test" }),
     { legacy: "reject" },
   );
   const transport = new StreamableHTTPClientTransport(
@@ -90,7 +90,7 @@ test("qyl server factory serves protocol revision 2026-07-28 over the fetch entr
       | undefined;
     assert.equal(
       displayMetadata?.ui?.resourceUri,
-      "ui://qyl-explorer/mcp-app.html",
+      "ui://qyl-explorer/mcp-app-v3.html",
     );
 
     const resourcesResult = await client.listResources() as Awaited<ReturnType<Client["listResources"]>> & {
@@ -101,13 +101,20 @@ test("qyl server factory serves protocol revision 2026-07-28 over the fetch entr
     assert.equal(resourcesResult.ttlMs, 300_000);
     assert.equal(resourcesResult.cacheScope, "public");
     assert.equal(
-      resources.find((resource) => resource.uri === "ui://qyl-explorer/mcp-app.html")?.mimeType,
+      resources.find((resource) => resource.uri === "ui://qyl-explorer/mcp-app-v3.html")?.mimeType,
       "text/html;profile=mcp-app",
     );
-    const appResult = await client.readResource({ uri: "ui://qyl-explorer/mcp-app.html" }) as
+    const appResult = await client.readResource({ uri: "ui://qyl-explorer/mcp-app-v3.html" }) as
       Awaited<ReturnType<Client["readResource"]>> & { ttlMs: number; cacheScope: string };
     assert.equal(appResult.ttlMs, 86_400_000);
     assert.equal(appResult.cacheScope, "public");
+    for (const resource of resources) {
+      const result = await client.readResource({ uri: resource.uri });
+      assert.deepEqual(result.contents[0]?._meta?.ui, {
+        domain: "https://mcp.qyl.test",
+        csp: { connectDomains: [], resourceDomains: [] },
+      }, resource.uri);
+    }
   } finally {
     await client.close().catch(() => undefined);
     await handler.close().catch(() => undefined);

@@ -73,13 +73,18 @@ returned `trace.error`. The collector's required project key is configured in
 Railway; the prior upstream 401 is resolved.
 
 Separate real authorization-code tests on the same day passed in ChatGPT web,
-claude.ai, Codex CLI 0.158.0-alpha.2.1 and MCP Inspector 2.8.0: each completed
-OAuth and a successful `list_metrics({})` call with zero live metrics. ChatGPT and claude.ai used their
-published CIMD identities; Codex used a fresh strict DCR registration and the
-modern protocol. Inspector used the existing DCR evaluation client, confirmed
-MCP `2026-07-28` and listed all 11 tools. Claude Code completed qyl OAuth and tool
-discovery, but its own Claude login expired before the model could call a tool. That read call
-and signed ChatGPT Events delivery remain open in the checklist.
+claude.ai, Claude Code 2.1.292, Codex CLI 0.158.0-alpha.2.1 and MCP Inspector
+2.8.0: each completed OAuth and a successful `list_metrics({})` call with zero
+live metrics. ChatGPT and both Claude clients used their published CIMD
+identities; Codex used a fresh strict DCR registration and the modern protocol.
+Claude Code's successful response also included the modern server identity
+metadata. Inspector used the existing DCR evaluation client, confirmed MCP
+`2026-07-28` and listed all 11 tools. The production ChatGPT Events test also
+passed: a matching error reached the subscribed chat, a different service's
+error did not, the subscription survived deployment and automatically renewed,
+and stopping monitoring removed it. A subsequent matching error produced no
+chat notification during more than three polling intervals. Public plugin
+preparation and portal verification remain open in the checklist.
 
 The TypeScript SDK v2 serves MCP revision `2026-07-28` and its supported
 2025-era protocols through one tool factory. HTTP uses the SDK's stateless
@@ -336,7 +341,9 @@ bun run start
 
 `MCP_PUBLIC_URL` adds its hostname to the Host and Origin allowlists, and
 `<public-url>/mcp` is the fixed resource identifier tokens are audience-bound to.
-A non-loopback bind requires it.
+A non-loopback bind requires it. Its origin is also advertised as `_meta.ui.domain`
+on both viewer resources for public plugin review. Use a dedicated origin for
+this plugin; local and stdio servers leave the host's default UI origin in place.
 
 The default Auth0 mode accepts only the qyl production Auth0 issuer
 `https://qyl-eu.eu.auth0.com/`, which is pinned in the build and is not
@@ -529,8 +536,9 @@ bun run smoke:live
 `smoke` exercises explicit demo behavior. `smoke:otlp` needs the sibling qyl
 collector checkout (or `QYL_COLLECTOR_PROJECT` pointing at it), starts an
 API-key-protected collector, and drives its real OTLP/protobuf and read surfaces
-— a fixture validated by a schema from this repository would prove nothing about
-interoperability. `smoke:live` needs the published `qyl` dotnet tool on `PATH`
+including MCP log queries for service, severity, trace, body, empty results and
+limits. It persists matching and deliberately nonmatching records before those
+queries. `smoke:live` needs the published `qyl` dotnet tool on `PATH`
 (`dotnet tool install -g qyl`): it starts `qyl up` under a timeout, sends
 OTLP/JSON traces, logs and metrics, then calls every one of the eleven tools in
 live mode over stdio, reads both MCP App resources, and repeats `tools/list`

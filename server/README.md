@@ -127,7 +127,7 @@ so serving it requires Bun.
 
 ## Release notes
 
-### Unreleased
+### 7.1.1
 
 - SDK v2.3.1 serving defaults accept modern and 2025-era tool clients over HTTP
   and stdio. The workbench negotiates automatically. The strict policy described
@@ -135,6 +135,9 @@ so serving it requires Bun.
 - Events recheck account status, explicit client access, user permissions and
   consent through Auth0. Unsubscribe aborts outstanding deliveries; restart
   cleanup removes expired subscriptions and obsolete signing keys.
+- Public viewers declare their deployment origin and keep the requested trace
+  limit on refresh. Release verification exercises a fresh npm consumer with
+  modern and 2025-era discovery and a real demo-tool call.
 
 ### 7.1.0
 
