@@ -23,18 +23,21 @@ verified progress, pending owner actions and remaining sequence. The original
 eight steps below are acceptance criteria; execution no longer starts at step 1.
 
 SDK/dependency integration, local Events coverage and the five personal client
-connections are complete. At the 01:09 UTC checkpoint, public endpoint health
-is verified; Collector PR #640 is merged, but its deployment is still waiting
-while main CI runs. MCP PR #80 is open with green CI at `acb0872` and contains
-the log-filter regression, Trace Explorer refresh correction and unsupported
-request guidance. Complete the remaining merge/review and deployment gates,
-then recheck filtered logs, viewer refresh and deletion-only routing in ChatGPT.
-Five of eight owner-account review rehearsals passed; these three need retests.
-Then complete the production Events lifecycle and public plugin verification.
+connections are complete. Collector PR #640 and MCP PR #80 are merged, their
+main CI and Railway deployments succeeded, and all eight owner-account review
+rehearsals now pass. Production rechecks confirm service/severity filtering,
+the ten-trace limit after viewer refresh, and direct refusal of deletion-only
+requests without a qyl call. PR #81 adds the dedicated public UI origin and
+versions both viewer resources; it is merged and deployed with successful main
+CI. Inspector reads both new resource versions, and ChatGPT renders both
+viewers at the dedicated sandbox origin. Continue with the production Events
+lifecycle and public plugin preparation.
 
 The public plugin remains an incomplete local draft. Free use and all eligible
-countries are confirmed; publisher identity, listing/reviewer/demo evidence and
-the portal challenge/scan remain open. Do not equate successful private client
+countries are confirmed. Individual publisher identity is **in review** after
+the owner completed the phone flow; do not restart the identity check. Verified
+identity, listing/reviewer/demo evidence and the portal challenge/scan remain
+open. Do not equate successful private client
 connections with completed public submission.
 
 ## SDK and protocol requirements

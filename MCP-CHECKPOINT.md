@@ -1,8 +1,9 @@
 # qyl.mcp checkpoint — 7 October 2026
 
-**Snapshot: 03:09 CEST / 01:09 UTC.** The authenticated service works in all
-five required clients. The mission is not complete: finish the production
-corrections, demonstrate Events end to end, then finish public plugin review.
+**Snapshot: 03:31 CEST / 01:31 UTC.** The authenticated service works in all
+five required clients, and all eight owner-account review rehearsals pass.
+The public UI-origin deployment is also verified. The mission is not complete:
+demonstrate Events end to end, then finish public plugin preparation and review.
 
 This is the current handoff for the existing goal. Continue from the remaining
 work below; do not restart the original eight-step sequence. Requirements and
@@ -13,58 +14,62 @@ evidence in [MCP-V2-INTEROP-TODO.md](MCP-V2-INTEROP-TODO.md).
 
 | Area | Verified position | Remaining work |
 | --- | --- | --- |
-| SDK and dependencies | SDK v2 defaults serve both supported wire eras. PRs #75 and #78 are merged. The earlier build/test/smoke evidence includes 320 tests. | Preserve these requirements while fixing the newly discovered filter regression. |
+| SDK and dependencies | SDK v2 defaults serve both supported wire eras. PRs #75 and #78 are merged. The earlier build/test/smoke evidence includes 320 tests. | Preserve these requirements in remaining work. |
 | Five real clients | ChatGPT web, claude.ai, Claude Code, Codex CLI and Inspector completed personal OAuth, catalog discovery and a real read call during this goal. | The basic connection milestone is complete; do not repeat all five logins. |
-| Production endpoint | Fresh probes returned HTTP 200 for `/healthz` and protected-resource metadata. Railway reports successful MCP deployment `e33fee83-c66b-4040-a6c4-2c005424ff0b`, source `856270c4`. | This is the earlier runtime; PR #80 is not deployed. Health checks do not prove query correctness. |
-| Collector filters | A natural ChatGPT request for service-specific error logs returned unrelated INFO records. The Collector consumed camelCase query names where contract 11.2 requires snake_case. [PR #640](https://github.com/ANcpLua/qyl/pull/640) passed PR CI and merged as `d07c45ad`. Twenty-one targeted tests and the expanded MCP-to-Collector regression passed. | Deployment `8f3afed5-52c2-415e-92d4-0fc1262cb63b` is **WAITING**; main CI is still running. Verify deployment success, then repeat the real filtered request. |
-| MCP corrections | [PR #80](https://github.com/ANcpLua/qyl.mcp/pull/80), head `acb0872`, is open with successful lint, verify and security checks. It contains the log-filter regression, Trace Explorer refresh fix and shared instructions for unsupported requests. Local browser checks preserve limit 10, a specific trace ID and a session filter with limit 2; fourteen affected tests pass. | Complete merge/review gates and deployment. Refresh ChatGPT's connection, then recheck filtered logs, viewer refresh and deletion-only routing. The green CodeRabbit status reported a rate limit, not a completed review. |
-| Natural-language review | Five of eight owner-account rehearsals passed: trace detail, metrics, sessions, rollback refusal and public-search refusal. | Filtered logs, viewer refresh and deletion-only routing need production retests. A dedicated reviewer account/sample-data run is still required. |
+| Production endpoint | PR #81 (`3ae30b52`) passed main CI `37557011340` and deployment `cf19d6da-2feb-491a-95d3-9809ad461575`. Authenticated ChatGPT requests, both viewers and trace refresh work against that deployment. | Continue with the Events lifecycle; endpoint and UI checks are complete. |
+| Collector filters | [PR #640](https://github.com/ANcpLua/qyl/pull/640), `d07c45ad`, passed main CI and deployment `8f3afed5-52c2-415e-92d4-0fc1262cb63b`. Twenty-one targeted tests and expanded MCP-to-Collector smoke passed. ChatGPT's service/ERROR request now returns 0 matches without unrelated records. Direct service/limit probes also pass. | The controlled matching production ERROR fixture remains part of the pending Events test; its matching behavior is covered locally. |
+| MCP corrections | [PR #80](https://github.com/ANcpLua/qyl.mcp/pull/80) is merged and deployed. A fresh ChatGPT chat retains ten traces after viewer refresh and directly declines deletion-only requests without visible qyl activity. | The three defect retests are complete. |
+| Public UI origin | [PR #81](https://github.com/ANcpLua/qyl.mcp/pull/81), `3ae30b52`, is merged and deployed. Inspector reads both new resource versions. After ChatGPT metadata refresh, both viewers render at `mcp-qyl-at.web-sandbox.oaiusercontent.com`; trace Refresh retains ten results. Dashboard correctly reports no MCP spans in its 24-hour window. | Verification complete. Optional CodeRabbit was pending at merge; it is not counted as a completed review. |
+| Natural-language review | All eight owner-account rehearsals passed: trace detail, filtered logs, metrics, sessions, viewer refresh, deletion refusal, rollback refusal and public-search refusal. | A dedicated reviewer account/sample-data run and real recording are still required. |
 | ChatGPT Events | Local lifecycle tests passed; a native `trace.error` task was created for `service_name = qyl-mcp-interop-oct7`. | Stored subscription, signed delivery, filtering, refresh/restart and unsubscribe still lack the complete production demonstration. |
-| Public plugin | A local package draft, icon and eight review prompts exist. Free use and availability in all eligible countries are confirmed by the owner. | Publisher verification, applicable public policy/support pages, reviewer access, demo, remaining review cases, domain verification and portal scan. No package has been uploaded or submitted. |
+| Public plugin | A local package draft, icon and eight review prompts exist. Free use and all eligible countries are confirmed. The owner completed the phone identity flow; Individual now shows **Identity in review**. | Await identity review; complete applicable public policy/support pages, reviewer access, demo, domain verification and portal scan. No package has been uploaded or submitted. |
 
 The five-client and local-test results above were established earlier in this
-goal. Checks at approximately 01:08–01:09 UTC read current working-copy state,
-PR/CI state, Railway deployments, public endpoint status, the completed browser
-review response and publisher-verification UI. This checkpoint did not rerun
-the build or test suite.
+goal. Subsequent checks confirm deployed Collector/MCP corrections and the
+three successful ChatGPT retests. PR #81 has its own focused local/CI evidence;
+the prior five client logins and full baseline suite were not repeated.
 
 ## Working copies
 
 | Location | Current state |
 | --- | --- |
-| `/Users/alexandernachtmann/RiderProjects/qyl.mcp` | `codex/mcp-plugin-review`, code verified at `acb0872` in PR #80. Checkpoint documentation follows that code in the same branch. |
+| `/Users/alexandernachtmann/RiderProjects/qyl.mcp` | Local branch `codex/mcp-plugin-review`, HEAD `db414530`. Eight local source/doc changes match PR #81's already-published files. The checkpoint, objective, checklist and preparation README are updated, and a service data inventory is added. Remote branches are published through the API from main, without downloading Git history. This checkout is not clean or on the remote evidence branch. |
 | `/private/tmp/qyl-filter-contract` | Clean `codex/collector-query-filters`, pushed as `889244faf211b6bf7b2ebbcb96476bbb11df51c0`; its correction is merged through PR #640. |
 | `/Users/alexandernachtmann/RiderProjects/qyl` | Clean `codex/runner-test-diagnostics`. Existing unrelated work remains on its own branch. |
 | `/Users/alexandernachtmann/RiderProjects/qyl.at` | Directory is absent. Current source files are needed for website edits; see the existing owner request below. |
 
 ## Resume in this order
 
-1. **Deploy the corrections and repeat three cases.** Track the existing
-   Collector deployment through successful main CI and deployment. Complete
-   MCP PR #80's remaining merge/review gates and deploy it. Refresh ChatGPT's
-   connection for the new UI resource and shared instructions. Recheck the
-   service/ERROR log filter, ten-trace viewer refresh and deletion-only request
-   without unnecessary telemetry calls. The expanded local MCP OTLP smoke
-   already verifies service/severity/trace/body filters, an empty result and
-   the requested limit.
-2. **Complete the real Events lifecycle.** After the pending access decision,
+1. **Complete the real Events lifecycle.** After the pending access decision,
    inspect the owner-scoped stored subscription, ingest a controlled matching
    trace, verify the chat notification and exact trace ID, then test filtering,
    refresh/restart and unsubscribe. Do not count an active task alone as proof
    of delivery.
-3. **Finish public plugin preparation and verification.** Complete the missing
+2. **Finish public plugin preparation and verification.** Complete the missing
    publisher/listing/reviewer/demo evidence and review cases, then the domain
    challenge and tools/Events scan. Keep preparation, submission for review and
    publication as distinct states. Record the final evidence in the checklist.
 
-## Items waiting on the owner
+Collector/MCP defect retests and public UI-origin verification are complete;
+do not repeat all eight rehearsals or five logins. The fresh UI-origin check
+is in [this owner-account chat](https://chatgpt.com/c/6ac5a05c-c45c-832c-bce2-ae47f40abb58).
 
-- **Publisher identity:** the `ancplua` page still shows **Start** for both
-  verification types, and its open **Verify your identity** dialog offers
-  **Start ID Check**. Successful verification is not shown. Continue in
+The [service data inventory](submission/service-data-inventory.md) now records
+the code's actual storage, recipients and deletion behavior for the missing
+public policy. Selected production settings confirm Events persistence,
+content-capture opt-in absent and Collector retention configured for 30 days.
+Physical deletion, provider/backup retention and reviewer data isolation remain
+unverified; the inventory is not a published policy or a completed review gate.
+
+## Waiting items
+
+- **Publisher identity review:** the owner reports **Successful** on the
+  phone, and the `ancplua` page confirms **Identity in review** for Individual.
+  Do not press Start again. Wait for the review result in
   [Organization settings → General → Verifications → Individual](https://platform.openai.com/settings/organization/general).
-  The owner must complete the personal identity check; no identity document
-  has been handled by the agent.
+  This is identity review, not a submitted plugin review. No reliable processing
+  time was established from official plugin documentation, and no identity
+  document has been handled by the agent.
 - **Temporary Railway SSH access:** the existing confirmation is unanswered.
   Automatic approval rejected registering the temporary key because it grants
   additional Railway access. No key was created or registered. The requested
