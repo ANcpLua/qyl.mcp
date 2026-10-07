@@ -464,6 +464,10 @@ async function bootstrap(): Promise<ServeOptions | undefined> {
   const transport = process.argv.includes("--stdio") ? "stdio" : "http";
 
   try {
+    const projects = readCollectorProjects();
+    if (projects !== undefined && transport === "stdio") {
+      throw new Error("MCP_COLLECTOR_PROJECTS requires hosted Auth0 resource authorization");
+    }
     // Before either transport accepts a connection: a server that answers tool
     // calls against a contract the collector does not serve is worse than one
     // that refuses to start.

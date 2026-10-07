@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
 import test from "node:test";
+import { createServer as createQylServer, closeDefaultNativeExecutionRuntime, hasNativeExecutionTelemetry } from "qyl-mcp-server";
 import {
     WorkbenchExecutionRecordSchema,
     WorkbenchProtocolEventSchema,
@@ -1420,6 +1421,44 @@ test("overlapping tool calls retain request-bound correlation through journals, 
     }
 });
 
+test("a request whose native server factory fails retains one failed server span", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "qyl-workbench-factory-failure-"));
+    let failFactory = false;
+    const harness = await startHarness(join(directory, "state.json"), {
+        serverFactory: () => {
+            if (failFactory) throw new Error("test server factory failed");
+            const server = createQylServer();
+            assert.equal(hasNativeExecutionTelemetry(server), true);
+            return server;
+        },
+    });
+    try {
+        const serverId = await fixtureServerId(harness);
+        const spans: McpOperationInput[] = [];
+        harness.workbench.telemetry.startOperation = (input) => ({
+            run: (dispatch) => dispatch(),
+            end(completion) { spans.push({ ...input, ...completion }); return undefined; },
+        });
+        failFactory = true;
+        const accepted = await postJson(harness, `/workbench/workspaces/default/servers/${serverId}/executions`, {
+            tool_name: "list_metrics", arguments: {}, timeout_ms: 5_000,
+            idempotency_key: "native-factory-failure",
+        });
+        assert.equal(accepted.response.status, 202);
+        const executionId = String(record(accepted.body.execution).id);
+        const execution = await waitForExecution(harness, serverId, executionId);
+        assert.equal(execution.status, "failed");
+        const serverSpans = spans.filter(span => span.role === "server" && span.method === "tools/call");
+        assert.equal(serverSpans.length, 1);
+        assert(serverSpans[0]!.errorType);
+        assert.equal(serverSpans[0]!.executionId, executionId);
+    } finally {
+        await harness.close();
+        await closeDefaultNativeExecutionRuntime();
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
 interface Harness {
     workbench: WorkbenchApi;
     server: Server;
@@ -1431,7 +1470,7 @@ interface Harness {
 
 async function startHarness(
     filePath: string,
-    options: { secretValues?: readonly string[] } = {},
+    options: { secretValues?: readonly string[]; serverFactory?: BuiltinMcpServer["serverFactory"] } = {},
 ): Promise<Harness> {
     const repository = new WorkbenchRepository({
         filePath,
@@ -1439,7 +1478,7 @@ async function startHarness(
             ? {}
             : { redactor: new SecretRedactor({ secretValues: options.secretValues }) }),
     });
-    const workbench = new WorkbenchApi([fixtureResource], {
+    const workbench = new WorkbenchApi([{ ...fixtureResource, serverFactory: options.serverFactory ?? fixtureResource.serverFactory }], {
         repository,
         telemetry: new McpTelemetry({ QYL_MCP_TELEMETRY: "0" }),
         observability: {
