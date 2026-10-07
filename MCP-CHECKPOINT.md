@@ -42,7 +42,7 @@ the prior five client logins and full baseline suite were not repeated.
 
 | Location | Current state |
 | --- | --- |
-| `/Users/alexandernachtmann/RiderProjects/qyl.mcp` | Local branch `codex/mcp-plugin-review`, HEAD `db414530`. Runtime/UI, evidence and release changes are published through merged PR #84. API publication did not move this checkout to those remote branches. The current checkpoint updates remain local until recorded in a follow-up; preserve the existing worktree changes. |
+| `/Users/alexandernachtmann/RiderProjects/qyl.mcp` | Local branch `codex/mcp-plugin-review`, HEAD `db414530`. Runtime/UI, evidence and release changes are published through merged PR #84. The latest checkpoint changes are published on `codex/mcp-release-checkpoint`. API publication did not move this checkout to those remote branches; preserve the existing worktree changes. |
 | `/private/tmp/qyl-filter-contract` | Clean `codex/collector-query-filters`, pushed as `889244faf211b6bf7b2ebbcb96476bbb11df51c0`; its correction is merged through PR #640. |
 | `/Users/alexandernachtmann/RiderProjects/qyl` | Clean `codex/runner-test-diagnostics`. Existing unrelated work remains on its own branch. |
 | `/Users/alexandernachtmann/RiderProjects/qyl.at` | Contains the 133 current-main source files retrieved through GitHub's file API at ref `6408c305`. This is a source directory without `.git`, not a Git checkout. Thirteen content/catalog/fixture changes are published in PR #16; dependencies and the generated site are available locally. |
