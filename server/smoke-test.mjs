@@ -104,7 +104,7 @@ check(
 const displayTraces = tools.find((t) => t.name === "display_traces");
 check(
   "display_traces has _meta.ui.resourceUri",
-  displayTraces?._meta?.ui?.resourceUri === "ui://qyl-explorer/mcp-app-v2.html",
+  displayTraces?._meta?.ui?.resourceUri === "ui://qyl-explorer/mcp-app-v3.html",
   JSON.stringify(displayTraces?._meta),
 );
 
@@ -119,7 +119,7 @@ const displayDashboard = tools.find((t) => t.name === "display_mcp_dashboard");
 check(
   "display_mcp_dashboard has _meta.ui.resourceUri",
   displayDashboard?._meta?.ui?.resourceUri ===
-    "ui://qyl-explorer/mcp-dashboard.html",
+    "ui://qyl-explorer/mcp-dashboard-v2.html",
   JSON.stringify(displayDashboard?._meta),
 );
 
@@ -341,10 +341,10 @@ check(
 );
 
 // --- 9. resources/read of the debugger UIs -----------------------------------
-console.log("resources/read ui://qyl-explorer/mcp-dashboard.html");
+console.log("resources/read ui://qyl-explorer/mcp-dashboard-v2.html");
 if (existsSync(new URL("./dist/mcp-dashboard.html", import.meta.url))) {
   const dashRes = await client.readResource({
-    uri: "ui://qyl-explorer/mcp-dashboard.html",
+    uri: "ui://qyl-explorer/mcp-dashboard-v2.html",
   });
   const content = dashRes.contents?.[0];
   check(

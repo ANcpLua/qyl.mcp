@@ -125,7 +125,12 @@ export function registerViewerResource(
   server: McpServer,
   uri: string,
   fileName: string,
+  uiDomain?: string,
 ): void {
+  const viewerMeta = uiDomain === undefined ? SELF_CONTAINED_VIEWER_META : {
+    ...SELF_CONTAINED_VIEWER_META,
+    ui: { ...SELF_CONTAINED_VIEWER_META.ui, domain: uiDomain },
+  };
   server.registerResource(
     uri,
     uri,
@@ -150,7 +155,7 @@ export function registerViewerResource(
             uri,
             mimeType: RESOURCE_MIME_TYPE,
             text: html,
-            _meta: SELF_CONTAINED_VIEWER_META,
+            _meta: viewerMeta,
           },
         ],
       };
@@ -165,6 +170,8 @@ export interface CreateServerOptions {
   nativeExecution?: NativeExecutionRuntime | false;
   /** MCP Events (`events/*`, webhook delivery); only a hosted process with a store has one. */
   events?: EventsRuntime;
+  /** Dedicated HTTPS origin for hosted viewer resources, required for public plugin review. */
+  uiDomain?: string;
 }
 
 /** Creates a server with automatic native execution evidence for every tool. */
@@ -377,8 +384,8 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       }),
   );
 
-  registerViewerResource(server, RESOURCE_URI, "mcp-app.html");
-  registerViewerResource(server, DASHBOARD_RESOURCE_URI, "mcp-dashboard.html");
+  registerViewerResource(server, RESOURCE_URI, "mcp-app.html", options.uiDomain);
+  registerViewerResource(server, DASHBOARD_RESOURCE_URI, "mcp-dashboard.html", options.uiDomain);
   options.events?.register(server);
 
   if (options.nativeExecution !== false) assertNativeExecutionRecordingArmed(server);

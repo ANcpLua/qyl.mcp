@@ -105,8 +105,12 @@ content, and the snapshot still pins its input schema and UI metadata.
 
 | Resource                               | Backs                                       |
 |----------------------------------------|---------------------------------------------|
-| `ui://qyl-explorer/mcp-app-v2.html`       | `display_traces` trace explorer             |
-| `ui://qyl-explorer/mcp-dashboard.html` | `display_mcp_dashboard` aggregate dashboard |
+| `ui://qyl-explorer/mcp-app-v3.html`       | `display_traces` trace explorer             |
+| `ui://qyl-explorer/mcp-dashboard-v2.html` | `display_mcp_dashboard` aggregate dashboard |
+
+Hosted deployments advertise their validated `MCP_PUBLIC_URL` origin as
+`_meta.ui.domain` on both resources. Their CSP keeps empty connection and asset
+allowlists: the bundled viewers use the MCP bridge and load no external assets.
 
 ## Recommended direct exposure summary
 
