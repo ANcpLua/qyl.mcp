@@ -467,7 +467,7 @@
           }
         ],
         "ui": {
-          "resourceUri": "ui://qyl-explorer/mcp-app.html"
+          "resourceUri": "ui://qyl-explorer/mcp-app-v2.html"
         },
         "openai/ui": {
           "entrypoints": [
@@ -5691,8 +5691,8 @@
   ],
   "resources": [
     {
-      "uri": "ui://qyl-explorer/mcp-app.html",
-      "name": "ui://qyl-explorer/mcp-app.html",
+      "uri": "ui://qyl-explorer/mcp-app-v2.html",
+      "name": "ui://qyl-explorer/mcp-app-v2.html",
       "title": null,
       "description": null,
       "mimeType": "text/html;profile=mcp-app"

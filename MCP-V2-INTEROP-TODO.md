@@ -6,6 +6,20 @@ SDK v2 and OAuth 2.1. Use the SDK's documented support for both `2026-07-28` and
 state they need. The current requirements are in
 [goal-objective.md](goal-objective.md), updated on 7 October 2026.
 
+## Current checkpoint
+
+[MCP-CHECKPOINT.md](MCP-CHECKPOINT.md) is the current resume summary. SDK and
+dependency integration, local Events tests and all five real client logins/read
+calls are complete. The remaining order is: finish the newly discovered
+Collector filter correction; demonstrate the complete production Events
+lifecycle; finish public plugin preparation and portal verification.
+
+Initial checkpoint checks confirmed merged PRs #75/#78, public health/resource
+metadata HTTP 200, and the `ancplua` portal still offering **Start** for
+Individual verification. The Collector correction has since entered PR #640;
+the expanded log-filter smoke and local Trace Explorer refresh checks pass.
+These checks do not replace the remaining production demonstrations.
+
 ## Established starting point
 
 - [x] Restore a local checkout of current GitHub `main` at
@@ -15,9 +29,9 @@ state they need. The current requirements are in
 
 PR #75 merged the SDK serving defaults and ongoing Events authorization into
 `main`. Production runs that implementation with the collector credential
-configured. ChatGPT web, claude.ai, Codex CLI and Inspector have completed
-personal OAuth and a read-tool call. Claude Code's read call and ChatGPT Events
-delivery remain open; verified results are recorded below.
+configured. ChatGPT web, claude.ai, Claude Code, Codex CLI and Inspector have
+completed personal OAuth and a read-tool call. ChatGPT Events delivery and
+public plugin verification remain open; verified results are recorded below.
 
 ## Execution sequence
 
@@ -59,6 +73,15 @@ delivery remain open; verified results are recorded below.
   HTTP and stdio. Check authenticated HTTP access and authorization failures.
 - [x] Compare the runtime tool catalog to its snapshot; regenerate only for
   deliberate changes. Resolve failures without weakening valid requirements.
+- [ ] Follow up on the Collector filter defect found in the later natural
+  ChatGPT review: finish regular [PR #640](https://github.com/ANcpLua/qyl/pull/640),
+  pass CI, merge/deploy and
+  repeat the filtered production request. The earlier broad smoke only checked
+  an unfiltered `search_logs` call and did not detect this defect. The expanded
+  MCP-to-Collector filter regression now passes locally against the correction.
+- [ ] Deploy and recheck the Trace Explorer refresh correction in ChatGPT.
+  Local browser checks confirm that the original limit, trace ID and session
+  ID survive refresh; the new `mcp-app-v2.html` resource and snapshot are built.
 
 ### 5. Prepare and verify production
 
@@ -90,9 +113,9 @@ identity. Set `OPENAI_APPS_CHALLENGE` from the portal when required. Verify OIDC
 ### 6. Verify real client connections
 
 - [x] Complete actual CIMD and DCR logins and verify token audience/scope.
-- [ ] In ChatGPT web, claude.ai, Claude Code, Codex CLI, and MCP Inspector,
+- [x] In ChatGPT web, claude.ai, Claude Code, Codex CLI, and MCP Inspector,
   authenticate, list tools, and complete one read-tool call.
-- [ ] Record client version, negotiated protocol, registration path, scopes,
+- [x] Record client version, negotiated protocol, registration path, scopes,
   result, and exact errors. Accept supported 2025-era connections through v2.
 
 ### 7. Verify Events in ChatGPT
@@ -203,7 +226,7 @@ legacy metric assertion was corrected to the published `items` result field.
 | ChatGPT web | Published CIMD, stable redirect, `private_key_jwt`, `qyl:read` | Connected; live trace viewer; `list_metrics({})` succeeded with 0 metrics. Native Events monitoring is active. Its Events path requires `2026-07-28`; the web client does not display a build version. |
 | claude.ai | Published web CIMD, public client, `qyl:read` and `offline_access` | Connected; 11 tools shown (2 interactive, 8 read-only, 1 app-only). A real `list_metrics({})` call returned `items: []`, `has_more: false`. Web build and negotiated revision are not exposed by this UI. |
 | Codex CLI 0.158.0-alpha.2.1 | Fresh strict DCR, PKCE S256, canonical resource, `qyl:read` | Modern feature enabled; 10 model-visible tools; `list_metrics({})` returned `items: []`, `has_more: false` with modern server identity metadata (`qyl.mcp`, 7.1.0). |
-| Claude Code 2.1.291 | Published Claude Code CIMD; qyl OAuth completed | qyl connection and 10 model-visible tools confirmed. The model call stopped because Claude Code's own Anthropic session expired; renewal and the real read call remain pending. |
+| Claude Code 2.1.292 | Published Claude Code CIMD; qyl OAuth completed | After the user renewed the Claude login in their own terminal, the client connected with 10 model-visible tools. Exactly one `list_metrics({})` call succeeded at `2026-10-07T00:28:41Z`, returning `items: []`, `has_more: false` and modern server identity metadata (`qyl.mcp`, 7.1.0). The run exited successfully with no permission denials or other tool calls. |
 | MCP Inspector 2.8.0 | Existing authorized hosted-eval DCR client; PKCE S256, canonical resource, `qyl:read offline_access` | OAuth completed after user consent. UI confirms MCP `2026-07-28`, lists all 11 tools and returns “No metrics recorded (live mode).” for `list_metrics({})`. Added the actual `http://127.0.0.1:6274/oauth/callback` alongside the existing evaluator callback. |
 
 - With explicit user approval, deleted three additional obsolete hosted-eval
@@ -228,10 +251,58 @@ legacy metric assertion was corrected to the published `items` result field.
   domain-verification token is available. No
   `OPENAI_APPS_CHALLENGE` is configured. The private ChatGPT connection works;
   public submission verification is not claimed.
+- [The public package draft](submission/README.md) now contains portable
+  manifests, listing copy, release notes and five positive/three negative
+  review cases. The owner confirmed all eligible countries, free use and no
+  purchases or planned buy-ins. The verified publisher identity is still
+  unconfirmed; the `ancplua` portal offers **Start** for both verification
+  types. The draft manifests pass schema/field checks and contain a verified
+  square PNG for the logo and composer. Listing policy/support pages, a
+  recorded demo, reviewer access and case execution remain open before a
+  complete package can enter the portal verification flow.
 - The user-linked Railway job `112557449308` is attempt 2 of run `37544569134`
   at the old `50ea32b` source containing `workspace:7.1.0`. Rerunning that job
   still uses that source. The corrected PR's lint, verify and Railway apply
   checks succeeded; this old rerun is not a failure of the deployed manifest.
+
+### Natural-language review follow-up
+
+- In the existing owner's ChatGPT connection, the revised text-only trace
+  prompt listed ten traces and inspected the newest returned ID, with recorded
+  service, duration and error status. This is an owner-account rehearsal; the
+  dedicated reviewer/sample-data run remains open.
+- The filtered error-log case exposed a real defect: a service/ERROR query
+  returned unrelated INFO records from `qyl.at`. ChatGPT flagged the mismatch;
+  its later empty literal search does not prove that the requested filter is
+  correct. The Collector read camelCase parameters while contract 11.2 and MCP
+  use snake_case.
+- The correction is present in `/private/tmp/qyl-filter-contract`, branch
+  `codex/collector-query-filters`, pushed as
+  `889244faf211b6bf7b2ebbcb96476bbb11df51c0`. Twenty-one targeted parser and real
+  HTTP tests passed in the implementation run. Existing analyzer warnings and
+  a RouteHandlerAnalyzer AD0001 warning were emitted; the run was not warning
+  free. Regular [PR #640](https://github.com/ANcpLua/qyl/pull/640) is now open;
+  CI/deployment/production retesting of this correction are not complete.
+- The expanded `smoke:otlp` passes against the corrected real Collector. It
+  persists five log fixtures differing by service, severity, trace or body;
+  the actual MCP tool must return exactly the matching record, an empty result
+  for an absent service and the requested maximum count. The initial fixture
+  wait timed out; isolating its marker from earlier smoke telemetry resolved
+  that test setup issue.
+- Natural metric and session prompts were rehearsed in ChatGPT: metric
+  discovery returned zero instruments and no more pages; session discovery
+  listed five actual sessions and their recorded status. Raw tool argument
+  JSON is not exposed in the inspected UI, so the UI summary is the evidence.
+- The Trace Explorer initially rendered ten live traces. Clicking its own
+  Refresh button broadened the result to twenty. Its source used a hard-coded
+  refresh query. The correction keeps the last successful display query and
+  reuses `display_traces` through the app bridge; cancelled inputs do not
+  replace it. Local browser checks with the built app and real MCP demo server
+  preserve limit 10, one exact trace ID and a session filter with limit 2.
+  The UI resource is versioned to `ui://qyl-explorer/mcp-app-v2.html`; deliberate
+  snapshot regeneration changes only that URI/name. Build, lint and all 14
+  affected schema/resource/catalog tests pass. Production rechecking remains
+  open.
 
 ## Existing implementation on main
 

@@ -9,7 +9,7 @@
 import { API_KEY_HEADER, PROJECT_HEADER } from "./contract-headers.js";
 
 /** URI of the trace explorer UI resource. */
-export const RESOURCE_URI = "ui://qyl-explorer/mcp-app.html";
+export const RESOURCE_URI = "ui://qyl-explorer/mcp-app-v2.html";
 
 /** URI of the MCP dashboard UI resource. */
 export const DASHBOARD_RESOURCE_URI = "ui://qyl-explorer/mcp-dashboard.html";

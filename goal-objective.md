@@ -16,6 +16,27 @@ surface.
 Repository: `/Users/alexandernachtmann/RiderProjects/qyl.mcp`
 Remote: <https://github.com/ANcpLua/qyl.mcp>
 
+## Current checkpoint and resume point — 7 October 2026
+
+Use [MCP-CHECKPOINT.md](MCP-CHECKPOINT.md) for the current working copies,
+verified progress, pending owner actions and remaining sequence. The original
+eight steps below are acceptance criteria; execution no longer starts at step 1.
+
+SDK/dependency integration, local Events coverage and the five personal client
+connections are complete. Public endpoint health is verified. A subsequent
+natural-language review exposed a Collector query-filter defect, so the next
+technical action is to finish Collector PR #640 through CI and deployment and
+repeat that request. The MCP-to-Collector regression now passes locally. A
+Trace Explorer refresh correction also preserves the original limit and
+trace/session scope in local browser checks; publish/deploy and verify it in
+ChatGPT. Then complete the production Events lifecycle and public plugin
+verification.
+
+The public plugin remains an incomplete local draft. Free use and all eligible
+countries are confirmed; publisher identity, listing/reviewer/demo evidence and
+the portal challenge/scan remain open. Do not equate successful private client
+connections with completed public submission.
+
 ## SDK and protocol requirements
 
 Use the official TypeScript SDK v2 packages. SDK version and MCP protocol
@@ -65,8 +86,9 @@ Source: [OpenAI MCP Events](https://developers.openai.com/plugins/build/mcp-even
 
 ## Execution sequence and completion criteria
 
-The checkout and revised requirements are established. Continue in this order,
-using [MCP-V2-INTEROP-TODO.md](MCP-V2-INTEROP-TODO.md) for the detailed checks.
+The checkout and revised requirements are established. These are the original
+completion criteria. Follow the current checkpoint's resume order and use
+[MCP-V2-INTEROP-TODO.md](MCP-V2-INTEROP-TODO.md) for the detailed checks.
 
 1. **Consolidate dependencies.** Review current PRs against main, select exact
    compatible SDK v2 and workspace dependency versions, investigate failing
