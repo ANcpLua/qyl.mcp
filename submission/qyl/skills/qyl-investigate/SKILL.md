@@ -38,8 +38,8 @@ the agent or person with the appropriate connector and authorization.
    runs. With `run_id`, the tool reads up to 100 traces for that session and
    returns per-leg phases with failures first. Any CI emitting this convention
    can use the tool; these bounds can leave older runs or phases out.
-7. **Get notified.** When the user wants notifications, use a client and deployment that expose
-   MCP Events to subscribe to `trace.error`, optionally narrowed to one
+7. **Get notified.** When the user wants notifications, use a client and
+   deployment that expose MCP Events to subscribe to `trace.error`, optionally narrowed to one
    `service_name`. A telemetry investigation alone does not authorize a
    subscription. Check the subscription result rather than assuming delivery.
 
