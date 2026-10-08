@@ -7,7 +7,7 @@ CI, public HTTP observations and pending owner actions.
 
 ## Revised goal, 2026-10-08
 
-The owner supplied a new fourteen-point sequence after the earlier document
+The owner supplied a new fifteen-point sequence after the earlier document
 reconciliation. [goal-objective.md](goal-objective.md#work-in-order) records
 those instructions. Completion of the earlier five criteria does not complete
 this sequence. New point 1 removes protocol logging; its local results are in

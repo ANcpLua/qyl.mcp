@@ -183,6 +183,12 @@ Never set the owner checks or bypass them; read owner comments and fix them.
     `server/docs/completion.md` is not the source. Keep `check_v2` outside CI
     because its skill is external to this repository.
 
+15. Rebuild `submission/public-pages-draft.md` from its version at commit
+    `93d8dbf`, restoring the sections "Data processed and purposes",
+    "Destinations", "Notifications" and "Retention and controls". Mark every
+    number and deployment statement as an owner-supplied field, not an
+    established fact.
+
 ### E. Owner actions, not agent actions
 
 List exact pending actions for publisher identity, public qyl.at pages from
@@ -201,7 +207,7 @@ and actual output. Owner actions are listed, not executed.
    from point 5 pass in CI.
 3. Points 6, 7, 11 and 12 have dated ledger rows with the required actual
    observations, including HTTP conformance and the legacy-only negative control.
-4. Files and fields from points 9, 10, 13 and 14 exist, with unresolved owner
+4. Files and fields from points 9, 10, 13, 14 and 15 exist, with unresolved owner
    values explicitly listed; the rebuilt ZIP has a recorded SHA-256.
 5. Point 8 is a merged schema PR plus the dependency bump and implementation
    here, or a documented blocker with its concrete reason.
