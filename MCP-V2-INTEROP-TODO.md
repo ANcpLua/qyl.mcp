@@ -576,3 +576,12 @@ record the scope of these fixtures; no production identity claim follows.
 | Token behavior | 2026-10-08: `QYL_MCP_TELEMETRY=0 node --test --test-name-pattern='the OpenAI domain challenge' server/dist-test/main.test.js` passed `the OpenAI domain challenge answers the configured token as plain text, before the gate`, 1 passed, 0 failed; absent/blank token returns 404 in the fixture. |
 | Owner action | README names `OPENAI_APPS_CHALLENGE`, the exact GET route and the pending action to copy the portal-provided token into the intended hosted environment, then verify in the portal. No variable was set and no portal action was performed. Source and command output are in the linked dated evidence. |
 | Documentation gate | 2026-10-08: `bun run --cwd server verify:deployment-guidance` passed; `git diff --check` was silent, exit 0. |
+
+## Revised goal — point 8: schema merged, release blocker, 2026-10-08
+
+| Check | Dated command and actual output |
+| --- | --- |
+| Upstream schema PR | 2026-10-08: `gh pr view 36 --repo ANcpLua/qyl-api-schema --json headRefOid,mergeCommit,mergedAt,statusCheckRollup,url` returned merge `719e46717fa9648dbeda899c02d3fef28bdf7a90`, merged at `2026-10-08T05:59:22Z`; all four required checks `SUCCESS` at `29adfd52ef55225473ed2af1e56de90c40996c41`. [PR #36](https://github.com/ANcpLua/qyl-api-schema/pull/36) contains the four optional TypeSpec fields and generated OpenAPI. |
+| Released package | 2026-10-08, after that merge: `npm view @ancplua/qyl-api-schema version gitHead --@ancplua:registry=https://registry.npmjs.org --json` returned `11.2.0`, commit `131b116227fb0362a1003bbb23eb7b57ed50c293`; `gh release view --repo ANcpLua/qyl-api-schema --json tagName,publishedAt,targetCommitish,url` returned `v11.2.0`, published `2026-09-17T11:07:10Z`. |
+| Blocker under Done when 5 | The exact Node command in [point-8 evidence](docs/evidence/2026-10-08-followup-08.md#concrete-release-blocker) returned installed `11.2.0`, GetTrace keys `[trace_id]`, CiLog keys `[run_id, limit]`. The published contract lacks the new fields; publication is forbidden in this goal. Dependency bump and runtime implementation remain open, explicitly not claimed complete. |
+| Owner prerequisite and follow-through | Owner publishes a schema release containing merge `719e46717fa9648dbeda899c02d3fef28bdf7a90`; then consumers can bump in lockstep and implement/filter/test the four options. The exact sequence and unchanged release boundary are in the linked evidence. |

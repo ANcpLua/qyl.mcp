@@ -14,6 +14,12 @@ this sequence. New point 1 removes protocol logging; its local results are in
 [the follow-up evidence](docs/evidence/2026-10-08-followup-01.md). Its merge/CI
 status must be read from its PR, not inferred from local tests.
 
+Point 8's schema PR is merged, while the qyl.mcp bump and runtime options are
+blocked on an owner-published contract release. The post-merge registry still
+reported 11.2.0 without the four fields on 2026-10-08.
+[Dated merge, checks, registry and installed-schema output](docs/evidence/2026-10-08-followup-08.md)
+records the permitted Done when 5 blocker and exact owner prerequisite.
+
 ## Repository and local evidence
 
 | State | Dated evidence |
