@@ -498,7 +498,6 @@ function propagationCarrier(value: unknown): McpPropagationCarrier | undefined {
   // logging/exporters. OpenTelemetry validates the trace/span IDs on extraction.
   const traceparent = value.traceparent;
   return typeof traceparent === "string"
-    && /^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/u.test(traceparent)
     ? { traceparent }
     : undefined;
 }

@@ -63,6 +63,9 @@ test("native tools/call records operation metadata and keeps payloads out of tel
   const starts: unknown[] = [];
   const completions: unknown[] = [];
   const secret = "NATIVE_EXECUTION_SECRET";
+  // W3C permits later traceparent versions. Leave parsing to OpenTelemetry,
+  // rather than accidentally pinning propagation to the version-00 spelling.
+  const traceparent = `01-${TRACE_ID}-${SPAN_ID}-01`;
   let now = Date.parse("2026-07-17T12:00:00.000Z");
   const runtime = new NativeExecutionRuntime(repository, {
     telemetry: capturingTelemetry(starts, completions),
@@ -107,7 +110,7 @@ test("native tools/call records operation metadata and keeps payloads out of tel
       name: "fixture.evidence",
       arguments: { authorization: `Bearer ${secret}` },
       _meta: {
-        traceparent: `00-${TRACE_ID}-${SPAN_ID}-01`,
+        traceparent,
         conversation: "ordinary private conversation",
         baggage: "private=ordinary-private-value",
       },
@@ -143,7 +146,7 @@ test("native tools/call records operation metadata and keeps payloads out of tel
     assert.equal(started.jsonRpcProtocolVersion, "2.0");
     assert.equal(started.executionId, "native-execution-1");
     assert.deepEqual(started.remotePropagation, {
-      traceparent: `00-${TRACE_ID}-${SPAN_ID}-01`,
+      traceparent,
     });
     assert.equal(started.startTimeMs, Date.parse("2026-07-17T12:00:00.000Z"));
     assert.doesNotMatch(JSON.stringify(started), /NATIVE_EXECUTION_SECRET/u);

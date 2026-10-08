@@ -59,7 +59,7 @@ client receives its result, that the serialized file excludes the text and
 payload fields, that reopening preserves the metadata, and that an attempted
 write containing `arguments` and `_meta` is rejected without changing the file.
 Native OTLP inputs likewise omit request/response bodies and client request IDs;
-only a validated `traceparent` is passed for trace correlation.
+only `traceparent` is passed to OpenTelemetry's parser for trace correlation.
 
 The schema is version 3. Valid version-1/2 files are projected to operation
 metadata and replaced atomically without a payload-bearing backup. Unreadable
@@ -81,6 +81,34 @@ The native-store assertions in both smoke scripts now require the new metadata
 shape. This intentionally replaces their former requirement to retain result
 bodies and protocol messages, matching the owner's revised storage requirement.
 Workbench's own execution-result checks remain in place.
+
+CI evidence, 2026-10-08 UTC, for code commit
+`2ad06673b5bcdebf1097be5f4b75e9cd039b86f2` in
+[PR #91](https://github.com/ANcpLua/qyl.mcp/pull/91):
+
+- `gh run view 37713013285 --repo ANcpLua/qyl.mcp --json status,conclusion`
+  returned `{"conclusion":"success","status":"completed"}`.
+- `gh run view 37713013285 --repo ANcpLua/qyl.mcp --log --job 113103037324`
+  records `bun run verify:sdk`, the combined build/tests/smokes, and these
+  real-Collector outputs:
+
+```text
+ok OTel operation logs carry the matching trace and span identifiers
+ok real OTLP traces, logs and metrics stored under two separate project credentials
+ok 2026-07-28: all 11 tools and viewer paths isolate concurrent accounts; foreign trace IDs and unassigned accounts denied
+ok 2025-11-25: all 11 tools and viewer paths isolate concurrent accounts; foreign trace IDs and unassigned accounts denied
+ok Events: same trace ID stays project-scoped; signatures, unsubscribe and assignment revocation pass
+all real-Collector project-isolation checks passed (local test identities; hosted reviewer login still required)
+```
+
+A subsequent compatibility correction delegates `traceparent` parsing entirely
+to OpenTelemetry instead of accepting only the version-00 spelling. On
+2026-10-08 UTC, `./node_modules/.bin/tsc -p server/tsconfig.test.json` followed by
+`QYL_MCP_NATIVE_STATE_PATH=/private/tmp/qyl-step1-native.json QYL_MCP_TELEMETRY=0 node --test server/dist-test/native-execution.test.js`
+returned `tests 10`, `pass 10`, `fail 0`, including a version-01 traceparent
+fixture. The CI evidence above belongs to the stated commit; the PR must pass
+CI and review again after this correction. No production or hosted-client
+claim follows from these fixture runs.
 
 ## Production endpoint `https://mcp.qyl.at/mcp`
 
