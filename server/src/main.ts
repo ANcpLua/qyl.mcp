@@ -24,6 +24,7 @@ import { closeDefaultNativeExecutionRuntime } from "./native-execution.js";
 import { EventsRuntime, createEventStore } from "./events.js";
 import { hostedEventsAuthorization } from "./events-authorization.js";
 import { readCollectorProjects } from "./collector-access.js";
+import { hostedUiDomain } from "./ui-domain.js";
 
 export function sanitizedErrorType(error: unknown): string {
   if (!(error instanceof Error)) return "UnknownError";
@@ -374,11 +375,14 @@ async function createHostedRuntime(
 ): Promise<ServeOptions> {
   const auth = await hostedAuth(config);
   const events = await hostedEvents(auth);
+  const uiDomain = config.publicUrl === undefined
+    ? undefined
+    : hostedUiDomain(new URL("/mcp", config.publicUrl).href);
   const handler = createHostedHandler(
     () =>
       createServer({
         transport: "streamable_http",
-        ...(config.publicUrl === undefined ? {} : { uiDomain: config.publicUrl.origin }),
+        ...(uiDomain === undefined ? {} : { uiDomain }),
         ...(recordsNativeExecutionEvidence(config) ? {} : { nativeExecution: false }),
         ...(events === undefined ? {} : { events }),
       }),

@@ -90,7 +90,7 @@ test("qyl server factory serves protocol revision 2026-07-28 over the fetch entr
       | undefined;
     assert.equal(
       displayMetadata?.ui?.resourceUri,
-      "ui://qyl-explorer/mcp-app-v4.html",
+      "ui://qyl-explorer/mcp-app-v5.html",
     );
 
     const resourcesResult = await client.listResources() as Awaited<ReturnType<Client["listResources"]>> & {
@@ -101,10 +101,10 @@ test("qyl server factory serves protocol revision 2026-07-28 over the fetch entr
     assert.equal(resourcesResult.ttlMs, 300_000);
     assert.equal(resourcesResult.cacheScope, "public");
     assert.equal(
-      resources.find((resource) => resource.uri === "ui://qyl-explorer/mcp-app-v4.html")?.mimeType,
+      resources.find((resource) => resource.uri === "ui://qyl-explorer/mcp-app-v5.html")?.mimeType,
       "text/html;profile=mcp-app",
     );
-    const appResult = await client.readResource({ uri: "ui://qyl-explorer/mcp-app-v4.html" }) as
+    const appResult = await client.readResource({ uri: "ui://qyl-explorer/mcp-app-v5.html" }) as
       Awaited<ReturnType<Client["readResource"]>> & { ttlMs: number; cacheScope: string };
     assert.equal(appResult.ttlMs, 86_400_000);
     assert.equal(appResult.cacheScope, "public");

@@ -197,7 +197,7 @@
           }
         ],
         "ui": {
-          "resourceUri": "ui://qyl-explorer/mcp-dashboard-v2.html"
+          "resourceUri": "ui://qyl-explorer/mcp-dashboard-v3.html"
         },
         "openai/ui": {
           "entrypoints": [
@@ -474,7 +474,7 @@
           }
         ],
         "ui": {
-          "resourceUri": "ui://qyl-explorer/mcp-app-v4.html"
+          "resourceUri": "ui://qyl-explorer/mcp-app-v5.html"
         },
         "openai/ui": {
           "entrypoints": [
@@ -5718,15 +5718,15 @@
   ],
   "resources": [
     {
-      "uri": "ui://qyl-explorer/mcp-app-v4.html",
-      "name": "ui://qyl-explorer/mcp-app-v4.html",
+      "uri": "ui://qyl-explorer/mcp-app-v5.html",
+      "name": "ui://qyl-explorer/mcp-app-v5.html",
       "title": null,
       "description": null,
       "mimeType": "text/html;profile=mcp-app"
     },
     {
-      "uri": "ui://qyl-explorer/mcp-dashboard-v2.html",
-      "name": "ui://qyl-explorer/mcp-dashboard-v2.html",
+      "uri": "ui://qyl-explorer/mcp-dashboard-v3.html",
+      "name": "ui://qyl-explorer/mcp-dashboard-v3.html",
       "title": null,
       "description": null,
       "mimeType": "text/html;profile=mcp-app"

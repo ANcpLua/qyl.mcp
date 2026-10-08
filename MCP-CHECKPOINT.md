@@ -28,8 +28,17 @@ output. The owner supplies the separate Inspector proof.
 Point 9 in the continuation normalizes only the advertised output schemas.
 [Dated evidence](docs/evidence/2026-10-08-point-9-schema-portability.md) records
 the eight spelling changes across six tools, unchanged contract revision and
-validation, and passing local tests. Its separate PR still requires all four
-review/CI gates; the owner's authenticated Inspector proof remains separate.
+validation, and passing local tests. [PR #120](https://github.com/ANcpLua/qyl.mcp/pull/120)
+merged on 2026-10-08 at `09:26:44Z`, merge `ee4c5a0`, after all four gates
+passed on `9371b65`. The owner's authenticated Inspector proof remains separate.
+
+Point 10 selects each viewer's domain for the connected UI host: Claude's
+exact connector-URL hash, the configured HTTPS origin plus compatibility
+alias for ChatGPT, or neither domain field for unknown hosts.
+[Dated source and local verification](docs/evidence/2026-10-08-point-10-ui-domain.md)
+cover both viewers and both wire eras. The separate point-10 PR still needs
+its own four green gates; these checks do not establish rendering in the
+owner's authenticated Claude or ChatGPT session.
 
 The [release contract map](release/contract.md) and [owner handoff](release/README.md)
 connect all revised points and Done-when criteria to the ledger and dated

@@ -687,3 +687,19 @@ evidence remains owner-supplied.
 | Dependency and import gates | 2026-10-08: lint exited 0; `verify:sdk` passed five tests and the seven-manifest boundary; `verify:pins` printed `verify:pins: contract pins agree (@ancplua/qyl-api-schema 11.3.0 == Qyl.Api.Contracts 11.3.0, via /Users/alexandernachtmann/RiderProjects/qyl)`. Contract, package pins and lockfile are unchanged. |
 | Local transport | 2026-10-08: `QYL_MCP_TELEMETRY=0 bun run smoke` exited 0, including SDK discovery of eleven tools, schema-aware calls, validation errors, host/origin guards and workbench reconnect. Exact output excerpt is in the linked evidence. |
 | Documentation audit | 2026-10-08: `PATH="/private/tmp/qyl-option-a/venv/bin:$PATH" bun run verify:completion` exited 0: eight tests, all repository checks and 253 local documentation/evidence links passed. |
+
+## Point 10 continuation — client-specific viewer domains, 2026-10-08
+
+[Dated commands, sources and actual output](docs/evidence/2026-10-08-point-10-ui-domain.md)
+record the domain correction for both viewers. Local SDK tests do not claim
+a completed authenticated Claude or ChatGPT rendering check.
+
+| Check | Dated command and actual output |
+| --- | --- |
+| Point-9 merge prerequisite | 2026-10-08: `gh pr view 120` reports `MERGED` at `2026-10-08T09:26:44Z`, merge `ee4c5a0ba24f450165cb62183cd1396919e0d41b`; all four gates passed on `9371b65e4a3475bdd67ca7c38dc5391deefa19b0`. Point 10 branches from that merged `origin/main`. |
+| Exact connector hash | 2026-10-08: the linked Node SHA-256 command prints `d2d8a324b34d6bf33467665cbb3dc80c.claudemcpcontent.com` for `https://mcp.qyl.at/mcp`; changing the path or trailing slash changes the hash. Following the owner's PR review, only ChatGPT receives `https://mcp.qyl.at` plus its `openai/widgetDomain` alias; unknown and local hosts omit both domain fields. |
+| Both hosts and wire eras | 2026-10-08: after the owner-review changes, `QYL_MCP_TELEMETRY=0 bun run test` passed 357 tests (179 server, 142 workbench, 32 dashboard, 4 site), including six new tests for both viewers, modern per-request identity, legacy client hints, unknown or missing identity, the ChatGPT alias, interleaving and exact URL spelling. |
+| Versioned resources and snapshot | 2026-10-08: `bun run --cwd server snapshot:tools` exited 0. The linked comparison prints `Snapshot: only 6 versioned viewer URI/name values changed` and `All 11 tool schemas, descriptions and annotations unchanged`. Viewer URIs are now Trace Explorer v5 and MCP Dashboard v3. |
+| Cache trade-off | 2026-10-08: the linked `statSync` command reports Trace Explorer `454194 bytes` and MCP Dashboard `443193 bytes` uncompressed. Dynamic hosted reads use `ttlMs: 0, cacheScope: private` instead of the former 24-hour public hint because metadata varies without a cache variation key. Each render refetches roughly 450 KB; the in-memory HTML cache only saves disk reads. The owner accepted this trade-off in PR #121. |
+| Transport and dependency gates | 2026-10-08: `QYL_MCP_TELEMETRY=0 bun run smoke`, lint and `verify:sdk` exited 0. The actual pin output is `verify:pins: contract pins agree (@ancplua/qyl-api-schema 11.3.0 == Qyl.Api.Contracts 11.3.0, via /Users/alexandernachtmann/RiderProjects/qyl)`. |
+| Documentation audit | 2026-10-08: `PATH="/private/tmp/qyl-option-a/venv/bin:$PATH" bun run verify:completion` exited 0: eight tests, all checks and 255 local documentation/evidence links passed. |
