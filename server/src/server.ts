@@ -64,6 +64,7 @@ import type { EventsRuntime } from "./events.js";
 import { runTool } from "./request-scope.js";
 import { redactTelemetry, telemetryToolResult } from "./telemetry-redaction.js";
 import { TRACE_QUERY_META_KEY } from "./trace-query.js";
+import type { UiDomain } from "./ui-domain.js";
 import type { McpTelemetryTransport } from "./mcp-semconv.js";
 import {
   assertNativeExecutionRecordingArmed,
@@ -86,6 +87,9 @@ const DIST_DIR = import.meta.dirname;
 const viewerHtmlByFile = new Map<string, string>();
 const PUBLIC_CATALOG_CACHE = { ttlMs: 300_000, cacheScope: "public" } as const;
 const PUBLIC_APP_CACHE = { ttlMs: 86_400_000, cacheScope: "public" } as const;
+// There is no cache Vary key for clientInfo/User-Agent. Keep the HTML cache,
+// but resolve client-specific resource metadata on every hosted read.
+const CLIENT_APP_CACHE = { ttlMs: 0, cacheScope: "private" } as const;
 
 /**
  * MCP Apps viewers declare an empty CSP: the bundles are single-file and fetch
@@ -126,17 +130,21 @@ export function registerViewerResource(
   server: McpServer,
   uri: string,
   fileName: string,
-  uiDomain?: string,
+  uiDomain?: UiDomain,
 ): void {
-  const viewerMeta = uiDomain === undefined ? SELF_CONTAINED_VIEWER_META : {
-    ...SELF_CONTAINED_VIEWER_META,
-    ui: { ...SELF_CONTAINED_VIEWER_META.ui, domain: uiDomain },
-  };
   server.registerResource(
     uri,
     uri,
-    { mimeType: RESOURCE_MIME_TYPE, cacheHint: PUBLIC_APP_CACHE },
-    async (): Promise<ReadResourceResult> => {
+    {
+      mimeType: RESOURCE_MIME_TYPE,
+      cacheHint: typeof uiDomain === "function" ? CLIENT_APP_CACHE : PUBLIC_APP_CACHE,
+    },
+    async (_uri, context): Promise<ReadResourceResult> => {
+      const domain = typeof uiDomain === "function" ? uiDomain(context) : uiDomain;
+      const viewerMeta = domain === undefined ? SELF_CONTAINED_VIEWER_META : {
+        ...SELF_CONTAINED_VIEWER_META,
+        ui: { ...SELF_CONTAINED_VIEWER_META.ui, domain },
+      };
       let html = viewerHtmlByFile.get(fileName);
       if (html === undefined) {
         try {
@@ -171,8 +179,8 @@ export interface CreateServerOptions {
   nativeExecution?: NativeExecutionRuntime | false;
   /** MCP Events (`events/*`, webhook delivery); only a hosted process with a store has one. */
   events?: EventsRuntime;
-  /** Dedicated HTTPS origin for hosted viewer resources, required for public plugin review. */
-  uiDomain?: string;
+  /** Hosted viewer domain, optionally selected per request for the connected UI host. */
+  uiDomain?: UiDomain;
 }
 
 /** Creates a server with automatic native execution evidence for every tool. */

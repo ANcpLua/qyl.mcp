@@ -52,9 +52,11 @@ source uses automatic negotiation; Events is a separate opt-in lifecycle.
 
 | Resource | Tool | Source evidence, 2026-10-08 |
 | --- | --- | --- |
-| `ui://qyl-explorer/mcp-app-v4.html` | `display_traces` | [Viewer constants and registration](docs/evidence/2026-10-08-step7.md#viewers) |
-| `ui://qyl-explorer/mcp-dashboard-v2.html` | `display_mcp_dashboard` | [Viewer constants and registration](docs/evidence/2026-10-08-step7.md#viewers) |
+| `ui://qyl-explorer/mcp-app-v5.html` | `display_traces` | [Client-specific domains and versioned resources](docs/evidence/2026-10-08-point-10-ui-domain.md) |
+| `ui://qyl-explorer/mcp-dashboard-v3.html` | `display_mcp_dashboard` | [Client-specific domains and versioned resources](docs/evidence/2026-10-08-point-10-ui-domain.md) |
 
-The same source declares a configured hosted UI origin and empty external
-connection/resource CSP allowlists. No viewer resource or runtime code changed
-in this documentation step.
+The hosted resource metadata selects Claude's connector-URL hash domain or
+the configured HTTPS origin for other hosts. External connection/resource
+CSP allowlists remain empty. Client-dependent resource responses use a zero
+TTL and private cache scope; the shared HTML cache remains independent of
+the caller. Local viewers omit the domain.
