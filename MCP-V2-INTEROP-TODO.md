@@ -593,3 +593,11 @@ record the scope of these fixtures; no production identity claim follows.
 | Listing fields | 2026-10-08: the exact Python draft check in [point-9 evidence](docs/evidence/2026-10-08-followup-09.md#draft-and-source-checks) returned name `3/100`, one-liner `71/200`, description `603/2000`, one proposed category and an existing icon. [Draft](submission/anthropic-connector-listing.md) includes documentation/privacy/support/slug fields. |
 | Public documentation | 2026-10-08: `curl` to the repository page returned `HTTP 200`; the content check found the qyl purpose and hosted-setup section. Exact command/output is in the linked evidence. |
 | Owner acknowledgements/access | The dated draft check returned `Acknowledgements: 7/7 pending owner fields`. The official-guide check returned `Acknowledgement topics found: 7/7`. Credentials, unresolved public-page/contact values and attestations are owner fields; no portal action occurred. |
+
+## Revised goal — point 10: icon and rebuilt package, 2026-10-08
+
+| Check | Dated command and actual output |
+| --- | --- |
+| Anthropic icon | 2026-10-08: `claude plugin validate ./submission/qyl` returned `Validation passed`; the exact Python field check in [point-10 evidence](docs/evidence/2026-10-08-followup-10.md) resolved `./assets/qyl-icon.png` inside the package to the same existing PNG as both OpenAI icon fields. |
+| Owner fields | Same dated field check returned `Owner fields absent: Anthropic URLs=3; OpenAI URLs/identity/countries=5` and `Owner destination mapping: PASS`. [Submission instructions](submission/README.md#owner-fields-still-required) name every target field and publication prerequisite. |
+| Rebuilt ZIP | 2026-10-08: `python3 submission/build-openai-package.py` returned six entries and SHA-256 `16a6ffb523f90674572efc99dca430cf661d26aaa08f54d6680f7da0261fab5c`. The linked validator output confirms source-identical contents and both root schemas. The unchanged hash is expected: the changed Anthropic manifest is excluded from this OpenAI archive. |
