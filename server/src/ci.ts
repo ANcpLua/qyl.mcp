@@ -130,7 +130,7 @@ export function registerCiTools(server: McpServer): void {
       // A run breakdown is two units a client can watch: the collector round
       // trip for the run's traces, then the flatten into per-leg phases. The
       // run list is one round trip.
-      runTool(ctx, "ci_log", args.run_id ? 2 : 1, async (scope) => {
+      runTool(ctx, args.run_id ? 2 : 1, async (scope) => {
         if (args.run_id) {
           const { traces, mode } = await fetchSessionTraces(args.run_id, 100, scope.collector);
           await scope.step(`Fetched ${traces.length} trace(s) of CI run ${args.run_id}`);

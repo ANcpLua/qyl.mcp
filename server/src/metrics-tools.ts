@@ -65,7 +65,7 @@ export function registerMetricsTools(server: McpServer): void {
       _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: ListMetricsArgs, ctx: ServerContext): Promise<CallToolResult> =>
-      runTool(ctx, "list_metrics", 1, async (scope) => {
+      runTool(ctx, 1, async (scope) => {
         const { metrics, mode } = await listMetrics(args, scope.collector);
         await scope.step(`Fetched ${metrics.length} metric instrument(s)`);
         return telemetryToolResult(summarizeMetricCatalog(metrics, mode), {
@@ -90,7 +90,7 @@ export function registerMetricsTools(server: McpServer): void {
       _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: MetricSeriesArgs, ctx: ServerContext): Promise<CallToolResult> =>
-      runTool(ctx, "get_metric_series", 1, async (scope) => {
+      runTool(ctx, 1, async (scope) => {
         const { series, mode } = await listMetricSeries(args, scope.collector);
         await scope.step(`Fetched ${series.length} series of ${args.metric_name}`);
         return telemetryToolResult(summarizeMetricSeries(series, mode), {
@@ -118,7 +118,7 @@ export function registerMetricsTools(server: McpServer): void {
       _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: QueryMetricArgs, ctx: ServerContext): Promise<CallToolResult> =>
-      runTool(ctx, "query_metric", 1, async (scope) => {
+      runTool(ctx, 1, async (scope) => {
         const { result, mode } = await queryMetric(args, scope.collector);
         await scope.step(
           `Queried ${args.metric_name}: ${result.series.length} series, ` +

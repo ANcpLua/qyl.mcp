@@ -468,3 +468,22 @@ while retaining source-derived data flows. README restores the five clients'
 setup and registration paths plus `MCP_ALLOWED_HOSTS` and
 `MCP_ALLOWED_ORIGIN_HOSTS`. The [dated help, documentation and source output](docs/evidence/2026-10-08-step7.md#client-setup-and-owner-review-correction)
 backs those instructions; no client login or owner action was performed.
+
+## Revised goal — point 1: remove protocol logging, 2026-10-08
+
+The owner revised the work sequence after PR #98. Earlier entries are retained
+as dated historical observations; this point supersedes the earlier decision
+to retain deprecated request logging. The new requirements are in
+[goal-objective.md](goal-objective.md#work-in-order).
+
+| Check | Dated command and actual output |
+| --- | --- |
+| Modern calls never emit deprecated logging | 2026-10-08: `QYL_MCP_TELEMETRY=0 QYL_MCP_NATIVE_STATE_PATH=/private/tmp/qyl-followup-1/native-rerun.json node --test server/dist-test/*.test.js` passed `modern tool calls emit no logging notifications, even when the client requests a log level`; 158 passed, 0 failed. The test checks absent capability and success/error calls with info, warning and absent levels. |
+| Progress, cancellation, native records and schemas | Same 158-test run passed existing progress/cancellation/native-record/manifest tests. No manifest snapshot changed. |
+| Transport | 2026-10-08: `QYL_MCP_TELEMETRY=0 QYL_MCP_NATIVE_STATE_PATH=/private/tmp/qyl-followup-1/native-smoke.json bun run smoke` exited 0; server `all checks passed` and workbench reconnect succeeded. |
+| SDK and lint | 2026-10-08: `bun run verify:sdk` reported 5 passed and the seven-manifest boundary success; `bun run lint` exited 0. |
+| Frame gate | 2026-10-08: `bun run --cwd server verify:frame` still checks every registration and all 11 manifest tools. It now matches the frame's cancellation/progress signature after the log-only name argument was removed. The temporary missing-frame negative control exits 1 and names `list_traces`. |
+
+[Commands and actual output](docs/evidence/2026-10-08-followup-01.md) retain the
+initial sandbox `listen EPERM` failures and successful permitted-listener rerun.
+No production or owner-client observation follows from these fixture checks.

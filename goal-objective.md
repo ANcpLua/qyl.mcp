@@ -38,7 +38,10 @@ Checked in the repository on 8 October 2026.
   `skills/qyl-investigate/SKILL.md`. Nothing in it is uploaded or submitted.
   `submission/public-pages-draft.md` holds draft text for the owner's public
   support, privacy and terms pages.
-- All earlier feature branches are merged. No PR is open.
+- Earlier preparation steps merged as PRs #93–#98; the dated `gh` output
+  in [step-7 evidence](docs/evidence/2026-10-08-step7.md#merged-steps) records
+  #93–#97, and [PR #98](https://github.com/ANcpLua/qyl.mcp/pull/98) holds
+  the final document reconciliation. This is historical, not an open-PR count.
 
 ## What is not established
 
@@ -109,120 +112,98 @@ actually does it.
 
 ## Work, in order
 
-Each step is one branch from `origin/main` and one PR to `main`, merged when
-CI is green and the review is clean.
+Revised owner instructions, 2026-10-08. These are requirements, not completion
+claims. The earlier seven preparation steps and their results remain in the
+[dated ledger](MCP-V2-INTEROP-TODO.md). This new sequence starts at point 1.
+Each point is one branch from the owning repository's `origin/main` and one
+PR to `main`. Start the next point only after the preceding PR is merged.
+Merge requires a clean own review and green `lint`, `verify`,
+`owner-review/content`, and `owner-review/evidence` on the reviewed head.
+Never set the owner checks or bypass them; read owner comments and fix them.
 
-1. **Done.** Rules, `verify:sdk` in CI and minimized native tool-call records
-   are merged (PR #91).
-2. **Tool descriptions** (Anthropic connector checklist, Directory Policy §2A,
-   §2B and §5B, OpenAI plugin guidelines). Every description states what the
-   tool does and when to use it, as the user's need. No sentence addresses the
-   model. Specifically:
-   - `get_trace`: its input schema is the contract binding
-     `Mcp.Tools.GetTraceInput` from `@ancplua/qyl-api-schema`, so new
-     parameters (`errors_only`, `max_spans`, `include_attributes`) are a
-     contract change in ANcpLua/qyl-api-schema first and are not part of this
-     objective. Here: say that the full span tree is returned and can be
-     large, and point to `display_traces` and `search_logs` for large traces.
-   - `ci_log`: its input schema is the contract binding `Mcp.Tools.CiLogInput`,
-     so a `service_prefix` parameter is also a contract change. Here: state
-     the emitter convention from `server/src/ci.ts` (resource `service.name`
-     starts with `qyl-ci`, one span per phase with a `ci.leg` attribute) and
-     the existing limits, so any CI that emits it can use the tool.
-   - `fetch_telemetry`: remove "The model should NOT call this tool directly";
-     the visibility is already correct.
-   - `query_metric`: with `step_ms` equal to the window, each grouping yields a
-     single bucket, so one number per series.
-   - Regenerate `server/tool-manifest.snapshot.json` deliberately with
-     `bun run --cwd server snapshot:tools` and confirm that only descriptions
-     changed.
-   - If write tools are added, give each its own tool with honest hints and
-     update negative test cases 1 and 2 in `submission/qyl/plugin.json`.
-3. **Agent skill.** Keep `submission/qyl/skills/qyl-investigate/SKILL.md` in
-   step with the tool descriptions. Its workflow: start with `list_sessions`
-   and `list_traces`; drill with `get_trace`, then `search_logs` on the same
-   `trace_id` with `severity_min` 17; metrics via `list_metrics`,
-   `get_metric_series`, `query_metric`; tool health via
-   `display_mcp_dashboard`; CI via `ci_log`; visual via `display_traces`;
-   Events for `trace.error`. Empty results mean no data, not no error.
-4. **Fresh evidence.** Run and record in MCP-V2-INTEROP-TODO.md, each with
-   date, command and output:
-   - the local checks (`bun run build`, `test`, `smoke`, `smoke:otlp`,
-     `verify:sdk`, `lint`);
-   - the v1-drift check from the local mcp-builder-v2 skill:
-     `node /Users/alexandernachtmann/RiderProjects/mcp-builder-v2/skills/mcp-builder-v2/scripts/check_v2.mjs /Users/alexandernachtmann/RiderProjects/qyl.mcp/server`
-     Record error-severity findings as findings; do not suppress them.
-   - the both-era black-box check, after `bun run --cwd server build`:
-     `node /Users/alexandernachtmann/RiderProjects/mcp-builder-v2/skills/mcp-builder-v2/scripts/verify_server.mjs --cwd /Users/alexandernachtmann/RiderProjects/qyl.mcp/server -- sh -c 'QYL_DEMO=1 exec node dist/main.js --stdio'`
-     It must print GREEN for modern-era tools/list, legacy-era tools/list
-     and tool-schema portability. It pins Inspector 2.9.0 with
-     `protocolEra` modern and legacy; an Inspector run in its default era
-     proves nothing.
-   - the production endpoint checks (`curl` against `https://mcp.qyl.at/mcp`
-     and its resource metadata);
-   - the npm package state (`npm view qyl-mcp-server version`).
-   Client connections and the Events lifecycle need the owner's clients;
-   record them as owner actions with the exact steps. The production
-   modern-era proof is an owner action too: Inspector 2.9.0 with OAuth login
-   and `protocolEra: "modern"` against `https://mcp.qyl.at/mcp`, recording
-   `tools/list` and the `MCP-Protocol-Version: 2026-07-28` request header.
-   No evidence, no claim.
-5. **Submission preparation**, two Anthropic records and one OpenAI record.
-   - Anthropic connector for `https://mcp.qyl.at/mcp`, submitted separately
-     at `https://claude.ai/directory/manage` as kind "MCP connector": test
-     credentials for a fully populated account, documentation URL, privacy
-     URL, support contact, icon. The default result is a Community listing
-     after the automatic scan.
-   - Anthropic plugin bundle: `submission/qyl/.claude-plugin/plugin.json`,
-     `.mcp.json`, `README.md`, `LICENSE` and the shared `skills/` exist. Add
-     `supportUrl`, `privacyPolicyUrl` and `termsOfServiceUrl` once the owner
-     publishes those pages. Portal fields: repository `ANcpLua/qyl.mcp`,
-     plugin path `submission/qyl`, a branch or tag (no commit). The
-     repository may stay private during validation and must be public to go
-     live, with the Claude GitHub App installed.
-   - OpenAI: the `submission/qyl/` ZIP with `$schema` in both manifests,
-     `extensions.com.openai`, one server, five positive and three negative
-     cases, a demo recording URL. Validate `plugin.json` and `mcp.json`
-     against their `$schema`. The ZIP contains `.claude-plugin/`; OpenAI
-     accepts Claude-compatible manifests and `extensions.com.openai` takes
-     precedence, but check the ZIP against the portal validator or exclude
-     `.claude-plugin/` when zipping.
-   - `submission/public-pages-draft.md` holds draft text for the owner's
-     support, privacy and terms pages. Reuse the wording, not its claims.
-   - Public pages on qyl.at and a reviewer account with isolated sample data
-     are owner decisions. Record in `submission/README.md` which fields the
-     owner still has to supply; do not invent them.
-6. **Submission and publication** are owner actions: legal attestations,
-   portal uploads, identity selection, publish. Agents prepare and report;
-   they do not submit. Publication is a separate decision after approval.
-7. **Keep the documents truthful.** README, MCP-CHECKPOINT.md,
-   QYL-MCP-MATRIX.md and MCP-V2-INTEROP-TODO.md state only what exists with
-   evidence. Distinguish source present, local test passed, CI passed,
-   production observed, portal status observed.
+### A. Code before submission
+
+1. Remove `ctx.mcpReq.log(...)` from `server/src/request-scope.ts` or restrict
+   it to the legacy path. Remove the modern deprecated logging path.
+2. Send the HTTP-start banner in `server/src/main.ts` to stderr.
+3. Resolve the `events.ts` JSON-Schema and Zod-root findings with justified
+   `mcp-v2-allow` markers or `zod/v4` imports. `check_v2.mjs` must report zero
+   errors without changing the checker.
+4. Add contract tests through `createMcpHandler().fetch`: a protocol-version
+   mismatch returns HTTP 400 with `-32020`; missing
+   `io.modelcontextprotocol/clientCapabilities` returns HTTP 400 with `-32602`.
+   `tools/list` carries `ttlMs` and `cacheScope` and has stable order across two calls.
+5. Record dated ledger rows with exact test names for wrong audience, missing
+   scope, expired token and cross-subject project access. Add missing tests;
+   they must run and pass in CI.
+
+### B. Production before reviewer access
+
+6. Inspect whether Railway automatically deploys `main`, including
+   `railway-config.yml`. Record deployment ID and source commit with dated
+   output. If the deployed build predates PR #91, record the argument-storage
+   risk and ask the owner to deploy; deployment is an owner action.
+7. Observe the production OpenAI challenge route's 404 until the portal token
+   is set. Document its environment-variable name in README. Setting it is an
+   owner action.
+
+### C. Contract repository
+
+8. In a separate PR in `ANcpLua/qyl-api-schema`, extend
+   `Mcp.Tools.GetTraceInput` with `errors_only`, `max_spans`,
+   `include_attributes`, and `Mcp.Tools.CiLogInput` with `service_prefix`.
+   After its release, bump the dependency here and implement the options in
+   `tools.ts` and `ci.ts`. Do not publish a release in this goal. If a required
+   release or other prerequisite is unavailable, document the precise blocker
+   instead of claiming the bump or runtime implementation is complete.
+
+### D. Submission files
+
+9. Add `submission/anthropic-connector-listing.md`: name ≤100 characters,
+   one-liner ≤200, description ≤2000, one to five categories, documentation
+   URL, privacy URL, support contact, icon and slug. Seven acknowledgements
+   and test credentials remain owner fields.
+10. Add the icon to `.claude-plugin/plugin.json`. After owner publication of
+    the pages, set `supportUrl`, `privacyPolicyUrl`, `termsOfServiceUrl` and
+    matching OpenAI interface URLs; `developerName` and `countries` also need
+    owner values. Unavailable values remain explicit owner fields. Rebuild
+    the ZIP and record its SHA-256 in the ledger.
+11. Record why MCP Registry and Custom Marketplaces are excluded.
+12. Record fresh HTTP both-era verification with conformance using
+    `verify_server.mjs --url … --start -- … bun dist/main.js`: 24 checks pass,
+    HTTP entry runs under Bun. Record a negative control proving the verifier
+    rejects a legacy-only fixture.
+13. Add `release/contract.md` and `release/README.md` mapping requirements to
+    `goal-objective.md`, `MCP-V2-INTEROP-TODO.md` and `docs/evidence/`.
+14. Add the requested completion audit as a CI script. Resolve the referenced
+    `server/docs/completion.md` audit definition with the owner before
+    implementing it; do not confuse MCP argument autocomplete with release completion.
+
+### E. Owner actions, not agent actions
+
+List exact pending actions for publisher identity, public qyl.at pages from
+`submission/public-pages-draft.md`, a reviewer account with an isolated
+project, demo recording, five client connections including the Inspector
+2.9.0 modern proof and request header, the Events lifecycle, challenge-token
+configuration, attestations, submission and publication. Do not perform them.
 
 ## Done when
 
-All of the following hold on `origin/main`. Each is verifiable from the
-repository without an owner action.
+Verify each item on the owning repository's `origin/main`, with dated commands
+and actual output. Owner actions are listed, not executed.
 
-1. `bun run verify:sdk` exists and runs in CI, and native tool-call records
-   contain no `arguments` and no `_meta`.
-2. `server/tool-manifest.snapshot.json` contains no description that
-   addresses the model, and every description states what the tool does and
-   when to use it as described in step 2.
-3. `submission/qyl/skills/qyl-investigate/SKILL.md`,
-   `submission/qyl/.claude-plugin/plugin.json`, `submission/qyl/.mcp.json`,
-   `submission/qyl/README.md` (at least 40 words outside code blocks) and
-   `submission/qyl/LICENSE` exist, and `submission/qyl/plugin.json` and
-   `submission/qyl/mcp.json` validate against their `$schema`.
-4. Every row in MCP-V2-INTEROP-TODO.md carries either dated evidence or the
-   exact owner action it is waiting for.
-5. MCP-CHECKPOINT.md, QYL-MCP-MATRIX.md, README.md and submission/README.md
-   contain no claim without evidence.
-
-Owner actions (publisher identity, public pages, reviewer account, demo
-recording, attestations, submission, publication) are outside this objective.
-They are listed, not performed.
+1. `check_v2.mjs` reports zero errors without checker changes.
+2. The protocol/catalog tests from point 4 and authorization/isolation tests
+   from point 5 pass in CI.
+3. Points 6, 7, 11 and 12 have dated ledger rows with the required actual
+   observations, including HTTP conformance and the legacy-only negative control.
+4. Files and fields from points 9, 10, 13 and 14 exist, with unresolved owner
+   values explicitly listed; the rebuilt ZIP has a recorded SHA-256.
+5. Point 8 is a merged schema PR plus the dependency bump and implementation
+   here, or a documented blocker with its concrete reason.
+6. No documentation claim lacks evidence. Preserve the original SDK boundary,
+   minimized records, user-need descriptions, shared skill and valid bundles.
+7. All owner-only work is listed with exact next actions and was not executed.
 
 ## Standing constraints
 
