@@ -78,7 +78,7 @@
     "smoke:projects": "node project-access-smoke.mjs"
   },
   "dependencies": {
-    "@ancplua/qyl-api-schema": "11.2.0",
+    "@ancplua/qyl-api-schema": "11.3.0",
     "@modelcontextprotocol/core": "2.3.1",
     "@modelcontextprotocol/server": "2.3.1",
     "@opentelemetry/api": "1.9.1",

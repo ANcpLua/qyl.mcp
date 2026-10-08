@@ -4,7 +4,7 @@ Dated 2026-10-08. Read the [release contract, its acceptance evidence and the
 requirements map](contract.md), the controlling
 [objective](../goal-objective.md), [ledger](../MCP-V2-INTEROP-TODO.md) and
 [command/output evidence](../docs/evidence/2026-10-08-followup-13.md) together.
-The map distinguishes repository work, the permitted Collector-lockstep blocker
+The map distinguishes repository work, the completed Collector pin prerequisite
 and pending owner actions. This directory does not authorize a release
 or establish a submitted/published portal state.
 
@@ -75,7 +75,7 @@ actual output for each completed observation.
 | Production Events lifecycle | Follow the same ledger's `events/list`, subscribe, signed matching delivery, nonmatching filter, persistence, renewal, unsubscribe and revocation steps. Record bounded delivery/no-delivery windows without keys. |
 | Deployment before reviewer access | Re-observe the active Railway deployment ID and source commit and compare with intended main. [Point 6](../docs/evidence/2026-10-08-followup-06.md) is a dated snapshot, not a guarantee about the next deployment. |
 | Challenge token | Copy the portal token into `OPENAI_APPS_CHALLENGE` on the intended deployment, check the plaintext route and complete portal verification; [point 7](../docs/evidence/2026-10-08-followup-07.md) observed 404 before this action. |
-| Collector contract prerequisite | Schema 11.3.0 is published. Coordinate the Collector main bump from 11.2.0, then qyl.mcp can bump and implement/test the new options; [refreshed blocker](../docs/evidence/2026-10-08-followup-15.md#release-blocker-refreshed-after-owner-release) includes the failing candidate gate. |
+| Inspector evidence after Collector deployment | [qyl PR #642](https://github.com/ANcpLua/qyl/pull/642) merged the 11.3.0 pin. [Option-A evidence](../docs/evidence/2026-10-08-point-8-options.md) records the successful Railway deployment and the local consumer's subsequent production Collector handshake. The owner supplies the separate authenticated Inspector evidence. |
 | Attestations and publication | Review the seven connector acknowledgement fields and all other applicable portal attestations, validate the three separate records, then decide and perform submission/publication. [Scope exclusions](../docs/evidence/2026-10-08-followup-11.md) still apply. |
 
 No portal action, publisher verification, public-page publication, credential

@@ -1,10 +1,10 @@
 {
-  "contract_revision": "sha256:75278211aa54def8",
+  "contract_revision": "sha256:382526f13652d18b",
   "tools": [
     {
       "name": "ci_log",
       "title": "CI Log",
-      "description": "Read CI telemetry from qyl when the user wants recent runs or a per-leg phase breakdown with failures first. Any CI can emit this convention: resource service.name starts with 'qyl-ci', session.id identifies the run, and one span per phase carries a ci.leg attribute; failed phases set span status to error. Without run_id, filters the 50 most recent sessions and returns up to limit matching runs (default 10). With run_id, reads up to 100 traces for that session; phase output can be large.",
+      "description": "Read CI telemetry from qyl when the user wants recent runs or a per-leg phase breakdown with failures first. Any CI can emit this convention: resource service.name starts with service_prefix (default 'qyl-ci'), session.id identifies the run, and one span per phase carries a ci.leg attribute; failed phases set span status to error. Without run_id, filters the 50 most recent sessions and returns up to limit matching runs (default 10). With run_id, reads up to 100 traces for that session and returns only phases matching the same case-sensitive service prefix; phase output can be large.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -31,6 +31,13 @@
             "maxLength": 128,
             "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
             "description": "Session id of one CI run for a per-leg phase breakdown; omit to list recent runs."
+          },
+          "service_prefix": {
+            "default": "qyl-ci",
+            "description": "Case-sensitive service-name prefix identifying CI telemetry in both run lists and phase breakdowns.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "limit": {
             "default": 10,
@@ -2047,7 +2054,7 @@
     {
       "name": "get_trace",
       "title": "Get Trace",
-      "description": "Fetch a single qyl trace by trace_id when the user wants its complete span data, including timing, attributes, events, and status. The full span tree is returned and can be large. For large traces, display_traces provides the visual waterfall and search_logs provides filtered, correlated logs.",
+      "description": "Fetch a single qyl trace by trace_id when the user wants span timing, events, status, and attributes. By default returns all spans; errors_only keeps error spans, max_spans caps them after filtering in Collector order, and include_attributes=false omits attribute collections. Trace totals are preserved and the summary reports returned and matching counts. The root span is omitted when excluded by the filter or cap. display_traces provides the visual waterfall.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -2077,6 +2084,22 @@
               "0af7651916cd43dd8448eb211c80319c"
             ],
             "description": "Unique trace identifier (32 lowercase hex characters)"
+          },
+          "errors_only": {
+            "default": false,
+            "description": "Return only spans with error status; omitted or false includes all span statuses.",
+            "type": "boolean"
+          },
+          "max_spans": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "description": "Maximum spans to return after filtering; omit to keep all matching spans."
+          },
+          "include_attributes": {
+            "default": true,
+            "description": "Include span, resource, event and link attributes; false omits those attribute collections.",
+            "type": "boolean"
           }
         },
         "required": [

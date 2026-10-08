@@ -31,10 +31,13 @@ import type { Mode, QylSession, QylSpan, QylTrace } from "./wire.js";
 /** Resource service-name prefix that marks telemetry as CI-emitted. */
 export const CI_SERVICE_PREFIX = "qyl-ci";
 
-/** CI sessions are the ones that carry at least one qyl-ci service. */
-export function filterCiSessions(sessions: QylSession[]): QylSession[] {
+/** CI sessions carry at least one service matching the requested prefix. */
+export function filterCiSessions(
+  sessions: QylSession[],
+  servicePrefix = CI_SERVICE_PREFIX,
+): QylSession[] {
   return sessions.filter((session) =>
-    session.services.some((service) => service.startsWith(CI_SERVICE_PREFIX))
+    session.services.some((service) => service.startsWith(servicePrefix))
   );
 }
 
@@ -46,9 +49,9 @@ function spanLeg(span: QylSpan): string {
 }
 
 /** Flatten a run's traces into per-leg phases, failures first. */
-export function collectCiPhases(traces: QylTrace[]): CiPhase[] {
+export function collectCiPhases(traces: QylTrace[], servicePrefix = CI_SERVICE_PREFIX): CiPhase[] {
   const phases = traces.flatMap((trace) =>
-    trace.spans.map((span): CiPhase => ({
+    trace.spans.filter((span) => span.resource.service_name.startsWith(servicePrefix)).map((span): CiPhase => ({
       leg: spanLeg(span),
       phase: span.name,
       status: span.status.code === 2 ? "error" : span.status.code === 1 ? "ok" : "unset",
@@ -72,10 +75,10 @@ export function collectCiPhases(traces: QylTrace[]): CiPhase[] {
   );
 }
 
-export function summarizeCiRuns(runs: CiRunSummary[], mode: Mode): string {
+export function summarizeCiRuns(runs: CiRunSummary[], mode: Mode, servicePrefix = CI_SERVICE_PREFIX): string {
   if (runs.length === 0) {
     return `No CI runs found (${mode} mode). CI telemetry appears once runs emit ` +
-      `spans with a '${CI_SERVICE_PREFIX}*' service.name.`;
+      `spans with a '${servicePrefix}*' service.name.`;
   }
   const lines = runs.map((run) => {
     const failure = run.error_count > 0 ? `${run.error_count} error(s)` : "clean";
@@ -85,9 +88,14 @@ export function summarizeCiRuns(runs: CiRunSummary[], mode: Mode): string {
   return `${runs.length} CI run(s) (${mode} mode), pass a run_id for the per-leg breakdown:\n${lines.join("\n")}`;
 }
 
-export function summarizeCiRun(runId: string, phases: CiPhase[], mode: Mode): string {
+export function summarizeCiRun(
+  runId: string,
+  phases: CiPhase[],
+  mode: Mode,
+  servicePrefix = CI_SERVICE_PREFIX,
+): string {
   if (phases.length === 0) {
-    return `CI run ${runId} has no phase spans (${mode} mode).`;
+    return `CI run ${runId} has no phase spans matching '${servicePrefix}*' (${mode} mode).`;
   }
   const legs = new Map<string, CiPhase[]>();
   for (const phase of phases) {
@@ -116,11 +124,12 @@ export function registerCiTools(server: McpServer): void {
       description:
         "Read CI telemetry from qyl when the user wants recent runs or a per-leg " +
         "phase breakdown with failures first. Any CI can emit this convention: " +
-        `resource service.name starts with '${CI_SERVICE_PREFIX}', session.id identifies ` +
+        `resource service.name starts with service_prefix (default '${CI_SERVICE_PREFIX}'), session.id identifies ` +
         "the run, and one span per phase carries a ci.leg attribute; failed phases " +
         "set span status to error. Without run_id, filters the 50 most recent " +
         "sessions and returns up to limit matching runs (default 10). With run_id, " +
-        "reads up to 100 traces for that session; phase output can be large.",
+        "reads up to 100 traces for that session and returns only phases matching " +
+        "the same case-sensitive service prefix; phase output can be large.",
       inputSchema: CiLogInputSchema,
       outputSchema: compactOutputSchema(CiLogOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
@@ -131,17 +140,18 @@ export function registerCiTools(server: McpServer): void {
       // trip for the run's traces, then the flatten into per-leg phases. The
       // run list is one round trip.
       runTool(ctx, args.run_id ? 2 : 1, async (scope) => {
+        const servicePrefix = args.service_prefix ?? CI_SERVICE_PREFIX;
         if (args.run_id) {
           const { traces, mode } = await fetchSessionTraces(args.run_id, 100, scope.collector);
           await scope.step(`Fetched ${traces.length} trace(s) of CI run ${args.run_id}`);
-          const phases = collectCiPhases(traces);
+          const phases = collectCiPhases(traces, servicePrefix);
           const legs = new Set(phases.map((phase) => phase.leg)).size;
           await scope.step(`Collected ${phases.length} phase(s) across ${legs} leg(s)`);
           const output: CiLogOutput = { run_id: args.run_id, phases, mode };
-          return telemetryToolResult(summarizeCiRun(args.run_id, phases, mode), output);
+          return telemetryToolResult(summarizeCiRun(args.run_id, phases, mode, servicePrefix), output);
         }
         const { sessions, mode } = await fetchSessions(50, undefined, scope.collector);
-        const runs = filterCiSessions(sessions)
+        const runs = filterCiSessions(sessions, servicePrefix)
           .slice(0, args.limit ?? 10)
           .map((session): CiRunSummary => ({
             run_id: session["session_id"],
@@ -153,7 +163,7 @@ export function registerCiTools(server: McpServer): void {
           }));
         await scope.step(`Found ${runs.length} CI run(s) among ${sessions.length} session(s)`);
         const output: CiLogOutput = { runs, mode };
-        return telemetryToolResult(summarizeCiRuns(runs, mode), output);
+        return telemetryToolResult(summarizeCiRuns(runs, mode, servicePrefix), output);
       }),
   );
 }

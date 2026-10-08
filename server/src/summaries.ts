@@ -75,7 +75,7 @@ export function summarizeTraceTable(traces: QylTrace[], mode: Mode): string {
   return lines.join("\n");
 }
 
-export function summarizeTrace(trace: QylTrace, mode: Mode): string {
+export function summarizeTrace(trace: QylTrace, mode: Mode, rootExcluded = false): string {
   const spansByService = new Map<string, number>();
   for (const span of trace.spans) {
     const service = serviceOf(span);
@@ -87,7 +87,7 @@ export function summarizeTrace(trace: QylTrace, mode: Mode): string {
 
   const lines = [
     `Trace ${trace.trace_id}${modeNote(mode)}`,
-    `Root: ${rootSpanName(trace)} — ${humanizeNs(trace.duration_ns)}, ` +
+    `Root: ${rootExcluded ? "not included in selected spans" : rootSpanName(trace)} — ${humanizeNs(trace.duration_ns)}, ` +
       `${trace.span_count} spans, started ${trace.start_time}`,
     `Spans by service: ${perService}`,
   ];

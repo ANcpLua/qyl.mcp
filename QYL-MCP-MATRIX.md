@@ -1,24 +1,25 @@
 # qyl MCP tool-use matrix
 
 Source inventory checked **2026-10-08** using the command and actual manifest
-output in [step-7 evidence](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory).
+output in [point-8 evidence](docs/evidence/2026-10-08-point-8-options.md), superseding
+the [step-7 inventory](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory).
 This maps existing tools to user needs; it does not claim a particular client,
 repository or production service currently emits telemetry.
 
 All 11 tools have `readOnlyHint: true` and `destructiveHint: false` in the
 inspected manifest. Ten are model-facing; `fetch_telemetry` is app-only.
-The manifest's contract revision is `sha256:75278211aa54def8`.
+The manifest's contract revision is `sha256:382526f13652d18b`.
 
 | Tool | User need and existing behavior | Limits / routing |
 | --- | --- | --- |
 | `list_sessions` | Find active or failing sessions with counts, state and recorded token usage. | Use returned IDs; `active_only` and `limit` are existing inputs. |
 | `list_traces` | Get a compact overview of traces, duration, services and error flags. | Summary only; span data is omitted. |
-| `get_trace` | Inspect complete span data for a returned `trace_id`. | Full span tree, potentially large; use the viewer or filtered logs for large traces. No new filtering parameters were added. |
+| `get_trace` | Inspect span data for a returned `trace_id`. | Defaults to the full trace. `errors_only` filters first, `max_spans` (1–1000) caps matching spans, and `include_attributes=false` omits attribute collections. Trace totals stay unchanged; text states matching/returned counts. |
 | `search_logs` | Find correlated logs or error details. | `trace_id`, `service_name`, `severity_min`, body query and limit; ERROR starts at 17. |
 | `list_metrics` | Discover exact recorded instrument names, units and kinds. | Start here before choosing a metric name. |
 | `get_metric_series` | Discover a metric's attribute streams and grouping/filter keys. | Use the returned attributes to choose the range query's groups. |
 | `query_metric` | Compare a metric over time or across groups. | With `step_ms` equal to the window, each grouping produces one bucket: one number per series. |
-| `ci_log` | Inspect recent CI runs or per-leg phases. | Any CI emitting resource `service.name` starting `qyl-ci`, run `session.id`, and one phase span with `ci.leg`; failed phases use error status. List filters 50 recent sessions, default 10 matching runs; detail reads up to 100 traces. |
+| `ci_log` | Inspect recent CI runs or per-leg phases. | Case-sensitive `service_prefix` (default `qyl-ci`) filters both sessions and phase spans. Run `session.id` and span `ci.leg` identify runs/legs; failed phases use error status. List filters 50 recent sessions before its limit (default 10); detail reads up to 100 traces. |
 | `display_traces` | See a trace waterfall, session traces or recent traces. | Interactive viewer; empty-input refresh preserves the original query in covered local tests. |
 | `display_mcp_dashboard` | Inspect recorded MCP usage, tool latency and errors. | Requires spans carrying `mcp.method.name`; only recorded telemetry in the selected project can appear. |
 | `fetch_telemetry` | Refresh or filter the trace explorer. | `_meta.ui.visibility: ["app"]`; UI plumbing, not a model-facing tool. |

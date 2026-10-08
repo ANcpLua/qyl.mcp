@@ -390,7 +390,9 @@ Completion audit passed; production, owner actions and prose evidence still requ
 ```
 
 Done-when 2 is read from the `verify` CI job of each merged point, not from a
-local run. Done-when 5 holds through the documented Collector-lockstep blocker.
+local run. At that observation, Done-when 5 held through the documented
+Collector-lockstep blocker. The [later Option-A continuation](../docs/evidence/2026-10-08-point-8-options.md)
+supersedes that blocker with the merged Collector pin and consumer implementation.
 
 ### Production observations repeated by the owner review
 
@@ -431,7 +433,7 @@ The [ledger](../MCP-V2-INTEROP-TODO.md) retains historical and superseding rows.
 | 5 | Wrong audience, missing scope, expiry and cross-subject isolation pass CI. | [Point 5](../docs/evidence/2026-10-08-followup-05.md): exact test names, timestamps and successful CI run, including point 4. |
 | 6 | Railway trigger, active deployment ID and commit recorded; compare with PR #91. | [Point 6](../docs/evidence/2026-10-08-followup-06.md): read-only live snapshot; running commit contains #91. It is not a perpetual production-state guarantee. |
 | 7 | Challenge route observed as 404; environment name documented. | [Point 7](../docs/evidence/2026-10-08-followup-07.md): production response and token-present/absent fixture; setting `OPENAI_APPS_CHALLENGE` remains an owner action. |
-| 8 | Schema change merged and owner released 11.3.0; consumer bump/runtime work blocked on Collector lockstep. | [Original point 8](../docs/evidence/2026-10-08-followup-08.md); [refreshed registry and Collector-pin evidence](../docs/evidence/2026-10-08-followup-15.md#release-blocker-refreshed-after-owner-release). Collector main still pins 11.2.0; the unchanged gate rejects a unilateral bump. |
+| 8 | Collector 11.3.0 prerequisite merged; consumer dependency and four input options implemented. | [Option-A continuation](../docs/evidence/2026-10-08-point-8-options.md) records qyl PR #642, actual `verify:pins` output, tests and manifest comparison. The consumer PR must pass its own four gates; a production handshake requires a successful Collector deploy first. |
 | 9 | Separate Anthropic connector listing with acknowledgement/access owner fields. | [Point 9](../docs/evidence/2026-10-08-followup-09.md); [listing draft](../submission/anthropic-connector-listing.md). |
 | 10 | Anthropic icon and rebuilt, validated OpenAI ZIP; unresolved manifest fields named. | [Point 10](../docs/evidence/2026-10-08-followup-10.md); [owner field mapping](../submission/README.md#owner-fields-still-required). |
 | 11 | MCP Registry and Custom Marketplaces excluded with reason. | [Point 11](../docs/evidence/2026-10-08-followup-11.md): owner-defined distribution scope. |
@@ -448,14 +450,15 @@ The [ledger](../MCP-V2-INTEROP-TODO.md) retains historical and superseding rows.
 | 2 | Points 4–5, successful verify CI on the reviewed source; do not substitute a local run for CI. |
 | 3 | Dated ledger rows and actual output for points 6, 7, 11 and 12. |
 | 4 | Files/fields from points 9, 10, 13, 14 and 15, explicit owner gaps and rebuilt ZIP SHA-256. The [point-15 check](../docs/evidence/2026-10-08-followup-15.md) records the final draft restoration; verify the merged state and CI before declaring completion. |
-| 5 | Point 8's documented Collector-lockstep blocker is the permitted alternative. The merged schema PR alone does not implement these options in qyl.mcp. |
+| 5 | [Point 8 Option A](../docs/evidence/2026-10-08-point-8-options.md) implements the consumer options after the Collector pin merge. Assess the consumer PR's required gates separately from the recorded local checks. |
 | 6 | All source, test, public-response and historical claims trace to the ledger/evidence; retain the SDK boundary, minimized records, user-need descriptions, shared skill and valid bundles. CI automation cannot establish the truth of arbitrary prose. |
 | 7 | [Owner handoff](README.md#owner-handoff), [client/Events procedures](../MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending) and [submission fields](../submission/README.md#owner-fields-still-required). Owner work remains pending. |
 
-For point 8, schema release 11.3.0 is available. Coordinate the Collector-side
-contract bump from 11.2.0 in `ANcpLua/qyl` first, then bump qyl.mcp in lockstep
-and implement/test `errors_only`, `max_spans`, `include_attributes` and
-`service_prefix`. The [dated release, pinned Collector commit and failing
-candidate gate](../docs/evidence/2026-10-08-followup-15.md#release-blocker-refreshed-after-owner-release)
-record this current prerequisite. Runtime support for those four options is
-not claimed complete.
+For point 8, [qyl PR #642](https://github.com/ANcpLua/qyl/pull/642) merged
+the Collector and dashboard contract pins to 11.3.0 before this consumer branch
+was created. qyl.mcp now implements `errors_only`, `max_spans`,
+`include_attributes` and `service_prefix` with the matching dependency.
+The [dated continuation](../docs/evidence/2026-10-08-point-8-options.md) contains
+the actual pin check and local test evidence. Keep production handshake proof
+separate and only record it after the Collector deploy succeeds; Inspector
+proof comes from the owner.

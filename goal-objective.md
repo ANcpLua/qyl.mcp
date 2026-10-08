@@ -217,6 +217,15 @@ and actual output. Owner actions are listed, not executed.
 
 ## Standing constraints
 
+Continuation authorized by the owner on 2026-10-08: complete point 8 via
+Option A. First branch `ANcpLua/qyl` from `origin/main`, move its Collector
+contract pin to 11.3.0, merge the PR after green CI and update the local
+`../qyl` checkout to merged `main`. Then bump qyl.mcp's schema dependency,
+implement the four input options, record the actual `verify:pins` output in
+the dated ledger, and pass the owner-review gate. Record a production
+handshake only after the Collector has deployed on Railway. The owner supplies
+the Inspector evidence.
+
 - Official split SDK v2 packages only. SDK version and wire revision are
   independent; v2's built-in 2025-era support is required compatibility.
   HTTP serves through `createMcpHandler(factory)` and stdio through
