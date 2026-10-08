@@ -114,10 +114,12 @@ export function registerCiTools(server: McpServer): void {
     {
       title: "CI Log",
       description:
-        "Read qyl's own CI runs from its telemetry (dogfooding — no GitHub API). " +
-        "Without arguments: recent CI runs (sessions whose service.name starts with " +
-        `'${CI_SERVICE_PREFIX}'). With run_id: per-leg phase breakdown, failures first, ` +
-        "so 'which leg hung on what' is answerable even when GitHub's log API is down.",
+        "Read CI run telemetry from the configured qyl project. Emitter convention: " +
+        `resource service.name starts with '${CI_SERVICE_PREFIX}', session.id identifies ` +
+        "a run, and one span per phase carries ci.leg. Without run_id, discover " +
+        "matching runs among the 50 most recent sessions. With run_id, return " +
+        "phases from up to 100 session traces, failures first, with ci.leg or " +
+        "the service name as the leg.",
       inputSchema: CiLogInputSchema,
       outputSchema: compactOutputSchema(CiLogOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,

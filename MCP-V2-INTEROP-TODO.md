@@ -20,8 +20,8 @@ Checked in source on 8 October 2026.
 | Account and project scoping | `server/src/collector-access.ts`, `request-scope.ts` | present |
 | Native tool-call records contain operation metadata only | `server/src/native-execution.ts` | implemented in step 1; dated tests below |
 | OpenAI plugin draft | `submission/qyl/plugin.json`, `mcp.json` | present, not uploaded |
-| Anthropic bundle (`.claude-plugin/plugin.json`, `.mcp.json`) | `submission/qyl/` | absent |
-| Agent skill | `submission/qyl/skills/` | absent |
+| Anthropic bundle (`.claude-plugin/plugin.json`, `.mcp.json`) | `submission/qyl/` | present on main; submission validation not recorded |
+| Agent skill | `submission/qyl/skills/qyl-investigate/SKILL.md` | present on main; alignment with step 2 pending |
 
 ## Local checks
 
@@ -126,6 +126,65 @@ was requested with `gh pr comment 91 --repo ANcpLua/qyl.mcp --body-file /private
 on 2026-10-08 UTC, returning
 <https://github.com/ANcpLua/qyl.mcp/pull/91#issuecomment-6050323909>.
 
+### Step 2 — tool descriptions
+
+Local run on 2026-10-08 UTC, branch `codex/tool-description-scope`, based on
+`4685c2471a4100ed6a00601b44ec3ead1b6a0f6f` (the merged PR #91). All eleven
+tool descriptions were checked against their handlers and generated inputs.
+Ten descriptions changed; `search_logs` already described its filters.
+
+| Command | Actual result |
+| --- | --- |
+| `bun run --cwd server snapshot:tools` | exit 0; server build and deployment-guidance check passed; wrote `server/tool-manifest.snapshot.json` |
+| `bun run verify:sdk` | 5 tests passed; `MCP SDK boundary passed for 7 manifests/lockfiles (SDK v2; exact pins).` |
+| `bun run lint` | `$ oxlint .`; exit 0 |
+| `git diff --check` | exit 0; no whitespace errors |
+
+Focused tests use the same viewer-bundle copy as `server/package.json`'s
+test script. The first invocation omitted that copy: 17 passed and the
+resource-read test failed because `dist-test/mcp-app.html` was missing.
+After the normal test setup, this exact command passed all 18 tests:
+
+```sh
+node -e "const fs=require('node:fs'); for (const name of ['mcp-app.html','mcp-dashboard.html']) fs.copyFileSync('server/dist/'+name,'server/dist-test/'+name)" && QYL_MCP_NATIVE_STATE_PATH=/private/tmp/qyl-step2-native.json QYL_MCP_TELEMETRY=0 node --test server/dist-test/tool-manifest.test.js server/dist-test/tool-annotations.test.js server/dist-test/ci.test.js server/dist-test/metrics.test.js
+```
+
+```text
+tests 18
+pass 18
+fail 0
+```
+
+The manifest diff was inspected and compared structurally with the base
+commit using the following command. Only top-level tool descriptions are
+excluded from the equality assertion; generated schemas are compared intact.
+
+```sh
+node --input-type=module <<'NODE'
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+const path = 'server/tool-manifest.snapshot.json';
+const before = JSON.parse(execFileSync('git', ['show', `4685c2471a4100ed6a00601b44ec3ead1b6a0f6f:${path}`], { encoding: 'utf8' }));
+const after = JSON.parse(readFileSync(path, 'utf8'));
+const changed = after.tools.filter((tool, index) => tool.description !== before.tools[index].description).map(tool => tool.name);
+for (const manifest of [before, after]) for (const tool of manifest.tools) delete tool.description;
+assert.deepEqual(after, before);
+console.log(`Only tool descriptions changed (${changed.length}/${after.tools.length}): ${changed.join(', ')}`);
+console.log('All input/output schemas, annotations, metadata, resources and the contract revision are unchanged.');
+NODE
+```
+
+```text
+Only tool descriptions changed (10/11): ci_log, display_mcp_dashboard, display_traces, fetch_telemetry, get_metric_series, get_trace, list_metrics, list_sessions, list_traces, query_metric
+All input/output schemas, annotations, metadata, resources and the contract revision are unchanged.
+```
+
+The `get_trace` and `ci_log` inputs are unchanged. Trace truncation/filtering
+and a configurable CI service prefix remain follow-up work in the schema
+repository before an implementation here. These local results do not establish
+production behavior, hosted client connections or submission readiness.
+
 ## Production endpoint `https://mcp.qyl.at/mcp`
 
 | Check | How | Date | Observation |
@@ -177,7 +236,7 @@ called and its result.
 | --- | --- | --- | --- |
 | OPENAI_PLUGIN | https://platform.openai.com/plugins | local draft, not uploaded | `submission/qyl/` |
 | ANTHROPIC_CONNECTOR | https://claude.ai/directory/manage | not created | |
-| ANTHROPIC_PLUGIN | https://claude.ai/directory/manage | not created, bundle files absent | |
+| ANTHROPIC_PLUGIN | https://claude.ai/directory/manage | portal record not created; bundle files present in source | `submission/qyl/.claude-plugin/plugin.json`, `.mcp.json` |
 
 Portal status is recorded only from the portal itself, with a date. Uploaded
 is not submitted, validated is not approved, approved is not published.

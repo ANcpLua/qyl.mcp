@@ -68,8 +68,8 @@ export function registerTelemetryTools(server: McpServer): void {
       title: "List Traces",
       description:
         "List recent qyl traces with summary fields (root span, services, duration, " +
-        "span count, error flag). Spans are omitted — use get_trace for full span data. " +
-        "Use display_traces instead when the user wants to LOOK at traces in the explorer UI.",
+        "span count, error flag). The full span tree is omitted. get_trace returns " +
+        "the full span tree; display_traces provides the interactive explorer.",
       inputSchema: ListTracesInputSchema,
       outputSchema: compactOutputSchema(ListTracesOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
@@ -92,9 +92,10 @@ export function registerTelemetryTools(server: McpServer): void {
     {
       title: "Get Trace",
       description:
-        "Fetch a single qyl trace by trace id, including every span with timing, " +
-        "attributes, events, and status. Use display_traces instead when the user " +
-        "wants to SEE the trace waterfall.",
+        "Fetch a qyl trace by trace_id with its full span tree, including timing, " +
+        "attributes, events, and status. The full tree can be large. display_traces " +
+        "provides an interactive waterfall; search_logs retrieves correlated logs " +
+        "with trace_id and severity_min filters.",
       inputSchema: GetTraceInputSchema,
       outputSchema: compactOutputSchema(GetTraceOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
@@ -115,8 +116,8 @@ export function registerTelemetryTools(server: McpServer): void {
       title: "List Sessions",
       description:
         "List qyl sessions with trace/span/error counts, state, and GenAI token " +
-        "usage where present. Pass a session id to display_traces to see a " +
-        "session's traces in the explorer UI.",
+        "usage where present. display_traces opens a session's traces in the " +
+        "interactive explorer by session_id.",
       inputSchema: ListSessionsInputSchema,
       outputSchema: compactOutputSchema(ListSessionsOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,

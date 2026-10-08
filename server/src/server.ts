@@ -220,10 +220,9 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       title: "Trace Explorer",
       description:
         "Show qyl traces in the interactive trace explorer with a span waterfall, " +
-        "detail panel, and correlated logs. Pass a trace_id to open one trace, a " +
-        "session_id for that session's traces, or neither for recent traces. Prefer " +
-        "this over list_traces/get_trace whenever the user wants to " +
-        "look at traces.",
+        "detail panel, and correlated logs. A trace_id opens one trace; a " +
+        "session_id selects that session's traces; with neither, the explorer " +
+        "shows recent traces.",
       inputSchema: DisplayTracesInputSchema,
       outputSchema: compactOutputSchema(DisplayTracesOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
@@ -292,9 +291,8 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       description:
         "Show an aggregate dashboard of MCP traffic (spans carrying an " +
         "`mcp.method.name` attribute): request/error timeline, per-server and " +
-        "per-transport breakdowns, and per-tool latency and error " +
-        "rates. Prefer this when the user asks about MCP usage, tool health, " +
-        "or MCP monitoring.",
+        "per-transport breakdowns, and per-tool latency and error rates " +
+        "over the selected hours window.",
       inputSchema: DisplayMcpDashboardInputSchema,
       outputSchema: compactOutputSchema(DisplayMcpDashboardOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
@@ -325,8 +323,8 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
     {
       title: "Fetch Telemetry",
       description:
-        "Fetch traces, a single trace, or logs for the trace explorer UI. " +
-        "The model should NOT call this tool directly.",
+        "Fetch trace lists, a single trace, logs, or MCP traffic statistics " +
+        "for the qyl viewers.",
       inputSchema: FetchTelemetryInputSchema,
       // No outputSchema: this tool is `_meta.ui.visibility: ["app"]`, so its only
       // caller is the bundled viewer, which is compiled against the generated

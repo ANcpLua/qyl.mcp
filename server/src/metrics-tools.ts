@@ -57,8 +57,8 @@ export function registerMetricsTools(server: McpServer): void {
       description:
         "List the metric instruments recorded for this project: name, kind " +
         "(gauge/sum/histogram), unit, how many attribute streams exist under each " +
-        "name, and when it was last written. Start here — query_metric needs an " +
-        "exact instrument name, and this is where the names come from.",
+        "name, and when it was last written. The returned names are metric_name " +
+        "inputs for get_metric_series and query_metric.",
       inputSchema: operationInputSchema<ListMetricsArgs>(METRICS_PATH),
       outputSchema: compactOutputSchema(MetricsListResponseSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
@@ -81,10 +81,8 @@ export function registerMetricsTools(server: McpServer): void {
       title: "Get Metric Series",
       description:
         "List the distinct attribute streams recorded under one metric name, with " +
-        "each stream's attributes, service, and first/last seen. Use it to discover " +
-        "which attribute keys are worth passing to query_metric as group_by or attr " +
-        "filters, before running a range query that would otherwise collapse or " +
-        "explode the result.",
+        "each stream's attributes, service, and first/last seen. These attributes " +
+        "can be used as group_by keys or attr filters in query_metric.",
       inputSchema: operationInputSchema<MetricSeriesArgs>(SERIES_PATH),
       outputSchema: compactOutputSchema(MetricSeriesListResponseSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
@@ -110,8 +108,8 @@ export function registerMetricsTools(server: McpServer): void {
         "end_time), a bucket width (step_ms), a reducer (aggregation: avg, min, max, " +
         "sum, count, last, p50, p90, p95, p99), optional group_by attribute keys, and " +
         "optional attr/attr_prefix matchers written 'key=value'. Returns one stream " +
-        "per grouping with its buckets. One bucket spanning the whole window collapses " +
-        "the answer to a single number.",
+        "per grouping with its buckets; grouping is preserved even when a single " +
+        "bucket spans the whole window.",
       inputSchema: operationInputSchema<QueryMetricArgs>(QUERY_PATH),
       outputSchema: compactOutputSchema(MetricQueryResultSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
