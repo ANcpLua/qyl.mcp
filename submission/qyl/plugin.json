@@ -9,6 +9,8 @@
     "com.openai": {
       "interface": {
         "displayName": "qyl",
+        "developerName": "ALEXANDER ROBERT NACHTMANN",
+        "category": "Developer Tools",
         "shortDescription": "Investigate qyl telemetry",
         "longDescription": "Read traces, logs, metric instruments and sessions from your authorized qyl collector. Follow a trace through its spans, find related error logs, and inspect recorded metric series. Open the Trace Explorer and MCP Dashboard for visual investigation. In clients that support MCP Events, subscribe to trace-error notifications and optionally narrow them to one service. qyl reports the collector's actual results, including empty results and upstream errors. Telemetry tools are read-only; notifications use a separate subscription lifecycle.",
         "websiteURL": "https://qyl.at/",
@@ -74,7 +76,7 @@
       },
       "publication": {
         "countries": [],
-        "release_notes": "Initial plugin package for the qyl.mcp 7.1.1 service: OAuth-protected telemetry tools, interactive trace and MCP viewers, and optional trace-error subscriptions."
+        "release_notes": "Initial plugin package for the hosted qyl.mcp service: OAuth-protected telemetry tools, interactive trace and MCP viewers, and optional trace-error subscriptions."
       }
     }
   }

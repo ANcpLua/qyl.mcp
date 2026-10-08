@@ -1,9 +1,10 @@
 # qyl.mcp objective
 
-Rewritten on 8 October 2026 on the owner's instruction. This file replaces
-every earlier version of itself, the goal widget text, and the progress claims
-in MCP-CHECKPOINT.md, MCP-V2-INTEROP-TODO.md and QYL-MCP-MATRIX.md. Later owner
-instructions take precedence over this document.
+This file is the objective for the qyl MCP server and its public plugin
+submissions. Later owner instructions take precedence over it. Working
+agreements are in [AGENTS.md](AGENTS.md), evidence in
+[MCP-V2-INTEROP-TODO.md](MCP-V2-INTEROP-TODO.md), state in
+[MCP-CHECKPOINT.md](MCP-CHECKPOINT.md).
 
 Repository: `/Users/alexandernachtmann/RiderProjects/qyl.mcp`
 Remote: <https://github.com/ANcpLua/qyl.mcp>
@@ -21,42 +22,32 @@ connectors, never through qyl tools.
 
 ## What is true today
 
-Everything in this section was checked in the repository on 8 October 2026.
+Checked in the repository on 8 October 2026.
 
-- `origin/main` is at `00a0aa9`. All `codex/*` branches are merged through
-  PRs #75, #78, #80 and #87 to #90; the local branch names are stale copies.
-  PRs #81 to #86 are merged as well. No PR is open.
-- The server uses the split TypeScript SDK v2 packages. The committed manifest
-  `server/tool-manifest.snapshot.json` lists 11 tools, all annotated
-  `readOnlyHint: true`. `fetch_telemetry` is app-only through
+- `main` uses the split TypeScript SDK v2 packages; `bun run verify:sdk` in
+  CI rejects SDK v1 packages. `server/tool-manifest.snapshot.json` lists 11
+  tools, all `readOnlyHint: true`. `fetch_telemetry` is app-only through
   `_meta.ui.visibility: ["app"]`. A `trace.error` Events implementation exists
-  in `server/src/events.ts`; account and project scoping exists in
-  `server/src/collector-access.ts`.
+  in `server/src/events.ts`; account and project scoping in
+  `server/src/collector-access.ts`. Native tool-call records in
+  `server/src/native-execution.ts` keep tool name, timing, status and error
+  type only.
 - `submission/qyl/` holds the OpenAI plugin draft (`plugin.json`,
   `mcp.json`, icon), the Anthropic bundle files (`.claude-plugin/plugin.json`,
   `.mcp.json`, `README.md`, `LICENSE`) and the shared agent skill
   `skills/qyl-investigate/SKILL.md`. Nothing in it is uploaded or submitted.
-- The main checkout carries uncommitted documentation and two new submission
-  drafts (`submission/demo-runbook.md`, `submission/public-pages-draft.md`).
-  Preserve them; do not commit them onto `main` unrebased, because that tree
-  lacks `server/src/trace-query.ts` and its test.
-- The working agreements for agents are `AGENTS.md` on `main`, with review
-  context in `docs/threat-model.md`. The Codex worktree
-  `/Users/alexandernachtmann/.codex/worktrees/reviewer-project-isolation/qyl.mcp`
-  is on branch `codex/review-invariants` at `00a0aa9` and carries uncommitted
-  `scripts/verify-mcp-sdk.mjs`, `scripts/verify-mcp-sdk.test.mjs`, the
-  `verify:sdk` script in `package.json`, `.oxlintrc.json` and
-  `.github/workflows/ci.yml` changes, plus untracked copies of `AGENTS.md`
-  and `docs/threat-model.md` that are identical to `main`.
+  `submission/public-pages-draft.md` holds draft text for the owner's public
+  support, privacy and terms pages.
+- All earlier feature branches are merged. No PR is open.
 
 ## What is not established
 
-Earlier versions of this file and MCP-CHECKPOINT.md claimed the following as
-verified: five real client connections (ChatGPT, claude.ai, Claude Code, Codex
-CLI, MCP Inspector); the production ChatGPT Events lifecycle; eight review
-rehearsals; npm `qyl-mcp-server@7.1.1` published and consumer-checked; qyl.at
-PR #16 and a live protocol guide; an approved Individual publisher identity;
-Collector PR #640; production rechecks of filters and viewer refresh.
+Earlier documents claimed the following as verified: five real client
+connections (ChatGPT, claude.ai, Claude Code, Codex CLI, MCP Inspector); the
+production ChatGPT Events lifecycle; eight review rehearsals; npm
+`qyl-mcp-server@7.1.1` published and consumer-checked; qyl.at PR #16 and a
+live protocol guide; an approved Individual publisher identity; Collector
+PR #640; production rechecks of filters and viewer refresh.
 
 The owner does not accept these claims. Treat each one as not done until it is
 re-established with fresh, reproducible evidence: the command or client, the
@@ -83,12 +74,12 @@ not a completed public submission.
   No invented extra requirements. Codex review plus required CI is enough;
   CodeRabbit is optional. Version bumps and deliberate requirement changes
   are normal work.
-- Tool descriptions describe the tool, never the model's behavior. App-only
-  tools are hidden through `_meta.ui.visibility`, not through a sentence.
+- Tool descriptions state what the tool does and when to use it, phrased as
+  the user's need. They never address the model and never restrict other
+  tools. App-only tools are hidden through `_meta.ui.visibility`.
 - qyl's own telemetry about incoming tool calls records only tool name,
   timing, status and error type. It must not persist argument values,
-  `_meta` or conversation text. `main` still does in
-  `server/src/native-execution.ts`; the fix lands with the rules PR.
+  `_meta` or conversation text.
 - qyl is free to use, with no purchases.
 
 ### Listing story
@@ -118,78 +109,73 @@ actually does it.
 
 ## Work, in order
 
-1. **Rules PR** from branch `codex/review-invariants`, rebased on current
-   `main`: `scripts/verify-mcp-sdk.mjs`, `scripts/verify-mcp-sdk.test.mjs`,
-   the `verify:sdk` script in `package.json`, `.oxlintrc.json` and
-   `.github/workflows/ci.yml`. `AGENTS.md` and `docs/threat-model.md` are
-   already on `main`; delete the worktree's untracked copies before pulling.
-   In the same PR, stop persisting `arguments` and `_meta` in
-   `FileNativeExecutionRepository` records (`server/src/native-execution.ts`)
-   with a test, so the rule in AGENTS.md is true on merge. Leave the
-   uncommitted working tree in the main checkout untouched.
-2. **Review-readiness fixes** (Anthropic connector checklist, Directory Policy
-   §1D and §5B, OpenAI plugin guidelines):
+Each step is one branch from `origin/main` and one PR to `main`, merged when
+CI is green and the review is clean.
+
+1. **Done.** Rules, `verify:sdk` in CI and minimized native tool-call records
+   are merged (PR #91).
+2. **Tool descriptions** (Anthropic connector checklist, Directory Policy §2A,
+   §2B and §5B, OpenAI plugin guidelines). Every description states what the
+   tool does and when to use it, as the user's need. No sentence addresses the
+   model. Specifically:
    - `get_trace`: its input schema is the contract binding
      `Mcp.Tools.GetTraceInput` from `@ancplua/qyl-api-schema`, so new
      parameters (`errors_only`, `max_spans`, `include_attributes`) are a
-     contract change in ANcpLua/qyl-api-schema first and are not required for
-     this goal. In this repository: make the description state honestly that
-     the full span tree is returned and point to `display_traces` and
-     `search_logs` for large traces.
+     contract change in ANcpLua/qyl-api-schema first and are not part of this
+     objective. Here: say that the full span tree is returned and can be
+     large, and point to `display_traces` and `search_logs` for large traces.
    - `ci_log`: its input schema is the contract binding `Mcp.Tools.CiLogInput`,
-     so a `service_prefix` parameter is also a contract change. In this
-     repository: make the description state the emitter convention from
-     `server/src/ci.ts` (sessions whose resource `service.name` starts with
-     `qyl-ci`, one span per phase with a `ci.leg` attribute), so any CI that
-     emits it can use the tool; or remove the tool from the public manifest if
-     that is preferred.
-   - `fetch_telemetry`: remove "The model should NOT call this tool directly"
-     from the description; the visibility is already correct.
-   - Check every description against "schema and annotation equal behavior".
+     so a `service_prefix` parameter is also a contract change. Here: state
+     the emitter convention from `server/src/ci.ts` (resource `service.name`
+     starts with `qyl-ci`, one span per phase with a `ci.leg` attribute) and
+     the existing limits, so any CI that emits it can use the tool.
+   - `fetch_telemetry`: remove "The model should NOT call this tool directly";
+     the visibility is already correct.
+   - `query_metric`: with `step_ms` equal to the window, each grouping yields a
+     single bucket, so one number per series.
+   - Regenerate `server/tool-manifest.snapshot.json` deliberately with
+     `bun run --cwd server snapshot:tools` and confirm that only descriptions
+     changed.
    - If write tools are added, give each its own tool with honest hints and
      update negative test cases 1 and 2 in `submission/qyl/plugin.json`.
-3. **Agent skill.** `submission/qyl/skills/qyl-investigate/SKILL.md` exists
-   on `main` and is shared by both plugin formats; keep it in step with the
-   tool descriptions. Its workflow: start with `list_sessions` and
-   `list_traces`; drill with `get_trace`, then `search_logs` on the same
+3. **Agent skill.** Keep `submission/qyl/skills/qyl-investigate/SKILL.md` in
+   step with the tool descriptions. Its workflow: start with `list_sessions`
+   and `list_traces`; drill with `get_trace`, then `search_logs` on the same
    `trace_id` with `severity_min` 17; metrics via `list_metrics`,
    `get_metric_series`, `query_metric`; tool health via
    `display_mcp_dashboard`; CI via `ci_log`; visual via `display_traces`;
    Events for `trace.error`. Empty results mean no data, not no error.
-4. **Fresh evidence.** Re-run and record, one by one: authentication, tool
-   listing and one read-tool call in ChatGPT, claude.ai, Claude Code, Codex CLI
-   and MCP Inspector, with client version, negotiated protocol and registration
-   path; the Events lifecycle on a `2026-07-28` ChatGPT surface; the npm
-   package state. Evidence lives in MCP-V2-INTEROP-TODO.md with date, command
-   and output. No evidence, no claim.
+4. **Fresh evidence.** Run and record in MCP-V2-INTEROP-TODO.md, each with
+   date, command and output: the local checks; the production endpoint checks
+   (`curl` against `https://mcp.qyl.at/mcp` and its resource metadata); the
+   npm package state (`npm view qyl-mcp-server version`). Client connections
+   and the Events lifecycle need the owner's clients; record them as owner
+   actions with the exact steps. No evidence, no claim.
 5. **Submission preparation**, two Anthropic records and one OpenAI record.
    - Anthropic connector for `https://mcp.qyl.at/mcp`, submitted separately
      at `https://claude.ai/directory/manage` as kind "MCP connector": test
      credentials for a fully populated account, documentation URL, privacy
      URL, support contact, icon. The default result is a Community listing
      after the automatic scan.
-   - Anthropic plugin bundle in the same folder as the OpenAI draft:
-     `submission/qyl/.claude-plugin/plugin.json`, `submission/qyl/.mcp.json`
-     pointing at `https://mcp.qyl.at/mcp`, `README.md`, `LICENSE` and the
-     shared `skills/` exist on `main`. Add `supportUrl`, `privacyPolicyUrl`
-     and `termsOfServiceUrl` once the owner publishes those pages. Portal
-     fields:
-     repository `ANcpLua/qyl.mcp`, plugin path `submission/qyl`, a branch or
-     tag (no commit). The repository may stay private during validation and
-     must be public to go live, with the Claude GitHub App installed.
+   - Anthropic plugin bundle: `submission/qyl/.claude-plugin/plugin.json`,
+     `.mcp.json`, `README.md`, `LICENSE` and the shared `skills/` exist. Add
+     `supportUrl`, `privacyPolicyUrl` and `termsOfServiceUrl` once the owner
+     publishes those pages. Portal fields: repository `ANcpLua/qyl.mcp`,
+     plugin path `submission/qyl`, a branch or tag (no commit). The
+     repository may stay private during validation and must be public to go
+     live, with the Claude GitHub App installed.
    - OpenAI: the `submission/qyl/` ZIP with `$schema` in both manifests,
      `extensions.com.openai`, one server, five positive and three negative
-     cases, a demo recording URL. The ZIP then contains `.claude-plugin/`;
-     OpenAI accepts Claude-compatible manifests and `extensions.com.openai`
-     takes precedence, but check the ZIP against the portal validator or
-     exclude `.claude-plugin/` when zipping.
-   - Local branch `codex/handoff-2026-10-08` carries reusable drafts:
-     `developerName`, `category`, logo paths and release notes in
-     `submission/qyl/plugin.json`, and `submission/public-pages-draft.md` with
-     support, privacy and terms text. Reuse the text, not its claims.
-   - Public support, privacy and terms pages on qyl.at and a reviewer account
-     with isolated sample data are owner decisions; record what is missing,
-     do not invent it.
+     cases, a demo recording URL. Validate `plugin.json` and `mcp.json`
+     against their `$schema`. The ZIP contains `.claude-plugin/`; OpenAI
+     accepts Claude-compatible manifests and `extensions.com.openai` takes
+     precedence, but check the ZIP against the portal validator or exclude
+     `.claude-plugin/` when zipping.
+   - `submission/public-pages-draft.md` holds draft text for the owner's
+     support, privacy and terms pages. Reuse the wording, not its claims.
+   - Public pages on qyl.at and a reviewer account with isolated sample data
+     are owner decisions. Record in `submission/README.md` which fields the
+     owner still has to supply; do not invent them.
 6. **Submission and publication** are owner actions: legal attestations,
    portal uploads, identity selection, publish. Agents prepare and report;
    they do not submit. Publication is a separate decision after approval.
@@ -203,13 +189,11 @@ actually does it.
 All of the following hold on `origin/main`. Each is verifiable from the
 repository without an owner action.
 
-1. The rules PR (step 1) is merged: `bun run verify:sdk` exists and runs in
-   CI, and `FileNativeExecutionRepository` records contain no `arguments` and
-   no `_meta`.
+1. `bun run verify:sdk` exists and runs in CI, and native tool-call records
+   contain no `arguments` and no `_meta`.
 2. `server/tool-manifest.snapshot.json` contains no description that
-   addresses the model, and the `get_trace` and `ci_log` descriptions state
-   their scope as described in step 2. Contract-level parameter additions
-   are tracked in ANcpLua/qyl-api-schema and are not part of this goal.
+   addresses the model, and every description states what the tool does and
+   when to use it as described in step 2.
 3. `submission/qyl/skills/qyl-investigate/SKILL.md`,
    `submission/qyl/.claude-plugin/plugin.json`, `submission/qyl/.mcp.json`,
    `submission/qyl/README.md` (at least 40 words outside code blocks) and
@@ -221,7 +205,7 @@ repository without an owner action.
    contain no claim without evidence.
 
 Owner actions (publisher identity, public pages, reviewer account, demo
-recording, attestations, submission, publication) are outside this goal.
+recording, attestations, submission, publication) are outside this objective.
 They are listed, not performed.
 
 ## Standing constraints
@@ -246,9 +230,3 @@ They are listed, not performed.
   the capability subscribes nobody automatically.
 - Never weaken a gate or regenerate an expected result to get green. Fix the
   gate and say so.
-
-## Goal status
-
-The goal widget text is the owner's and points at this file. The goal is
-complete when the "Done when" list holds; set the widget status from that
-list, not from this document's prose.

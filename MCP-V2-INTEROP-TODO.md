@@ -20,8 +20,8 @@ Checked in source on 8 October 2026.
 | Account and project scoping | `server/src/collector-access.ts`, `request-scope.ts` | present |
 | Native tool-call records contain operation metadata only | `server/src/native-execution.ts` | implemented in step 1; dated tests below |
 | OpenAI plugin draft | `submission/qyl/plugin.json`, `mcp.json` | present, not uploaded |
-| Anthropic bundle (`.claude-plugin/plugin.json`, `.mcp.json`) | `submission/qyl/` | absent |
-| Agent skill | `submission/qyl/skills/` | absent |
+| Anthropic bundle (`.claude-plugin/plugin.json`, `.mcp.json`, `README.md`, `LICENSE`) | `submission/qyl/` | present; portal validation not recorded |
+| Agent skill | `submission/qyl/skills/qyl-investigate/SKILL.md` | present |
 
 ## Local checks
 
