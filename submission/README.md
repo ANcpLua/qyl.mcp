@@ -13,7 +13,7 @@ preparation instructions, not claims of portal creation or approval.
 
 | Record | Prepared source / observed local state | Owner destination and remaining fields |
 | --- | --- | --- |
-| OPENAI_PLUGIN | [Draft ZIP](packages/qyl-openai-1.0.0-draft.zip), six source-identical files; both root manifests schema-valid. | `https://platform.openai.com/plugins`; select publisher, countries, supply support/privacy/terms URLs, reviewer access and `review.demo_recording_url`, then validate the saved draft. |
+| OPENAI_PLUGIN | `python3 submission/build-openai-package.py` produces a local draft ZIP with six source-identical files; both root manifests schema-valid. | `https://platform.openai.com/plugins`; select publisher, countries, supply support/privacy/terms URLs, reviewer access and `review.demo_recording_url`, then validate the saved draft. |
 | ANTHROPIC_CONNECTOR | Endpoint `https://mcp.qyl.at/mcp`; unauthenticated challenge and resource metadata observed in [step 4](../docs/evidence/2026-10-08-step4.md#endpoint). No connector portal record is evidenced. | `https://claude.ai/directory/manage`, kind **MCP connector**; supply a fully populated isolated test account, documentation URL, privacy URL, support contact, icon, slug and category. Goal step 5 identifies the default route as Community listing after automatic scan; this is not an observed listing. |
 | ANTHROPIC_PLUGIN | `qyl/.claude-plugin/plugin.json`, `.mcp.json`, README, LICENSE and shared skill exist; local Claude validator passes. No bundle portal record is evidenced. | Same portal, kind **Plugin bundle**; repository `ANcpLua/qyl.mcp`, plugin path `submission/qyl`, branch `main` or owner-selected tag (**not a commit SHA**). Owner arranges Claude GitHub App access; repository may remain private during validation and must be public to go live per goal step 5. |
 
@@ -25,6 +25,11 @@ then checked the ZIP against the source bytes. The root plugin has
 `extensions.com.openai`, one server, five positive and three negative cases.
 The README contains 269 words outside code blocks. The shared skill remains
 identical for both plugin formats.
+
+Build from the repository root with `python3 submission/build-openai-package.py`.
+The output `submission/packages/qyl-openai-1.0.0-draft.zip` is ignored by Git;
+rebuild and revalidate it after changing packaged files. The recorded hash
+belongs to the inspected 2026-10-08 build, not to future source changes.
 
 The OpenAI ZIP excludes `.claude-plugin/` and `.mcp.json` deliberately, so it
 uses only the root portable manifests. The Anthropic files stay in `qyl/`.

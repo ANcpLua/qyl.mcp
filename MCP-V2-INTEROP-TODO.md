@@ -398,7 +398,7 @@ open; this does not establish any current portal state.
 | Artifact | Dated command and result |
 | --- | --- |
 | OpenAI root manifests | 2026-10-08: Python/jsonschema command in step-5 record validates each manifest against its fetched `$schema`; both print `PASS`. |
-| OpenAI draft ZIP | 2026-10-08: archive verification in the same command prints `ZIP: six source-identical files; no .claude-plugin, .mcp.json, .app.json or apps binding`; SHA-256 `16a6ffb523f90674572efc99dca430cf661d26aaa08f54d6680f7da0261fab5c`. |
+| OpenAI generated draft ZIP (Git-ignored; build with `python3 submission/build-openai-package.py`) | 2026-10-08: archive verification in the same command prints `ZIP: six source-identical files; no .claude-plugin, .mcp.json, .app.json or apps binding`; SHA-256 `16a6ffb523f90674572efc99dca430cf661d26aaa08f54d6680f7da0261fab5c`. |
 | Anthropic bundle and shared skill | 2026-10-08: file inventory prints all five required paths `present`; README 269 words outside code blocks; `claude plugin validate ./submission/qyl` prints `✔ Validation passed`. |
 | Cases and server | 2026-10-08: Python inspection prints `review cases: 5 positive, 3 negative; servers: 1; owner identity/countries unset`. These are drafted cases, not executed hosted-client evidence. |
 | Missing owner fields | Exact remaining actions are in [submission/README.md](submission/README.md#owner-fields-still-required): publisher, targeting, URLs, reviewer access, recording, hosted review cases, attestations and later publication. |
