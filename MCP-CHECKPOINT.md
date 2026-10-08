@@ -14,16 +14,19 @@ this sequence. New point 1 removes protocol logging; its local results are in
 [the follow-up evidence](docs/evidence/2026-10-08-followup-01.md). Its merge/CI
 status must be read from its PR, not inferred from local tests.
 
-Point 8's schema PR is merged, while the qyl.mcp bump and runtime options are
-blocked on an owner-published contract release. The post-merge registry still
-reported 11.2.0 without the four fields on 2026-10-08.
-[Dated merge, checks, registry and installed-schema output](docs/evidence/2026-10-08-followup-08.md)
-records the permitted Done when 5 blocker and exact owner prerequisite.
+Point 8's schema PR is merged and schema release 11.3.0 is now published.
+The remaining blocker is Collector main's 11.2.0 pin: the unchanged lockstep
+gate rejects a unilateral qyl.mcp bump. The [refreshed dated registry, Collector
+commit and candidate-gate output](docs/evidence/2026-10-08-followup-15.md#release-blocker-refreshed-after-owner-release)
+supersedes the earlier missing-release prerequisite. Consumer bump and runtime
+options remain open under the permitted Done when 5 blocker alternative.
 
 The [release contract map](release/contract.md) and [owner handoff](release/README.md)
 connect all revised points and Done-when criteria to the ledger and dated
 commands/output. [Point-14 evidence](docs/evidence/2026-10-08-followup-14.md) records the new CI audit;
-point 15 remains pending.
+[point-15 evidence](docs/evidence/2026-10-08-followup-15.md) records restored public-page sections
+with explicit owner fields. Final completion still requires checking the merged
+`origin/main` and its CI, not inferring a merge from these local records.
 
 ## Repository and local evidence
 

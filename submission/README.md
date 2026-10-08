@@ -49,8 +49,8 @@ the public documentation check.
 
 | Item | Exact next owner action |
 | --- | --- |
-| Publisher identity | Choose and verify the intended publisher in the OpenAI portal. Then supply the exact public name if needed; `developerName` is currently omitted. |
-| Country targeting | Select the intended countries or explicitly choose all eligible countries. `publication.countries` is omitted; no broad targeting is inferred. |
+| Publisher identity | Choose and verify the intended publisher in the OpenAI portal. The supplied WIP proposes `ancplua`; confirm the permitted public name in the portal. `developerName` is currently omitted. |
+| Country targeting | The owner-supplied WIP selects all eligible countries; apply that selection in the portal. `publication.countries` remains omitted as directed. [Dated supplied values](../docs/evidence/2026-10-08-followup-15.md#owner-supplied-wip-values). |
 | Website, support, privacy, terms | Recheck the existing `https://qyl.at/` homepage for the final listing; approve and publish the [public-page drafts](public-pages-draft.md). Supply the actual URLs. Then add OpenAI `supportURL`, `privacyPolicyURL`, `termsOfServiceURL` and Anthropic `supportUrl`, `privacyPolicyUrl`, `termsOfServiceUrl`. Missing URLs stay absent. |
 | Reviewer account | Provide an isolated populated Collector project and OAuth account that reviewers can use without the owner's mailbox, phone or private network. Enter credentials only in private portal fields. |
 | Demo recording | Record the walkthrough below in a working owner client and supply a reviewer-accessible playback URL; only then set `review.demo_recording_url`. |
@@ -58,8 +58,8 @@ the public documentation check.
 | Legal attestations, submission, publication | Owner reviews and performs these separately. An uploaded draft or a schema-valid ZIP does not establish approval or publication. |
 
 Free use with no purchases is the explicit owner decision in
-[goal-objective.md](../goal-objective.md#owner-decisions); no future-commerce
-or country commitment is inferred from it.
+[goal-objective.md](../goal-objective.md#owner-decisions); no future-commerce commitment is inferred from it. The separate country
+decision comes from the supplied WIP, as linked above.
 
 Point 10 was checked on 2026-10-08; [commands and actual output](../docs/evidence/2026-10-08-followup-10.md)
 record the Anthropic icon validation and the rebuilt OpenAI ZIP. Apply these
