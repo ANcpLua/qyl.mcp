@@ -146,11 +146,27 @@ CI is green and the review is clean.
    `display_mcp_dashboard`; CI via `ci_log`; visual via `display_traces`;
    Events for `trace.error`. Empty results mean no data, not no error.
 4. **Fresh evidence.** Run and record in MCP-V2-INTEROP-TODO.md, each with
-   date, command and output: the local checks; the production endpoint checks
-   (`curl` against `https://mcp.qyl.at/mcp` and its resource metadata); the
-   npm package state (`npm view qyl-mcp-server version`). Client connections
-   and the Events lifecycle need the owner's clients; record them as owner
-   actions with the exact steps. No evidence, no claim.
+   date, command and output:
+   - the local checks (`bun run build`, `test`, `smoke`, `smoke:otlp`,
+     `verify:sdk`, `lint`);
+   - the v1-drift check from the local mcp-builder-v2 skill:
+     `node /Users/alexandernachtmann/RiderProjects/mcp-builder-v2/skills/mcp-builder-v2/scripts/check_v2.mjs /Users/alexandernachtmann/RiderProjects/qyl.mcp/server`
+     Record error-severity findings as findings; do not suppress them.
+   - the both-era black-box check, after `bun run --cwd server build`:
+     `node /Users/alexandernachtmann/RiderProjects/mcp-builder-v2/skills/mcp-builder-v2/scripts/verify_server.mjs --cwd /Users/alexandernachtmann/RiderProjects/qyl.mcp/server -- sh -c 'QYL_DEMO=1 exec node dist/main.js --stdio'`
+     It must print GREEN for modern-era tools/list, legacy-era tools/list
+     and tool-schema portability. It pins Inspector 2.9.0 with
+     `protocolEra` modern and legacy; an Inspector run in its default era
+     proves nothing.
+   - the production endpoint checks (`curl` against `https://mcp.qyl.at/mcp`
+     and its resource metadata);
+   - the npm package state (`npm view qyl-mcp-server version`).
+   Client connections and the Events lifecycle need the owner's clients;
+   record them as owner actions with the exact steps. The production
+   modern-era proof is an owner action too: Inspector 2.9.0 with OAuth login
+   and `protocolEra: "modern"` against `https://mcp.qyl.at/mcp`, recording
+   `tools/list` and the `MCP-Protocol-Version: 2026-07-28` request header.
+   No evidence, no claim.
 5. **Submission preparation**, two Anthropic records and one OpenAI record.
    - Anthropic connector for `https://mcp.qyl.at/mcp`, submitted separately
      at `https://claude.ai/directory/manage` as kind "MCP connector": test

@@ -34,6 +34,8 @@ Checked in source on 8 October 2026.
 | Collector contract smoke | `bun run smoke:otlp` | not recorded | |
 | Project isolation smoke | `bun run smoke:projects` | not recorded | |
 | SDK v1 dependency check | `bun run verify:sdk` | 2026-10-08 UTC | 5 tests passed; `MCP SDK boundary passed for 7 manifests/lockfiles (SDK v2; exact pins).` |
+| v1-drift check (mcp-builder-v2 skill) | `node /Users/alexandernachtmann/RiderProjects/mcp-builder-v2/skills/mcp-builder-v2/scripts/check_v2.mjs /Users/alexandernachtmann/RiderProjects/qyl.mcp/server` | not recorded | |
+| Both-era black-box check, after `bun run --cwd server build` | `node /Users/alexandernachtmann/RiderProjects/mcp-builder-v2/skills/mcp-builder-v2/scripts/verify_server.mjs --cwd /Users/alexandernachtmann/RiderProjects/qyl.mcp/server -- sh -c 'QYL_DEMO=1 exec node dist/main.js --stdio'` | not recorded | GREEN required for modern tools/list, legacy tools/list, schema portability |
 
 ### Step 1 — rules and native call records
 
@@ -132,8 +134,8 @@ on 2026-10-08 UTC, returning
 | --- | --- | --- | --- |
 | Unauthenticated `/mcp` returns 401 with `resource_metadata` | curl | not recorded | |
 | Protected resource metadata names the resource, issuer `https://qyl-eu.eu.auth0.com/` and scope `qyl:read` | curl | not recorded | |
-| Modern `tools/list` with `MCP-Protocol-Version: 2026-07-28` | Inspector `protocolEra: modern` | not recorded | |
-| 2025-era `tools/list` | default SDK client | not recorded | |
+| Modern `tools/list` with `MCP-Protocol-Version: 2026-07-28` | owner action: Inspector 2.9.0 with OAuth login and `protocolEra: "modern"` (goal step 4) | not recorded | |
+| 2025-era `tools/list` | owner action: same Inspector run with `protocolEra: "legacy"` | not recorded | |
 | `events/list` returns `trace.error` | modern client | not recorded | |
 | Deployed commit equals `main` | Railway deployment id | not recorded | |
 
