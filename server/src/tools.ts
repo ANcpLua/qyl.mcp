@@ -77,7 +77,7 @@ export function registerTelemetryTools(server: McpServer): void {
       _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: ListTracesInput, ctx: ServerContext): Promise<CallToolResult> =>
-      runTool(ctx, "list_traces", 1, async (scope) => {
+      runTool(ctx, 1, async (scope) => {
         const { traces, mode } = await fetchTraces(args.limit ?? 20, scope.collector);
         await scope.step(`Fetched ${traces.length} trace(s)`);
         const output: ListTracesOutput = {
@@ -103,7 +103,7 @@ export function registerTelemetryTools(server: McpServer): void {
       _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: GetTraceInput, ctx: ServerContext): Promise<CallToolResult> =>
-      runTool(ctx, "get_trace", 1, async (scope) => {
+      runTool(ctx, 1, async (scope) => {
         const { trace, mode } = await fetchTrace(args.trace_id, scope.collector);
         await scope.step(`Fetched trace ${args.trace_id} (${trace.span_count} spans)`);
         const output: GetTraceOutput = { trace, mode };
@@ -125,7 +125,7 @@ export function registerTelemetryTools(server: McpServer): void {
       _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: ListSessionsInput, ctx: ServerContext): Promise<CallToolResult> =>
-      runTool(ctx, "list_sessions", 1, async (scope) => {
+      runTool(ctx, 1, async (scope) => {
         const { sessions, mode } = await fetchSessions(
           args.limit ?? 20,
           args.active_only,
@@ -151,7 +151,7 @@ export function registerTelemetryTools(server: McpServer): void {
       _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: SearchLogsInput, ctx: ServerContext): Promise<CallToolResult> =>
-      runTool(ctx, "search_logs", 1, async (scope) => {
+      runTool(ctx, 1, async (scope) => {
         const { logs, mode } = await fetchLogs(
           {
             trace_id: args.trace_id,

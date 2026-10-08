@@ -32,7 +32,7 @@ const handler = createMcpHandler(({ era }) => {
 - Builds a **fresh server per request**, holds nothing between requests → stateless, scales
   horizontally with no session affinity. The factory receives the request's `era`.
 - Default `legacy: 'stateless'` also serves 2025-era clients per request; `legacy: 'reject'`
-  refuses them. qyl.mcp uses `legacy: 'reject'` on both transports (6.0.0).
+  refuses them. qyl.mcp leaves this option at its serving default.
 - Web-standard `Request`/`Response`; adapters (`@modelcontextprotocol/node` /`express`/`hono`/
   `fastify`) wire it into runtimes and add DNS-rebinding `Host`/`Origin` guards
   (`localhostHostValidation()` etc.). The guards answer rejected requests with `403` themselves —
@@ -45,12 +45,13 @@ const handler = createMcpHandler(({ era }) => {
 
 ```ts
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
-const handle = serveStdio(serverFactory, { legacy: 'reject', onerror: reportError });
+const handle = serveStdio(serverFactory, { onerror: reportError });
 // handle.close() on shutdown
 ```
 
-qyl.mcp rejects legacy on stdio (6.0.0; the SDK default `'serve'` would open a 2025-era client from
-a second pinned instance, and 5.2.0 did that for one release). `serveStdio` routes the instance's own `send*ListChanged()` /
+qyl.mcp uses the SDK stdio default and supports both eras. This repository-specific
+observation was checked on 2026-10-08; see [source/test commands and output](../../../../docs/evidence/2026-10-08-followup-01.md).
+`serveStdio` routes the instance's own `send*ListChanged()` /
 `sendResourceUpdated()` onto its open subscription stream — no `notify` facade needed on stdio.
 
 ## Notifications on modern connections

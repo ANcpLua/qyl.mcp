@@ -3,15 +3,15 @@
  *
  * Every tool this server registers runs inside `runTool` (src/request-scope.ts):
  * that frame is what carries the request's cancellation signal into the
- * collector fetch, sends progress to a client that asked, and logs one line per
- * call. A tool registered around the frame silently has none of the three, and
+ * collector fetch and sends progress to a client that asked. A tool registered
+ * around the frame silently has neither, and
  * nothing at compile time notices — `registerTool` accepts any handler.
  *
  * Two checks, both mechanical, over the non-test sources under src/:
  *
- *   1. Every `server.registerTool("<name>", …)` site names `runTool(ctx, "<name>"`
- *      in the same registration, with the same name, so the log line and the
- *      manifest agree on what the tool is called.
+ *   1. Every `server.registerTool("<name>", …)` site calls `runTool(ctx, …)`
+ *      in the same registration, so cancellation and requested progress pass
+ *      through the common frame.
  *   2. Every tool in the generated manifest has such a site. A tool that is
  *      registered somewhere the scan does not see is a scan defect, and this
  *      is what makes it fail loudly instead of passing by omission.
@@ -42,13 +42,9 @@ for (const name of files) {
     const start = site.index;
     const end = index + 1 < sites.length ? sites[index + 1].index : source.length;
     const span = source.slice(start, end);
-    const frame = span.match(/runTool\(\s*ctx,\s*"([^"]+)"/u);
+    const frame = span.match(/runTool\(\s*ctx,/u);
     if (!frame) {
-      failures.push(`${name}: tool "${tool}" is registered without runTool(ctx, "${tool}", …)`);
-      continue;
-    }
-    if (frame[1] !== tool) {
-      failures.push(`${name}: tool "${tool}" runs its frame under the name "${frame[1]}"`);
+      failures.push(`${name}: tool "${tool}" is registered without runTool(ctx, …)`);
       continue;
     }
     framed.set(tool, name);
@@ -67,8 +63,8 @@ if (failures.length > 0) {
   throw new Error(
     `verify:frame failed (${failures.length} problem(s)):\n\n` +
       failures.map((failure) => `  ${failure}`).join("\n\n") +
-      "\n\n  Every tool runs inside runTool (src/request-scope.ts): cancellation, " +
-      "progress and the log line come from the frame, not from the handler.",
+      "\n\n  Every tool runs inside runTool (src/request-scope.ts): cancellation " +
+      "and progress come from the frame, not from the handler.",
   );
 }
 

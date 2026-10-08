@@ -2,12 +2,12 @@
  * The request-scoped helpers every tool handler runs inside.
  *
  * The SDK hands each handler a `ServerContext` whose `mcpReq` carries the
- * cancellation signal, the request's `_meta`, a `notify` bound to this request
- * and `log` for `notifications/message`. `runTool` resolves all of that once and
+ * cancellation signal, the request's `_meta`, and a request-bound `notify`.
+ * `runTool` resolves those once and
  * hands the work a plain `ToolScope`: the data layer (`data.ts`, `metrics.ts`)
  * takes `CollectorRequestOptions` with an `AbortSignal`, never the SDK context.
  *
- * Three channels, one frame:
+ * Two channels, one frame:
  *   - cancellation: `scope.collector.signal` is `ctx.mcpReq.signal`, aborted on
  *     `notifications/cancelled` for this request and when the connection
  *     closes; `collectorRequest` races it against its own timeout.
@@ -16,23 +16,11 @@
  *     reporter counts its own steps, so `progress` increases per token by
  *     construction; `runTool` reports the final step itself once the result is
  *     built, so a handler declares only the steps it reports.
- *   - logging: one `info` per finished call and one `warning` per failed one,
- *     through `ctx.mcpReq.log`, which honours the client's `logging/setLevel`
- *     (per request on revision 2026-07-28). MCP logging is deprecated as of
- *     that revision (SEP-2577) and stays functional through the deprecation
- *     window; qyl.mcp keeps it beside stderr and OpenTelemetry at the owner's
- *     call — see the workspace DECISIONS.md entry of 2026-09-12.
  */
 import type { CallToolResult, ServerContext } from "@modelcontextprotocol/server";
 import { CollectorError, type CollectorRequestOptions } from "./collector.js";
 import { CollectorAccessError, collectorAccessForSubject } from "./collector-access.js";
 import { redactTelemetryText } from "./telemetry-redaction.js";
-
-/** The logger name every `notifications/message` from this server carries. */
-export const LOGGER = "qyl.mcp";
-
-/** Longest summary line a log notification carries; results can be tables. */
-const LOG_SUMMARY_CHARS = 200;
 
 /** What a tool's work receives: collector options and a progress step. */
 export interface ToolScope {
@@ -53,13 +41,6 @@ export function toolError(err: unknown): CallToolResult {
   };
 }
 
-/** The first line of a result's first text block, bounded; already redacted. */
-function summaryOf(result: CallToolResult): string {
-  const first = result.content.find((block) => block.type === "text");
-  const line = first?.type === "text" ? first.text.split("\n", 1)[0] ?? "" : "";
-  return line.length > LOG_SUMMARY_CHARS ? `${line.slice(0, LOG_SUMMARY_CHARS - 1)}…` : line;
-}
-
 /**
  * Run one tool call inside its request scope.
  *
@@ -72,7 +53,6 @@ function summaryOf(result: CallToolResult): string {
  */
 export async function runTool(
   ctx: ServerContext,
-  tool: string,
   steps: number,
   work: (scope: ToolScope) => Promise<CallToolResult>,
 ): Promise<CallToolResult> {
@@ -89,10 +69,6 @@ export async function runTool(
       params: { progressToken, progress, total, message },
     });
   };
-  const log = async (level: "info" | "warning", data: Record<string, unknown>): Promise<void> => {
-    if (signal.aborted) return;
-    await ctx.mcpReq.log(level, { tool, ...data }, LOGGER);
-  };
 
   try {
     const access = collectorAccessForSubject(ctx.http?.authInfo?.extra?.["subject"]);
@@ -101,11 +77,8 @@ export async function runTool(
       step,
     });
     await step("Result ready");
-    await log(result.isError ? "warning" : "info", { summary: summaryOf(result) });
     return result;
   } catch (err) {
-    const result = toolError(err);
-    await log("warning", { summary: summaryOf(result) });
-    return result;
+    return toolError(err);
   }
 }

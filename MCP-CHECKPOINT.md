@@ -5,6 +5,15 @@ Checked **2026-10-08**. The [objective](goal-objective.md) defines completion;
 [evidence ledger](MCP-V2-INTEROP-TODO.md) distinguishes source, local tests,
 CI, public HTTP observations and pending owner actions.
 
+## Revised goal, 2026-10-08
+
+The owner supplied a new fifteen-point sequence after the earlier document
+reconciliation. [goal-objective.md](goal-objective.md#work-in-order) records
+those instructions. Completion of the earlier five criteria does not complete
+this sequence. New point 1 removes protocol logging; its local results are in
+[the follow-up evidence](docs/evidence/2026-10-08-followup-01.md). Its merge/CI
+status must be read from its PR, not inferred from local tests.
+
 ## Repository and local evidence
 
 | State | Dated evidence |
