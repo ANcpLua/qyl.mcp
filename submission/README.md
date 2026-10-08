@@ -28,8 +28,9 @@ identical for both plugin formats.
 
 Build from the repository root with `python3 submission/build-openai-package.py`.
 The output `submission/packages/qyl-openai-1.0.0-draft.zip` is ignored by Git;
-rebuild and revalidate it after changing packaged files. The recorded hash
-belongs to the inspected 2026-10-08 build, not to future source changes.
+rebuild and revalidate it after changing packaged files. The current hash is
+recorded in the [listing-review ledger row](../MCP-V2-INTEROP-TODO.md#listing-review-2026-10-08);
+it belongs to that 2026-10-08 build, not to future source changes.
 
 The OpenAI ZIP excludes `.claude-plugin/` and `.mcp.json` deliberately, so it
 uses only the root portable manifests. The Anthropic files stay in `qyl/`.
