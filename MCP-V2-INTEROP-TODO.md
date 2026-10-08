@@ -585,3 +585,11 @@ record the scope of these fixtures; no production identity claim follows.
 | Released package | 2026-10-08, after that merge: `npm view @ancplua/qyl-api-schema version gitHead --@ancplua:registry=https://registry.npmjs.org --json` returned `11.2.0`, commit `131b116227fb0362a1003bbb23eb7b57ed50c293`; `gh release view --repo ANcpLua/qyl-api-schema --json tagName,publishedAt,targetCommitish,url` returned `v11.2.0`, published `2026-09-17T11:07:10Z`. |
 | Blocker under Done when 5 | The exact Node command in [point-8 evidence](docs/evidence/2026-10-08-followup-08.md#concrete-release-blocker) returned installed `11.2.0`, GetTrace keys `[trace_id]`, CiLog keys `[run_id, limit]`. The published contract lacks the new fields; publication is forbidden in this goal. Dependency bump and runtime implementation remain open, explicitly not claimed complete. |
 | Owner prerequisite and follow-through | Owner publishes a schema release containing merge `719e46717fa9648dbeda899c02d3fef28bdf7a90`; then consumers can bump in lockstep and implement/filter/test the four options. The exact sequence and unchanged release boundary are in the linked evidence. |
+
+## Revised goal — point 9: Anthropic connector listing, 2026-10-08
+
+| Check | Dated command and actual output |
+| --- | --- |
+| Listing fields | 2026-10-08: the exact Python draft check in [point-9 evidence](docs/evidence/2026-10-08-followup-09.md#draft-and-source-checks) returned name `3/100`, one-liner `71/200`, description `603/2000`, one proposed category and an existing icon. [Draft](submission/anthropic-connector-listing.md) includes documentation/privacy/support/slug fields. |
+| Public documentation | 2026-10-08: `curl` to the repository page returned `HTTP 200`; the content check found the qyl purpose and hosted-setup section. Exact command/output is in the linked evidence. |
+| Owner acknowledgements/access | The dated draft check returned `Acknowledgements: 7/7 pending owner fields`. The official-guide check returned `Acknowledgement topics found: 7/7`. Credentials, unresolved public-page/contact values and attestations are owner fields; no portal action occurred. |

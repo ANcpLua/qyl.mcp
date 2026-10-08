@@ -40,6 +40,11 @@ The existing icon is PNG, 1254 × 1254, 979540 bytes (`sips` and `wc` outputs
 in the evidence record). The package has no reviewer credentials or app
 bindings. Source author metadata is not proof of a verified publisher.
 
+The separate [Anthropic connector listing draft](anthropic-connector-listing.md)
+was checked on 2026-10-08; [commands/output](../docs/evidence/2026-10-08-followup-09.md)
+record lengths, source-backed behavior, seven pending acknowledgement slots and
+the public documentation check.
+
 ## Owner fields still required
 
 | Item | Exact next owner action |
