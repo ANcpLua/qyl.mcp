@@ -2054,7 +2054,7 @@
     {
       "name": "get_trace",
       "title": "Get Trace",
-      "description": "Fetch a single qyl trace by trace_id when the user wants span timing, events, status, and attributes. By default returns all spans; errors_only keeps error spans, max_spans caps them after filtering in Collector order, and include_attributes=false omits attribute collections. Trace totals are preserved and the summary reports returned and matching counts. display_traces provides the visual waterfall.",
+      "description": "Fetch a single qyl trace by trace_id when the user wants span timing, events, status, and attributes. By default returns all spans; errors_only keeps error spans, max_spans caps them after filtering in Collector order, and include_attributes=false omits attribute collections. Trace totals are preserved and the summary reports returned and matching counts. The root span is omitted when excluded by the filter or cap. display_traces provides the visual waterfall.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,

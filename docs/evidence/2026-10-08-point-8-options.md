@@ -348,3 +348,39 @@ This establishes the local 11.3.0 consumer's real startup-gate comparison
 against the deployed production Collector. It is not an observation of a
 deployed MCP process or an authenticated Inspector session. No credentials,
 tenant settings or Railway deployment configuration were changed.
+
+## Review follow-up, 2026-10-08
+
+The review found that the text summary still received the original root when
+the structured projection excluded it. The summary now receives the projected
+trace and explicitly says `Root: not included in selected spans` when the
+filter or cap removes the known root. The tool description also documents
+root omission. The default full-trace summary retains the original root name.
+
+`bun run --cwd server snapshot:tools` exited 0. The snapshot delta for this
+follow-up is only `get_trace.description`; all schemas remain unchanged.
+The focused command below passed 22 tests, including the new
+`get_trace does not name a root excluded by the cap in its text summary`
+and assertions for filtered and empty results:
+
+```sh
+QYL_MCP_TELEMETRY=0 node --test server/dist-test/tool-options.test.js server/dist-test/contracts.test.js server/dist-test/ci.test.js server/dist-test/tool-manifest.test.js
+bun run lint
+node verify-contract-pins.mjs
+```
+
+Actual summaries: `tests 22`, `pass 22`, `fail 0`; `$ oxlint .` exited 0;
+the pin command again returned the exact 11.3.0 agreement above.
+
+The canonical `QYL_MCP_TELEMETRY=0 bun run --cwd server test` then exited 0:
+`tests 168`, `pass 168`, `fail 0`. An earlier direct `node --test` invocation
+without the test script's viewer-bundle copy passed 167/168; its resource test
+correctly rejected the missing `dist-test/mcp-app.html`. Running the canonical
+script supplied the required test assets; no assertion was changed.
+
+The other review suggestion asks for new structured projection/count fields.
+This continuation uses the published 11.3.0 output contract: selected count
+is `trace.spans.length`, total count remains `trace.span_count`, and the text
+reports the pre-cap matching count as stated in the tool description. Adding
+new generated output fields needs a separate contract change/release; no local
+fields or contract changes were invented for this input-option implementation.

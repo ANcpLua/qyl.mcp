@@ -91,9 +91,10 @@ test("get_trace defaults preserve the complete trace and attributes", async (con
   const trace = fixtureTrace();
   const connection = await connectCollector(context, trace);
   for (const options of [{}, { errors_only: false, include_attributes: true }]) {
-    const { output } = await readTrace(connection, { trace_id: trace.trace_id, ...options });
+    const { result, output } = await readTrace(connection, { trace_id: trace.trace_id, ...options });
     assert.equal(output.mode, "live");
     assert.deepEqual(output.trace, trace);
+    assert.match(JSON.stringify(result.content), /Root: phase-0/);
   }
 });
 
@@ -110,6 +111,8 @@ test("get_trace filters errors before capping spans and retains honest trace tot
   assert.equal(output.trace.duration_ns, trace.duration_ns);
   assert.equal(output.trace.has_error, true);
   assert.match(JSON.stringify(result.content), /Returned 1 of 2 matching spans \(4 total\); error status only/);
+  assert.match(JSON.stringify(result.content), /Root: not included in selected spans/);
+  assert.doesNotMatch(JSON.stringify(result.content), /phase-0/);
   assert.doesNotMatch(JSON.stringify(output.trace), /"attributes"|\w+-payload/);
   const full = await readTrace(connection, { trace_id: trace.trace_id });
   assert.deepEqual(full.output.trace, trace, "projection must not mutate later reads");
@@ -139,6 +142,19 @@ test("get_trace reports empty error matches without adding a nonmatching root", 
   assert.equal(output.trace.span_count, 4);
   assert.equal(output.mode, "live");
   assert.match(JSON.stringify(result.content), /Returned 0 of 0 matching spans \(4 total\)/);
+  assert.match(JSON.stringify(result.content), /Root: not included in selected spans/);
+  assert.doesNotMatch(JSON.stringify(result.content), /phase-0/);
+});
+
+test("get_trace does not name a root excluded by the cap in its text summary", async (context) => {
+  const trace = fixtureTrace();
+  trace.spans.push(trace.spans.shift()!);
+  const connection = await connectCollector(context, trace);
+  const { result, output } = await readTrace(connection, { trace_id: trace.trace_id, max_spans: 1 });
+  assert.equal(output.trace.root_span, undefined);
+  assert.deepEqual(output.trace.spans.map((span) => span.name), ["phase-1"]);
+  assert.match(JSON.stringify(result.content), /Root: not included in selected spans/);
+  assert.doesNotMatch(JSON.stringify(result.content), /phase-0/);
 });
 
 test("ci_log applies the case-sensitive service prefix to run lists before their limit and to phase breakdowns", async (context) => {
