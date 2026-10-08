@@ -192,7 +192,8 @@ The [threat model](docs/threat-model.md) describes the authorization boundary.
 `.railway/railway.ts` declares build `bun run --cwd server build`, start
 `bun server/dist/main.js`, healthcheck `/healthz` and an Events volume at
 `/data`. This proves configuration in source, not that Railway applied it.
-The public deployed commit remains an owner observation.
+The [dated production observation](docs/evidence/2026-10-08-followup-06.md)
+records Railway's running commit and main-branch trigger on 2026-10-08.
 
 For a hosted bind, configure `MCP_PUBLIC_URL`, `MCP_BIND_HOST`, allowed hosts
 and origins, and the intended Collector URL/credential. The public URL sets
@@ -276,8 +277,13 @@ uses Access, and Auth0-backed Events cannot be enabled in this mode.
 Use [submission/README.md](submission/README.md) for the three separate records,
 local package build and remaining owner fields. The owner handles identity,
 public pages, reviewer accounts, recording, attestations, uploads, submission
-and publication. `OPENAI_APPS_CHALLENGE` serves the owner-supplied domain token
-only when configured; its source implementation does not prove verification.
+and publication. The owner copies the portal's domain token into the hosted
+environment variable `OPENAI_APPS_CHALLENGE`. Until a nonblank token is set,
+`GET /.well-known/openai-apps-challenge` returns 404; with a token, it returns
+the exact trimmed value as plain text. On 2026-10-08, the production GET
+returned `404 Not Found`. [Dated curl output, source and test](docs/evidence/2026-10-08-followup-07.md)
+support these statements. Setting the variable and completing the portal's
+verification are pending owner actions.
 
 ## Verification and limits
 
