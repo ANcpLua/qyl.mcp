@@ -62,7 +62,8 @@ import { registerCiTools } from "./ci.js";
 import { registerMetricsTools } from "./metrics-tools.js";
 import type { EventsRuntime } from "./events.js";
 import { runTool } from "./request-scope.js";
-import { telemetryToolResult } from "./telemetry-redaction.js";
+import { redactTelemetry, telemetryToolResult } from "./telemetry-redaction.js";
+import { TRACE_QUERY_META_KEY } from "./trace-query.js";
 import type { McpTelemetryTransport } from "./mcp-semconv.js";
 import {
   assertNativeExecutionRecordingArmed,
@@ -240,10 +241,12 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       ctx: ServerContext,
     ): Promise<CallToolResult> =>
       runTool(ctx, "display_traces", 1, async (scope) => {
-        const result = await fetchTracesForDisplay(
-          { trace_id, session_id, limit: limit ?? 20 },
-          scope.collector,
-        );
+        const query: DisplayTracesInput & { limit: number } = {
+          limit: limit ?? 20,
+          ...(trace_id === undefined ? {} : { trace_id }),
+          ...(session_id === undefined ? {} : { session_id }),
+        };
+        const result = await fetchTracesForDisplay(query, scope.collector);
         const target = trace_id
           ? `trace ${trace_id}`
           : session_id
@@ -275,7 +278,10 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
           mode: result.mode,
         };
 
-        return telemetryToolResult(text, output);
+        return {
+          ...telemetryToolResult(text, output),
+          _meta: redactTelemetry({ [TRACE_QUERY_META_KEY]: query }),
+        };
       }),
   );
 

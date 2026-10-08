@@ -10,7 +10,7 @@ import { API_KEY_HEADER, PROJECT_HEADER } from "./contract-headers.js";
 import type { CollectorAccess } from "./collector-access.js";
 
 /** URI of the trace explorer UI resource. */
-export const RESOURCE_URI = "ui://qyl-explorer/mcp-app-v3.html";
+export const RESOURCE_URI = "ui://qyl-explorer/mcp-app-v4.html";
 
 /** URI of the MCP dashboard UI resource. */
 export const DASHBOARD_RESOURCE_URI = "ui://qyl-explorer/mcp-dashboard-v2.html";

@@ -104,7 +104,7 @@ check(
 const displayTraces = tools.find((t) => t.name === "display_traces");
 check(
   "display_traces has _meta.ui.resourceUri",
-  displayTraces?._meta?.ui?.resourceUri === "ui://qyl-explorer/mcp-app-v3.html",
+  displayTraces?._meta?.ui?.resourceUri === "ui://qyl-explorer/mcp-app-v4.html",
   JSON.stringify(displayTraces?._meta),
 );
 

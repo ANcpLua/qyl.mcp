@@ -24,6 +24,7 @@ import {
   FetchTelemetryOutputSchema,
 } from "../src/contract-validation.ts";
 import { formatAttributeValue } from "@ancplua/qyl-api-schema/runtime";
+import { traceQueryForResult } from "../src/trace-query.ts";
 import { computeWaterfall, type WaterfallRow } from "./waterfall.ts";
 import "./global.css";
 import "./mcp-app.css";
@@ -255,7 +256,7 @@ app.ontoolresult = (result) => {
     showError(toolErrorText(result) ?? "Received an invalid tool result.");
     return;
   }
-  if (pendingTraceQuery) state.traceQuery = pendingTraceQuery;
+  state.traceQuery = traceQueryForResult(result, pendingTraceQuery ?? state.traceQuery);
   pendingTraceQuery = undefined;
   applyTraces(payload);
 };
@@ -874,6 +875,7 @@ async function refreshTraces() {
     if (!payload) {
       throw new Error("display_traces returned an invalid payload");
     }
+    state.traceQuery = traceQueryForResult(result, state.traceQuery);
     applyTraces(payload);
   } catch (err) {
     if (hadTraces) {
