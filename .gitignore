@@ -18,3 +18,6 @@ tools/hosted-eval/node_modules
 
 # JetBrains IDE state (Rider/WebStorm); machine-local, never shared.
 .idea/
+
+# Local draft packages are rebuilt from submission/qyl; never commit upload ZIPs.
+/submission/packages/*.zip
