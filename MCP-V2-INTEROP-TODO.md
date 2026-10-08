@@ -110,6 +110,22 @@ fixture. The CI evidence above belongs to the stated commit; the PR must pass
 CI and review again after this correction. No production or hosted-client
 claim follows from these fixture runs.
 
+For corrected code commit `5c835be4dfb0a873be39bd9b8e76318739ce0999`, checked
+on 2026-10-08 UTC:
+
+```text
+$ gh run view 37713263607 --repo ANcpLua/qyl.mcp --json status,conclusion --jq '{status,conclusion}'
+{"conclusion":"success","status":"completed"}
+```
+
+This is the complete CI workflow, including lint, the SDK check, build, tests,
+transport smoke, live OTLP and project-isolation smoke. Later checkpoint edits
+do not change that runtime code. Codex's first review reported the version-00
+traceparent restriction; the correction above removes it. A new code review
+was requested with `gh pr comment 91 --repo ANcpLua/qyl.mcp --body-file /private/tmp/qyl-step1-review-request.md`
+on 2026-10-08 UTC, returning
+<https://github.com/ANcpLua/qyl.mcp/pull/91#issuecomment-6050323909>.
+
 ## Production endpoint `https://mcp.qyl.at/mcp`
 
 | Check | How | Date | Observation |
