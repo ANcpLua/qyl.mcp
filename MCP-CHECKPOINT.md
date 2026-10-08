@@ -20,6 +20,10 @@ reported 11.2.0 without the four fields on 2026-10-08.
 [Dated merge, checks, registry and installed-schema output](docs/evidence/2026-10-08-followup-08.md)
 records the permitted Done when 5 blocker and exact owner prerequisite.
 
+The [release contract map](release/contract.md) and [owner handoff](release/README.md)
+connect all revised points and Done-when criteria to the ledger and dated
+commands/output. Their point-13 snapshot leaves points 14 and 15 pending.
+
 ## Repository and local evidence
 
 | State | Dated evidence |
@@ -49,8 +53,10 @@ metadata; `npm view qyl-mcp-server version` returned 7.1.1 on 2026-10-08.
 These results do not prove the deployed commit, a fresh npm consumer, a real
 client connection or production Events behavior.
 
-All five client connections, production Events lifecycle and modern request
-header proof, deployed commit, reviewer account, demo recording, publisher
+The active deployment ID and commit were observed read-only in
+[point-6 evidence](docs/evidence/2026-10-08-followup-06.md); recheck that dated
+snapshot before reviewer access. All five client connections, production Events
+lifecycle and modern request header proof, reviewer account, demo recording, publisher
 identity, targeting, public pages, attestations, submission and publication
 remain in the [owner-action index](MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending)
 and [submission handoff](submission/README.md#owner-fields-still-required).
