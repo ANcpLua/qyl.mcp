@@ -3,15 +3,9 @@
 The following tables define which qyl MCP server tools should be used for work in each qyl repository.
 
 This is a recommendation based on the generated tool manifest snapshot, repository architecture and project contracts.
-The repository recommendations come from those sources. Production checks on
-7 October 2026 listed the 11-tool catalog and successfully called `list_metrics`
-and `list_traces` with an Auth0 machine token over both `2026-07-28` and
-`2025-11-25`. Modern Events discovery returned `trace.error`. Personal client
-OAuth and a real read call succeeded in ChatGPT web, claude.ai, Claude Code,
-Codex CLI and Inspector. Production ChatGPT Events delivery, service filtering,
-automatic renewal, survival across deployment and unsubscribe passed. Public
-plugin preparation and portal verification remain pending; see
-[the verification checklist](MCP-V2-INTEROP-TODO.md).
+The repository recommendations come from those sources. This matrix makes no
+claim about production, client or portal state; that evidence lives in
+[the evidence ledger](MCP-V2-INTEROP-TODO.md).
 
 `+` means the tool should be directly available and is preferred for suitable work.
 `C` means conditional — applicable only in the scenario named in the section notes.
@@ -52,7 +46,9 @@ Repository abbreviations:
 
 `ci_log` reads sessions whose `service.name` starts with `qyl-ci`; only qyl's own CI emits that telemetry
 (`qyl/eng/tools/QylToolSmoke/CiTelemetry.cs`), so the tool is meaningless for the other repositories' CI runs. It stays
-direct in `qyl.mcp` because `server/src/ci.ts` owns the implementation and dogfoods it.
+direct in `qyl.mcp` because `server/src/ci.ts` owns the implementation and dogfoods it. goal-objective.md
+schedules its removal from the public manifest or a required `service_prefix` parameter, because the default
+returns nothing for other users.
 
 Conditional scenarios for the generic readers:
 
@@ -95,8 +91,8 @@ Displays are preferred over their data counterparts whenever the user wants to S
 |--------------------------------|----------|:---:|:-------:|:------:|:-------:|:---------:|
 | `fetch_telemetry`              | Snapshot |  U  |    U    |   U    |    U    |     U     |
 
-The tool states "The model should NOT call this tool directly." `fetch_telemetry` feeds the trace explorer wherever
-`display_traces` is used. It exists in the manifest for the embedded UI's callbacks, not for agents.
+`fetch_telemetry` is app-only through its `ui.visibility` metadata, so the model does not see it. It feeds the trace
+explorer wherever `display_traces` is used. It exists in the manifest for the embedded UI's callbacks, not for agents.
 
 It publishes no `outputSchema`. Its callers are the bundled viewers, compiled against the generated TypeScript types,
 so describing those bodies in `tools/list` spent context on shapes no model may request. It still returns structured
@@ -125,5 +121,5 @@ allowlists: the bundled viewers use the MCP bridge and load no external assets.
 
 The central policy is: keep the read-only telemetry and metrics intelligence directly available where the data is
 owned, prefer the interactive displays whenever the human wants to look rather than the model wants to read, and never
-let the model call the UI-plumbing fetch tool directly. Every tool in the manifest is read-only; the server publishes
-no mutating tool.
+keep the UI-plumbing fetch tool hidden from the model by metadata. Today every tool in the manifest is read-only;
+write tools may be added as separate, honestly annotated tools, see [AGENTS.md](AGENTS.md).

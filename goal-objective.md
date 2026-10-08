@@ -1,157 +1,241 @@
-# qyl.mcp interoperability and Events objective
+# qyl.mcp objective
 
-Updated from the user's requirements on 7 October 2026. This is the working
-objective for the active goal. It supersedes the older attachment's
-modern-protocol-only and no-user-data requirements. Later user instructions
-take precedence over this document.
-
-## Outcome
-
-Make `https://mcp.qyl.at/mcp` work with ChatGPT web and Codex plugins, claude.ai,
-Claude Code, Codex CLI, and MCP Inspector. Each client must authenticate, list
-tools, and complete a real read-tool call. Make the existing `trace.error`
-Events feature configurable and verify its lifecycle in a supported ChatGPT
-surface.
+Rewritten on 8 October 2026 on the owner's instruction. This file replaces
+every earlier version of itself, the goal widget text, and the progress claims
+in MCP-CHECKPOINT.md, MCP-V2-INTEROP-TODO.md and QYL-MCP-MATRIX.md. Later owner
+instructions take precedence over this document.
 
 Repository: `/Users/alexandernachtmann/RiderProjects/qyl.mcp`
 Remote: <https://github.com/ANcpLua/qyl.mcp>
+Production endpoint: `https://mcp.qyl.at/mcp`
 
-## Current checkpoint and resume point — 7 October 2026
+## Outcome
 
-Use [MCP-CHECKPOINT.md](MCP-CHECKPOINT.md) for the current working copies,
-verified progress, pending owner actions and remaining sequence. The original
-eight steps below are acceptance criteria; execution no longer starts at step 1.
+qyl becomes the Swiss army knife of connectors for AI agents: one MCP server
+that lets a model measure, correlate and diagnose a running system, published
+as an Anthropic connector plus plugin bundle and as an OpenAI plugin. The
+listing story is "qyl measures and correlates; the agent reasons and acts."
+qyl's tools stay inside qyl's own service. Actions in third-party systems
+such as GitHub, Railway or cloud providers happen through the agent's own
+connectors, never through qyl tools.
 
-SDK/dependency integration, local Events coverage and the five personal client
-connections are complete. Collector PR #640 and MCP PR #80 are merged, their
-main CI and Railway deployments succeeded, and all eight owner-account review
-rehearsals now pass. Production rechecks confirm service/severity filtering,
-the ten-trace limit after viewer refresh, and direct refusal of deletion-only
-requests without a qyl call. PR #81 adds the dedicated public UI origin and
-versions both viewer resources; it is merged and deployed with successful main
-CI. Inspector reads both new resource versions, and ChatGPT renders both
-viewers at the dedicated sandbox origin. The production Events store and
-matching ChatGPT delivery are now verified, including service filtering,
-survival across deployment, automatic renewal and unsubscribe. The task is
-paused, the Events store is empty, and a subsequent matching error produced
-no notification during more than three polling intervals. Evidence PR #83 is
-merged and deployed with successful main CI. Release PR #84 is also merged
-and deployed. npm `qyl-mcp-server@7.1.1` is published with SDK 2.3.1, and fresh
-npx consumers passed discovery, tool listing and demo metrics in both protocol
-eras. The earlier GitHub connection failure is resolved; its terminal handoff
-is no longer needed. qyl.at PR #16's final CI passed; automatic approval rejected
-its production merge, and one explicit rollout request is pending. Finish that
-rollout after approval, then continue public plugin preparation.
+## What is true today
 
-The public plugin remains an incomplete local draft. Free use and all eligible
-countries are confirmed. The `ancplua` organization now shows Individual
-identity **Approved**. Select that verified identity when preparing the portal
-entry; do not restart the identity check. Public listing/support/policy details,
-reviewer/demo evidence and the portal challenge/scan remain open. Do not equate successful private client
-connections with completed public submission.
+Everything in this section was checked in the repository on 8 October 2026.
 
-## SDK and protocol requirements
+- `origin/main` is at `00a0aa9`. All `codex/*` branches are merged through
+  PRs #75, #78, #80 and #87 to #90; the local branch names are stale copies.
+  PRs #81 to #86 are merged as well. No PR is open.
+- The server uses the split TypeScript SDK v2 packages. The committed manifest
+  `server/tool-manifest.snapshot.json` lists 11 tools, all annotated
+  `readOnlyHint: true`. `fetch_telemetry` is app-only through
+  `_meta.ui.visibility: ["app"]`. A `trace.error` Events implementation exists
+  in `server/src/events.ts`; account and project scoping exists in
+  `server/src/collector-access.ts`.
+- An OpenAI plugin draft exists in `submission/qyl/` (`plugin.json`,
+  `mcp.json`, icon). `submission/README.md` states that it is incomplete and
+  has not been uploaded or submitted. No Anthropic plugin bundle exists yet:
+  there is no `.claude-plugin/plugin.json` and no `.mcp.json` in `main`.
+- The main checkout carries uncommitted documentation and two new submission
+  drafts (`submission/demo-runbook.md`, `submission/public-pages-draft.md`).
+  Preserve them; do not commit them onto `main` unrebased, because that tree
+  lacks `server/src/trace-query.ts` and its test.
+- The working agreements for agents are `AGENTS.md` on `main`, with review
+  context in `docs/threat-model.md`. The Codex worktree
+  `/Users/alexandernachtmann/.codex/worktrees/reviewer-project-isolation/qyl.mcp`
+  is on branch `codex/review-invariants` at `00a0aa9` and carries uncommitted
+  `scripts/verify-mcp-sdk.mjs`, `scripts/verify-mcp-sdk.test.mjs`, the
+  `verify:sdk` script in `package.json`, `.oxlintrc.json` and
+  `.github/workflows/ci.yml` changes, plus untracked copies of `AGENTS.md`
+  and `docs/threat-model.md` that are identical to `main`.
 
-Use the official TypeScript SDK v2 packages. SDK version and MCP protocol
-revision are separate requirements: using SDK v2 permits its built-in support
-for both `2026-07-28` and 2025-era clients.
+## What is not established
 
-- Use `createMcpHandler(factory)` with its documented stateless compatibility
-  default for HTTP. Register the tools once through the shared factory. Use
-  `toNodeHandler` only where a Node HTTP adapter is needed.
-- Use `serveStdio(factory)` with its documented compatibility behavior for
-  stdio. Remove the current blanket `legacy: "reject"` policy from serving
-  entry points as part of implementation.
-- Let SDK clients negotiate when connecting to general-purpose MCP servers.
-  Keep explicit protocol pins in tests that need to exercise a particular era.
-- Use the SDK's identity metadata, error handling, and `inputRequired` support
-  where applicable. Check the v2 documentation before adding local protocol
-  detection, fallback routing, identity stamping, or compatibility shims.
-- Review existing era-specific assumptions in handlers and tests. Preserve the
-  same authorization and tool behavior through both supported protocol paths.
-- Keep package versions exact for reproducible builds. Dependency version pins
-  do not imply a requirement to reject another supported wire protocol.
+Earlier versions of this file and MCP-CHECKPOINT.md claimed the following as
+verified: five real client connections (ChatGPT, claude.ai, Claude Code, Codex
+CLI, MCP Inspector); the production ChatGPT Events lifecycle; eight review
+rehearsals; npm `qyl-mcp-server@7.1.1` published and consumer-checked; qyl.at
+PR #16 and a live protocol guide; an approved Individual publisher identity;
+Collector PR #640; production rechecks of filters and viewer refresh.
 
-The earlier instruction to stop when a client requests the 2025 protocol is
-replaced by these requirements. Adding the v1 `@modelcontextprotocol/sdk`
-dependency is outside this objective; compatibility is supplied by SDK v2.
+The owner does not accept these claims. Treat each one as not done until it is
+re-established with fresh, reproducible evidence: the command or client, the
+date, and the actual output. Do not copy any of these claims into README,
+checkpoint, matrix, listing or review text. A successful private connection is
+not a completed public submission.
 
-Sources: [v2 server API](https://ts.sdk.modelcontextprotocol.io/v2/api/@modelcontextprotocol/server/)
-and [protocol migration guide](https://ts.sdk.modelcontextprotocol.io/v2/migration/support-2026-07-28).
+## Owner decisions
 
-## Events and permitted storage
+- Read-only is not a requirement. Neither the Anthropic connector checklist,
+  the Software Directory Policy nor the OpenAI plugin guidelines demand it.
+  They demand separate read and write tools, accurate `title`,
+  `readOnlyHint` and `destructiveHint` on every tool, and descriptions that
+  match behavior. Write tools are welcome under those conditions.
+- First-party boundary. Every tool calls qyl's own APIs or APIs qyl
+  legitimately proxies (Anthropic "API ownership"; OpenAI rejects unofficial
+  third-party connectors). Directory-safe write tools are, for example:
+  annotate a trace or session, mark an incident, saved queries or dashboards,
+  alert rules in the Collector project, Event subscriptions, deleting own
+  telemetry as a separate delete tool with `destructiveHint: true`. Not qyl
+  tools: opening PRs, triggering deploys or rollbacks.
+- Rules for reviewing and contributing are collaborative, not a list of
+  prohibitions. Concrete regressions with trigger, path and consequence.
+  No invented extra requirements. Codex review plus required CI is enough;
+  CodeRabbit is optional. Version bumps and deliberate requirement changes
+  are normal work.
+- Tool descriptions describe the tool, never the model's behavior. App-only
+  tools are hidden through `_meta.ui.visibility`, not through a sentence.
+- qyl's own telemetry about incoming tool calls records only tool name,
+  timing, status and error type. It must not persist argument values,
+  `_meta` or conversation text. `main` still does in
+  `server/src/native-execution.ts`; the fix lands with the rules PR.
+- qyl is free to use, with no purchases.
 
-Events may be enabled through `MCP_EVENTS_STORE` on an authenticated deployment
-with persistent storage. Permit only the subscription data needed to operate
-them: owner subject/client identifiers, event/filter identity, callback URL,
-signing keys and their rotation window, expiration, and delivery/cursor state.
-Keep this state isolated by authenticated owner and out of tool results/logs.
-Remove expired or unsubscribed records and stop delivery when access is revoked.
-OAuth access/refresh tokens and a copy of the collector's telemetry are not
-part of this storage allowance.
+### Listing story
 
-ChatGPT Events require protocol `2026-07-28`. Verify Events on that path while
-retaining ordinary tool access for 2025-era clients. Enabling event capability
-does not subscribe users automatically. This replaces the blanket statement
-that the server stores no user data.
+> "Once an AI can measure a system, it can reason about it. So we gave it the
+> instrumentation to measure everything."
+>
+> qyl is an observability platform built for AI agents. Agents fail quietly:
+> deep call stacks, bloated contexts, slow tools. qyl gives frontier models a
+> Model Context Protocol server (TypeScript SDK v2) that acts as a semantic
+> gateway to your telemetry: traces, logs, metrics and MCP runtime sessions
+> from your own collector.
+>
+> Instead of reading raw log dumps, the model asks compact, intent-driven
+> questions: which sessions are failing, what happened inside this trace,
+> which logs belong to it, how did this metric move. qyl returns the
+> collector's real answers, including empty results and upstream errors, and
+> renders them in an interactive Trace Explorer and MCP Dashboard. In clients
+> that support MCP Events, qyl notifies the model about new trace errors.
+>
+> qyl measures and correlates; the agent reasons and acts. Every telemetry
+> tool is read-only, so the model can investigate without side effects and
+> hand the fix to the agent that owns the code.
 
-Source: [OpenAI MCP Events](https://developers.openai.com/plugins/build/mcp-events).
+Do not promise remediation, fixing or continuous monitoring until a tool
+actually does it.
 
-## Execution sequence and completion criteria
+## Work, in order
 
-The checkout and revised requirements are established. These are the original
-completion criteria. Follow the current checkpoint's resume order and use
-[MCP-V2-INTEROP-TODO.md](MCP-V2-INTEROP-TODO.md) for the detailed checks.
+1. **Rules PR** from branch `codex/review-invariants`, rebased on current
+   `main`: `scripts/verify-mcp-sdk.mjs`, `scripts/verify-mcp-sdk.test.mjs`,
+   the `verify:sdk` script in `package.json`, `.oxlintrc.json` and
+   `.github/workflows/ci.yml`. `AGENTS.md` and `docs/threat-model.md` are
+   already on `main`; delete the worktree's untracked copies before pulling.
+   In the same PR, stop persisting `arguments` and `_meta` in
+   `FileNativeExecutionRepository` records (`server/src/native-execution.ts`)
+   with a test, so the rule in AGENTS.md is true on merge. Leave the
+   uncommitted working tree in the main checkout untouched.
+2. **Review-readiness fixes** (Anthropic connector checklist, Directory Policy
+   §1D and §5B, OpenAI plugin guidelines):
+   - `get_trace`: add `errors_only`, `max_spans` and `include_attributes` in
+     `server/src/server.ts` and `server/src/data.ts`; drop "every span" from
+     the description.
+   - `ci_log`: remove it from the public manifest (preferred; `list_sessions`
+     covers the rest), or make `CI_SERVICE_PREFIX` in `server/src/ci.ts` a
+     required `service_prefix` parameter. A default of `qyl-ci` still returns
+     nothing for other users.
+   - `fetch_telemetry`: remove "The model should NOT call this tool directly"
+     from the description; the visibility is already correct.
+   - Check every description against "schema and annotation equal behavior".
+   - If write tools are added, give each its own tool with honest hints and
+     update negative test cases 1 and 2 in `submission/qyl/plugin.json`.
+3. **Ship an agent skill** shared by both plugin formats at
+   `submission/qyl/skills/qyl-investigate/SKILL.md`: start with `list_sessions` and
+   `list_traces`; drill with `get_trace`, then `search_logs` on the same
+   `trace_id` with `severity_min` 17; metrics via `list_metrics`,
+   `get_metric_series`, `query_metric`; tool health via
+   `display_mcp_dashboard`; CI via `ci_log`; visual via `display_traces`;
+   Events for `trace.error`. Empty results mean no data, not no error.
+4. **Fresh evidence.** Re-run and record, one by one: authentication, tool
+   listing and one read-tool call in ChatGPT, claude.ai, Claude Code, Codex CLI
+   and MCP Inspector, with client version, negotiated protocol and registration
+   path; the Events lifecycle on a `2026-07-28` ChatGPT surface; the npm
+   package state. Evidence lives in MCP-V2-INTEROP-TODO.md with date, command
+   and output. No evidence, no claim.
+5. **Submission preparation**, two Anthropic records and one OpenAI record.
+   - Anthropic connector for `https://mcp.qyl.at/mcp`, submitted separately
+     at `https://claude.ai/directory/manage` as kind "MCP connector": test
+     credentials for a fully populated account, documentation URL, privacy
+     URL, support contact, icon. The default result is a Community listing
+     after the automatic scan.
+   - Anthropic plugin bundle in the same folder as the OpenAI draft:
+     `submission/qyl/.claude-plugin/plugin.json` (name, displayName, version,
+     description, author, license), `submission/qyl/.mcp.json` pointing at
+     `https://mcp.qyl.at/mcp`, a `README.md` of at least 40 words outside
+     code blocks, a `LICENSE` file, and the shared `skills/`. Portal fields:
+     repository `ANcpLua/qyl.mcp`, plugin path `submission/qyl`, a branch or
+     tag (no commit). The repository may stay private during validation and
+     must be public to go live, with the Claude GitHub App installed.
+   - OpenAI: the `submission/qyl/` ZIP with `$schema` in both manifests,
+     `extensions.com.openai`, one server, five positive and three negative
+     cases, a demo recording URL. The ZIP then contains `.claude-plugin/`;
+     OpenAI accepts Claude-compatible manifests and `extensions.com.openai`
+     takes precedence, but check the ZIP against the portal validator or
+     exclude `.claude-plugin/` when zipping.
+   - Public support, privacy and terms pages on qyl.at and a reviewer account
+     with isolated sample data are owner decisions; record what is missing,
+     do not invent it.
+6. **Submission and publication** are owner actions: legal attestations,
+   portal uploads, identity selection, publish. Agents prepare and report;
+   they do not submit. Publication is a separate decision after approval.
+7. **Keep the documents truthful.** README, MCP-CHECKPOINT.md,
+   QYL-MCP-MATRIX.md and MCP-V2-INTEROP-TODO.md state only what exists with
+   evidence. Distinguish source present, local test passed, CI passed,
+   production observed, portal status observed.
 
-1. **Consolidate dependencies.** Review current PRs against main, select exact
-   compatible SDK v2 and workspace dependency versions, investigate failing
-   checks, and regenerate lockfiles from the chosen manifests. Include the
-   server package in the review; individual passing PRs do not verify the
-   combined dependency set.
-2. **Adopt SDK serving and negotiation.** Remove blanket protocol rejection
-   from HTTP, stdio, and workbench paths. Review shared handlers, identity
-   access, fixtures, and client negotiation against the documented SDK behavior.
-   Keep authorization, stable tool contracts, and accurate annotations across
-   both eras. Replace obsolete assertions and update protocol documentation.
-3. **Make Events operational locally.** Verify configuration with Events enabled
-   and disabled. Exercise owner-scoped subscription storage, callback
-   verification, filtered signed delivery, refresh/key rotation, restart
-   survival, expiration, revoked access, and unsubscribe. Tool access must
-   remain usable for clients without Events support.
-4. **Verify the combined build.** Run the repository build, test, and smoke
-   commands plus the collector contract checks required by CI. Exercise both
-   eras on HTTP and stdio; verify authorization failures as well as successful
-   calls. Compare the tool catalog with the committed snapshot and regenerate
-   deliberately for intended changes. Do not weaken valid requirements to
-   make a check pass.
-5. **Prepare and verify production.** Inspect current endpoint access and Auth0
-   settings, resolve any actual access failure, then apply the necessary
-   authorized configuration and deploy the verified build. Both resource
-   metadata URLs and the challenge must identify `https://mcp.qyl.at/mcp`,
-   `https://qyl-eu.eu.auth0.com/`, and `qyl:read`. Verify audience/scope with a real
-   token. Complete required plugin domain verification, storage configuration,
-   and tools/events scanning. Auth0 remains the issuer and OIDC discovery host;
-   enable `openid`/`email` only where workspace domain claiming needs them.
-6. **Verify real client connections.** Complete CIMD and DCR authorization-code
-   flows with PKCE S256, issuer identification, and explicit permissions. In
-   ChatGPT, claude.ai, Claude Code, Codex CLI, and MCP Inspector, log in, list
-   tools, and call a read tool. Record the actual client version, negotiated
-   protocol, registration path, scopes, result, and exact errors. Accept
-   supported 2025-era tool connections.
-7. **Verify Events in ChatGPT.** On a supported `2026-07-28` ChatGPT surface,
-   subscribe to `trace.error`, produce a matching event, confirm verified signed
-   delivery in the chat, and check filtering and refresh/restart behavior.
-   Stop monitoring and confirm unsubscribe removes the subscription and stops
-   delivery.
-8. **Record completion.** Update the README, contract matrix, and checklist with
-   actual results and remaining failures. Distinguish source presence, local
-   tests, CI results, and production evidence. Completion requires the client
-   and Events demonstrations above.
+## Done when
 
-## Execution scope
+All of the following hold on `origin/main`. Each is verifiable from the
+repository without an owner action.
 
-The user started the active goal on 7 October with all eight steps, including
-production configuration, deployment, and client/Events verification. That
-instruction authorizes the necessary scoped implementation, pushes, deployment,
-and Auth0 changes and supersedes the earlier preparation-only approval gate.
-Track completion from evidence in the checklist.
+1. The rules PR (step 1) is merged: `bun run verify:sdk` exists and runs in
+   CI, and `FileNativeExecutionRepository` records contain no `arguments` and
+   no `_meta`.
+2. `server/tool-manifest.snapshot.json` contains no description that
+   addresses the model; `get_trace` accepts `errors_only`, `max_spans` and
+   `include_attributes`; `ci_log` is absent from the public manifest or
+   requires `service_prefix`.
+3. `submission/qyl/skills/qyl-investigate/SKILL.md`,
+   `submission/qyl/.claude-plugin/plugin.json`, `submission/qyl/.mcp.json`,
+   `submission/qyl/README.md` (at least 40 words outside code blocks) and
+   `submission/qyl/LICENSE` exist, and `submission/qyl/plugin.json` and
+   `submission/qyl/mcp.json` validate against their `$schema`.
+4. Every row in MCP-V2-INTEROP-TODO.md carries either dated evidence or the
+   exact owner action it is waiting for.
+5. MCP-CHECKPOINT.md, QYL-MCP-MATRIX.md, README.md and submission/README.md
+   contain no claim without evidence.
+
+Owner actions (publisher identity, public pages, reviewer account, demo
+recording, attestations, submission, publication) are outside this goal.
+They are listed, not performed.
+
+## Standing constraints
+
+- Official split SDK v2 packages only. SDK version and wire revision are
+  independent; v2's built-in 2025-era support is required compatibility.
+  HTTP serves through `createMcpHandler(factory)` and stdio through
+  `serveStdio(factory)` with their documented defaults. Protocol pins and era
+  rejection belong in focused tests and fixtures, not in production entry
+  points. Clients negotiate; the workbench keeps
+  `versionNegotiation: { mode: "auto" }`.
+- Every hosted operation authorizes from validated credentials. Canonical
+  resource `https://mcp.qyl.at/mcp`, issuer `https://qyl-eu.eu.auth0.com/`,
+  scope `qyl:read`, consistent with discovery and challenges. Tool arguments,
+  UI inputs and request metadata never select credentials or another project.
+- Events may run through `MCP_EVENTS_STORE` on an authenticated deployment
+  with persistent storage. Store only owner subject and client identifiers,
+  event and filter identity, callback URL, signing keys with rotation window,
+  expiration, and delivery or cursor state, isolated by owner and kept out of
+  tool results and logs. Remove expired or unsubscribed records; stop delivery
+  on revocation. OAuth tokens and copied telemetry are never stored. Enabling
+  the capability subscribes nobody automatically.
+- Never weaken a gate or regenerate an expected result to get green. Fix the
+  gate and say so.
+
+## Goal status
+
+The goal widget text is the owner's and points at this file. The goal is
+complete when the "Done when" list holds; set the widget status from that
+list, not from this document's prose.
