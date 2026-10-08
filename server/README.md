@@ -86,13 +86,12 @@ in-flight collector fetch instead of waiting out its timeout. Progress: a
 request that carries a `progressToken` gets `notifications/progress` per
 completed step, one per collector round trip plus a final "Result ready"
 (`ci_log` with a `run_id` reports the flatten into legs as a step of its own).
-Logging: the server declares the `logging` capability and sends one
-`notifications/message` per call, `info` on success and `warning` on failure,
-under the logger `qyl.mcp`. On revision `2026-07-28` the client's level travels
-per request in `_meta["io.modelcontextprotocol/logLevel"]`; a request without
-it gets no log line, and `logging/setLevel` does not exist in that revision.
-MCP logging is deprecated as of that revision (SEP-2577) and kept here through
-the deprecation window beside stderr and OpenTelemetry.
+Logging: the server declares no `logging` capability and sends no
+`notifications/message`, including when a client supplies a log level.
+Operational error diagnostics go to stderr; native tool timing/status telemetry
+uses OpenTelemetry. Requested progress and cancellation remain available.
+[Source and test commands/output, 2026-10-08](https://github.com/ANcpLua/qyl.mcp/blob/main/docs/evidence/2026-10-08-followup-01.md).
+
 
 Every inbound `tools/call` on a local server — `--stdio`, or HTTP without
 `MCP_PUBLIC_URL` — records only its tool name, timing, status and error type,
@@ -167,6 +166,10 @@ real ChatGPT demonstration are separate checks before upload.
 ## Release notes
 
 ### 7.2.0
+
+- Removed deprecated MCP logging capability and per-call log notifications;
+  retained requested progress, cancellation and native operation telemetry.
+  [Dated verification, 2026-10-08](https://github.com/ANcpLua/qyl.mcp/blob/main/docs/evidence/2026-10-08-followup-01.md).
 
 - Optional Auth0-account-to-Collector project isolation, also applied to Events.
 - Events share polling for accounts assigned to the same project; independent

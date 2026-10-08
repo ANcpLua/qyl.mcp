@@ -487,3 +487,9 @@ to retain deprecated request logging. The new requirements are in
 [Commands and actual output](docs/evidence/2026-10-08-followup-01.md) retain the
 initial sandbox `listen EPERM` failures and successful permitted-listener rerun.
 No production or owner-client observation follows from these fixture checks.
+
+Point-1 owner correction, 2026-10-08: `gh pr view 100 --repo ANcpLua/qyl.mcp --json comments`
+returned the outdated package-README logging claim. The paragraph and 7.2.0
+release notes now document removal; `bun run --cwd server verify:readme`
+returned `11 tools documented; 0 mutating (none) named with its exception.`,
+exit 0. The source evidence and exact output are retained in the linked record.
