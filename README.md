@@ -28,6 +28,31 @@ Configure that endpoint in the intended client and authorize an account with
 access to the intended Collector project. Client registration and user/project
 authorization must both be configured by the operator.
 
+The following are connection instructions, not completed connection tests.
+Their CLI/help and official-documentation sources were checked on 2026-10-08
+in the [client setup evidence](docs/evidence/2026-10-08-step7.md#client-setup-and-owner-review-correction).
+
+| Client | Connection setting | Registration path |
+| --- | --- | --- |
+| ChatGPT web | In Plugins, choose **Add custom MCP server**, enter `https://mcp.qyl.at/mcp`, select OAuth and request `qyl:read`; create and install the personal plugin. | Choose CIMD, DCR or a provisioned OAuth client as offered. For CIMD, use the metadata document and callback shown by the connection page; stable metadata is `https://chatgpt.com/oauth/client.json` where issuer-bound callbacks are supported. |
+| claude.ai | In **Customize → Connectors**, add a custom connector for `https://mcp.qyl.at/mcp`, select sign-in and complete OAuth. Organization users first need their owner to add the connector under organization settings. | Select Claude's published identity (CIMD), automatic registration (DCR), or a provisioned client. Public CIMD: `https://claude.ai/oauth/mcp-oauth-client-metadata`. |
+| Claude Code | Run `claude mcp add --transport http qyl https://mcp.qyl.at/mcp`, then open `/mcp` to authenticate. | Automatic CIMD/DCR discovery; if a provisioned client is required, use the CLI's `--client-id` and `--client-secret` prompt, with its actual callback registered. |
+| Codex CLI | Add the TOML below to the intended Codex configuration, then run `codex mcp login qyl --scopes qyl:read`. | Automatic CIMD/DCR selection; for a targeted registration check, the inspected CLI accepts `--oauth-client-registration cimd` or `dcr` on login. A configured client ID takes precedence. |
+| MCP Inspector | Save the JSON below as `inspector-modern.json`; run `npx -y @modelcontextprotocol/inspector@2.9.0 --config inspector-modern.json`, complete OAuth with `qyl:read`, then invoke `tools/list`. | Use the provisioned client or registration flow offered by Inspector and the issuer. Record which path was used; registration alone does not grant resource access. |
+
+Codex configuration:
+
+```toml
+[mcp_servers.qyl]
+url = "https://mcp.qyl.at/mcp"
+```
+
+Inspector configuration (repeat with `"legacy"` for the legacy check):
+
+```json
+{"mcpServers":{"qyl":{"type":"streamable-http","url":"https://mcp.qyl.at/mcp","protocolEra":"modern"}}}
+```
+
 ChatGPT, Codex, claude.ai, Claude Code and Inspector connections remain
 **owner checks**, with exact procedures in the
 [ledger](MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending).
@@ -145,6 +170,8 @@ and [Workbench](docs/evidence/2026-10-08-step7.md#workbench).
 | --- | --- |
 | `QYL_COLLECTOR_URL` | Collector base URL; local default `http://127.0.0.1:5100`. |
 | `QYL_API_KEY` | Outgoing Collector credential. |
+| `MCP_ALLOWED_HOSTS` | Comma-separated additional request hostnames, added to the public URL hostname for hosted HTTP. |
+| `MCP_ALLOWED_ORIGIN_HOSTS` | Comma-separated additional browser-origin hostnames, added to the public URL hostname for hosted HTTP. |
 | `QYL_PROJECT` | Server-configured Collector project scope. |
 | `MCP_COLLECTOR_PROJECTS` | Operator-controlled verified-subject-to-project mapping. |
 | `QYL_MCP_TELEMETRY=0` | Disable MCP self-telemetry. |

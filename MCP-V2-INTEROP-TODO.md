@@ -459,3 +459,12 @@ Earlier unaccepted claims remain separated as follows:
 The five client connections, production Events lifecycle, npm consumer,
 publication and other owner decisions remain indexed in the existing owner
 sections above; none was deleted to satisfy a completion criterion.
+
+Owner correction, 2026-10-08: `gh pr view 98 --repo ANcpLua/qyl.mcp --json comments`
+returned [two requested changes](https://github.com/ANcpLua/qyl.mcp/pull/98#issuecomment-6051677237).
+The follow-up replaces the service data inventory's unsupported live deployment,
+configuration, retention, Events and identity claims with exact owner actions,
+while retaining source-derived data flows. README restores the five clients'
+setup and registration paths plus `MCP_ALLOWED_HOSTS` and
+`MCP_ALLOWED_ORIGIN_HOSTS`. The [dated help, documentation and source output](docs/evidence/2026-10-08-step7.md#client-setup-and-owner-review-correction)
+backs those instructions; no client login or owner action was performed.

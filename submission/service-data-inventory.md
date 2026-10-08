@@ -1,144 +1,86 @@
-# Hosted qyl MCP data inventory
+# qyl MCP service data inventory
 
-Technical evidence for preparing the public plugin's privacy, support and
-reviewer-access material. Checked on 7 October 2026 against the current local
-source and selected production settings. This is not a published privacy
-policy or a commitment about provider retention. Keep it outside the upload
-directory `submission/qyl/`.
+Source-derived input for privacy, support and reviewer-access drafting,
+checked **2026-10-08**. This is not a published policy or a production
+configuration observation. Commands and actual source output are in
+[step-7 evidence](../docs/evidence/2026-10-08-step7.md), including the
+[additional inventory excerpts](../docs/evidence/2026-10-08-step7.md#inventory-and-allowlist-source).
+Keep this document outside the upload directory `submission/qyl/`.
 
-## Verified service boundary
+## Service boundary in source
 
-- Production MCP is `https://mcp.qyl.at/mcp`. Release PR #84 (`2073dc2d`) is
-  deployed as `50e768c7-90f8-4333-9b41-ea11baff94cb`, reporting service version
-  7.1.1. This version/publication change preserves the data-handling runtime
-  verified with PR #81 (`3ae30b52`).
-- Auth0 validates callers for the qyl MCP audience and `qyl:read`. The server
-  authorizes each request. Clients receive telemetry returned by the configured
-  Collector through read-only tools and optional viewers.
-- The Collector endpoint, API key and optional project header are deployment
-  configuration. Production has a Collector credential and no `QYL_PROJECT`
-  override. The Collector runs in `ApiKey` mode with one configured project;
-  an in-memory comparison confirmed that the MCP credential maps to that
-  project. No key values were printed. The Collector derives project scope
-  from the credential and rejects conflicting project headers. The MCP code
-  does not assign a different Collector credential/project to each Auth0 user.
-  A new reviewer login would therefore share the deployment's existing data
-  scope; it would not create a sample-only project.
-- Events are enabled at `/data/mcp-events.json`. Their Auth0 access checker is
-  configured. Production uses the default 30-second polling interval.
+The public endpoint's unauthenticated challenge and metadata were observed at
+`https://mcp.qyl.at/mcp`; see the dated `curl` output in
+[step 4](../docs/evidence/2026-10-08-step4.md#endpoint).
+**Deployed commit: owner compares the active Railway deployment with
+`git rev-parse origin/main` and records date, deployment ID and both commits.**
+No release PR or version response substitutes for this observation.
 
-Sources: [request authorization](../server/src/authorization.ts),
-[token verification](../server/src/oauth.ts),
-[Collector configuration](../server/src/config.ts),
-[hosted startup](../server/src/main.ts), and
-[Railway service declaration](../.railway/railway.ts).
+The Auth0 source validates audience, issuer, expiry and `qyl:read` and gates
+hosted requests. Collector URL, credential and project are server configuration.
+With `MCP_COLLECTOR_PROJECTS`, the verified subject selects a configured project
+and credential; without it, the source also supports single-project operation.
+No current production mapping or reviewer isolation is established here.
+[Configuration and authorization source](../docs/evidence/2026-10-08-step7.md#configuration-and-serving).
 
-Collector project-scope sources inspected in the available checkout:
-`services/qyl.collector/ApiKeys/CollectorApiKeyMiddleware.cs`,
-`services/qyl.collector/ApiKeys/AuthenticatedProject.cs`,
-`services/qyl.collector/ApiKeys/OtlpApiKeyValidator.cs`, and
-`services/qyl.collector/Hosting/CollectorAuthExtensions.cs`.
+Events are optional in authenticated Auth0 mode with `MCP_EVENTS_STORE` and
+ongoing authorization-check credentials. The source default poll interval is
+30 seconds. This is not evidence that production enables Events or uses that
+interval. [Events source](../docs/evidence/2026-10-08-step7.md#events).
 
-## Data used and retained by the MCP service
+## Data flow and persistence in source
 
-| Data | Purpose and handling | Persistence established by source |
+| Data | Purpose and handling | Source evidence, 2026-10-08 |
 | --- | --- | --- |
-| OAuth access token and claims | Validate issuer, audience, expiry, subject, client ID, token ID and scopes; associate the request with its authorized caller | Request authentication uses the token in memory. Subscriber access/refresh tokens are not fields in the Events store. This does not establish Auth0 or client-side token retention. |
-| Tool arguments and returned traces, logs, metrics and sessions | Execute a bounded query against the configured Collector and return its actual result to the connected client/viewer | The public HTTP server disables the local native-execution evidence file. The Events file contains no copy of the Collector's telemetry. Collector storage remains separate. |
-| Events subscription | Own, filter, verify, sign, refresh and expire a webhook subscription | The persistent JSON fields are `id`, `subject`, `clientId`, `name`, `arguments`, `url`, `secret`, optional `previousSecret` and `previousSecretUntil`, `refreshBefore`, and `updatedAt`. `arguments` currently contains only the optional `service_name` filter. |
-| Events delivery bookkeeping | Suppress already observed trace errors and track in-flight delivery | Seen trace IDs, callback-verification cache and in-flight delivery state are in process memory. The current persisted schema has no replay queue or cursor history; responses use `cursor: null`. |
-| Auth0 Management API credential and token | Recheck the subscriber's account, application grant, consent and permission while Events run | Client credentials are supplied by host configuration. The Management API access token and short-lived authorization cache are in memory, not in subscriber records. |
-| Operational diagnostics | Report startup/request failures and event authorization, polling or delivery failures | The application writes diagnostics to stdout/stderr. Some event messages include subscription/event IDs. Hosting/edge log retention was not established by this inspection. |
+| OAuth token and validated claims | Authenticate and authorize a request; Events persist owner subject/client ID, not the subscriber's access or refresh token. Provider/client retention is outside this source observation. | [Authentication](../docs/evidence/2026-10-08-step7.md#deployment-and-authentication), [Events schema](../docs/evidence/2026-10-08-step7.md#inventory-and-allowlist-source). |
+| Tool arguments and Collector results | Execute the requested query and return traces, logs, metrics or sessions to the client/viewer. Hosted HTTP with `MCP_PUBLIC_URL` disables the local native store; native record fields exclude arguments, metadata and result bodies. | [Serving](../docs/evidence/2026-10-08-step7.md#configuration-and-serving), [native schema](../docs/evidence/2026-10-08-step7.md#native-records). |
+| Events subscription | Persist `id`, `subject`, `clientId`, event name, `arguments` (optional `service_name`), callback URL, current/previous signing secret and rotation expiry, `refreshBefore` and `updatedAt`. No copied Collector telemetry is in this schema. | [Stored subscription schema](../docs/evidence/2026-10-08-step7.md#inventory-and-allowlist-source). |
+| Delivery bookkeeping | In-memory seen-trace, verification and in-flight state; delivered events use `cursor: null`. The persisted subscription schema contains no replay queue. | [Delivery and schema](../docs/evidence/2026-10-08-step7.md#inventory-and-allowlist-source). |
+| Auth0 management access | Host credentials support ongoing account/grant/consent/permission checks. The checker caches access results in memory; it does not add management tokens to subscription records. | [Authorization checker](../docs/evidence/2026-10-08-step7.md#events). |
+| Operational diagnostics | Startup, polling and delivery paths report errors; some delivery diagnostics include event/subscription IDs. This does not establish hosting or edge log retention. | [Serving](../docs/evidence/2026-10-08-step7.md#configuration-and-serving), [delivery excerpts](../docs/evidence/2026-10-08-step7.md#inventory-and-allowlist-source). |
 
-`QYL_MCP_CAPTURE_CONTENT` is absent in the inspected production settings; its
-implementation enables request/response content capture only for the explicit
-value `1`. This flag and the disabled native-execution file do not establish
-that every hosting, edge, identity-provider or client log contains no data.
+Workbench's optional content capture is separate from the minimized native
+incoming-call records. Its source reads `QYL_MCP_CAPTURE_CONTENT`; no live
+setting is asserted. [Workbench/telemetry source](../docs/evidence/2026-10-08-step7.md#workbench).
 
-Sources: [Events schema and lifecycle](../server/src/events.ts),
-[atomic JSON persistence](../server/src/atomic-json-store.ts),
-[ongoing access checks](../server/src/events-authorization.ts),
-[public-host evidence setting](../server/src/main.ts),
-[telemetry configuration](../server/src/telemetry.ts), and
-[Collector result handling](../server/src/collector.ts).
+## Recipients and roles
 
-## Recipients and service roles
-
-| Service or destination | Verified role |
+| Destination | Source-derived role and evidence, 2026-10-08 |
 | --- | --- |
-| Connected MCP client, including ChatGPT | Receives requested tool results and viewer data. Telemetry fields can contain personal or confidential content supplied to the Collector. |
-| Subscription's verified HTTPS callback | Receives signed `trace.error` notifications. The payload includes trace ID, root-span name, service names, span count, duration and start time, plus event metadata. The root-span name and service names are user-supplied telemetry. |
-| Configured qyl Collector | Supplies the traces, logs, metrics and sessions requested by tools and Events polling. It owns the underlying telemetry store. |
-| Auth0 | Provides the login/token issuer and account/grant/consent/permission checks used for continuing Events authorization. |
-| Railway | Hosts the deployed MCP service and its persistent Events volume; the Collector is a separate service. |
-| Cloudflare | Provides the public endpoint's edge/security layer. Its separate data practices and retention were not established here. |
+| Connected MCP client and viewer | Receive the requested Collector data; see [tool inventory](../docs/evidence/2026-10-08-step7.md#package-and-tool-inventory). Telemetry content is input data, not a guarantee that no personal information can occur. |
+| Verified callback | Receives signed `trace.error` payloads with trace ID, root-span name, services, span count, duration and start time. HTTPS/public-address checks and redirect rejection are implemented; these do not remove personal data from telemetry names. See [Events](../docs/evidence/2026-10-08-step7.md#events) and [callback excerpts](../docs/evidence/2026-10-08-step7.md#inventory-and-allowlist-source). |
+| Configured Collector | Supplies telemetry for tools and polling; underlying storage is separate from the MCP subscription store. See [configuration](../docs/evidence/2026-10-08-step7.md#configuration-and-serving). |
+| Auth0 | Configured token issuer and ongoing Events authorization provider in Auth0 mode; see [authentication](../docs/evidence/2026-10-08-step7.md#deployment-and-authentication). |
+| Hosting and edge providers | Owner identifies the actually deployed providers, processing roles and retention from current deployment/account settings and records dated output; repository deployment declarations alone do not establish these facts. |
 
-Callback verification and delivery reject non-public destinations and redirects
-and use HTTPS. This destination check does not remove personal information from
-the event payload. The subscribers' callback URLs and signing secrets are not
-public listing or review-demo material.
+## Retention and deletion in source
 
-Sources: [event payload](../server/src/events.ts),
-[callback verification and signing](../server/src/webhook.ts), and the
-[production evidence checklist](../MCP-V2-INTEROP-TODO.md).
+The [Events constants and tests](../docs/evidence/2026-10-08-step7.md#events)
+set the default subscription TTL to one hour, bounded from five minutes to
+24 hours, with ten minutes of prior-key overlap. Expiry pruning removes
+expired subscriptions and previous keys. Unsubscribe removes owner-scoped
+records and cancels deliveries. Confirmed revocation or callback HTTP 410
+removes a subscription; authorization outages pause delivery.
+[Lifecycle and atomic-store excerpts](../docs/evidence/2026-10-08-step7.md#inventory-and-allowlist-source)
+show these paths and file mode `0600`. Logical removal and file permissions
+are not proof of physical erasure, encryption or backup deletion.
 
-## Retention and deletion behavior
+| Unobserved production fact | Exact pending owner action |
+| --- | --- |
+| Collector retention and deletion | Inspect the active Collector retention configuration and deployed implementation, run an approved expiry fixture, and record date, inputs and actual deletion results. |
+| Hosting/edge logs and backups | Inspect current provider log-retention and volume-backup settings; record date, service IDs and redacted output, including provider recovery-copy limitations. |
+| Events lifecycle in production | Run the subscribe, matching/non-matching delivery, restart, renewal, unsubscribe and revocation procedures in the [owner checklist](../MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending), retaining actual results. |
+| Deletion outside the MCP store | Establish and document how the owner handles Collector data, identity/consent records and copies already returned to clients; removing a subscription alone is not that process. |
 
-- An Events subscription defaults to one hour and accepts a TTL between five
-  minutes and 24 hours. Refresh can extend it. Expired records and expired
-  prior signing keys are removed during startup/polling and subscription
-  updates; the prior signing-key overlap is ten minutes.
-- `events/unsubscribe` removes the matching owner-scoped record and aborts
-  and waits for its in-flight deliveries. Confirmed loss of authorization or
-  callback HTTP 410 also removes the subscription. An unavailable authorization
-  service suspends delivery; it does not count as confirmed revocation.
-- The Events store is atomically replaced with file mode `0600`. This is
-  application-level file access and record removal, not a guarantee about
-  encryption, physical erasure or hosting backups.
-- The inspected Collector production setting is `QYL_RETENTION_DAYS=30`.
-  Its source defaults to hourly retention cycles when no interval override is
-  present, as in the inspected settings. Source deletes expired logs, spans and
-  metric data in batches and performs a database checkpoint after deletion.
-  A live retention cycle, physical erasure and derived-data retention were not
-  demonstrated in this goal.
-- On 7 October at about 01:50 UTC, the authenticated Railway Backups pages for
-  both production services, `qyl-mcp` and `qyl-collector`, displayed
-  **No backup schedule** and **No Backups** for their attached volumes.
-  This establishes the visible service-volume backup configuration at that
-  time. It does not establish provider-internal recovery copies, log retention
-  or physical deletion. No backup or schedule was created or changed.
-- Removing an Events subscription does not delete Collector telemetry,
-  Auth0 account/consent records or copies already returned to a client.
-- The production lifecycle test on 7 October observed the same subscription
-  survive deployment and renew automatically. Pausing its ChatGPT task removed
-  it from the persistent store before expiration. A later controlled error was
-  stored in the Collector but produced no notification over more than three
-  polling intervals; the Events store stayed empty. This demonstrates logical
-  record removal and stopped delivery, not physical erasure. The three
-  synthetic test traces remain subject to Collector retention.
+## Remaining publisher decisions
 
-Collector sources inspected in the available checkout:
-`services/qyl.collector/Retention/RetentionOptions.cs`,
-`services/qyl.collector/Retention/RetentionService.cs`, and
-`services/qyl.collector.storage/DuckDbStore.Retention.cs`.
+**Owner action: verify the publisher identity in the portal**, recording the
+date, selected identity and actual verification status. No identity approval
+is established by repository author metadata.
 
-## Remaining publisher decisions and evidence
-
-The public policy and support pages still need the verified publishing identity,
-a confirmed public contact/support route, account/data-deletion handling,
-provider retention, and any additional data uses outside the code
-above. Do not infer these from a GitHub username, free pricing or an open-source
-license. The `ancplua` organization now shows the Individual identity check as
-Approved; the public package still needs its selected publisher identity.
-
-Reviewer access needs an explicitly authorized account scoped to sample data.
-The existing owner-account rehearsals do not supply that isolation or reviewer
-credentials. Confirm that scope before recording or granting external access.
-Keep login credentials in the portal's secure reviewer fields, never this file,
-the public manifest, a recording or the ZIP.
-
-No public policy URL, retention promise or reviewer-access completion is
-established by this technical inventory. Current website source files are now
-available locally through the approved GitHub file API; confirmation of a
-public/private support route remains pending. The existing Railway browser
-console supplied the needed inspection access without a new SSH key.
+The owner must also provide confirmed public support/privacy/terms URLs,
+reviewer credentials for an isolated populated project, a demo recording and
+any retention/deletion commitments. Inspect the live project mapping before
+sharing reviewer access; a new login alone does not prove isolation. Keep
+credentials in private reviewer fields. The exact handoff is in
+[submission preparation](README.md#owner-fields-still-required).
