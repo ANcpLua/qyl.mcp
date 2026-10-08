@@ -67,11 +67,11 @@ have no accepted evidence. The full list is in goal-objective.md under
 
 ## Next
 
-The owner resumed for step 2 on 8 October 2026: open one PR, merge after green
-CI and clean review, then pause. On the next resume, continue with steps 3
-and 4: align the existing shared skill and collect fresh evidence. Submission
-preparation follows separately in step 5. New trace/CI parameters require a
-released contract change in `ANcpLua/qyl-api-schema` first.
+The owner resumed on 8 October 2026 and then removed the intermediate pauses.
+Merge step 2 after green CI and clean review, then continue with steps 3 and 4
+in one PR: align the existing shared skill and collect fresh evidence.
+Submission preparation follows separately in step 5. New trace/CI parameters
+require a released contract change in `ANcpLua/qyl-api-schema` first.
 
 ## Owner actions pending
 
