@@ -59,6 +59,9 @@ jobs:
         with:
           global-json-file: qyl/global.json
 
+      - name: Enforce the SDK v2 dependency boundary
+        run: bun run verify:sdk
+
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: bun run test

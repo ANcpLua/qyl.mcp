@@ -364,18 +364,20 @@ if (existsSync(new URL("./dist/mcp-dashboard.html", import.meta.url))) {
 const nativeState = JSON.parse(await readFile(nativeStatePath, "utf8"));
 check(
   "native tool execution evidence is automatic and terminal",
-  nativeState.version === 2 &&
+  nativeState.version === 3 &&
     nativeState.executions.length >= 9 &&
     nativeState.executions.every((execution) =>
       execution.status !== "running" &&
       execution.durationMs >= 0 &&
-      execution.protocolEvents?.length === 2 &&
-      execution.telemetryCorrelation?.executionId === execution.id),
+      typeof execution.toolName === "string" &&
+      typeof execution.id === "string"),
 );
 check(
-  "prose-only tool results leave usage and cost unavailable",
+  "native records contain only operation metadata",
   nativeState.executions.every((execution) =>
-    execution.tokenUsage === undefined && execution.cost === undefined),
+    Object.keys(execution).every((key) => [
+      "id", "toolName", "status", "createdAt", "startedAt", "completedAt", "durationMs", "errorType",
+    ].includes(key))),
 );
 } finally {
   await client.close().catch(() => undefined);

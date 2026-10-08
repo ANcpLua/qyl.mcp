@@ -18,7 +18,7 @@ Checked in source on 8 October 2026.
 | `fetch_telemetry` app-only visibility | `server/src/server.ts` | present |
 | Trace-error Events implementation | `server/src/events.ts`, `events-authorization.ts`, `webhook.ts` | present |
 | Account and project scoping | `server/src/collector-access.ts`, `request-scope.ts` | present |
-| Tool-call records persist `arguments` and `_meta` | `server/src/native-execution.ts` | present, removal is goal step 1 |
+| Native tool-call records contain operation metadata only | `server/src/native-execution.ts` | implemented in step 1; dated tests below |
 | OpenAI plugin draft | `submission/qyl/plugin.json`, `mcp.json` | present, not uploaded |
 | Anthropic bundle (`.claude-plugin/plugin.json`, `.mcp.json`) | `submission/qyl/` | absent |
 | Agent skill | `submission/qyl/skills/` | absent |
@@ -27,12 +27,104 @@ Checked in source on 8 October 2026.
 
 | Check | Command | Last run | Result |
 | --- | --- | --- | --- |
-| Build | `bun run build` | not recorded | |
-| Tests | `bun run test` | not recorded | |
-| Transport smoke, both eras | `bun run smoke` | not recorded | |
+| Build | `bun run build` | 2026-10-08 UTC | exit 0; Vite reports its bundle-size warning |
+| Tests | `QYL_MCP_NATIVE_STATE_PATH=/private/tmp/qyl-step1-native.json QYL_MCP_TELEMETRY=0 bun run test` | 2026-10-08 UTC | 337 passed: server 159, Workbench 142, dashboard 32, site 4; 0 failures |
+| Transport smoke, both eras | `bun run smoke` | 2026-10-08 UTC | exit 0; `all checks passed`, Workbench connects/disconnects/reconnects |
+| Lint | `bun run lint` | 2026-10-08 UTC | `$ oxlint .`; exit 0 |
 | Collector contract smoke | `bun run smoke:otlp` | not recorded | |
 | Project isolation smoke | `bun run smoke:projects` | not recorded | |
-| SDK v1 dependency check | `bun run verify:sdk` | not on `main` yet | |
+| SDK v1 dependency check | `bun run verify:sdk` | 2026-10-08 UTC | 5 tests passed; `MCP SDK boundary passed for 7 manifests/lockfiles (SDK v2; exact pins).` |
+
+### Step 1 — rules and native call records
+
+Local run on 2026-10-08 UTC, branch `codex/review-invariants`, based on
+`8c658fd62b413ae682bea256002f83f18d5ade6a` (`git rev-parse HEAD` immediately
+after `git rebase --autostash origin/main`). These are local results; they
+do not establish CI, deployment or a real hosted client connection.
+
+`bun run test` produced these regression-test results:
+
+```text
+✔ native tools/call records operation metadata and keeps payloads out of telemetry
+✔ native evidence records validation failure without persisting results of any size
+✔ native telemetry reports terminal evidence persistence failures
+✔ file native repository persists only operation metadata for successful and failed calls
+✔ version-1 state loses payloads before it is read or written again
+✔ version-2 state loses payloads before it is read or written again
+```
+
+The file-backed test sends ordinary private text through arguments, metadata,
+text and structured results on success and failure. It verifies that the
+client receives its result, that the serialized file excludes the text and
+payload fields, that reopening preserves the metadata, and that an attempted
+write containing `arguments` and `_meta` is rejected without changing the file.
+Native OTLP inputs likewise omit request/response bodies and client request IDs;
+only `traceparent` is passed to OpenTelemetry's parser for trace correlation.
+
+The schema is version 3. Valid version-1/2 files are projected to operation
+metadata and replaced atomically without a payload-bearing backup. Unreadable
+files retain the existing archive recovery behavior; old recovery archives
+are not purged by this change.
+
+`bun run smoke` also produced:
+
+```text
+ok native tool execution evidence is automatic and terminal
+ok native records contain only operation metadata
+ok stock client negotiated the legacy era
+ok legacy catalog has all 11 tools
+ok legacy read tool returns real demo metrics
+ok in-process tools/call recording is native and automatic
+```
+
+The native-store assertions in both smoke scripts now require the new metadata
+shape. This intentionally replaces their former requirement to retain result
+bodies and protocol messages, matching the owner's revised storage requirement.
+Workbench's own execution-result checks remain in place.
+
+CI evidence, 2026-10-08 UTC, for code commit
+`2ad06673b5bcdebf1097be5f4b75e9cd039b86f2` in
+[PR #91](https://github.com/ANcpLua/qyl.mcp/pull/91):
+
+- `gh run view 37713013285 --repo ANcpLua/qyl.mcp --json status,conclusion`
+  returned `{"conclusion":"success","status":"completed"}`.
+- `gh run view 37713013285 --repo ANcpLua/qyl.mcp --log --job 113103037324`
+  records `bun run verify:sdk`, the combined build/tests/smokes, and these
+  real-Collector outputs:
+
+```text
+ok OTel operation logs carry the matching trace and span identifiers
+ok real OTLP traces, logs and metrics stored under two separate project credentials
+ok 2026-07-28: all 11 tools and viewer paths isolate concurrent accounts; foreign trace IDs and unassigned accounts denied
+ok 2025-11-25: all 11 tools and viewer paths isolate concurrent accounts; foreign trace IDs and unassigned accounts denied
+ok Events: same trace ID stays project-scoped; signatures, unsubscribe and assignment revocation pass
+all real-Collector project-isolation checks passed (local test identities; hosted reviewer login still required)
+```
+
+A subsequent compatibility correction delegates `traceparent` parsing entirely
+to OpenTelemetry instead of accepting only the version-00 spelling. On
+2026-10-08 UTC, `./node_modules/.bin/tsc -p server/tsconfig.test.json` followed by
+`QYL_MCP_NATIVE_STATE_PATH=/private/tmp/qyl-step1-native.json QYL_MCP_TELEMETRY=0 node --test server/dist-test/native-execution.test.js`
+returned `tests 10`, `pass 10`, `fail 0`, including a version-01 traceparent
+fixture. The CI evidence above belongs to the stated commit; the PR must pass
+CI and review again after this correction. No production or hosted-client
+claim follows from these fixture runs.
+
+For corrected code commit `5c835be4dfb0a873be39bd9b8e76318739ce0999`, checked
+on 2026-10-08 UTC:
+
+```text
+$ gh run view 37713263607 --repo ANcpLua/qyl.mcp --json status,conclusion --jq '{status,conclusion}'
+{"conclusion":"success","status":"completed"}
+```
+
+This is the complete CI workflow, including lint, the SDK check, build, tests,
+transport smoke, live OTLP and project-isolation smoke. Later checkpoint edits
+do not change that runtime code. Codex's first review reported the version-00
+traceparent restriction; the correction above removes it. A new code review
+was requested with `gh pr comment 91 --repo ANcpLua/qyl.mcp --body-file /private/tmp/qyl-step1-review-request.md`
+on 2026-10-08 UTC, returning
+<https://github.com/ANcpLua/qyl.mcp/pull/91#issuecomment-6050323909>.
 
 ## Production endpoint `https://mcp.qyl.at/mcp`
 

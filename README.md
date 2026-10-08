@@ -216,11 +216,13 @@ export as contract-validated JSON or Markdown with SHA-256 artifact evidence.
 The server also records inbound `tools/call` requests natively — including over
 plain stdio, with no workbench involved — to
 `~/.qyl/mcp-native-executions.json` (`QYL_MCP_NATIVE_STATE_PATH` overrides),
-newest 1,000 retained. Results under two million serialized characters are kept
-in full after redaction; larger ones are replaced by an explicit truncation
-result rather than silently trimmed. Token usage and cost are kept only when a tool reports
-explicit structured evidence; qyl.mcp never infers them from prose, latency, or
-payload size.
+newest 1,000 retained. Each native record contains a server-generated ID, tool
+name, timing, status and error type. Arguments, metadata, result bodies and
+error messages are not retained. Known version-1/2 files are reduced to this
+format on load; unreadable files and pre-existing recovery archives still need
+operator review. Hosted HTTP (`MCP_PUBLIC_URL` set) disables this local store.
+Local checks for this behavior are recorded in the
+[step 1 evidence](MCP-V2-INTEROP-TODO.md#step-1--rules-and-native-call-records).
 
 ## Configuration
 
@@ -231,7 +233,7 @@ payload size.
 | `QYL_PROJECT` | Server-owned collector project scope; defaults to `default`. |
 | `QYL_OTLP_ENDPOINT` | Optional OTLP base for workbench self-telemetry. |
 | `QYL_MCP_TELEMETRY=0` | Disable MCP spans, metrics, and operation logs. Enabled otherwise. |
-| `QYL_MCP_CAPTURE_CONTENT=1` | Include redacted, size-bounded request and response bodies in operation logs. Off by default. |
+| `QYL_MCP_CAPTURE_CONTENT=1` | Workbench content capture; native incoming tool-call telemetry never supplies request or response bodies. |
 | `QYL_MCP_STATE_PATH` | Override the durable workbench JSON path. |
 | `QYL_MCP_NATIVE_STATE_PATH` | Override the native-execution evidence path. |
 | `QYL_MCP_WORKBENCH_PORT` | Workbench listener port; default `18888`. |
@@ -250,10 +252,12 @@ and its development MCP conventions.
 low-cardinality target exists, and never carry argument or result content.
 Failures use `error.type` on the same operation histogram rather than a second
 counter. The `qyl.mcp.operation` log event carries matching trace context; its
-body is metadata-only unless you opt in with `QYL_MCP_CAPTURE_CONTENT=1`.
+body is metadata-only for native incoming tool calls. Workbench client operation
+logs can include redacted content when `QYL_MCP_CAPTURE_CONTENT=1`.
 
-Trace context and baggage travel in the unprefixed MCP `params._meta` bag on
-every supported transport. An inbound server span parents off that remote context
+Trace context travels in the unprefixed MCP `params._meta` bag. Native incoming
+tool telemetry accepts only the W3C `traceparent` field for correlation, omitting
+arbitrary metadata and baggage. An inbound server span parents off that remote context
 and links any ambient transport span. HTTP propagation stays a separate concern
 and is never replaced by the MCP carrier.
 

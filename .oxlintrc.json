@@ -16,6 +16,17 @@
         "test-results"
     ],
     "rules": {
+        "no-restricted-imports": [
+            "error",
+            {
+                "patterns": [
+                    {
+                        "group": ["@modelcontextprotocol/sdk", "@modelcontextprotocol/sdk/**"],
+                        "message": "Use the split SDK v2 packages; v2 supplies 2025-era compatibility."
+                    }
+                ]
+            }
+        ],
         "eqeqeq": [
             "error",
             "smart"
