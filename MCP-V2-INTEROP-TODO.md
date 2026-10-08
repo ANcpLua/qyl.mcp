@@ -608,3 +608,12 @@ record the scope of these fixtures; no production identity claim follows.
 | --- | --- |
 | MCP Registry | Excluded by owner requirement, `goal-objective.md` point 11. The preparation scope is the OpenAI plugin plus Anthropic connector and plugin bundle; adding a registry entry expands that scope and publication is an owner action. 2026-10-08: the exact `rg` command in [point-11 evidence](docs/evidence/2026-10-08-followup-11.md) returned that requirement and the three submission destinations. No registry action was performed. |
 | Custom Marketplaces | Excluded by the same requirement: a custom distribution catalog is an additional distribution target, outside these three directory records. The same dated command/output establishes the agreed scope, not any claim of platform incompatibility. No marketplace was created or published. |
+
+## Revised goal — point 12: HTTP conformance and negative control, 2026-10-08
+
+| Check | Dated command and actual output |
+| --- | --- |
+| HTTP both eras | 2026-10-08: the exact `verify_server.mjs --url http://127.0.0.1:54306/mcp --cwd …/server --start -- … bun dist/main.js` command in [point-12 evidence](docs/evidence/2026-10-08-followup-12.md#http-both-era-verification-with-conformance) exited 0: modern and legacy each listed 11 tools; schema portability GREEN. |
+| HTTP conformance | Same command: `server-stateless 24 passed; 4 n/a (need SDK fixtures); 1 SHOULD-warning(s)` for list-change notification; `tools-list 4 passed`; `dns-rebinding-protection 2 passed`; verifier GREEN. Scope and warning are retained, not claimed as a complete fixture suite. |
+| Bun HTTP entry | 2026-10-08: `env QYL_DEMO=1 QYL_MCP_TELEMETRY=0 node dist/main.js` in `server/` exited 1 with the explicit message to run the HTTP entry with Bun; Node serves stdio only. The successful HTTP command above uses Bun 1.4.2. |
+| Legacy-only negative control | 2026-10-08: `verify_server.mjs --cwd /private/tmp/qyl-followup-12/legacy-only -- bun index.ts` exited 1: modern RED (pinned 2026-07-28 not offered), legacy GREEN (`notes_get`), schema skipped. The evidence retains the initial broken dependency link and its rejected run, corrected fixture setup, exact command and unchanged verifier hashes. |
