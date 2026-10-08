@@ -239,6 +239,16 @@ Validation on 2026-10-08:
 - `bun run lint` returned `$ oxlint .`, exit 0.
 - `git diff --check` returned no output, exit 0.
 
+Owner-review correction, 2026-10-08:
+`gh pr view 94 --repo ANcpLua/qyl.mcp --json comments` returned
+[the owner's two requested changes](https://github.com/ANcpLua/qyl.mcp/pull/94#issuecomment-6051328564):
+remove the skill's internal Evidence section and restore the explicit
+limitations for deletion, deployment, rollback and web search. The revised
+skill keeps evidence here and names those limitations next to the authorized
+connector guidance. After the edit, the same temporary-environment
+`quick_validate.py` command above returned `Skill is valid!`;
+`git diff --check` returned no output (exit 0).
+
 ## Production endpoint `https://mcp.qyl.at/mcp`
 
 | Check | How | Date | Observation |

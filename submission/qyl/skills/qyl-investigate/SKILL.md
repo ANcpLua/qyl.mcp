@@ -51,12 +51,6 @@ the agent or person with the appropriate connector and authorization.
   result.
 - Report what the collector returned, including upstream errors, in the
   words of the result. Do not substitute demo data for live data.
-- For remediation, use the appropriate authorized connector. The current
-  qyl telemetry tools do not perform those actions.
-
-## Evidence
-
-Checked 2026-10-08 against the repository tool manifest and Events source.
-Command, output and workflow-to-source mapping are recorded in
-[MCP-V2-INTEROP-TODO.md, step 3](https://github.com/ANcpLua/qyl.mcp/blob/main/MCP-V2-INTEROP-TODO.md#step-3--agent-skill).
-This describes source behavior, not a verified hosted-client connection.
+- qyl cannot delete telemetry, deploy, roll back or search the web. State
+  the limitation plainly and use the appropriate authorized connector for
+  those actions.
