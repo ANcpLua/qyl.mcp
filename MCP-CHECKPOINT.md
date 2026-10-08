@@ -19,8 +19,10 @@ The local Collector checkout is on that merged `main`; `verify:pins` confirms
 11.3.0 on both sides. The consumer now implements the three trace options and
 the CI service prefix. [Option-A evidence](docs/evidence/2026-10-08-point-8-options.md)
 supersedes the earlier Collector-pin blocker. Its own PR still requires the
-four review/CI gates. Production handshake evidence requires the Collector
-deployment first; the owner supplies the Inspector proof.
+four review/CI gates. After the Collector deployment reached `SUCCESS` and
+`RUNNING`, the local 11.3.0 startup gate matched the production Collector's
+revision at `2026-10-08T08:18:26.200Z`; the linked evidence contains the actual
+output. The owner supplies the separate Inspector proof.
 
 The [release contract map](release/contract.md) and [owner handoff](release/README.md)
 connect all revised points and Done-when criteria to the ledger and dated

@@ -294,3 +294,57 @@ Actual output at the first post-merge observation:
 At that observation the new build was still waiting. No production handshake
 was inferred from the merge or local tests. The Inspector evidence remains
 owner-supplied and is separate from these checks.
+
+### Successful deployment and production Collector handshake
+
+Later on 2026-10-08, this command:
+
+```sh
+railway deployment list --project 5eaa4020-71d9-4828-89d3-316cb188529e --service ff836187-b65c-4645-ab40-67b54fbfa93f --environment production --limit 1 --json | jq '[.[]|{id,status,createdAt,commitHash:.meta.commitHash}]'
+```
+
+returned:
+
+```json
+[{"id":"a8f98435-c8a8-4e2d-b3a4-d9c6f9dd3145","status":"SUCCESS","createdAt":"2026-10-08T08:08:13.723Z","commitHash":"15924345bd804c358b1ab22d059b27d815bc8874"}]
+```
+
+`railway status --project 5eaa4020-71d9-4828-89d3-316cb188529e --environment production --json`
+also reported that deployment in the Collector's `activeDeployments`, with
+`deploymentStopped: false` and instance `281e1eb2-8eac-475d-a928-1fed782375be`
+at `RUNNING`. Only after those observations was the public Collector probed.
+
+The first one-attempt probe at `2026-10-08T08:18:12.840Z` returned
+`{"kind":"unreachable","detail":"The operation was aborted due to timeout"}`.
+The gate exited 1 as intended; that attempt did not establish a handshake.
+An independent `curl --max-time 20 --silent --show-error --fail https://api.qyl.at/health`
+then returned a healthy body advertising `sha256:382526f13652d18b`.
+The following retry used the built consumer's actual HTTP startup gate and
+its default retry policy:
+
+```sh
+env -u QYL_API_KEY -u QYL_PROJECT -u MCP_COLLECTOR_PROJECTS QYL_DEMO=0 QYL_COLLECTOR_URL=https://api.qyl.at QYL_MCP_TELEMETRY=0 node --input-type=module - <<'JS'
+import { generatedContractRevision, probeCollectorHealth, assertCollectorContractRevision } from './server/dist/contract-handshake.js';
+console.log(JSON.stringify({startedAt: new Date().toISOString(), expected: generatedContractRevision()}));
+await assertCollectorContractRevision({transport: 'http', probe: async () => {
+  const observed = await probeCollectorHealth();
+  console.log(JSON.stringify({at: new Date().toISOString(), observed}));
+  return observed;
+}});
+console.log('Production Collector handshake: PASS');
+JS
+```
+
+Actual output, exit 0:
+
+```text
+{"startedAt":"2026-10-08T08:18:25.990Z","expected":"sha256:382526f13652d18b"}
+{"at":"2026-10-08T08:18:26.200Z","observed":{"kind":"advertised","healthy":true,"revision":"sha256:382526f13652d18b"}}
+{"level":"info","message":"contract revision sha256:382526f13652d18b matched at https://api.qyl.at/"}
+Production Collector handshake: PASS
+```
+
+This establishes the local 11.3.0 consumer's real startup-gate comparison
+against the deployed production Collector. It is not an observation of a
+deployed MCP process or an authenticated Inspector session. No credentials,
+tenant settings or Railway deployment configuration were changed.
