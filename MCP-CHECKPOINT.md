@@ -18,11 +18,18 @@ Point 8's Collector prerequisite is merged in [qyl PR #642](https://github.com/A
 The local Collector checkout is on that merged `main`; `verify:pins` confirms
 11.3.0 on both sides. The consumer now implements the three trace options and
 the CI service prefix. [Option-A evidence](docs/evidence/2026-10-08-point-8-options.md)
-supersedes the earlier Collector-pin blocker. Its own PR still requires the
-four review/CI gates. After the Collector deployment reached `SUCCESS` and
+supersedes the earlier Collector-pin blocker. [Consumer PR #119](https://github.com/ANcpLua/qyl.mcp/pull/119)
+merged on 2026-10-08 at `08:37:26Z` after all four review/CI gates passed on
+`0321963`. After the Collector deployment reached `SUCCESS` and
 `RUNNING`, the local 11.3.0 startup gate matched the production Collector's
 revision at `2026-10-08T08:18:26.200Z`; the linked evidence contains the actual
 output. The owner supplies the separate Inspector proof.
+
+Point 9 in the continuation normalizes only the advertised output schemas.
+[Dated evidence](docs/evidence/2026-10-08-point-9-schema-portability.md) records
+the eight spelling changes across six tools, unchanged contract revision and
+validation, and passing local tests. Its separate PR still requires all four
+review/CI gates; the owner's authenticated Inspector proof remains separate.
 
 The [release contract map](release/contract.md) and [owner handoff](release/README.md)
 connect all revised points and Done-when criteria to the ledger and dated

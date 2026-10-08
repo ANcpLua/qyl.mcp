@@ -795,7 +795,7 @@
           "__schema31": {
             "type": "object",
             "properties": {},
-            "additionalProperties": {}
+            "additionalProperties": true
           },
           "__schema32": {
             "oneOf": [
@@ -1934,7 +1934,7 @@
                   {
                     "type": "object",
                     "properties": {},
-                    "additionalProperties": {}
+                    "additionalProperties": true
                   },
                   {
                     "oneOf": [
@@ -2379,7 +2379,7 @@
           "__schema31": {
             "type": "object",
             "properties": {},
-            "additionalProperties": {}
+            "additionalProperties": true
           },
           "__schema32": {
             "oneOf": [
@@ -4401,7 +4401,7 @@
                 "services",
                 "has_error"
               ],
-              "additionalProperties": {},
+              "additionalProperties": true,
               "description": "Trace summary without the full span collection"
             }
           },
@@ -4446,7 +4446,7 @@
                   {
                     "type": "object",
                     "properties": {},
-                    "additionalProperties": {}
+                    "additionalProperties": true
                   },
                   {
                     "oneOf": [
@@ -4755,9 +4755,13 @@
                       },
                       "value": {
                         "description": "The aggregation applied to the points in this bucket. Null when the bucket\nholds no value: either no point landed in it, or every point that did was\nan OTLP `NO_RECORDED_VALUE` marker.",
-                        "type": [
-                          "number",
-                          "null"
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
                         ]
                       },
                       "point_count": {
@@ -4827,7 +4831,7 @@
                   {
                     "type": "object",
                     "properties": {},
-                    "additionalProperties": {}
+                    "additionalProperties": true
                   },
                   {
                     "oneOf": [
@@ -5594,7 +5598,7 @@
                   {
                     "type": "object",
                     "properties": {},
-                    "additionalProperties": {}
+                    "additionalProperties": true
                   },
                   {
                     "oneOf": [

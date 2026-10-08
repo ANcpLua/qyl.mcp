@@ -39,3 +39,17 @@ test("the published tool manifest matches its committed snapshot", async () => {
     "the tool manifest changed: review the diff, then regenerate with `bun run snapshot:tools`",
   );
 });
+
+test("telemetry tools advertise portable output schema spellings through the SDK", async () => {
+  const { tools } = JSON.parse(await buildToolManifest()) as {
+    tools: { name: string; outputSchema: unknown }[];
+  };
+  const affected = ["display_traces", "get_trace", "list_traces", "search_logs", "get_metric_series", "query_metric"];
+  for (const name of affected) {
+    const tool = tools.find((candidate) => candidate.name === name);
+    assert.ok(tool, name);
+    const schema = JSON.stringify(tool.outputSchema);
+    assert.doesNotMatch(schema, /"additionalProperties":\{\}/u, name);
+    assert.doesNotMatch(schema, /"type":\[/u, name);
+  }
+});
