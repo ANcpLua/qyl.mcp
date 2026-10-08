@@ -25,7 +25,7 @@ The [ledger](../MCP-V2-INTEROP-TODO.md) retains historical and superseding rows.
 | 11 | MCP Registry and Custom Marketplaces excluded with reason. | [Point 11](../docs/evidence/2026-10-08-followup-11.md): owner-defined distribution scope. |
 | 12 | Bun HTTP both-era conformance and working legacy-only negative control. | [Point 12](../docs/evidence/2026-10-08-followup-12.md): 24 stateless checks, additional scenario results, fixture exclusions and warning, negative-control exit 1. |
 | 13 | These release documents map requirements, ledger and evidence. | [Point 13](../docs/evidence/2026-10-08-followup-13.md): file/mapping/link checks. |
-| 14 | Pending: repository completion audit in the verify CI job. | Required checks come from [goal point 14](../goal-objective.md#d-submission-files) and [the original audit snippet](../docs/evidence/2026-10-08-step7.md). `server/docs/completion.md` is not the audit source; external `check_v2` stays outside CI. |
+| 14 | Repository completion audit wired into the verify CI job. | [Point 14](../docs/evidence/2026-10-08-followup-14.md): local audit and negative controls; [script](../scripts/verify-completion.py) derives from [the original audit snippet](../docs/evidence/2026-10-08-step7.md). External `check_v2` stays outside CI. |
 | 15 | Pending: restore the four public-page sections from commit `93d8dbf`. | [Goal point 15](../goal-objective.md#d-submission-files); [current draft](../submission/public-pages-draft.md). Every number and deployment statement must be an owner-supplied field. |
 
 ## Done-when mapping
@@ -35,7 +35,7 @@ The [ledger](../MCP-V2-INTEROP-TODO.md) retains historical and superseding rows.
 | 1 | Point 3, rerun the unchanged external checker for final source state. |
 | 2 | Points 4–5, successful verify CI on the reviewed source; do not substitute a local run for CI. |
 | 3 | Dated ledger rows and actual output for points 6, 7, 11 and 12. |
-| 4 | Files/fields from points 9, 10, 13, 14 and 15, explicit owner gaps and rebuilt ZIP SHA-256. Points 14 and 15 are still pending in this dated map. |
+| 4 | Files/fields from points 9, 10, 13, 14 and 15, explicit owner gaps and rebuilt ZIP SHA-256. Point 15 is still pending in this dated map. |
 | 5 | Point 8's documented release blocker is the permitted alternative. The merged schema PR alone does not implement these options in qyl.mcp. |
 | 6 | All source, test, public-response and historical claims trace to the ledger/evidence; retain the SDK boundary, minimized records, user-need descriptions, shared skill and valid bundles. CI automation cannot establish the truth of arbitrary prose. |
 | 7 | [Owner handoff](README.md#owner-handoff), [client/Events procedures](../MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending) and [submission fields](../submission/README.md#owner-fields-still-required). Owner work remains pending. |

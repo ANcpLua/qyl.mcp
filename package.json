@@ -20,6 +20,7 @@
     "dev": "bun run --cwd server build && bun run --cwd dashboard dev",
     "verify:pins": "node verify-contract-pins.mjs",
     "verify:sdk": "node --test scripts/verify-mcp-sdk.test.mjs && bun scripts/verify-mcp-sdk.mjs",
+    "verify:completion": "python3 -m unittest discover -s scripts -p test_verify_completion.py && python3 scripts/verify-completion.py",
     "lint": "oxlint .",
     "smoke:projects": "bun run --cwd server smoke:projects"
   },
