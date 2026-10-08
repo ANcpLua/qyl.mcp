@@ -23,7 +23,7 @@ On 2026-10-08, the commands in [step-5 evidence](../docs/evidence/2026-10-08-ste
 validated `plugin.json` and `mcp.json` against their fetched `$schema` documents,
 then checked the ZIP against the source bytes. The root plugin has
 `extensions.com.openai`, one server, five positive and three negative cases.
-The README contains 269 words outside code blocks. The shared skill remains
+The README then contained 269 words outside code blocks. The shared skill remains
 identical for both plugin formats.
 
 Build from the repository root with `python3 submission/build-openai-package.py`.
