@@ -500,3 +500,16 @@ search also found the landing-page claim. Both were corrected; the skill's
 qyl-specific legacy rejection claim was reconciled with the recorded factory
 source. `quick_validate.py` returned `Skill is valid!`; server build and lint
 exited 0. Full commands/output are in the point-1 evidence record.
+
+## Revised goal — point 2: HTTP banner on stderr, 2026-10-08
+
+| Check | Dated command and actual output |
+| --- | --- |
+| Preceding point merged | 2026-10-08: `gh pr view 100 --repo ANcpLua/qyl.mcp --json state,mergedAt,mergeCommit,headRefOid,statusCheckRollup` returned `MERGED`, merge `150a158eae054d4f553dae94c6add9f4e33d741e`, all four required checks `SUCCESS` at head `1ef923b`. |
+| Application banner | 2026-10-08: the Python Bun-process command in [point-2 evidence](docs/evidence/2026-10-08-followup-02.md#actual-http-process) returned `HTTP /healthz: 200`, `stderr: MCP server serving http://127.0.0.1:52045/mcp`; stdout contained only Bun's own development-server line. The command asserts qyl's banner is not on stdout. |
+| Build and lint | 2026-10-08: `bun run --cwd server build` and `bun run lint` exited 0; `git diff --check` was silent, exit 0. |
+
+The evidence retains the initial fixture cleanup timeout and overly broad
+stdout assertion, along with the corrected fixture and successful output.
+The earlier HTTP-banner assessment describes the prior source; this point
+changes that application banner's stream without changing the stdio path.
