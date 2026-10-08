@@ -128,6 +128,43 @@ was requested with `gh pr comment 91 --repo ANcpLua/qyl.mcp --body-file /private
 on 2026-10-08 UTC, returning
 <https://github.com/ANcpLua/qyl.mcp/pull/91#issuecomment-6050323909>.
 
+### Step 2 — tool descriptions
+
+Local evidence, 2026-10-08, branch `codex/step2-tool-descriptions`, compared
+with base `9e2476b` (`origin/main` when run). These commands establish local
+source and manifest results only.
+
+| Command | Actual output / result |
+| --- | --- |
+| `bun run --cwd server snapshot:tools` | Exit 0; `wrote /Users/alexandernachtmann/RiderProjects/qyl.mcp/server/tool-manifest.snapshot.json` (includes server build and test compilation). |
+| `QYL_MCP_TELEMETRY=0 node --test server/dist-test/tool-manifest.test.js` | `✔ the published tool manifest matches its committed snapshot`; `tests 1`, `pass 1`, `fail 0`. |
+| `bun run verify:sdk` | `tests 5`, `pass 5`, `fail 0`; `MCP SDK boundary passed for 7 manifests/lockfiles (SDK v2; exact pins).` |
+| `bun run lint` | `$ oxlint .`; exit 0. |
+| `git diff --check` | No output; exit 0. |
+| `git diff -- server/src server/tool-manifest.snapshot.json` | Review: all 11 descriptions name the function and user need; `get_trace` states full-tree size and alternatives; `ci_log` states emitter convention and 50-session/100-trace limits; `query_metric` states one number per series. No handler, schema, title, annotation or visibility edits. |
+
+Manifest comparison command, run on 2026-10-08:
+
+```sh
+node --input-type=module <<'JS'
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+const before = JSON.parse(execFileSync('git', ['show', '9e2476b:server/tool-manifest.snapshot.json']));
+const after = JSON.parse(readFileSync('server/tool-manifest.snapshot.json'));
+const strip = m => ({ ...m, tools: m.tools.map(({ description, ...rest }) => rest) });
+assert.deepEqual(strip(after), strip(before));
+assert.equal(after.tools.filter((t, i) => t.description !== before.tools[i].description).length, 11);
+console.log('PASS: 11 descriptions changed; all other manifest fields unchanged');
+JS
+```
+
+Output:
+
+```text
+PASS: 11 descriptions changed; all other manifest fields unchanged
+```
+
 ## Production endpoint `https://mcp.qyl.at/mcp`
 
 | Check | How | Date | Observation |
