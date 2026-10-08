@@ -55,11 +55,29 @@ records the original Collector branch/commit and the separate fresh `main`
 fixture at `d1de0c953d469edf8d9ef4168dc6fb5c0f016dfd`. No production inference
 follows from either local run.
 
-Static findings remain open in this evidence-only step: 25 `TS-ZOD-ROOT`,
-2 `TS-RAW-SHAPE`, 2 `TS-STDOUT-LOG`, and 2 `TS-PUSH-REQUEST` occurrences
-(including compiled duplicates). These counts come from the complete checker
-output in the transcript; the runtime both-era success does not erase them.
-No checker, suppression or source behavior changed.
+Static checker output retained: 25 `TS-ZOD-ROOT`, 2 `TS-RAW-SHAPE`,
+2 `TS-STDOUT-LOG`, and 2 `TS-PUSH-REQUEST` occurrences, including compiled
+duplicates. All 31 error-severity diagnostics remain in the transcript;
+the assessments below explain their concrete paths without changing the
+checker, suppressing findings or changing code.
+
+### Static findings — assessed, 2026-10-08
+
+Commands below ran from the repository root against this PR's unchanged
+runtime source and installed SDK 2.3.1. Output excerpts are literal; the
+assessment is the interpretation of that output, not a changed checker result.
+
+| Rule | Assessment | Command | Actual output excerpt |
+| --- | --- | --- | --- |
+| `TS-STDOUT-LOG` | **assessed**: `server/src/main.ts:414` is the HTTP-start banner inside `createHostedRuntime`, not the stdio path. `bootstrap` returns after `startStdioServer` for `--stdio`. | `sed -n '372,425p' server/src/main.ts`; `sed -n '453,490p' server/src/main.ts` | `async function createHostedRuntime(`; `console.log(` followed by the template string `MCP server serving ${endpoint}`; `if (transport === "stdio") {` / `startStdioServer(() => createServer({ transport: "stdio" }));` / `return undefined;` |
+| `TS-PUSH-REQUEST` | **assessed**: `server/src/request-scope.ts:94` calls the deprecated logging notification. SDK 2.3.1 filters it on the modern path using the request's `logLevel`; absent threshold returns without delivery, and messages below the threshold are filtered. This is not an elicitation or sampling request. | `sed -n '90,96p' server/src/request-scope.ts`; `sed -n '2216,2230p' server/node_modules/@modelcontextprotocol/server/dist/createMcpHandler-D4NN8WsG.d.mts`; `sed -n '1083,1100p' server/node_modules/@modelcontextprotocol/server/dist/mcp-DIH4cS6P.mjs` | `await ctx.mcpReq.log(level, { tool, ...data }, LOGGER);`; `@deprecated Deprecated as of protocol version 2026-07-28 (SEP-2577).`; `threshold = ctx.mcpReq.envelope?.[LOG_LEVEL_META_KEY];`; `if (threshold === void 0) return Promise.resolve();`; `method: "notifications/message",` |
+| `TS-RAW-SHAPE` | **assessed**: `server/src/events.ts:77` is the JSON Schema of the `events/list` definition, not a raw Zod tool-registration shape. | `sed -n '70,89p' server/src/events.ts`; `sed -n '330,332p' server/src/events.ts` | `export const TRACE_ERROR_EVENT = {`; `inputSchema: {` / `type: "object",` / `properties: {`; `return { events: [TRACE_ERROR_EVENT] };` |
+| `TS-ZOD-ROOT` | **assessed**: the root imports resolve to installed Zod 4.6.5 in this repository; the diagnostic's Zod-3 condition is not the installed dependency state. Generated duplicates refer to the same imports. | `node -p "require('./server/node_modules/zod/package.json').version"`; `node -p "require('./server/package.json').dependencies.zod"` | `4.6.5` from each command. |
+
+The SDK package-version command
+`node -p "require('./server/node_modules/@modelcontextprotocol/server/package.json').version"`
+returned `2.3.1` on 2026-10-08. These are source/dependency assessments;
+the separate both-era test remains the recorded runtime evidence.
 
 ### Step 1 — rules and native call records
 
