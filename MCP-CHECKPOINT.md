@@ -22,7 +22,8 @@ records the permitted Done when 5 blocker and exact owner prerequisite.
 
 The [release contract map](release/contract.md) and [owner handoff](release/README.md)
 connect all revised points and Done-when criteria to the ledger and dated
-commands/output. Their point-13 snapshot leaves points 14 and 15 pending.
+commands/output. [Point-14 evidence](docs/evidence/2026-10-08-followup-14.md) records the new CI audit;
+point 15 remains pending.
 
 ## Repository and local evidence
 

@@ -624,3 +624,11 @@ record the scope of these fixtures; no production identity claim follows.
 | --- | --- |
 | Release documents | 2026-10-08: the Python command in [point-13 evidence](docs/evidence/2026-10-08-followup-13.md) returned `Mappings: work points 1..15; Done when 1..7` for [release/contract.md](release/contract.md). [release/README.md](release/README.md) links the objective, ledger and evidence and names exact pending owner actions. |
 | Scope and links | Same dated command returned `Pending points 14/15 and point-8 release blocker: explicit` and `Local document links and heading anchors: 70 resolve`. These are snapshot results; later points update the map. Manual claim review and separate owner review are still required. |
+
+## Revised goal — point 14: repository completion CI audit, 2026-10-08
+
+| Check | Dated command and actual output |
+| --- | --- |
+| Audit and negative controls | 2026-10-08: `PATH="/private/tmp/qyl-followup-14/clean-venv/bin:$PATH" bun run verify:completion` passed 8 tests, both declared schemas, 8 bundle and 5 handoff files, README 263 words, 11 descriptions, strict metadata-only record, ledger rows and local links. [Point-14 evidence](docs/evidence/2026-10-08-followup-14.md) contains exact setup and output. |
+| CI placement and boundary | Same dated source review of `.github/workflows/ci.yml` and `package.json` shows `bun run verify:completion` in `verify`, after tests, with a temporary Python environment and pinned requirements. `check_v2` stays outside CI. Manual prose/owner-state review is still required. |
+| Existing gates | 2026-10-08: `bun run lint` exited 0; `bun run verify:sdk` passed 5 tests and the seven-manifest boundary; `git diff --check` was silent, exit 0. |
