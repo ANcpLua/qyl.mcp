@@ -43,9 +43,12 @@ For transport changes, the required `smoke` commands remain in AGENTS.md; the
 [HTTP both-era command](../docs/evidence/2026-10-08-followup-12.md) also records
 its Bun-only entry and conformance scope.
 
-The [point-10 rebuild](../docs/evidence/2026-10-08-followup-10.md) produced local
-`submission/packages/qyl-openai-1.0.0-draft.zip` with SHA-256
-`16a6ffb523f90674572efc99dca430cf661d26aaa08f54d6680f7da0261fab5c`.
+The [listing-review rebuild](../MCP-V2-INTEROP-TODO.md#listing-review-2026-10-08)
+on 2026-10-08 produced local `submission/packages/qyl-openai-1.0.0-draft.zip`
+with SHA-256 `328dd9813dcbf10e581a722593b797f7ffd01f4ec6562ea3cc1ad9ae1f6aa4ce`.
+It supersedes the [point-10 rebuild](../docs/evidence/2026-10-08-followup-10.md)
+hash `16a6ffb523f90674572efc99dca430cf661d26aaa08f54d6680f7da0261fab5c`, which
+covered the earlier packaged README, manifest and skill.
 That archive is Git-ignored. Rebuild and revalidate after any packaged-source
 change; do not apply this hash to future manifest edits. Missing URLs,
 publisher name and countries are mapped in the [submission handoff](../submission/README.md#owner-fields-still-required).
