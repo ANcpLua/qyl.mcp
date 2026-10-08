@@ -9,7 +9,7 @@ import {
   type AuthInfo,
   type OAuthTokenVerifier,
 } from "@modelcontextprotocol/server";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { createResourceAuthorization } from "./authorization.js";
 import { QYL_MCP_RESOURCE, QYL_MCP_SCOPE } from "./oauth.js";
 

@@ -295,9 +295,11 @@ The [2026-10-08 transcript](docs/evidence/2026-10-08-step4.md) records actual
 results, including the initial OTLP failure against the adjacent Collector
 feature branch and the successful rerun against a fresh Collector `main`.
 Use `QYL_COLLECTOR_PROJECT` to select the intended fixture. Static `check_v2`
-returned 31 error-severity findings; the [per-rule assessments](MCP-V2-INTEROP-TODO.md#static-findings--assessed-2026-10-08)
+historically returned 31 error-severity findings; the [per-rule assessments](MCP-V2-INTEROP-TODO.md#static-findings--assessed-2026-10-08)
 explain the installed paths without suppressing diagnostics. Both-era runtime
-evidence is recorded separately.
+evidence is recorded separately. The revised point-3 run on 2026-10-08 reports
+zero errors with an unchanged checker after explicit `zod/v4` imports and a
+justified Events JSON-Schema marker; see [command and output](docs/evidence/2026-10-08-followup-03.md#static-checker-before-and-after).
 
 Remote connections, production Events, deployed commit and a fresh npm
 consumer remain owner observations. Local tests or CI cannot substitute for

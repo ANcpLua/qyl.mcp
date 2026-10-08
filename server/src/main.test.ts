@@ -11,7 +11,7 @@ import {
   type OAuthMetadata,
   type OAuthTokenVerifier,
 } from "@modelcontextprotocol/server";
-import { z } from "zod";
+import * as z from "zod/v4";
 import {
   createFetch,
   createHostedHandler,

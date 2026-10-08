@@ -6,7 +6,7 @@ import test from "node:test";
 import { CallToolResultSchema } from "@modelcontextprotocol/core";
 import type { CallToolResult } from "@modelcontextprotocol/client";
 import { McpServer } from "@modelcontextprotocol/server";
-import { z } from "zod";
+import * as z from "zod/v4";
 import {
   assertNativeExecutionRecordingArmed,
   FileNativeExecutionRepository,

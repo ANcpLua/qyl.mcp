@@ -28,7 +28,7 @@
  */
 
 import { createRequire } from "node:module";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 const COMPONENT_SCHEMA_PREFIX = "#/components/schemas/";
 

@@ -24,7 +24,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import type { McpServer, ServerCapabilities, ServerContext } from "@modelcontextprotocol/server";
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { AtomicJsonStore } from "./atomic-json-store.js";
 import { fetchTraces } from "./data.js";
 import { CollectorAccessError, collectorAccessForSubject } from "./collector-access.js";
@@ -74,6 +74,7 @@ export const TRACE_ERROR_EVENT = {
     "A trace containing at least one error span reached the qyl collector. " +
     "Pass service_name to watch one service; omit it to watch every service.",
   delivery: ["webhook"],
+  // mcp-v2-allow TS-RAW-SHAPE: events/list publishes JSON Schema, not a Zod tool-registration shape.
   inputSchema: {
     type: "object",
     properties: {

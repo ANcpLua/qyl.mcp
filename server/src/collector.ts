@@ -15,7 +15,7 @@ import type {
   SessionEntity,
   Trace,
 } from "@ancplua/qyl-api-schema/types";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { collectorHeaders, collectorUrl } from "./config.js";
 import { CollectorAccessError, readCollectorProjects, type CollectorAccess } from "./collector-access.js";
 import {

@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { rename } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { AtomicJsonStore, PersistenceError } from "./atomic-json-store.js";
 import type {
   McpPropagationCarrier,

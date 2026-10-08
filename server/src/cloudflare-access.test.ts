@@ -5,7 +5,7 @@ import { createCloudflareAccessAuth, readAccessConfig } from "./cloudflare-acces
 import { createFetch, createHostedHandler, hostedAuth } from "./main.js";
 import { McpServer } from "@modelcontextprotocol/server";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 const teamDomain = "https://example.cloudflareaccess.com";
 const audience = "example-access-application";

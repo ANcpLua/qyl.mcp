@@ -1,6 +1,6 @@
 import { contractSchema, publishedContractSchema, type ContractInput } from "@ancplua/qyl-api-schema/zod";
 import type { StandardSchemaWithJSON } from "@modelcontextprotocol/server";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 // The JSON-Schema-to-Zod adapter that produced these validators is published by
 // the contract package itself, so this module is now only the named bindings.
