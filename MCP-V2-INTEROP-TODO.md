@@ -567,3 +567,12 @@ record the scope of these fixtures; no production identity claim follows.
 | Running deployment | 2026-10-08: `railway status --project 5eaa4020-71d9-4828-89d3-316cb188529e --environment production --json` returned active deployment `2c548573-5f6a-4293-9d89-5b366f282a15`, `SUCCESS`, `deploymentStopped: false`, instance `RUNNING`, commit `369c54acd78a8a6ccdef62d03c26601440163be3`. Latest successor `1f37877e-079d-44a0-8f7b-9c7bb32fb300` at `e85773e6e6a1a1dc12ab55e5c91b320488a64d24` was `WAITING`; it was not claimed as running. |
 | PR #91 included | 2026-10-08: `git merge-base --is-ancestor 4685c2471a4100ed6a00601b44ec3ead1b6a0f6f 369c54acd78a8a6ccdef62d03c26601440163be3` exited 0. The running commit contains the record-minimization fix. No pre-#91 build was observed, so no owner redeploy request is needed for that condition. Existing stored-data erasure was not inspected. |
 | Read-only scope | Only `railway list/status/deployment list/service status/api` reads and Git/GitHub reads were used. No deployment or configuration mutation was invoked; [commands/output](docs/evidence/2026-10-08-followup-06.md) include the initial unlinked-checkout error and explicit-ID recovery. |
+
+## Revised goal — point 7: production challenge, 2026-10-08
+
+| Check | Dated command and actual output |
+| --- | --- |
+| Production challenge route | 2026-10-08: the exact `curl` command in [point-7 evidence](docs/evidence/2026-10-08-followup-07.md#production-observation) returned `HTTP 404`, body `Not Found`; server Date `Thu, 08 Oct 2026 05:46:20 GMT`. This is response evidence, not an inspection of environment values. |
+| Token behavior | 2026-10-08: `QYL_MCP_TELEMETRY=0 node --test --test-name-pattern='the OpenAI domain challenge' server/dist-test/main.test.js` passed `the OpenAI domain challenge answers the configured token as plain text, before the gate`, 1 passed, 0 failed; absent/blank token returns 404 in the fixture. |
+| Owner action | README names `OPENAI_APPS_CHALLENGE`, the exact GET route and the pending action to copy the portal-provided token into the intended hosted environment, then verify in the portal. No variable was set and no portal action was performed. Source and command output are in the linked dated evidence. |
+| Documentation gate | 2026-10-08: `bun run --cwd server verify:deployment-guidance` passed; `git diff --check` was silent, exit 0. |
