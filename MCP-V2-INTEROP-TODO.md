@@ -311,3 +311,62 @@ redacted actual output. Never record tokens, cookies or callback signing keys.
 | Revocation stops delivery | On a separate test subscription, revoke the isolated account's access, emit a fresh matching test error, and retain revocation timing plus the bounded no-delivery window. Restore access only by owner decision. |
 | npm fresh consumer | In a fresh temporary project, install the exact observed `qyl-mcp-server@7.1.1`, run the pinned Inspector 2.9.0 with modern and legacy configurations against its stdio command in explicit demo mode, and record discovery plus a read result in both eras. The registry version alone is not this proof. |
 | Public directory statuses | For each of OPENAI_PLUGIN, ANTHROPIC_CONNECTOR and ANTHROPIC_PLUGIN, the owner reads the corresponding portal and records date, record identifier and actual draft/submitted/approved/published state. No portal state is established here. |
+
+## Directory records
+
+Repository-side inventory, checked 2026-10-08. `sed -n '1,85p'
+submission/README.md` reports OPENAI_PLUGIN as `local draft` and both
+Anthropic records as `not created`; these are preparation states recorded in
+the repository, not independently observed portal states. The owner's
+[2026-10-08 review](https://github.com/ANcpLua/qyl.mcp/pull/95#issuecomment-6051431328)
+requests retaining those states in this index. Portal status verification
+remains an explicit owner action above.
+
+| Record | Repository-side state and dated evidence | Exact pending owner action |
+| --- | --- | --- |
+| OPENAI_PLUGIN | 2026-10-08: local draft; `plugin.json` and `mcp.json` present (inventory output below). | Supply the missing review fields, then separately authorize and perform portal validation/upload at `https://platform.openai.com/plugins`; record the actual status. |
+| ANTHROPIC_CONNECTOR | 2026-10-08: `submission/README.md` records `not created`; endpoint draft is `https://mcp.qyl.at/mcp`. | Create the separate MCP connector record at `https://claude.ai/directory/manage` after supplying the reviewer account, documentation/privacy URLs, support contact and icon; record its actual status. |
+| ANTHROPIC_PLUGIN | 2026-10-08: bundle files present; `submission/README.md` records the portal record as `not created`. | Select repository `ANcpLua/qyl.mcp`, plugin path `submission/qyl` and a branch or tag in the separate plugin-bundle record; arrange the Claude GitHub App access and later publication decision; record actual portal status. |
+
+Inventory command, 2026-10-08:
+
+```sh
+node --input-type=module <<'JS'
+import { existsSync } from 'node:fs';
+for (const f of ['submission/qyl/plugin.json','submission/qyl/mcp.json','submission/qyl/.claude-plugin/plugin.json','submission/qyl/.mcp.json','submission/qyl/README.md','submission/qyl/LICENSE','submission/public-pages-draft.md']) console.log(`${f}: ${existsSync(f) ? 'present' : 'absent'}`);
+JS
+```
+
+Actual output:
+
+```text
+submission/qyl/plugin.json: present
+submission/qyl/mcp.json: present
+submission/qyl/.claude-plugin/plugin.json: present
+submission/qyl/.mcp.json: present
+submission/qyl/README.md: present
+submission/qyl/LICENSE: present
+submission/public-pages-draft.md: present
+```
+
+## Owner actions required
+
+Open preparation actions, recorded 2026-10-08 from `goal-objective.md`,
+steps 4–6. These instructions are not evidence of execution or authorization
+to perform them in this task.
+
+| Action | Needed for | Exact owner action |
+| --- | --- | --- |
+| Publisher identity | OPENAI_PLUGIN | Select the intended publisher identity in the OpenAI portal and record its actual verified status before submission. |
+| Public pages | All three records | Approve the wording in `submission/public-pages-draft.md`, publish support/privacy/terms pages on qyl.at, and supply their final reachable URLs for the manifests and portal fields. |
+| Reviewer account | All three records | Create or choose an isolated reviewer account, populate its Collector project with representative sample traces/logs/metrics, verify OAuth access, and supply credentials through the portal's private reviewer field. |
+| Demo recording | OPENAI_PLUGIN | Record the installed plugin performing the positive review cases with sample data, host the recording, and supply its reachable URL for `review.demo_recording_url`. |
+| Attestations and submission | All three records | Review legal attestations, approve final fields, and explicitly submit each separate portal record; retain the date, record ID and portal response. |
+| Publication | All three records | After approval, make a separate publication decision; for the Anthropic bundle ensure required repository visibility and GitHub App access, then publish and record the observed listing URL. |
+
+## Auth0 discovery decision
+
+Repository decision pointer, 2026-10-08: `sed -n '388,403p' README.md`
+prints that Auth0 publishes OIDC discovery, qyl.mcp is the resource server
+rather than issuer, and `openid`/`email` for workspace domain claiming do not
+replace `qyl:read`; see [README authentication guidance](README.md#authentication).
