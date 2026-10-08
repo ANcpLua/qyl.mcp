@@ -617,3 +617,10 @@ record the scope of these fixtures; no production identity claim follows.
 | HTTP conformance | Same command: `server-stateless 24 passed; 4 n/a (need SDK fixtures); 1 SHOULD-warning(s)` for list-change notification; `tools-list 4 passed`; `dns-rebinding-protection 2 passed`; verifier GREEN. Scope and warning are retained, not claimed as a complete fixture suite. |
 | Bun HTTP entry | 2026-10-08: `env QYL_DEMO=1 QYL_MCP_TELEMETRY=0 node dist/main.js` in `server/` exited 1 with the explicit message to run the HTTP entry with Bun; Node serves stdio only. The successful HTTP command above uses Bun 1.4.2. |
 | Legacy-only negative control | 2026-10-08: `verify_server.mjs --cwd /private/tmp/qyl-followup-12/legacy-only -- bun index.ts` exited 1: modern RED (pinned 2026-07-28 not offered), legacy GREEN (`notes_get`), schema skipped. The evidence retains the initial broken dependency link and its rejected run, corrected fixture setup, exact command and unchanged verifier hashes. |
+
+## Revised goal — point 13: release requirement/evidence map, 2026-10-08
+
+| Check | Dated command and actual output |
+| --- | --- |
+| Release documents | 2026-10-08: the Python command in [point-13 evidence](docs/evidence/2026-10-08-followup-13.md) returned `Mappings: work points 1..15; Done when 1..7` for [release/contract.md](release/contract.md). [release/README.md](release/README.md) links the objective, ledger and evidence and names exact pending owner actions. |
+| Scope and links | Same dated command returned `Pending points 14/15 and point-8 release blocker: explicit` and `Local document links and heading anchors: 70 resolve`. These are snapshot results; later points update the map. Manual claim review and separate owner review are still required. |
