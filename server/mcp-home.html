@@ -108,12 +108,12 @@
       <p class="section-index">02 / REQUEST SCOPE</p>
       <div class="protocol-heading">
         <h2 id="scope-title">Every call runs inside its request.</h2>
-        <p>One frame around all eleven tools. A tool registered outside it fails the build, so none of the three can go missing.</p>
+        <p>One frame around all eleven tools. A tool registered outside it fails the build, so cancellation and requested progress stay in the common frame.</p>
       </div>
       <div class="protocol-grid scope-grid">
         <article><span>Cancel</span><h3>Stop means stop</h3><p>A <code>notifications/cancelled</code>, or a dropped connection, aborts the in-flight collector fetch at once instead of waiting out its timeout.</p></article>
         <article><span>Progress</span><h3>Only when you ask</h3><p>A request that carries a <code>progressToken</code> gets one <code>notifications/progress</code> per collector round trip and a final <em>Result ready</em>. No token, no noise.</p></article>
-        <article><span>Log</span><h3>One line per call</h3><p>A request that names a log level in its <code>_meta</code> envelope receives one <code>notifications/message</code>: <em>info</em> on success, <em>warning</em> on failure, logger <code>qyl.mcp</code>.</p></article>
+        <article><span>Observe</span><h3>Operation telemetry</h3><p>Native tool telemetry records timing, status and error type through OpenTelemetry. The server sends no deprecated protocol log messages.</p></article>
       </div>
     </section>
 

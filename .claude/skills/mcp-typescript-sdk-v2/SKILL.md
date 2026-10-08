@@ -6,11 +6,11 @@ metadata:
   author: Alex + Claude
   version: "1.0.0"
   verified-against: |
-    Installed packages in qyl.mcp: @modelcontextprotocol/{core,server,client,node,express} 2.0.0
-    (server/package.json pins 2.0.0 exact). Upstream docs: modelcontextprotocol/typescript-sdk
-    main @ 3924de9 (2026-08-18), which documents the v2 stable line.
-    qyl.mcp usage surface grep-verified: registerTool (25 sites), isError (22), ProtocolError (9),
-    setRequestHandler (3), ResourceNotFoundError (3), registerResource (2), registerPrompt (1).
+    qyl.mcp source and local tests, 2026-10-08: core/server/client 2.3.1,
+    express 2.0.2, node 2.1.1. Package/source commands and actual output:
+    docs/evidence/2026-10-08-followup-01.md (SDK skill and landing-page correction).
+    Generic SDK reference material must be checked against installed types before use.
+
 ---
 
 # MCP TypeScript SDK v2 — Expert Reference
@@ -22,12 +22,12 @@ package is replaced by a split package family, and the v1 API names do not exist
 
 ## Package map (what to import from where)
 
-Nine published packages; qyl.mcp installs five:
+The inspected server/workbench manifests use these five split packages:
 
 | Package | Contains | qyl.mcp uses it for |
 | --- | --- | --- |
 | `@modelcontextprotocol/server` | `McpServer`, `createMcpHandler`, `ProtocolError` + subclasses, `inputRequired`, OAuth server helpers (`requireBearerAuth`, `oauthMetadataResponse`) | the qyl MCP server |
-| `@modelcontextprotocol/server/stdio` | `serveStdio`, `StdioServerTransport` (Node-only subpath) | stdio entry (`legacy: "reject"`) |
+| `@modelcontextprotocol/server/stdio` | `serveStdio`, `StdioServerTransport` (Node-only subpath) | stdio entry with SDK serving defaults |
 | `@modelcontextprotocol/client` | `Client`, `StreamableHTTPClientTransport`, `versionNegotiation` | dynamic foreign-server connections |
 | `@modelcontextprotocol/core` | **Zod schema constants only** (`CallToolResultSchema`, `OAuthMetadataSchema`, …) | validating raw wire JSON (native-execution, oauth) |
 | `@modelcontextprotocol/node` / `express` | Node/Express adapters over `createMcpHandler` | HTTP hosting |
@@ -66,22 +66,15 @@ An **era** is a behavior family decided once at connect time:
   server→client input via `return inputRequired(...)`; change notifications only over a
   client-opened `subscriptions/listen` stream; `_meta` envelope on every request.
 
-qyl.mcp serves **only the modern era**, on both transports: `createMcpHandler` and `serveStdio`
-run with `legacy: "reject"`, so a 2025-era `initialize` gets `-32022` naming `2026-07-28`
-(6.0.0; 5.2.0 served the 2025 era for exactly one release). A client must open with
-`server/discover` — on the SDK's `Client` that is `versionNegotiation: { mode: 'auto' }` or a pin;
-the default `mode: 'legacy'` cannot connect. Proven at the 6.0.0 gate by three agents that were
-told nothing about eras.
-Sampling, roots, and the `logging` capability are deprecated as of `2026-07-28` (SEP-2577) and
-stay functional through the deprecation window — reach for elicitation via `input_required`
-first. qyl.mcp uses none of sampling, roots, tasks or SSE. It does keep MCP logging (6.1.0):
-every tool runs inside `runTool` (`server/src/request-scope.ts`), which forwards the cancellation
-signal, sends progress to a `progressToken`, and logs one `notifications/message` per call.
-Measured on SDK 2.0.0 for the modern era: `ctx.mcpReq.log` sends only when the request carried
-`_meta["io.modelcontextprotocol/logLevel"]`, `logging/setLevel` is refused with
-`METHOD_NOT_SUPPORTED_BY_PROTOCOL_VERSION`, and the SDK `Client` has no option that sets the key —
-the caller puts it in `_meta`. `verify:frame` fails the test run on a tool registered outside
-the frame.
+qyl.mcp serves modern and supported 2025-era clients through the SDK defaults
+of `createMcpHandler(factory)` and `serveStdio(factory)`. The workbench uses
+`versionNegotiation: { mode: 'auto' }`. Keep era pins and rejection in focused
+tests and fixtures, not production serving.
+
+qyl.mcp uses none of sampling, roots, logging, tasks or the legacy HTTP+SSE
+transport. `runTool` forwards cancellation and progress only, and `verify:frame`
+fails on a tool registered outside the frame. Source/test evidence, checked
+2026-10-08: [commands and actual output](../../../docs/evidence/2026-10-08-followup-01.md).
 
 Full era matrix, serving patterns, sessions, notifications: `references/serving-and-eras.md`.
 
@@ -125,5 +118,5 @@ Before asserting any SDK behavior not covered here: read the installed package's
 (`ts.sdk.modelcontextprotocol.io/v2/`, source: `modelcontextprotocol/typescript-sdk` `docs/`).
 The upstream repo pins wire-visible behavior in dedicated test files
 (`docs/behavior-surface-pins.md`) — a claim that contradicts a pin is wrong.
-When the pinned `2.0.0` is bumped, re-verify this skill's claims against the release notes before
+When an SDK pin changes, re-verify this skill's claims against the release notes before
 trusting it, and update `metadata.verified-against`.

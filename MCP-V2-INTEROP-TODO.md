@@ -493,3 +493,10 @@ returned the outdated package-README logging claim. The paragraph and 7.2.0
 release notes now document removal; `bun run --cwd server verify:readme`
 returned `11 tools documented; 0 mutating (none) named with its exception.`,
 exit 0. The source evidence and exact output are retained in the linked record.
+
+Point-1 follow-up, 2026-10-08: the second `gh pr view 100 --repo ANcpLua/qyl.mcp --json comments`
+response identified the local SDK skill's stale logging instruction. Hidden-file
+search also found the landing-page claim. Both were corrected; the skill's
+qyl-specific legacy rejection claim was reconciled with the recorded factory
+source. `quick_validate.py` returned `Skill is valid!`; server build and lint
+exited 0. Full commands/output are in the point-1 evidence record.
