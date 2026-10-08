@@ -61,6 +61,24 @@ Free use with no purchases is the explicit owner decision in
 [goal-objective.md](../goal-objective.md#owner-decisions); no future-commerce
 or country commitment is inferred from it.
 
+Point 10 was checked on 2026-10-08; [commands and actual output](../docs/evidence/2026-10-08-followup-10.md)
+record the Anthropic icon validation and the rebuilt OpenAI ZIP. Apply these
+remaining fields only after the owner supplies approved values and publishes
+the pages. Placeholder strings are not manifest values.
+
+| Owner-supplied value | Anthropic `.claude-plugin/plugin.json` | OpenAI root `plugin.json` |
+| --- | --- | --- |
+| Published support URL | `supportUrl` | `extensions.com.openai.interface.supportURL` |
+| Published privacy URL | `privacyPolicyUrl` | `extensions.com.openai.interface.privacyPolicyURL` |
+| Published terms URL | `termsOfServiceUrl` | `extensions.com.openai.interface.termsOfServiceURL` |
+| Verified public publisher name | Owner confirms existing `author` metadata | `extensions.com.openai.interface.developerName` |
+| Approved country selection | Owner supplies portal targeting if requested | `extensions.com.openai.publication.countries` |
+
+All five OpenAI fields and the three Anthropic URLs above remain absent, as
+verified in the linked evidence. After setting approved values, rerun both
+manifest validators and rebuild the ZIP; the current hash cannot cover those
+future edits.
+
 ## Recording walkthrough for the owner
 
 Use the prompts and expected behavior in `qyl/plugin.json` as the test contract.

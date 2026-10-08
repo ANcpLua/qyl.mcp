@@ -10,6 +10,7 @@
   "homepage": "https://qyl.at/",
   "repository": "https://github.com/ANcpLua/qyl.mcp",
   "documentationUrl": "https://github.com/ANcpLua/qyl.mcp#readme",
+  "icon": "./assets/qyl-icon.png",
   "license": "MIT",
   "keywords": ["observability", "opentelemetry", "traces", "logs", "metrics", "mcp"]
 }
