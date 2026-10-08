@@ -402,3 +402,35 @@ open; this does not establish any current portal state.
 | Anthropic bundle and shared skill | 2026-10-08: file inventory prints all five required paths `present`; README 269 words outside code blocks; `claude plugin validate ./submission/qyl` prints `✔ Validation passed`. |
 | Cases and server | 2026-10-08: Python inspection prints `review cases: 5 positive, 3 negative; servers: 1; owner identity/countries unset`. These are drafted cases, not executed hosted-client evidence. |
 | Missing owner fields | Exact remaining actions are in [submission/README.md](submission/README.md#owner-fields-still-required): publisher, targeting, URLs, reviewer access, recording, hosted review cases, attestations and later publication. |
+
+## Step 6 — owner submission/publication handoff, 2026-10-08
+
+This is a boundary record, not a completed submission. The exact owner actions
+remain in [Owner actions required](#owner-actions-required) and the missing
+fields in [submission/README.md](submission/README.md#owner-fields-still-required).
+No portal status is inferred from a merged preparation PR.
+
+Scope evidence, command `sed -n '195,201p' goal-objective.md`, output excerpt:
+
+```text
+6. **Submission and publication** are owner actions: legal attestations,
+   portal uploads, identity selection, publish. Agents prepare and report;
+   they do not submit. Publication is a separate decision after approval.
+```
+
+Preparation boundary, command `git rev-parse origin/main`, output:
+
+```text
+698f045c4dfbb39a171cc59154f64abbc8fd3040
+```
+
+The following are pending owner actions, not tasks executed by this goal:
+
+| Record | Submission handoff | Publication handoff |
+| --- | --- | --- |
+| OPENAI_PLUGIN | Resolve publisher/targeting/URLs/demo/reviewer access, rebuild the local ZIP, upload and validate it, perform attestations, and submit through the owner's portal. Record the actual response. | After approval, owner makes a separate decision to publish and records the observed listing URL/status. |
+| ANTHROPIC_CONNECTOR | Supply the isolated populated account and connector fields, create/validate the separate MCP connector record and submit it. Record the actual response. | Owner verifies the automatic-scan/review result and actual listing state; a successful private connection is not a published connector. |
+| ANTHROPIC_PLUGIN | Supply public page URLs, repository branch/tag and GitHub App access, validate the separate plugin-bundle record, perform attestations and submit it. Record the actual response. | After approval, owner supplies required public repository access and explicitly publishes; record the observed listing URL/status. |
+
+Local verification, 2026-10-08: `git diff --name-only` returned only
+`MCP-V2-INTEROP-TODO.md`; `git diff --check` returned no output (exit 0).
