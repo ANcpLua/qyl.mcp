@@ -322,12 +322,9 @@ export function createHostedHandler(
  * Whether this HTTP process may persist native execution evidence.
  *
  * The evidence file is a LOCAL artifact: it records every inbound tools/call —
- * lifecycle, duration, and a redacted JSON-RPC timeline — into a single JSON
- * file under $HOME. That is exactly what an operator running the server on
- * their own machine wants, and exactly what a public deployment must not do:
- * there the callers are other people, the file would blend their requests into
- * one container-local store, nothing rotates it, and nothing ever reads it
- * back. MCP_PUBLIC_URL is the signal that this process serves somebody else, so
+ * tool name, timing, status and error type — into a bounded JSON file under
+ * $HOME. This local developer artifact is not a hosted audit log.
+ * MCP_PUBLIC_URL is the signal that this process serves somebody else, so
  * recording is armed only in its absence — the loopback default keeps it, and
  * so does --stdio, which is a local process by construction.
  */

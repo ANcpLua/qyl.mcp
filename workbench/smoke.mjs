@@ -194,14 +194,15 @@ try {
     await readFile(join(temp, "native-executions.json"), "utf8"),
   );
   const nativeCall = nativeState.executions?.find(
-    (execution) => execution.request?.toolName === "list_traces",
+    (execution) => execution.toolName === "list_traces",
   );
   check(
     "in-process tools/call recording is native and automatic",
     nativeCall?.status === "succeeded" &&
       nativeCall.durationMs >= 0 &&
-      nativeCall.protocolEvents?.length === 2 &&
-      nativeCall.result?.structuredContent?.traces?.length === 1,
+      Object.keys(nativeCall).every((key) => [
+        "id", "toolName", "status", "createdAt", "startedAt", "completedAt", "durationMs", "errorType",
+      ].includes(key)),
   );
 
   const telemetryResponse = await fetch(`${baseUrl}${executionPath}/telemetry`, {

@@ -95,9 +95,12 @@ MCP logging is deprecated as of that revision (SEP-2577) and kept here through
 the deprecation window beside stderr and OpenTelemetry.
 
 Every inbound `tools/call` on a local server — `--stdio`, or HTTP without
-`MCP_PUBLIC_URL` — is recorded natively: validated result, lifecycle, duration,
-redacted JSON-RPC timeline, and trace/span correlation, persisted atomically to
-`~/.qyl/mcp-native-executions.json`. A public deployment (`MCP_PUBLIC_URL` set)
+`MCP_PUBLIC_URL` — records only its tool name, timing, status and error type,
+plus a server-generated execution ID, atomically in
+`~/.qyl/mcp-native-executions.json`. Arguments, request metadata, result bodies
+and error messages are not retained. Known version-1/2 files are reduced to
+this format on load; unreadable files still use the existing archive recovery
+path, and pre-existing archives are not purged. A public deployment (`MCP_PUBLIC_URL` set)
 records nothing to disk; that evidence file is a local developer artifact, not a
 multi-tenant audit log.
 
@@ -112,7 +115,7 @@ multi-tenant audit log.
 | `QYL_OTLP_ENDPOINT` | Optional OTLP base for self-telemetry. |
 | `QYL_DEMO=1` | Explicit, visibly labelled demo telemetry. A collector failure never silently substitutes demo data. |
 | `QYL_MCP_TELEMETRY=0` | Disable MCP spans, metrics, and operation logs. |
-| `QYL_MCP_CAPTURE_CONTENT=1` | Include redacted, size-bounded request and response bodies in operation logs. Off by default. |
+| `QYL_MCP_CAPTURE_CONTENT=1` | Workbench content capture; native incoming tool-call telemetry never supplies request or response bodies. |
 | `QYL_MCP_NATIVE_STATE_PATH` | Override the native execution-evidence path. |
 | `MCP_EVENTS_STORE` | Persistent Events subscription file; requires Auth0 and the access-check credentials below. |
 | `MCP_EVENTS_AUTH0_CLIENT_ID` / `MCP_EVENTS_AUTH0_CLIENT_SECRET` | Dedicated Management API application with `read:users`, `read:clients`, `read:client_grants`, `read:grants`; resolves CIMD identities and keeps access checks current without storing subscriber tokens. |
