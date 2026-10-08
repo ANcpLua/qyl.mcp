@@ -601,3 +601,10 @@ record the scope of these fixtures; no production identity claim follows.
 | Anthropic icon | 2026-10-08: `claude plugin validate ./submission/qyl` returned `Validation passed`; the exact Python field check in [point-10 evidence](docs/evidence/2026-10-08-followup-10.md) resolved `./assets/qyl-icon.png` inside the package to the same existing PNG as both OpenAI icon fields. |
 | Owner fields | Same dated field check returned `Owner fields absent: Anthropic URLs=3; OpenAI URLs/identity/countries=5` and `Owner destination mapping: PASS`. [Submission instructions](submission/README.md#owner-fields-still-required) name every target field and publication prerequisite. |
 | Rebuilt ZIP | 2026-10-08: `python3 submission/build-openai-package.py` returned six entries and SHA-256 `16a6ffb523f90674572efc99dca430cf661d26aaa08f54d6680f7da0261fab5c`. The linked validator output confirms source-identical contents and both root schemas. The unchanged hash is expected: the changed Anthropic manifest is excluded from this OpenAI archive. |
+
+## Revised goal — point 11: excluded distribution targets, 2026-10-08
+
+| Target | Reason and dated evidence |
+| --- | --- |
+| MCP Registry | Excluded by owner requirement, `goal-objective.md` point 11. The preparation scope is the OpenAI plugin plus Anthropic connector and plugin bundle; adding a registry entry expands that scope and publication is an owner action. 2026-10-08: the exact `rg` command in [point-11 evidence](docs/evidence/2026-10-08-followup-11.md) returned that requirement and the three submission destinations. No registry action was performed. |
+| Custom Marketplaces | Excluded by the same requirement: a custom distribution catalog is an additional distribution target, outside these three directory records. The same dated command/output establishes the agreed scope, not any claim of platform incompatibility. No marketplace was created or published. |
