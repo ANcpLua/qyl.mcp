@@ -1,6 +1,7 @@
 # Release preparation handoff
 
-Dated 2026-10-08. Read the [contract map](contract.md), the controlling
+Dated 2026-10-08. Read the [release contract, its acceptance evidence and the
+requirements map](contract.md), the controlling
 [objective](../goal-objective.md), [ledger](../MCP-V2-INTEROP-TODO.md) and
 [command/output evidence](../docs/evidence/2026-10-08-followup-13.md) together.
 The map distinguishes repository work, the permitted Collector-lockstep blocker
