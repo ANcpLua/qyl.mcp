@@ -175,9 +175,13 @@ Never set the owner checks or bypass them; read owner comments and fix them.
     rejects a legacy-only fixture.
 13. Add `release/contract.md` and `release/README.md` mapping requirements to
     `goal-objective.md`, `MCP-V2-INTEROP-TODO.md` and `docs/evidence/`.
-14. Add the requested completion audit as a CI script. Resolve the referenced
-    `server/docs/completion.md` audit definition with the owner before
-    implementing it; do not confuse MCP argument autocomplete with release completion.
+14. Turn the audit snippet in `docs/evidence/2026-10-08-step7.md` into a CI
+    script in the `verify` job. Check required `submission/qyl` files, both
+    root manifests against `submission/schemas`, README word count, all eleven
+    descriptions (user need, no model instruction), native record schema without
+    `arguments`/`_meta`, ledger without "not recorded" rows, and local links.
+    `server/docs/completion.md` is not the source. Keep `check_v2` outside CI
+    because its skill is external to this repository.
 
 ### E. Owner actions, not agent actions
 
