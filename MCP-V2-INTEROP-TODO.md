@@ -165,6 +165,90 @@ Output:
 PASS: 11 descriptions changed; all other manifest fields unchanged
 ```
 
+### Step 3 — agent skill
+
+Source and local validation evidence, 2026-10-08, branch
+`codex/step3-agent-skill`, based on merged step 2 at `84cad49`.
+The workflow below is supported by the manifest descriptions: sessions and
+traces, full trace then correlated error logs, metric discovery/series/query,
+MCP dashboard, CI convention/limits and trace visualization. Empty results
+report missing matching data; they do not prove system health. Events are an
+opt-in workflow for clients and deployments exposing the extension, not a
+claim of production delivery.
+
+Command:
+
+```sh
+node --input-type=module -e 'import {readFileSync} from "node:fs"; const {tools}=JSON.parse(readFileSync("server/tool-manifest.snapshot.json")); for(const t of tools) console.log(t.name+": "+t.description); console.log("all_read_only="+tools.every(t=>t.annotations.readOnlyHint===true));'
+```
+
+Actual output:
+
+```text
+ci_log: Read CI telemetry from qyl when the user wants recent runs or a per-leg phase breakdown with failures first. Any CI can emit this convention: resource service.name starts with 'qyl-ci', session.id identifies the run, and one span per phase carries a ci.leg attribute; failed phases set span status to error. Without run_id, filters the 50 most recent sessions and returns up to limit matching runs (default 10). With run_id, reads up to 100 traces for that session; phase output can be large.
+display_mcp_dashboard: Show an aggregate dashboard of MCP traffic (spans carrying an `mcp.method.name` attribute): request/error timeline, per-server and per-transport breakdowns, and per-tool latency and error rates. Useful when the user wants to inspect MCP usage or tool health over a time window.
+display_traces: Show qyl traces in the interactive trace explorer with a span waterfall, detail panel, and correlated logs when the user wants to see the trace waterfall. A trace_id opens one trace, a session_id shows that session's traces, and neither shows recent traces.
+fetch_telemetry: Fetch traces, a single trace, or logs for the trace explorer UI when the user refreshes the view or changes its filters.
+get_metric_series: List the distinct attribute streams recorded under one metric name, with each stream's attributes, service, and first/last seen. Useful when the user wants to discover group_by keys or attr filters for query_metric before choosing the groups in a range query.
+get_trace: Fetch a single qyl trace by trace_id when the user wants its complete span data, including timing, attributes, events, and status. The full span tree is returned and can be large. For large traces, display_traces provides the visual waterfall and search_logs provides filtered, correlated logs.
+list_metrics: List the metric instruments recorded for this project: name, kind (gauge/sum/histogram), unit, how many attribute streams exist under each name, and when it was last written. Useful when the user wants to discover instrument names before querying a metric by its exact name.
+list_sessions: List qyl sessions when the user wants to find active or failing sessions, with trace/span/error counts, state, and GenAI token usage where present. display_traces accepts a session_id to show that session's traces in the explorer.
+list_traces: List recent qyl traces when the user wants a compact overview of activity and failures: root span, services, duration, span count, and error flag. Spans are omitted; get_trace returns the full span tree, while display_traces provides the interactive explorer.
+query_metric: Run a time-bucketed range query when the user wants to compare a metric over time or across groups: a window (start_time, end_time), a bucket width (step_ms), a reducer (aggregation: avg, min, max, sum, count, last, p50, p90, p95, p99), optional group_by attribute keys, and optional attr/attr_prefix matchers written 'key=value'. Returns one stream per grouping with its buckets. With step_ms equal to the window duration, each grouping yields one bucket: one number per series.
+search_logs: Search qyl log records when the user wants error details or logs correlated with a trace. Filters include trace_id, service_name, minimum severity (OTel numbers: 9 INFO, 13 WARN, 17 ERROR), and a body substring query.
+all_read_only=true
+
+```
+
+Events and empty-result source command:
+
+```sh
+rg -n 'TRACE_ERROR_EVENT_NAME|No .*found|No .*record|No .*match' server/src/events.ts server/src/summaries.ts
+```
+
+Actual output:
+
+```text
+server/src/summaries.ts:133:  if (logs.length === 0) return `No logs matched${modeNote(mode)}.`;
+server/src/summaries.ts:182:  if (metrics.length === 0) return `No metrics recorded (${mode} mode).`;
+server/src/summaries.ts:192:  if (series.length === 0) return `No series match those attributes (${mode} mode).`;
+server/src/summaries.ts:215:  if (result.series.length === 0) return `${header}\nNo matching series.`;
+server/src/events.ts:46:export const TRACE_ERROR_EVENT_NAME = "trace.error";
+server/src/events.ts:72:  name: TRACE_ERROR_EVENT_NAME,
+server/src/events.ts:143:  name: z.literal(TRACE_ERROR_EVENT_NAME),
+server/src/events.ts:223:  if (name !== TRACE_ERROR_EVENT_NAME) throw invalidParams(`unknown event "${name}"`);
+server/src/events.ts:383:        name: TRACE_ERROR_EVENT_NAME,
+
+```
+
+`sed -n '65,90p' server/src/events.ts` returned an Events definition with
+`service_name` as an optional string property, `delivery: ["webhook"]` and
+`Only traces that involve this service.` The subscription instruction requires
+the user's notification request; it does not authorize owner-client testing.
+
+Validation on 2026-10-08:
+
+- Initial `python3 /Users/alexandernachtmann/.codex/skills/.system/skill-creator/scripts/quick_validate.py submission/qyl/skills/qyl-investigate`
+  returned `ModuleNotFoundError: No module named 'yaml'`. The bundled Python
+  had the same missing dependency.
+- `python3 -m venv /private/tmp/qyl-skill-validation-20261008` returned exit 0;
+  `/private/tmp/qyl-skill-validation-20261008/bin/python -m pip install PyYAML==6.0.3`
+  returned `Successfully installed PyYAML-6.0.3`.
+- `/private/tmp/qyl-skill-validation-20261008/bin/python /Users/alexandernachtmann/.codex/skills/.system/skill-creator/scripts/quick_validate.py submission/qyl/skills/qyl-investigate`
+  returned `Skill is valid!`.
+- `bun run lint` returned `$ oxlint .`, exit 0.
+- `git diff --check` returned no output, exit 0.
+
+Owner-review correction, 2026-10-08:
+`gh pr view 94 --repo ANcpLua/qyl.mcp --json comments` returned
+[the owner's two requested changes](https://github.com/ANcpLua/qyl.mcp/pull/94#issuecomment-6051328564):
+remove the skill's internal Evidence section and restore the explicit
+limitations for deletion, deployment, rollback and web search. The revised
+skill keeps evidence here and names those limitations next to the authorized
+connector guidance. After the edit, the same temporary-environment
+`quick_validate.py` command above returned `Skill is valid!`;
+`git diff --check` returned no output (exit 0).
+
 ## Production endpoint `https://mcp.qyl.at/mcp`
 
 | Check | How | Date | Observation |
