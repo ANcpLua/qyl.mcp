@@ -23,19 +23,61 @@ Checked in source on 8 October 2026.
 | Anthropic bundle (`.claude-plugin/plugin.json`, `.mcp.json`, `README.md`, `LICENSE`) | `submission/qyl/` | present; portal validation not recorded |
 | Agent skill | `submission/qyl/skills/qyl-investigate/SKILL.md` | present |
 
-## Local checks
+## Local checks — fresh run, 2026-10-08
 
-| Check | Command | Last run | Result |
+Exact commands, timestamps, exit codes and actual output are in the
+[step-4 transcript](docs/evidence/2026-10-08-step4.md). Tests use explicit
+local fixtures; these results do not establish production or owner-client behavior.
+
+| Check | Command | Result / dated output |
+| --- | --- | --- |
+| Build | `bun run build` | 2026-10-08, exit 0; Vite bundle-size warning retained in transcript. |
+| Tests | `bun run test` | 2026-10-08, exit 0; server 159, workbench 142, dashboard 32, site 4 passed; 337 total, 0 failures. |
+| Transport | `bun run smoke` | 2026-10-08, exit 0; `all checks passed`, stock legacy negotiation and workbench reconnect recorded. |
+| Collector contracts | `bun run smoke:otlp` | 2026-10-08, initial exit 1: `live search_logs did not honor its combined filters`; four logs returned from the existing separate qyl checkout. Fresh-main fixture rerun: exit 0; `ok generated API-key auth and Qyl schemas validate live telemetry reads`. See the dated command below. |
+| Project isolation | `bun run smoke:projects` | 2026-10-08, exit 0; both eras and Events signatures/unsubscribe/revocation pass with local identities. |
+| SDK boundary | `bun run verify:sdk` | 2026-10-08, exit 0; 5 tests pass, `MCP SDK boundary passed for 7 manifests/lockfiles (SDK v2; exact pins).` |
+| Lint | `bun run lint` | 2026-10-08, exit 0; `$ oxlint .`. |
+| Static v1 drift | `node /Users/alexandernachtmann/RiderProjects/mcp-builder-v2/skills/mcp-builder-v2/scripts/check_v2.mjs /Users/alexandernachtmann/RiderProjects/qyl.mcp/server` | 2026-10-08, exit 1; `31 error(s), 0 warning(s) in 146 file(s)`. All findings retained in transcript, including generated `dist-test` findings. No suppression added. |
+| Both-era black box, after `bun run --cwd server build` | `node /Users/alexandernachtmann/RiderProjects/mcp-builder-v2/skills/mcp-builder-v2/scripts/verify_server.mjs --cwd /Users/alexandernachtmann/RiderProjects/qyl.mcp/server -- sh -c 'QYL_DEMO=1 exec node dist/main.js --stdio'` | 2026-10-08, exit 0; GREEN modern-era tools/list (11), GREEN legacy-era tools/list (11), GREEN tool-schema portability. Inspector 2.9.0 explicitly pins modern and legacy. |
+
+Fresh Collector rerun on 2026-10-08:
+
+```sh
+QYL_MCP_TELEMETRY=0 QYL_MCP_NATIVE_STATE_PATH=/private/tmp/qyl-step4-evidence/native-fresh.json QYL_COLLECTOR_PROJECT=/private/tmp/qyl-step4-collector/services/qyl.collector/qyl.collector.csproj bun run smoke:otlp
+```
+
+Output includes `ok live MCP log filters exclude unrelated services, severities,
+traces and bodies`, `ok live MCP log searches preserve empty results and the
+requested limit`, and `ok generated API-key auth and Qyl schemas validate live telemetry reads`; exit 0.
+The [transcript](docs/evidence/2026-10-08-step4.md#collector-fixture-provenance)
+records the original Collector branch/commit and the separate fresh `main`
+fixture at `d1de0c953d469edf8d9ef4168dc6fb5c0f016dfd`. No production inference
+follows from either local run.
+
+Static checker output retained: 25 `TS-ZOD-ROOT`, 2 `TS-RAW-SHAPE`,
+2 `TS-STDOUT-LOG`, and 2 `TS-PUSH-REQUEST` occurrences, including compiled
+duplicates. All 31 error-severity diagnostics remain in the transcript;
+the assessments below explain their concrete paths without changing the
+checker, suppressing findings or changing code.
+
+### Static findings — assessed, 2026-10-08
+
+Commands below ran from the repository root against this PR's unchanged
+runtime source and installed SDK 2.3.1. Output excerpts are literal; the
+assessment is the interpretation of that output, not a changed checker result.
+
+| Rule | Assessment | Command | Actual output excerpt |
 | --- | --- | --- | --- |
-| Build | `bun run build` | 2026-10-08 UTC | exit 0; Vite reports its bundle-size warning |
-| Tests | `QYL_MCP_NATIVE_STATE_PATH=/private/tmp/qyl-step1-native.json QYL_MCP_TELEMETRY=0 bun run test` | 2026-10-08 UTC | 337 passed: server 159, Workbench 142, dashboard 32, site 4; 0 failures |
-| Transport smoke, both eras | `bun run smoke` | 2026-10-08 UTC | exit 0; `all checks passed`, Workbench connects/disconnects/reconnects |
-| Lint | `bun run lint` | 2026-10-08 UTC | `$ oxlint .`; exit 0 |
-| Collector contract smoke | `bun run smoke:otlp` | not recorded | |
-| Project isolation smoke | `bun run smoke:projects` | not recorded | |
-| SDK v1 dependency check | `bun run verify:sdk` | 2026-10-08 UTC | 5 tests passed; `MCP SDK boundary passed for 7 manifests/lockfiles (SDK v2; exact pins).` |
-| v1-drift check (mcp-builder-v2 skill) | `node /Users/alexandernachtmann/RiderProjects/mcp-builder-v2/skills/mcp-builder-v2/scripts/check_v2.mjs /Users/alexandernachtmann/RiderProjects/qyl.mcp/server` | not recorded | |
-| Both-era black-box check, after `bun run --cwd server build` | `node /Users/alexandernachtmann/RiderProjects/mcp-builder-v2/skills/mcp-builder-v2/scripts/verify_server.mjs --cwd /Users/alexandernachtmann/RiderProjects/qyl.mcp/server -- sh -c 'QYL_DEMO=1 exec node dist/main.js --stdio'` | not recorded | GREEN required for modern tools/list, legacy tools/list, schema portability |
+| `TS-STDOUT-LOG` | **assessed**: `server/src/main.ts:414` is the HTTP-start banner inside `createHostedRuntime`, not the stdio path. `bootstrap` returns after `startStdioServer` for `--stdio`. | `sed -n '372,425p' server/src/main.ts`; `sed -n '453,490p' server/src/main.ts` | `async function createHostedRuntime(`; `console.log(` followed by the template string `MCP server serving ${endpoint}`; `if (transport === "stdio") {` / `startStdioServer(() => createServer({ transport: "stdio" }));` / `return undefined;` |
+| `TS-PUSH-REQUEST` | **assessed**: `server/src/request-scope.ts:94` calls the deprecated logging notification. SDK 2.3.1 filters it on the modern path using the request's `logLevel`; absent threshold returns without delivery, and messages below the threshold are filtered. This is not an elicitation or sampling request. | `sed -n '90,96p' server/src/request-scope.ts`; `sed -n '2216,2230p' server/node_modules/@modelcontextprotocol/server/dist/createMcpHandler-D4NN8WsG.d.mts`; `sed -n '1083,1100p' server/node_modules/@modelcontextprotocol/server/dist/mcp-DIH4cS6P.mjs` | `await ctx.mcpReq.log(level, { tool, ...data }, LOGGER);`; `@deprecated Deprecated as of protocol version 2026-07-28 (SEP-2577).`; `threshold = ctx.mcpReq.envelope?.[LOG_LEVEL_META_KEY];`; `if (threshold === void 0) return Promise.resolve();`; `method: "notifications/message",` |
+| `TS-RAW-SHAPE` | **assessed**: `server/src/events.ts:77` is the JSON Schema of the `events/list` definition, not a raw Zod tool-registration shape. | `sed -n '70,89p' server/src/events.ts`; `sed -n '330,332p' server/src/events.ts` | `export const TRACE_ERROR_EVENT = {`; `inputSchema: {` / `type: "object",` / `properties: {`; `return { events: [TRACE_ERROR_EVENT] };` |
+| `TS-ZOD-ROOT` | **assessed**: the root imports resolve to installed Zod 4.6.5 in this repository; the diagnostic's Zod-3 condition is not the installed dependency state. Generated duplicates refer to the same imports. | `node -p "require('./server/node_modules/zod/package.json').version"`; `node -p "require('./server/package.json').dependencies.zod"` | `4.6.5` from each command. |
+
+The SDK package-version command
+`node -p "require('./server/node_modules/@modelcontextprotocol/server/package.json').version"`
+returned `2.3.1` on 2026-10-08. These are source/dependency assessments;
+the separate both-era test remains the recorded runtime evidence.
 
 ### Step 1 — rules and native call records
 
@@ -249,79 +291,100 @@ connector guidance. After the edit, the same temporary-environment
 `quick_validate.py` command above returned `Skill is valid!`;
 `git diff --check` returned no output (exit 0).
 
-## Production endpoint `https://mcp.qyl.at/mcp`
+## Step 4 — production HTTP and package observations
 
-| Check | How | Date | Observation |
-| --- | --- | --- | --- |
-| Unauthenticated `/mcp` returns 401 with `resource_metadata` | curl | not recorded | |
-| Protected resource metadata names the resource, issuer `https://qyl-eu.eu.auth0.com/` and scope `qyl:read` | curl | not recorded | |
-| Modern `tools/list` with `MCP-Protocol-Version: 2026-07-28` | owner action: Inspector 2.9.0 with OAuth login and `protocolEra: "modern"` (goal step 4) | not recorded | |
-| 2025-era `tools/list` | owner action: same Inspector run with `protocolEra: "legacy"` | not recorded | |
-| `events/list` returns `trace.error` | modern client | not recorded | |
-| Deployed commit equals `main` | Railway deployment id | not recorded | |
+2026-10-08, exact response headers/bodies and command start times are in the
+[step-4 transcript](docs/evidence/2026-10-08-step4.md#endpoint).
 
-## Client connections
-
-Each row needs the client version, the registration path (pre-registered,
-CIMD or DCR), the negotiated protocol, the granted scopes, the read tool
-called and its result.
-
-| Client | Date | Version | Registration | Protocol | Auth | `tools/list` | Read call | Evidence |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ChatGPT web | not recorded | | | | | | | |
-| Codex plugin or CLI | not recorded | | | | | | | |
-| claude.ai | not recorded | | | | | | | |
-| Claude Code | not recorded | | | | | | | |
-| MCP Inspector | not recorded | | | | | | | |
-
-## Events lifecycle on a 2026-07-28 ChatGPT surface
-
-| Step | Date | Observation |
+| Observation | Command | Actual output |
 | --- | --- | --- |
-| Subscribe to `trace.error` | not recorded | |
-| A matching error delivers a signed notification | not recorded | |
-| A non-matching service does not deliver | not recorded | |
-| The subscription survives a deployment | not recorded | |
-| Automatic renewal | not recorded | |
-| Unsubscribe removes the subscription and stops delivery | not recorded | |
-| Revoked access stops delivery | not recorded | |
+| Unauthenticated MCP | `curl --silent --show-error --include https://mcp.qyl.at/mcp` | `HTTP/2 401`; `www-authenticate: Bearer scope="qyl:read", resource_metadata="https://mcp.qyl.at/.well-known/oauth-protected-resource/mcp"`; `{"error":"unauthorized"}`. |
+| Resource metadata | `curl --silent --show-error --include https://mcp.qyl.at/.well-known/oauth-protected-resource/mcp` | `HTTP/2 200`; `{"resource":"https://mcp.qyl.at/mcp","authorization_servers":["https://qyl-eu.eu.auth0.com/"],"scopes_supported":["qyl:read"]}`. |
+| npm latest | `npm view qyl-mcp-server version` | `7.1.1`. This is a registry observation, not evidence of publishing or a consumer test. |
 
-## Package
+## Owner-only observations still pending
 
-| Item | Value | Date | Observation |
-| --- | --- | --- | --- |
-| `server/package.json` version | 7.2.0 | 8 October 2026 | source |
-| npm `qyl-mcp-server` latest | not recorded | | `npm view qyl-mcp-server version` |
-| Fresh consumer check, both eras | `server/published-smoke.mjs` | not recorded | |
+Recorded 2026-10-08 from the work boundary in `goal-objective.md`, steps 4–6.
+The actions below are instructions, not claims that any portal or client was
+opened. For every run, save the date, exact client version, registration path
+(pre-registered/CIMD/DCR), granted scopes, negotiated protocol, tool name and
+redacted actual output. Never record tokens, cookies or callback signing keys.
+
+| Observation | Exact owner action |
+| --- | --- |
+| ChatGPT web connection | In the owner's ChatGPT workspace, add `https://mcp.qyl.at/mcp` as a custom connector, complete OAuth for an isolated reviewer account with `qyl:read`, record discovery, call `list_traces` with `limit: 1`, and retain its actual result plus the fields above. |
+| Codex plugin/CLI connection | In the owner's chosen Codex client, record its version, configure the remote MCP URL `https://mcp.qyl.at/mcp`, complete OAuth, record discovery and call `list_traces` with `limit: 1`; retain the actual result and negotiated protocol. |
+| claude.ai connection | In the owner's Claude connector settings, add the same endpoint, complete OAuth with the isolated reviewer account, record discovery and a `list_traces` call with `limit: 1` plus the fields above. |
+| Claude Code connection | In the owner's Claude Code client, record its version, add the endpoint as a Streamable HTTP MCP server, complete OAuth, record discovery and a `list_traces` call with `limit: 1` plus the fields above. |
+| Production modern-era proof / MCP Inspector | Save an Inspector config with `{"mcpServers":{"qyl":{"type":"streamable-http","url":"https://mcp.qyl.at/mcp","protocolEra":"modern"}}}`. Run `npx -y @modelcontextprotocol/inspector@2.9.0 --config inspector-modern.json`, log in through OAuth, run `tools/list`, and retain its output and the captured request header `MCP-Protocol-Version: 2026-07-28`. Also run `list_traces` with `limit: 1`. |
+| Production legacy-era proof | Repeat the Inspector 2.9.0 OAuth procedure with `protocolEra: "legacy"`; retain the negotiated protocol, `tools/list`, a `list_traces` result and redacted request headers. |
+| Production `events/list` | On the authorized modern ChatGPT/Inspector connection, invoke `events/list` and save the actual response, including whether `trace.error` is offered. |
+| Deployment commit | In the owner's Railway project, inspect the active deployment ID and its source commit; compare it with `git rev-parse origin/main`. Save the date and both values. Do not infer deployment from a successful HTTP response. |
+| Events subscribe | In the owner's Events-capable 2026-07-28 ChatGPT surface, explicitly request `trace.error` notifications for an isolated test service; retain the redacted subscription response and expiration. |
+| Matching signed notification | Emit an owner-approved error trace for that service into the isolated project; retain the trace ID, received notification time and signature-verification outcome without signing keys. |
+| Non-matching service | Emit an error trace for a different test service, record both IDs and the bounded observation window, and verify it produces no notification on the filtered subscription. |
+| Subscription survives deployment | Record subscription ID/expiration, perform an owner-approved deployment, emit another matching error and record delivery for the same subscription. |
+| Automatic renewal | Observe the owner's client across its renewal time; retain before/after expiration and subscription/renewal responses, then a matching delivery. |
+| Unsubscribe stops delivery | Unsubscribe in the owner client, retain its response, emit a fresh matching test error and record the bounded no-delivery window. |
+| Revocation stops delivery | On a separate test subscription, revoke the isolated account's access, emit a fresh matching test error, and retain revocation timing plus the bounded no-delivery window. Restore access only by owner decision. |
+| npm fresh consumer | In a fresh temporary project, install the exact observed `qyl-mcp-server@7.1.1`, run the pinned Inspector 2.9.0 with modern and legacy configurations against its stdio command in explicit demo mode, and record discovery plus a read result in both eras. The registry version alone is not this proof. |
+| Public directory statuses | For each of OPENAI_PLUGIN, ANTHROPIC_CONNECTOR and ANTHROPIC_PLUGIN, the owner reads the corresponding portal and records date, record identifier and actual draft/submitted/approved/published state. No portal state is established here. |
 
 ## Directory records
 
-| Record | Portal | State | Evidence |
-| --- | --- | --- | --- |
-| OPENAI_PLUGIN | https://platform.openai.com/plugins | local draft, not uploaded | `submission/qyl/` |
-| ANTHROPIC_CONNECTOR | https://claude.ai/directory/manage | not created | |
-| ANTHROPIC_PLUGIN | https://claude.ai/directory/manage | not created, bundle files absent | |
+Repository-side inventory, checked 2026-10-08. `sed -n '1,85p'
+submission/README.md` reports OPENAI_PLUGIN as `local draft` and both
+Anthropic records as `not created`; these are preparation states recorded in
+the repository, not independently observed portal states. The owner's
+[2026-10-08 review](https://github.com/ANcpLua/qyl.mcp/pull/95#issuecomment-6051431328)
+requests retaining those states in this index. Portal status verification
+remains an explicit owner action above.
 
-Portal status is recorded only from the portal itself, with a date. Uploaded
-is not submitted, validated is not approved, approved is not published.
+| Record | Repository-side state and dated evidence | Exact pending owner action |
+| --- | --- | --- |
+| OPENAI_PLUGIN | 2026-10-08: local draft; `plugin.json` and `mcp.json` present (inventory output below). | Supply the missing review fields, then separately authorize and perform portal validation/upload at `https://platform.openai.com/plugins`; record the actual status. |
+| ANTHROPIC_CONNECTOR | 2026-10-08: `submission/README.md` records `not created`; endpoint draft is `https://mcp.qyl.at/mcp`. | Create the separate MCP connector record at `https://claude.ai/directory/manage` after supplying the reviewer account, documentation/privacy URLs, support contact and icon; record its actual status. |
+| ANTHROPIC_PLUGIN | 2026-10-08: bundle files present; `submission/README.md` records the portal record as `not created`. | Select repository `ANcpLua/qyl.mcp`, plugin path `submission/qyl` and a branch or tag in the separate plugin-bundle record; arrange the Claude GitHub App access and later publication decision; record actual portal status. |
+
+Inventory command, 2026-10-08:
+
+```sh
+node --input-type=module <<'JS'
+import { existsSync } from 'node:fs';
+for (const f of ['submission/qyl/plugin.json','submission/qyl/mcp.json','submission/qyl/.claude-plugin/plugin.json','submission/qyl/.mcp.json','submission/qyl/README.md','submission/qyl/LICENSE','submission/public-pages-draft.md']) console.log(`${f}: ${existsSync(f) ? 'present' : 'absent'}`);
+JS
+```
+
+Actual output:
+
+```text
+submission/qyl/plugin.json: present
+submission/qyl/mcp.json: present
+submission/qyl/.claude-plugin/plugin.json: present
+submission/qyl/.mcp.json: present
+submission/qyl/README.md: present
+submission/qyl/LICENSE: present
+submission/public-pages-draft.md: present
+```
 
 ## Owner actions required
 
-| Action | Needed for | State |
+Open preparation actions, recorded 2026-10-08 from `goal-objective.md`,
+steps 4–6. These instructions are not evidence of execution or authorization
+to perform them in this task.
+
+| Action | Needed for | Exact owner action |
 | --- | --- | --- |
-| Select the publisher identity in the OpenAI portal | OPENAI_PLUGIN | open |
-| Publish support, privacy and terms pages on qyl.at | all three records | open |
-| Reviewer account with isolated sample telemetry | all three records | open |
-| Demo recording URL | OPENAI_PLUGIN review | open |
-| Legal attestations and submission | all three records | open |
-| Publication after approval | all three records | separate decision |
+| Publisher identity | OPENAI_PLUGIN | Select the intended publisher identity in the OpenAI portal and record its actual verified status before submission. |
+| Public pages | All three records | Approve the wording in `submission/public-pages-draft.md`, publish support/privacy/terms pages on qyl.at, and supply their final reachable URLs for the manifests and portal fields. |
+| Reviewer account | All three records | Create or choose an isolated reviewer account, populate its Collector project with representative sample traces/logs/metrics, verify OAuth access, and supply credentials through the portal's private reviewer field. |
+| Demo recording | OPENAI_PLUGIN | Record the installed plugin performing the positive review cases with sample data, host the recording, and supply its reachable URL for `review.demo_recording_url`. |
+| Attestations and submission | All three records | Review legal attestations, approve final fields, and explicitly submit each separate portal record; retain the date, record ID and portal response. |
+| Publication | All three records | After approval, make a separate publication decision; for the Anthropic bundle ensure required repository visibility and GitHub App access, then publish and record the observed listing URL. |
 
 ## Auth0 discovery decision
 
-Auth0 is the authorization server and already serves OIDC discovery at
-`https://qyl-eu.eu.auth0.com/.well-known/openid-configuration`. qyl.mcp does not
-serve `/.well-known/openid-configuration` on `mcp.qyl.at`, because qyl.mcp is a
-resource server rather than the token issuer. If ChatGPT workspace domain
-claiming is needed, enable `openid` and `email` for the OAuth client and verify
-that Auth0 UserInfo returns a verified email; this does not replace the
-resource permission `qyl:read`.
+Repository decision pointer, 2026-10-08: `sed -n '388,403p' README.md`
+prints that Auth0 publishes OIDC discovery, qyl.mcp is the resource server
+rather than issuer, and `openid`/`email` for workspace domain claiming do not
+replace `qyl:read`; see [README authentication guidance](README.md#authentication).
