@@ -67,9 +67,10 @@ export function registerTelemetryTools(server: McpServer): void {
     {
       title: "List Traces",
       description:
-        "List recent qyl traces with summary fields (root span, services, duration, " +
-        "span count, error flag). Spans are omitted — use get_trace for full span data. " +
-        "Use display_traces instead when the user wants to LOOK at traces in the explorer UI.",
+        "List recent qyl traces when the user wants a compact overview of activity " +
+        "and failures: root span, services, duration, span count, and error flag. " +
+        "Spans are omitted; get_trace returns the full span tree, while display_traces " +
+        "provides the interactive explorer.",
       inputSchema: ListTracesInputSchema,
       outputSchema: compactOutputSchema(ListTracesOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
@@ -92,9 +93,10 @@ export function registerTelemetryTools(server: McpServer): void {
     {
       title: "Get Trace",
       description:
-        "Fetch a single qyl trace by trace id, including every span with timing, " +
-        "attributes, events, and status. Use display_traces instead when the user " +
-        "wants to SEE the trace waterfall.",
+        "Fetch a single qyl trace by trace_id when the user wants its complete span " +
+        "data, including timing, attributes, events, and status. The full span tree " +
+        "is returned and can be large. For large traces, display_traces provides " +
+        "the visual waterfall and search_logs provides filtered, correlated logs.",
       inputSchema: GetTraceInputSchema,
       outputSchema: compactOutputSchema(GetTraceOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
@@ -114,9 +116,9 @@ export function registerTelemetryTools(server: McpServer): void {
     {
       title: "List Sessions",
       description:
-        "List qyl sessions with trace/span/error counts, state, and GenAI token " +
-        "usage where present. Pass a session id to display_traces to see a " +
-        "session's traces in the explorer UI.",
+        "List qyl sessions when the user wants to find active or failing sessions, " +
+        "with trace/span/error counts, state, and GenAI token usage where present. " +
+        "display_traces accepts a session_id to show that session's traces in the explorer.",
       inputSchema: ListSessionsInputSchema,
       outputSchema: compactOutputSchema(ListSessionsOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
@@ -140,9 +142,9 @@ export function registerTelemetryTools(server: McpServer): void {
     {
       title: "Search Logs",
       description:
-        "Search qyl log records, filterable by trace id (correlated logs), service " +
-        "name, minimum severity (OTel numbers: 9 INFO, 13 WARN, 17 ERROR), and a " +
-        "body substring query.",
+        "Search qyl log records when the user wants error details or logs correlated " +
+        "with a trace. Filters include trace_id, service_name, minimum severity " +
+        "(OTel numbers: 9 INFO, 13 WARN, 17 ERROR), and a body substring query.",
       inputSchema: SearchLogsInputSchema,
       outputSchema: compactOutputSchema(SearchLogsOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,

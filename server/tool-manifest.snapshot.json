@@ -4,7 +4,7 @@
     {
       "name": "ci_log",
       "title": "CI Log",
-      "description": "Read qyl's own CI runs from its telemetry (dogfooding — no GitHub API). Without arguments: recent CI runs (sessions whose service.name starts with 'qyl-ci'). With run_id: per-leg phase breakdown, failures first, so 'which leg hung on what' is answerable even when GitHub's log API is down.",
+      "description": "Read CI telemetry from qyl when the user wants recent runs or a per-leg phase breakdown with failures first. Any CI can emit this convention: resource service.name starts with 'qyl-ci', session.id identifies the run, and one span per phase carries a ci.leg attribute; failed phases set span status to error. Without run_id, filters the 50 most recent sessions and returns up to limit matching runs (default 10). With run_id, reads up to 100 traces for that session; phase output can be large.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -173,7 +173,7 @@
     {
       "name": "display_mcp_dashboard",
       "title": "MCP Dashboard",
-      "description": "Show an aggregate dashboard of MCP traffic (spans carrying an `mcp.method.name` attribute): request/error timeline, per-server and per-transport breakdowns, and per-tool latency and error rates. Prefer this when the user asks about MCP usage, tool health, or MCP monitoring.",
+      "description": "Show an aggregate dashboard of MCP traffic (spans carrying an `mcp.method.name` attribute): request/error timeline, per-server and per-transport breakdowns, and per-tool latency and error rates. Useful when the user wants to inspect MCP usage or tool health over a time window.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -450,7 +450,7 @@
     {
       "name": "display_traces",
       "title": "Trace Explorer",
-      "description": "Show qyl traces in the interactive trace explorer with a span waterfall, detail panel, and correlated logs. Pass a trace_id to open one trace, a session_id for that session's traces, or neither for recent traces. Prefer this over list_traces/get_trace whenever the user wants to look at traces.",
+      "description": "Show qyl traces in the interactive trace explorer with a span waterfall, detail panel, and correlated logs when the user wants to see the trace waterfall. A trace_id opens one trace, a session_id shows that session's traces, and neither shows recent traces.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -1671,7 +1671,7 @@
     {
       "name": "fetch_telemetry",
       "title": "Fetch Telemetry",
-      "description": "Fetch traces, a single trace, or logs for the trace explorer UI. The model should NOT call this tool directly.",
+      "description": "Fetch traces, a single trace, or logs for the trace explorer UI when the user refreshes the view or changes its filters.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -1750,7 +1750,7 @@
     {
       "name": "get_metric_series",
       "title": "Get Metric Series",
-      "description": "List the distinct attribute streams recorded under one metric name, with each stream's attributes, service, and first/last seen. Use it to discover which attribute keys are worth passing to query_metric as group_by or attr filters, before running a range query that would otherwise collapse or explode the result.",
+      "description": "List the distinct attribute streams recorded under one metric name, with each stream's attributes, service, and first/last seen. Useful when the user wants to discover group_by keys or attr filters for query_metric before choosing the groups in a range query.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -2047,7 +2047,7 @@
     {
       "name": "get_trace",
       "title": "Get Trace",
-      "description": "Fetch a single qyl trace by trace id, including every span with timing, attributes, events, and status. Use display_traces instead when the user wants to SEE the trace waterfall.",
+      "description": "Fetch a single qyl trace by trace_id when the user wants its complete span data, including timing, attributes, events, and status. The full span tree is returned and can be large. For large traces, display_traces provides the visual waterfall and search_logs provides filtered, correlated logs.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -3236,7 +3236,7 @@
     {
       "name": "list_metrics",
       "title": "List Metrics",
-      "description": "List the metric instruments recorded for this project: name, kind (gauge/sum/histogram), unit, how many attribute streams exist under each name, and when it was last written. Start here — query_metric needs an exact instrument name, and this is where the names come from.",
+      "description": "List the metric instruments recorded for this project: name, kind (gauge/sum/histogram), unit, how many attribute streams exist under each name, and when it was last written. Useful when the user wants to discover instrument names before querying a metric by its exact name.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -3363,7 +3363,7 @@
     {
       "name": "list_sessions",
       "title": "List Sessions",
-      "description": "List qyl sessions with trace/span/error counts, state, and GenAI token usage where present. Pass a session id to display_traces to see a session's traces in the explorer UI.",
+      "description": "List qyl sessions when the user wants to find active or failing sessions, with trace/span/error counts, state, and GenAI token usage where present. display_traces accepts a session_id to show that session's traces in the explorer.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -3628,7 +3628,7 @@
     {
       "name": "list_traces",
       "title": "List Traces",
-      "description": "List recent qyl traces with summary fields (root span, services, duration, span count, error flag). Spans are omitted — use get_trace for full span data. Use display_traces instead when the user wants to LOOK at traces in the explorer UI.",
+      "description": "List recent qyl traces when the user wants a compact overview of activity and failures: root span, services, duration, span count, and error flag. Spans are omitted; get_trace returns the full span tree, while display_traces provides the interactive explorer.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -4543,7 +4543,7 @@
     {
       "name": "query_metric",
       "title": "Query Metric",
-      "description": "Run a time-bucketed range query over one metric: a window (start_time, end_time), a bucket width (step_ms), a reducer (aggregation: avg, min, max, sum, count, last, p50, p90, p95, p99), optional group_by attribute keys, and optional attr/attr_prefix matchers written 'key=value'. Returns one stream per grouping with its buckets. One bucket spanning the whole window collapses the answer to a single number.",
+      "description": "Run a time-bucketed range query when the user wants to compare a metric over time or across groups: a window (start_time, end_time), a bucket width (step_ms), a reducer (aggregation: avg, min, max, sum, count, last, p50, p90, p95, p99), optional group_by attribute keys, and optional attr/attr_prefix matchers written 'key=value'. Returns one stream per grouping with its buckets. With step_ms equal to the window duration, each grouping yields one bucket: one number per series.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -4924,7 +4924,7 @@
     {
       "name": "search_logs",
       "title": "Search Logs",
-      "description": "Search qyl log records, filterable by trace id (correlated logs), service name, minimum severity (OTel numbers: 9 INFO, 13 WARN, 17 ERROR), and a body substring query.",
+      "description": "Search qyl log records when the user wants error details or logs correlated with a trace. Filters include trace_id, service_name, minimum severity (OTel numbers: 9 INFO, 13 WARN, 17 ERROR), and a body substring query.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
