@@ -672,3 +672,18 @@ local checks, the merged Collector prerequisite and pending external evidence.
 | Production Collector handshake | 2026-10-08: Railway deployment `a8f98435-c8a8-4e2d-b3a4-d9c6f9dd3145` for merge `15924345bd804c358b1ab22d059b27d815bc8874` reached `SUCCESS`, with an active `RUNNING` instance. After that observation, the local 11.3.0 HTTP startup gate returned `Production Collector handshake: PASS` at `2026-10-08T08:18:26.200Z`, matching live `sha256:382526f13652d18b`. The linked evidence retains the initial timeout and exact successful command/output. Deployed MCP and authenticated Inspector proof remain separate; the owner supplies Inspector evidence. |
 | Local integration gates | 2026-10-08: `smoke`, `smoke:otlp` and `smoke:projects` exited 0 against the local Collector. OTLP parsing, combined log filters, all 11 tools across both wire eras, signatures, unsubscribe and assignment revocation passed. `verify:completion` passed its 8 tests, all checks and 251 local links. Exact output is in the linked Option-A evidence. |
 | Review regression | 2026-10-08: after the summary fix, 22 focused tests and all 168 canonical server tests passed; lint and the unchanged pin check passed. Text and structured results both omit a known root excluded by the filter or cap, including empty results. The follow-up snapshot changes only `get_trace.description`; generated output fields remain those published in 11.3.0. |
+
+## Point 9 continuation — schema portability, 2026-10-08
+
+This follows the point-8 Option-A continuation. [Commands and actual output](docs/evidence/2026-10-08-point-9-schema-portability.md)
+record the local implementation and verification; authenticated Inspector
+evidence remains owner-supplied.
+
+| Check | Dated command and actual output |
+| --- | --- |
+| Point-8 merge prerequisite | 2026-10-08: `gh pr view 119` reports `MERGED` at `2026-10-08T08:37:26Z`, commit `4e69bf2d123e41b17edab9505cc4aaa2a410d196`; `lint`, `verify`, `owner-review/content`, and `owner-review/evidence` all passed on `0321963`. Point 9 branches from that merged `origin/main`. |
+| Advertised schema spelling | 2026-10-08: `bun run --cwd server snapshot:tools` exited 0. The linked comparison printed `Only requested output spellings changed: 8`: seven empty `additionalProperties` objects became `true`, and the one nullable numeric type array became `anyOf`. All six reported tools are covered. Revision stays `sha256:382526f13652d18b`; all other manifest fields are unchanged. |
+| Validation and regression tests | 2026-10-08: the focused run passed six tests. Full `QYL_MCP_TELEMETRY=0 bun run test` then passed all 351 tests (173 server, 142 workbench, 32 dashboard, 4 site). Cases cover both spellings, unchanged validation, preserved constraints/literal data, hoisted references and the SDK's actual six-tool catalog. |
+| Dependency and import gates | 2026-10-08: lint exited 0; `verify:sdk` passed five tests and the seven-manifest boundary; `verify:pins` printed `verify:pins: contract pins agree (@ancplua/qyl-api-schema 11.3.0 == Qyl.Api.Contracts 11.3.0, via /Users/alexandernachtmann/RiderProjects/qyl)`. Contract, package pins and lockfile are unchanged. |
+| Local transport | 2026-10-08: `QYL_MCP_TELEMETRY=0 bun run smoke` exited 0, including SDK discovery of eleven tools, schema-aware calls, validation errors, host/origin guards and workbench reconnect. Exact output excerpt is in the linked evidence. |
+| Documentation audit | 2026-10-08: `PATH="/private/tmp/qyl-option-a/venv/bin:$PATH" bun run verify:completion` exited 0: eight tests, all repository checks and 253 local documentation/evidence links passed. |

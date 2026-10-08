@@ -14,6 +14,42 @@ const JSON_SCHEMA_TARGET = "draft-2020-12" as const;
 
 const compacted = new WeakMap<object, StandardSchemaWithJSON<never, never>>();
 
+/** Normalize schema nodes only; defaults, examples and enum/const values are data. */
+function normalizeOutputSpelling(value: unknown): void {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return;
+  const schema = value as Record<string, unknown>;
+  const additional = schema.additionalProperties;
+  if (additional !== null && typeof additional === "object" &&
+      !Array.isArray(additional) && Object.keys(additional).length === 0) {
+    schema.additionalProperties = true;
+  }
+  if (Array.isArray(schema.type)) {
+    const anyOf = schema.type.map((type) => ({ type }));
+    delete schema.type;
+    if (schema.anyOf === undefined) {
+      schema.anyOf = anyOf;
+    } else {
+      // A type constraint and an existing anyOf both apply; keep that conjunction.
+      schema.allOf = [...(Array.isArray(schema.allOf) ? schema.allOf : []), { anyOf }];
+    }
+  }
+  for (const key of ["$defs", "definitions", "properties", "patternProperties", "dependentSchemas", "dependencies"]) {
+    const children = schema[key];
+    if (children !== null && typeof children === "object" && !Array.isArray(children)) {
+      for (const child of Object.values(children)) normalizeOutputSpelling(child);
+    }
+  }
+  for (const key of [
+    "additionalProperties", "unevaluatedProperties", "propertyNames", "items", "additionalItems",
+    "unevaluatedItems", "contains", "contentSchema", "not", "if", "then", "else",
+    "allOf", "anyOf", "oneOf", "prefixItems",
+  ]) {
+    const child = schema[key];
+    if (Array.isArray(child)) child.forEach(normalizeOutputSpelling);
+    else normalizeOutputSpelling(child);
+  }
+}
+
 /**
  * Emits a tool's output JSON Schema with repeated subschemas hoisted into
  * `$defs`, when that spelling is actually smaller than the inlined one.
@@ -54,6 +90,10 @@ export function compactOutputSchema<T>(schema: z.ZodType<T>): StandardSchemaWith
         io: "output",
         reused: "ref",
       });
+      // Zod compacts unions after its override hook. Normalize its finished,
+      // independent JSON objects, then compare the actual advertised sizes.
+      normalizeOutputSpelling(inlined);
+      normalizeOutputSpelling(hoisted);
       emitted = JSON.stringify(hoisted).length < JSON.stringify(inlined).length ? hoisted : inlined;
     }
     return emitted;

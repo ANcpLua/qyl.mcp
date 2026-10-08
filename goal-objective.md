@@ -226,6 +226,15 @@ the dated ledger, and pass the owner-review gate. Record a production
 handshake only after the Collector has deployed on Railway. The owner supplies
 the Inspector evidence.
 
+The next point in this continuation, point 9, addresses the owner's Inspector
+2.9.0 schema-portability report. After point 8 merges, normalize only the JSON
+Schema emitted by `compactOutputSchema`: empty `additionalProperties: {}`
+becomes `true`, and type arrays become `anyOf` with one `type` per branch.
+Keep validation and the published contract unchanged. Regenerate the manifest,
+test both cases, record dated ledger evidence, and pass the owner-review gate
+in a separate PR. This follows point 8 without renumbering the earlier listing
+work recorded above.
+
 - Official split SDK v2 packages only. SDK version and wire revision are
   independent; v2's built-in 2025-era support is required compatibility.
   HTTP serves through `createMcpHandler(factory)` and stdio through
