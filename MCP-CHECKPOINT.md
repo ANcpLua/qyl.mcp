@@ -33,7 +33,8 @@ merged on 2026-10-08 at `09:26:44Z`, merge `ee4c5a0`, after all four gates
 passed on `9371b65`. The owner's authenticated Inspector proof remains separate.
 
 Point 10 selects each viewer's domain for the connected UI host: Claude's
-exact connector-URL hash or the configured HTTPS origin for other hosts.
+exact connector-URL hash, the configured HTTPS origin plus compatibility
+alias for ChatGPT, or neither domain field for unknown hosts.
 [Dated source and local verification](docs/evidence/2026-10-08-point-10-ui-domain.md)
 cover both viewers and both wire eras. The separate point-10 PR still needs
 its own four green gates; these checks do not establish rendering in the

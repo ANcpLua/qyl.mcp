@@ -56,7 +56,8 @@ source uses automatic negotiation; Events is a separate opt-in lifecycle.
 | `ui://qyl-explorer/mcp-dashboard-v3.html` | `display_mcp_dashboard` | [Client-specific domains and versioned resources](docs/evidence/2026-10-08-point-10-ui-domain.md) |
 
 The hosted resource metadata selects Claude's connector-URL hash domain or
-the configured HTTPS origin for other hosts. External connection/resource
+the configured HTTPS origin plus `openai/widgetDomain` alias for ChatGPT;
+unknown hosts omit both domain fields. External connection/resource
 CSP allowlists remain empty. Client-dependent resource responses use a zero
 TTL and private cache scope; the shared HTML cache remains independent of
 the caller. Local viewers omit the domain.

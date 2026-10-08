@@ -144,6 +144,8 @@ export function registerViewerResource(
       const viewerMeta = domain === undefined ? SELF_CONTAINED_VIEWER_META : {
         ...SELF_CONTAINED_VIEWER_META,
         ui: { ...SELF_CONTAINED_VIEWER_META.ui, domain },
+        // HTTPS origins are the ChatGPT format; Claude uses a bare hash host.
+        ...(domain.startsWith("https://") ? { "openai/widgetDomain": domain } : {}),
       };
       let html = viewerHtmlByFile.get(fileName);
       if (html === undefined) {

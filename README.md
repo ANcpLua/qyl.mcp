@@ -203,10 +203,11 @@ For a hosted bind, configure `MCP_PUBLIC_URL`, `MCP_BIND_HOST`, allowed hosts
 and origins, and the intended Collector URL/credential. The public URL sets
 the resource audience and viewer origin. For Claude, viewer metadata uses
 the first 32 hex characters of SHA-256 over the full public `/mcp` URL plus
-`.claudemcpcontent.com`; ChatGPT and other hosts receive the HTTPS origin.
+`.claudemcpcontent.com`; ChatGPT receives the HTTPS origin in `ui.domain`
+and its `openai/widgetDomain` alias. Unknown hosts omit both fields.
 The SDK's per-request client name selects this presentation metadata, with
-`Claude-User` as the fallback for stateless legacy HTTP. Local viewers omit
-the domain. Keep Collector credentials on the server. With project mapping
+`Claude-User` or `openai-mcp` as hints for stateless legacy HTTP. Local viewers
+omit the domain. Keep Collector credentials on the server. With project mapping
 enabled, only the verified subject selects the project; tool arguments and
 metadata do not select credentials.
 

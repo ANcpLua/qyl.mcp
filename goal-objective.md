@@ -239,7 +239,9 @@ Point 10 of this continuation fixes the owner's Claude viewer-domain failure.
 After point 9 merges, select resource-content `ui.domain` for the connected
 client: Claude receives the first 32 SHA-256 hex characters of the exact
 configured public MCP connector URL, followed by `.claudemcpcontent.com`;
-other hosts receive the dedicated HTTPS origin. The hash includes the path.
+ChatGPT receives the dedicated HTTPS origin and its `openai/widgetDomain`
+alias; other hosts omit both fields, as refined in the owner's point-10 PR
+review on 2026-10-08. The hash includes the path.
 Test both hosts, record dated evidence, and pass the four review/CI gates in
 a separate PR. Client hints only select presentation metadata.
 

@@ -42,7 +42,11 @@ async function connect(
   return client;
 }
 
-async function expectViewers(client: Client, domain: string | undefined): Promise<void> {
+async function expectViewers(
+  client: Client,
+  domain: string | undefined,
+  widgetDomain?: string,
+): Promise<void> {
   for (const uri of viewerUris) {
     const result = await client.readResource({ uri });
     assert.equal(result.contents.length, 1);
@@ -53,6 +57,7 @@ async function expectViewers(client: Client, domain: string | undefined): Promis
         ...(domain === undefined ? {} : { domain }),
       },
       "openai/ui": { availableDisplayModes: ["inline", "fullscreen"] },
+      ...(widgetDomain === undefined ? {} : { "openai/widgetDomain": widgetDomain }),
     }, uri);
     if (client.getProtocolEra() === "modern" && domain !== undefined) {
       const cache = result as typeof result & { ttlMs: number; cacheScope: string };
@@ -64,28 +69,41 @@ async function expectViewers(client: Client, domain: string | undefined): Promis
 
 test("hosted viewers select Claude's hash or ChatGPT's origin per modern request", async (context) => {
   const handler = endpoint(context);
-  const clients = await Promise.all([
-    connect(context, handler, "claude-ai"),
-    connect(context, handler, "Anthropic/ClaudeAI"),
+  const cases = [
+    ["claude-ai", undefined, claudeDomain, undefined],
+    ["Anthropic/ClaudeAI", undefined, claudeDomain, undefined],
     // An explicit SDK identity wins over an inconsistent HTTP hint.
-    connect(context, handler, "ChatGPT", "modern", "Claude-User/1.0"),
-    connect(context, handler, "codex"),
-  ]);
+    ["ChatGPT", "Claude-User/1.0", "https://mcp.qyl.at", "https://mcp.qyl.at"],
+    ["openai-mcp", undefined, "https://mcp.qyl.at", "https://mcp.qyl.at"],
+    ["codex", undefined, undefined, undefined],
+  ] as const;
+  const clients = await Promise.all(cases.map(async ([name, userAgent, domain, widgetDomain]) => ({
+    client: await connect(context, handler, name, "modern", userAgent), domain, widgetDomain,
+  })));
   // Repeat after the shared HTML cache is populated, interleaving both hosts.
   for (let pass = 0; pass < 2; pass += 1) {
-    await Promise.all(clients.map((client, i) =>
-      expectViewers(client, i < 2 ? claudeDomain : "https://mcp.qyl.at")));
+    await Promise.all(clients.map(({ client, domain, widgetDomain }) =>
+      expectViewers(client, domain, widgetDomain)));
   }
 });
 
 test("stateless legacy viewer reads use Claude-User without retaining initialize identity", async (context) => {
   const handler = endpoint(context);
-  const claude = await connect(context, handler, "Anthropic/ClaudeAI", "legacy", "Claude-User/1.0");
-  const chatgpt = await connect(context, handler, "ChatGPT", "legacy", "ChatGPT-User/1.0");
+  const claude = await connect(context, handler, "Anthropic/ClaudeAI", "legacy", "Claude-User");
+  const chatgpt = await connect(context, handler, "openai-mcp", "legacy", "openai-mcp/1.0.0");
+  const chatgptAlias = await connect(context, handler, "ChatGPT", "legacy", "ChatGPT-User/1.0");
   await Promise.all([
     expectViewers(claude, claudeDomain),
-    expectViewers(chatgpt, "https://mcp.qyl.at"),
+    expectViewers(chatgpt, "https://mcp.qyl.at", "https://mcp.qyl.at"),
+    expectViewers(chatgptAlias, "https://mcp.qyl.at", "https://mcp.qyl.at"),
   ]);
+});
+
+test("unknown hosts omit both ui.domain and openai/widgetDomain", async (context) => {
+  const handler = endpoint(context);
+  const modern = await connect(context, handler, "another-ui-host", "modern", "ChatGPT-User/1.0");
+  const legacy = await connect(context, handler, "another-ui-host", "legacy", "another-ui-host/1.0");
+  await Promise.all([expectViewers(modern, undefined), expectViewers(legacy, undefined)]);
 });
 
 test("Claude viewer domains hash the exact configured connector path and trailing slash", async (context) => {
@@ -100,7 +118,7 @@ test("Claude viewer domains hash the exact configured connector path and trailin
   }
 });
 
-test("modern requests without clientInfo use the origin and do not inherit another caller", async (context) => {
+test("modern requests without clientInfo omit the domain and do not inherit another caller", async (context) => {
   const handler = endpoint(context);
   const claude = await connect(context, handler, "claude-ai");
   await expectViewers(claude, claudeDomain);
@@ -124,9 +142,14 @@ test("modern requests without clientInfo use the origin and do not inherit anoth
     }));
     assert.equal(response.status, 200);
     const body = await response.json() as { result: {
-      contents: { _meta: { ui: { domain: string } } }[];
+      contents: { _meta: { ui: { domain?: string }; "openai/widgetDomain"?: string } }[];
+      ttlMs: number;
+      cacheScope: string;
     } };
-    assert.equal(body.result.contents[0]?._meta.ui.domain, "https://mcp.qyl.at");
+    assert.equal(body.result.contents[0]?._meta.ui.domain, undefined);
+    assert.equal(body.result.contents[0]?._meta["openai/widgetDomain"], undefined);
+    assert.equal(body.result.ttlMs, 0);
+    assert.equal(body.result.cacheScope, "private");
   }
 });
 

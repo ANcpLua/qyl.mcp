@@ -45,15 +45,24 @@ Read on 2026-10-08:
   records `Anthropic/ClaudeAI` at initialization and `Claude-User` on later
   HTTP requests. This observed header is a presentation fallback, not an
   authenticated identity or a protocol requirement.
+- [Firsthand ChatGPT widget trace](https://community.openai.com/t/runtime-error-on-all-resource-widgets-in-developer-mode/1379591/6)
+  records `openai-mcp/1.0.0` on widget-resource requests. It is likewise only
+  a presentation hint.
+- [Owner review of this PR](https://github.com/ANcpLua/qyl.mcp/pull/121#issuecomment-6057325834)
+  refines the initial fallback requirement: only ChatGPT receives the HTTPS
+  origin, including its `openai/widgetDomain` alias. Unknown hosts omit both
+  domain fields. The owner also accepts the cache trade-off recorded below.
 
 `main.ts` derives the existing canonical `/mcp` endpoint from the configured
 HTTPS origin and supplies a domain resolver. The resolver hashes that exact
 string, never the incoming request URL or headers. Modern reads use the SDK's
 request envelope. Recognized Claude names include `claude-ai`, `Claude` and
-`Anthropic/ClaudeAI`; absent client info falls back to the `Claude-User` HTTP
-header. Other or absent hints yield the configured origin. Local resources
-without a configured domain still omit it. Existing constant `uiDomain`
-embedding overrides remain supported.
+`Anthropic/ClaudeAI`; `ChatGPT` and `openai-mcp` select the HTTPS origin and
+matching `openai/widgetDomain` alias. Absent client info falls back to the
+HTTP User-Agent (`Claude-User`, `openai-mcp`, or `ChatGPT-User`). Unknown or
+absent hints omit both domain fields, as do local resources without a
+configured domain. Existing constant `uiDomain` embedding overrides remain
+supported, with the compatibility alias added for HTTPS origins.
 
 Each resource read computes its own metadata; the shared cache contains only
 HTML. Hosted dynamic responses use `ttlMs: 0`, `cacheScope: private`, because
@@ -62,6 +71,27 @@ resource caching are unchanged. Trace Explorer moves to `mcp-app-v5.html`,
 MCP Dashboard to `mcp-dashboard-v3.html`, to invalidate old resource metadata.
 The empty CSP allowlists, display modes, tool schemas, auth and Collector
 selection are unchanged.
+
+The cache trade-off is intentional: each hosted resource read/render must
+refetch its approximately 450 KB single-file bundle because only its metadata
+varies. The server's in-memory HTML cache avoids disk reads; it does not avoid
+that transfer. On 2026-10-08, this command measured the uncompressed files:
+
+```sh
+node --input-type=module - <<'JS'
+import {statSync} from 'node:fs';
+for(const file of ['server/dist/mcp-app.html','server/dist/mcp-dashboard.html']) console.log(file,statSync(file).size,'bytes');
+JS
+```
+
+```text
+server/dist/mcp-app.html 454194 bytes
+server/dist/mcp-dashboard.html 443193 bytes
+```
+
+This replaces the former 24-hour public response hint only for dynamic
+hosted metadata. There is no advertised cache variation key for these
+client hints, so reuse could give a host another host's incompatible domain.
 
 ## Exact URL hashes
 
@@ -103,29 +133,34 @@ git diff --check
 
 All exited 0 in the final run. The snapshot command printed
 `wrote /Users/alexandernachtmann/RiderProjects/qyl.mcp/server/tool-manifest.snapshot.json`.
-The full test command built the bundles and passed 356 tests:
+After the owner-review changes, the full test command built the bundles and
+passed 357 tests:
 
 ```text
-server:    tests 178, pass 178, fail 0
+server:    tests 179, pass 179, fail 0
 workbench: tests 142, pass 142, fail 0
 dashboard: tests 32, pass 32, fail 0
 site:      tests 4, pass 4, fail 0
 ```
 
-The five new passing SDK-level tests in `server/src/ui-domain.test.ts` are:
+The six new passing SDK-level tests in `server/src/ui-domain.test.ts` are:
 
 ```text
 hosted viewers select Claude's hash or ChatGPT's origin per modern request
 stateless legacy viewer reads use Claude-User without retaining initialize identity
+unknown hosts omit both ui.domain and openai/widgetDomain
 Claude viewer domains hash the exact configured connector path and trailing slash
-modern requests without clientInfo use the origin and do not inherit another caller
+modern requests without clientInfo omit the domain and do not inherit another caller
 viewers without a public URL omit ui.domain for local clients
 ```
 
 Both resources are read in every case. Modern tests interleave two Claude
-client names with ChatGPT and Codex, repeat after the HTML cache is warm,
+client names with ChatGPT (`ChatGPT` and `openai-mcp`) and Codex, repeat after the HTML cache is warm,
 check unchanged CSP/display modes, and verify zero-TTL private cache hints.
 A conflicting HTTP hint cannot override an explicit SDK client name.
+ChatGPT receives equal standard and compatibility domain fields; unknown
+clients receive neither, over both wire eras. The legacy test uses both
+`openai-mcp/1.0.0` and `ChatGPT-User/1.0` for ChatGPT and `Claude-User` for Claude.
 Existing tests retain the constant-domain embedding path and public cache.
 
 The initial build exposed SDK 2.3.1's empty neutral `RequestMetaEnvelope`
