@@ -1,27 +1,26 @@
 # qyl.mcp evidence ledger
 
 Reset on 8 October 2026. An entry counts only with a date, the exact command
-or client and version, and the actual output or observation. Rows without
-that say `not recorded`. Nothing in this file is inferred from another row,
+or client and version, and the actual output or observation. Unobserved states carry the exact pending owner action. Nothing in this file is inferred from another row,
 from a passing unit test or from a successful initialize. Requirements and
 the work order are in [goal-objective.md](goal-objective.md).
 
-## Repository facts
+## Repository facts — source inspected 2026-10-08
 
-Checked in source on 8 October 2026.
+Commands and actual source output are in [step-7 evidence](docs/evidence/2026-10-08-step7.md).
+This table describes source, not a deployed or portal-observed state.
 
-| Item | Where | State |
-| --- | --- | --- |
-| SDK v2 split packages, no `@modelcontextprotocol/sdk` | `server/package.json`, `workbench/package.json` | present |
-| HTTP via `createMcpHandler`, stdio via `serveStdio` | `server/src/main.ts` | present |
-| 11 tools, all `readOnlyHint: true` | `server/tool-manifest.snapshot.json` | present |
-| `fetch_telemetry` app-only visibility | `server/src/server.ts` | present |
-| Trace-error Events implementation | `server/src/events.ts`, `events-authorization.ts`, `webhook.ts` | present |
-| Account and project scoping | `server/src/collector-access.ts`, `request-scope.ts` | present |
-| Native tool-call records contain operation metadata only | `server/src/native-execution.ts` | implemented in step 1; dated tests below |
-| OpenAI plugin draft | `submission/qyl/plugin.json`, `mcp.json` | present, not uploaded |
-| Anthropic bundle (`.claude-plugin/plugin.json`, `.mcp.json`, `README.md`, `LICENSE`) | `submission/qyl/` | present; portal validation not recorded |
-| Agent skill | `submission/qyl/skills/qyl-investigate/SKILL.md` | present |
+| Item | Dated command/output evidence |
+| --- | --- |
+| SDK v2 split packages, no SDK-v1 dependency | Package-inventory command outputs core/server 2.3.1; `bun run verify:sdk` outputs `MCP SDK boundary passed for 7 manifests/lockfiles (SDK v2; exact pins).` |
+| HTTP factory and stdio factory | Serving-source commands output `createHostedHandler` using a server factory and `serveStdio(serverFactory, ...)`; package tests cover both eras. |
+| 11 tools, all read-only | Package/tool inventory outputs all 11 names and `readOnlyHint: true`, `destructiveHint: false`. |
+| App-only fetch | Same inventory outputs `fetch_telemetry` visibility `["app"]`. |
+| Trace-error Events | Events-source command outputs `TRACE_ERROR_EVENT_NAME = "trace.error"` and subscription/list handlers; local test evidence is separate below. |
+| Account/project scoping | Configuration-source command outputs verified-subject lookup in `collectorAccessForSubject`; arguments and metadata are not selectors. |
+| Minimized native records | Native-source command outputs strict `NativeExecutionRecordSchema` with ID, tool name, status, timing and error type only; regression tests are recorded below. |
+| OpenAI draft | Step-5 validation outputs PASS for `plugin.json` and `mcp.json`; no portal result follows. |
+| Anthropic bundle and shared skill | Step-5 inventory outputs each required file `present`; README 269 words; Claude local validator passes. |
 
 ## Local checks — fresh run, 2026-10-08
 
@@ -332,8 +331,7 @@ redacted actual output. Never record tokens, cookies or callback signing keys.
 
 ## Directory records
 
-Repository-side inventory, checked 2026-10-08. `sed -n '1,85p'
-submission/README.md` reports OPENAI_PLUGIN as `local draft` and both
+Historical step-4 repository-side inventory, rechecked 2026-10-08. `git show ff930a8:submission/README.md` reports OPENAI_PLUGIN as `local draft` and both
 Anthropic records as `not created`; these are preparation states recorded in
 the repository, not independently observed portal states. The owner's
 [2026-10-08 review](https://github.com/ANcpLua/qyl.mcp/pull/95#issuecomment-6051431328)
@@ -343,8 +341,8 @@ remains an explicit owner action above.
 | Record | Repository-side state and dated evidence | Exact pending owner action |
 | --- | --- | --- |
 | OPENAI_PLUGIN | 2026-10-08: local draft; `plugin.json` and `mcp.json` present (inventory output below). | Supply the missing review fields, then separately authorize and perform portal validation/upload at `https://platform.openai.com/plugins`; record the actual status. |
-| ANTHROPIC_CONNECTOR | 2026-10-08: `submission/README.md` records `not created`; endpoint draft is `https://mcp.qyl.at/mcp`. | Create the separate MCP connector record at `https://claude.ai/directory/manage` after supplying the reviewer account, documentation/privacy URLs, support contact and icon; record its actual status. |
-| ANTHROPIC_PLUGIN | 2026-10-08: bundle files present; `submission/README.md` records the portal record as `not created`. | Select repository `ANcpLua/qyl.mcp`, plugin path `submission/qyl` and a branch or tag in the separate plugin-bundle record; arrange the Claude GitHub App access and later publication decision; record actual portal status. |
+| ANTHROPIC_CONNECTOR | 2026-10-08: `git show ff930a8:submission/README.md` records `not created`; endpoint draft is `https://mcp.qyl.at/mcp`. | Create the separate MCP connector record at `https://claude.ai/directory/manage` after supplying the reviewer account, documentation/privacy URLs, support contact and icon; record its actual status. |
+| ANTHROPIC_PLUGIN | 2026-10-08: bundle files present; `git show ff930a8:submission/README.md` records the portal record as `not created`. | Select repository `ANcpLua/qyl.mcp`, plugin path `submission/qyl` and a branch or tag in the separate plugin-bundle record; arrange the Claude GitHub App access and later publication decision; record actual portal status. |
 
 Inventory command, 2026-10-08:
 
@@ -384,10 +382,13 @@ to perform them in this task.
 
 ## Auth0 discovery decision
 
-Repository decision pointer, 2026-10-08: `sed -n '388,403p' README.md`
-prints that Auth0 publishes OIDC discovery, qyl.mcp is the resource server
-rather than issuer, and `openid`/`email` for workspace domain claiming do not
-replace `qyl:read`; see [README authentication guidance](README.md#authentication).
+Source/metadata evidence, 2026-10-08: the commands in
+[step-7 authentication evidence](docs/evidence/2026-10-08-step7.md#deployment-and-authentication)
+show resource metadata routes and the pinned Auth0 issuer. The public OAuth
+metadata command outputs Auth0's `issuer`; qyl.mcp does not implement its own
+OIDC issuer discovery. See [README authentication guidance](README.md#authentication).
+Workspace domain claiming and any verified-email requirement remain an owner
+check; they do not replace `qyl:read` resource authorization.
 
 ## Step 5 — local submission preparation, 2026-10-08
 
@@ -434,3 +435,27 @@ The following are pending owner actions, not tasks executed by this goal:
 
 Local verification, 2026-10-08: `git diff --name-only` returned only
 `MCP-V2-INTEROP-TODO.md`; `git diff --check` returned no output (exit 0).
+
+## Step 7 — documentation reconciliation, 2026-10-08
+
+[Source and merge evidence](docs/evidence/2026-10-08-step7.md) records the
+commands behind README, checkpoint and matrix statements. Local checks:
+`bun run --cwd server build` exits 0 including the unchanged deployment-guidance
+verifier; `bun run verify:sdk` reports 5 passes and the boundary success;
+`bun run lint` prints `$ oxlint .` and exits 0; `git diff --check` is silent,
+exit 0. This documentation revision does not change runtime code or gates.
+
+Earlier unaccepted claims remain separated as follows:
+
+| Claim | Fresh evidence or exact pending owner action |
+| --- | --- |
+| qyl.at PR #16 | On 2026-10-08, `gh pr view 16 --repo ANcpLua/qyl.at --json state,mergeCommit,mergedAt,url` returned `MERGED`, merge `098e4138fab7443fe8d3f558a92867e5d1ba39fc`, merged at `2026-10-07T19:50:42Z`. This proves the PR state only. |
+| Live protocol guide | Owner opens the deployed guide, records its exact URL/date and rendered protocol text, and compares the deployed revision with the intended qyl.at source. PR #16 alone is not deployment evidence. |
+| Collector PR #640 | On 2026-10-08, `gh pr view 640 --repo ANcpLua/qyl --json state,mergeCommit,mergedAt,url` returned `MERGED`, merge `d07c45add9384aa285df693bd651dfbd89e330a4`, merged at `2026-10-07T01:04:22Z`. This proves the PR state only. |
+| Eight hosted review rehearsals | Owner runs all five positive and three negative cases from `submission/qyl/plugin.json`, records client/version/date, actual tool calls and results, and marks each passed/failed. They remain unrun as hosted cases here. |
+| Approved Individual publisher identity | Owner reads the selected identity and verification status in the intended portal and records the date/status. Package author names do not establish this. |
+| Production filters and viewer refresh | Owner runs a bounded combined trace/service/severity/body log query against isolated sample data and refreshes the viewer with empty host input; records inputs, expected fixture IDs and actual output. Local smoke and UI tests are not production proof. |
+
+The five client connections, production Events lifecycle, npm consumer,
+publication and other owner decisions remain indexed in the existing owner
+sections above; none was deleted to satisfy a completion criterion.

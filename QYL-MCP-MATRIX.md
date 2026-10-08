@@ -1,125 +1,59 @@
-# qyl MCP Tool Use Matrix for qyl Repositories
+# qyl MCP tool-use matrix
 
-The following tables define which qyl MCP server tools should be used for work in each qyl repository.
+Source inventory checked **2026-10-08** using the command and actual manifest
+output in [step-7 evidence](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory).
+This maps existing tools to user needs; it does not claim a particular client,
+repository or production service currently emits telemetry.
 
-This is a recommendation based on the generated tool manifest snapshot, repository architecture and project contracts.
-The repository recommendations come from those sources. This matrix makes no
-claim about production, client or portal state; that evidence lives in
-[the evidence ledger](MCP-V2-INTEROP-TODO.md).
+All 11 tools have `readOnlyHint: true` and `destructiveHint: false` in the
+inspected manifest. Ten are model-facing; `fetch_telemetry` is app-only.
+The manifest's contract revision is `sha256:75278211aa54def8`.
 
-`+` means the tool should be directly available and is preferred for suitable work.
-`C` means conditional — applicable only in the scenario named in the section notes.
-`U` means UI plumbing — called by the embedded explorer UI, never by the model directly.
-`-` means the tool is technically related but native agent tools or repository commands are preferred.
-`N/A` means the tool is not applicable to that repository. A blank cell means availability or relevance is not
-sufficiently verified.
+| Tool | User need and existing behavior | Limits / routing |
+| --- | --- | --- |
+| `list_sessions` | Find active or failing sessions with counts, state and recorded token usage. | Use returned IDs; `active_only` and `limit` are existing inputs. |
+| `list_traces` | Get a compact overview of traces, duration, services and error flags. | Summary only; span data is omitted. |
+| `get_trace` | Inspect complete span data for a returned `trace_id`. | Full span tree, potentially large; use the viewer or filtered logs for large traces. No new filtering parameters were added. |
+| `search_logs` | Find correlated logs or error details. | `trace_id`, `service_name`, `severity_min`, body query and limit; ERROR starts at 17. |
+| `list_metrics` | Discover exact recorded instrument names, units and kinds. | Start here before choosing a metric name. |
+| `get_metric_series` | Discover a metric's attribute streams and grouping/filter keys. | Use the returned attributes to choose the range query's groups. |
+| `query_metric` | Compare a metric over time or across groups. | With `step_ms` equal to the window, each grouping produces one bucket: one number per series. |
+| `ci_log` | Inspect recent CI runs or per-leg phases. | Any CI emitting resource `service.name` starting `qyl-ci`, run `session.id`, and one phase span with `ci.leg`; failed phases use error status. List filters 50 recent sessions, default 10 matching runs; detail reads up to 100 traces. |
+| `display_traces` | See a trace waterfall, session traces or recent traces. | Interactive viewer; empty-input refresh preserves the original query in covered local tests. |
+| `display_mcp_dashboard` | Inspect recorded MCP usage, tool latency and errors. | Requires spans carrying `mcp.method.name`; only recorded telemetry in the selected project can appear. |
+| `fetch_telemetry` | Refresh or filter the trace explorer. | `_meta.ui.visibility: ["app"]`; UI plumbing, not a model-facing tool. |
 
-For the `Baseline` column:
+Descriptions and input/annotation fields are in the source inventory above;
+query-restoration and empty-result behavior are covered in the
+[2026-10-08 local tests](docs/evidence/2026-10-08-step4.md#test).
 
-- `Snapshot` means the tool appears in `server/tool-manifest.snapshot.json` at contract revision
-  `sha256:75278211aa54def8`. The server is closed-world: a fresh runtime `tools/list` must equal the snapshot, and the
-  snapshot is regenerated only deliberately with its diff inspected.
+## Applying the tools across repositories
 
-There are no `VERIFY` or `GHOST` states: the generated manifest is the contract, so a tool either exists at the
-pinned revision or it does not.
+These are conditional recommendations, not assertions about emission or ownership:
 
-Protocol compatibility uses SDK v2 defaults: modern `2026-07-28` and supported
-2025-era tool clients share the same catalog and authorization requirements.
-Events require the modern protocol. The workbench negotiates automatically.
+| Work area | Use qyl when… | Otherwise… |
+| --- | --- | --- |
+| `qyl` / `qyl.mcp` | The authorized Collector contains the service's runtime or CI telemetry. | Inspect source/build/test results through the agent's repository tools. |
+| `qyl.at` | The user wants to compare documented telemetry behavior with actual recorded data. | Use site sources and local page checks; do not assume the site emits OTLP. |
+| Semantic conventions / instrumentation | Emitted attributes, instruments or spans reached the authorized Collector. | Verify generation/instrumentation locally before claiming runtime evidence. |
+| Any other CI | It emits the `ci_log` convention above into the authorized Collector. | Use that CI system's own authorized connector for its records or actions. |
 
-Repository abbreviations:
+No repository has an exclusive claim on the emitter convention or MCP span
+attributes. Third-party mutations such as GitHub PRs or deployments are outside
+qyl tools; see the first-party boundary in [AGENTS.md](AGENTS.md).
 
-- `qyl.mcp` — MCP server, Workbench and dashboard
-- `qyl.at` — Astro site and Cloudflare Worker
-- `SemConv` — `Qyl.OpenTelemetry.SemanticConventions`
-- `AutoInstr` — `Qyl.OpenTelemetry.AutoInstrumentation`
+## Protocol and viewers
 
-## Telemetry reading
+The local pinned Inspector 2.9.0 check passed `tools/list` for modern and legacy
+eras and schema portability; see [dated command/output](docs/evidence/2026-10-08-step4.md#both-era).
+That result does not establish a production client connection. Workbench's
+source uses automatic negotiation; Events is a separate opt-in lifecycle.
 
-| Tool            | Baseline | qyl | qyl.mcp | qyl.at | SemConv | AutoInstr |
-|-----------------|----------|:---:|:-------:|:------:|:-------:|:---------:|
-| `ci_log`        | Snapshot |  +  |    +    |  N/A   |   N/A   |    N/A    |
-| `list_sessions` | Snapshot |  +  |    +    |   C    |    C    |     C     |
-| `list_traces`   | Snapshot |  +  |    +    |   C    |    C    |     C     |
-| `get_trace`     | Snapshot |  +  |    +    |   C    |    C    |     C     |
-| `search_logs`   | Snapshot |  +  |    +    |   C    |    C    |     C     |
+| Resource | Tool | Source evidence, 2026-10-08 |
+| --- | --- | --- |
+| `ui://qyl-explorer/mcp-app-v4.html` | `display_traces` | [Viewer constants and registration](docs/evidence/2026-10-08-step7.md#viewers) |
+| `ui://qyl-explorer/mcp-dashboard-v2.html` | `display_mcp_dashboard` | [Viewer constants and registration](docs/evidence/2026-10-08-step7.md#viewers) |
 
-`ci_log` reads sessions whose `service.name` starts with `qyl-ci`; only qyl's own CI emits that telemetry
-(`qyl/eng/tools/QylToolSmoke/CiTelemetry.cs`), so the tool is meaningless for the other repositories' CI runs. It stays
-direct in `qyl.mcp` because `server/src/ci.ts` owns the implementation and dogfoods it. goal-objective.md
-schedules its removal from the public manifest or a required `service_prefix` parameter, because the default
-returns nothing for other users.
-
-Conditional scenarios for the generic readers:
-
-- `qyl.at`: verifying that product documentation (`telemetry.mdx`, `getting-started.mdx`) matches live behavior; the
-  site itself emits no OTLP.
-- `SemConv`: confirming generated attribute names appear on real spans and logs.
-- `AutoInstr`: confirming emitted instrumentation (spans, logs, GenAI token usage) arrives at a running collector.
-
-## Metrics reading
-
-| Tool                | Baseline | qyl | qyl.mcp | qyl.at | SemConv | AutoInstr |
-|---------------------|----------|:---:|:-------:|:------:|:-------:|:---------:|
-| `list_metrics`      | Snapshot |  +  |    +    |   C    |    C    |     C     |
-| `get_metric_series` | Snapshot |  +  |    +    |   C    |    C    |     C     |
-| `query_metric`      | Snapshot |  +  |    +    |   C    |    C    |     C     |
-
-The metrics read contract arrived in `@ancplua/qyl-api-schema` 8.0.0. The three tools are read in order:
-`list_metrics` for an exact instrument name and its series count, `get_metric_series` for the attribute keys
-worth grouping or filtering on, `query_metric` for the windowed answer. Passing `group_by` without first
-looking at the series is the common way to get either one collapsed line or a truncated fan-out.
-
-Conditional for the same reason the generic trace and log readers are: `SemConv` and `AutoInstr` use them to
-confirm that emitted instruments and their attribute vocabulary actually arrive at a running collector, and
-`qyl.at` to check documented metric names against live behavior. Neither owns the data.
-
-## Interactive displays
-
-| Tool                    | Baseline | qyl | qyl.mcp | qyl.at | SemConv | AutoInstr |
-|-------------------------|----------|:---:|:-------:|:------:|:-------:|:---------:|
-| `display_traces`        | Snapshot |  +  |    +    |   C    |    C    |     C     |
-| `display_mcp_dashboard` | Snapshot |  +  |    +    |  N/A   |   N/A   |    N/A    |
-
-Displays are preferred over their data counterparts whenever the user wants to SEE the result: `display_traces` over
-`list_traces`/`get_trace` for waterfalls. `display_mcp_dashboard` aggregates spans carrying `mcp.method.name`; only qyl
-(collector ingest) and qyl.mcp (server traffic) produce and own that data.
-
-## UI plumbing
-
-| Tool                           | Baseline | qyl | qyl.mcp | qyl.at | SemConv | AutoInstr |
-|--------------------------------|----------|:---:|:-------:|:------:|:-------:|:---------:|
-| `fetch_telemetry`              | Snapshot |  U  |    U    |   U    |    U    |     U     |
-
-`fetch_telemetry` is app-only through its `ui.visibility` metadata, so the model does not see it. It feeds the trace
-explorer wherever `display_traces` is used. It exists in the manifest for the embedded UI's callbacks, not for agents.
-
-It publishes no `outputSchema`. Its callers are the bundled viewers, compiled against the generated TypeScript types,
-so describing those bodies in `tools/list` spent context on shapes no model may request. It still returns structured
-content, and the snapshot still pins its input schema and UI metadata.
-
-## UI resources
-
-| Resource                               | Backs                                       |
-|----------------------------------------|---------------------------------------------|
-| `ui://qyl-explorer/mcp-app-v4.html`       | `display_traces` trace explorer             |
-| `ui://qyl-explorer/mcp-dashboard-v2.html` | `display_mcp_dashboard` aggregate dashboard |
-
-Hosted deployments advertise their validated `MCP_PUBLIC_URL` origin as
-`_meta.ui.domain` on both resources. Their CSP keeps empty connection and asset
-allowlists: the bundled viewers use the MCP bridge and load no external assets.
-
-## Recommended direct exposure summary
-
-| Repository                              | Direct toolset | Conditional focus                                              |
-|-----------------------------------------|---------------:|----------------------------------------------------------------|
-| `qyl`                                   |       11 tools | Telemetry, metrics, CI evidence and the interactive displays   |
-| `qyl.mcp`                               |       11 tools | Telemetry, metrics, CI evidence and the interactive displays   |
-| `qyl.at`                                |        0 tools | Telemetry readers and trace explorer for docs verification     |
-| `Qyl.OpenTelemetry.SemanticConventions` |        0 tools | Telemetry readers for verifying generated attribute vocabulary |
-| `Qyl.OpenTelemetry.AutoInstrumentation` |        0 tools | Telemetry readers for verifying emitted instrumentation        |
-
-The central policy is: keep the read-only telemetry and metrics intelligence directly available where the data is
-owned, prefer the interactive displays whenever the human wants to look rather than the model wants to read, and never
-keep the UI-plumbing fetch tool hidden from the model by metadata. Today every tool in the manifest is read-only;
-write tools may be added as separate, honestly annotated tools, see [AGENTS.md](AGENTS.md).
+The same source declares a configured hosted UI origin and empty external
+connection/resource CSP allowlists. No viewer resource or runtime code changed
+in this documentation step.

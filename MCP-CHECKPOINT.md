@@ -1,41 +1,42 @@
 # qyl.mcp checkpoint
 
-Updated 8 October 2026. This file records state, not progress. The objective,
-the work order and the completion criteria are in
-[goal-objective.md](goal-objective.md). Working agreements are in
-[AGENTS.md](AGENTS.md). Evidence is in
-[MCP-V2-INTEROP-TODO.md](MCP-V2-INTEROP-TODO.md). A statement belongs here
-only when the repository or a dated evidence entry backs it.
+Checked **2026-10-08**. The [objective](goal-objective.md) defines completion;
+[AGENTS.md](AGENTS.md) defines repository rules. The
+[evidence ledger](MCP-V2-INTEROP-TODO.md) distinguishes source, local tests,
+CI, public HTTP observations and pending owner actions.
 
-## State on main
+## Repository and local evidence
 
-- Server: split TypeScript SDK v2 packages; `bun run verify:sdk` in CI rejects
-  SDK v1 packages. 11 tools in `server/tool-manifest.snapshot.json`, all
-  `readOnlyHint: true`; `fetch_telemetry` app-only; `trace.error` Events in
-  `server/src/events.ts`; project scoping in `server/src/collector-access.ts`.
-  Native tool-call records keep tool name, timing, status and error type only.
-  `server/package.json` declares version 7.2.0.
-- Submission: `submission/qyl/` holds the OpenAI plugin draft, the Anthropic
-  bundle files and the shared skill `skills/qyl-investigate/SKILL.md`. Nothing
-  is uploaded or submitted. `submission/public-pages-draft.md` holds draft
-  text for the owner's support, privacy and terms pages.
-- Step 1 of "Work, in order" is merged (PR #91). Steps 2 to 5 are open.
+| State | Dated evidence |
+| --- | --- |
+| Split SDK 2.3.1, contract package 11.2.0, server source version 7.2.0. | [Step-7 package command/output](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory). |
+| 11 read-only tools; ten model-facing and app-only `fetch_telemetry`; descriptions match step 2. | Same manifest inventory; [step-2 comparison](MCP-V2-INTEROP-TODO.md#step-2--tool-descriptions) proves only descriptions changed. |
+| Incoming native records exclude arguments, `_meta` and result bodies. | [Strict schema source](docs/evidence/2026-10-08-step7.md#native-records) and [regression evidence](MCP-V2-INTEROP-TODO.md#step-1--rules-and-native-call-records). |
+| Build, 337 tests, transport, SDK, lint and project-isolation checks passed locally. | [Step-4 transcript](docs/evidence/2026-10-08-step4.md). The initial OTLP failure and successful fresh-main Collector rerun are both retained. |
+| Inspector 2.9.0 passed modern/legacy discovery and schema portability. | [Black-box command/output](docs/evidence/2026-10-08-step4.md#both-era). |
+| Static drift scan produced 31 error-severity findings, with four source-specific assessments. | [Unchanged raw output](docs/evidence/2026-10-08-step4.md#static-drift-findings) and [assessed rules](MCP-V2-INTEROP-TODO.md#static-findings--assessed-2026-10-08). |
+| Shared skill and Anthropic files exist; both OpenAI manifests schema-valid; package build reproducible. | [Step-5 commands/output](docs/evidence/2026-10-08-step5.md). Generated ZIP is local and Git-ignored, not a submitted artifact. |
 
-## Not established
+## Merge and CI evidence
 
-Client connections, the production Events lifecycle, review rehearsals, the
-npm registry state, qyl.at changes, publisher identity and production rechecks
-have no accepted evidence. The full list is in goal-objective.md under
-"What is not established". Treat each item as not done.
+Steps 2–6 merged sequentially as PRs #93–#97. Each has `lint`, `verify`,
+`owner-review/content` and `owner-review/evidence` recorded as SUCCESS at its
+reviewed head. Step 1 was already merged in #91. Exact heads, merge commits,
+dates and `gh` outputs are in [step-7 merge evidence](docs/evidence/2026-10-08-step7.md#merged-steps).
+This revision reconciles the step-7 documents; its own PR and CI status must
+be read from GitHub rather than inferred from these earlier runs.
 
-## Next
+## Public observations and remaining owner work
 
-Step 2 of "Work, in order" in goal-objective.md: tool descriptions that state
-what each tool does and when to use it, without new parameters.
+`curl` observed the public MCP 401 challenge and correct resource/issuer/scope
+metadata; `npm view qyl-mcp-server version` returned 7.1.1 on 2026-10-08.
+[Exact output](docs/evidence/2026-10-08-step4.md#endpoint).
+These results do not prove the deployed commit, a fresh npm consumer, a real
+client connection or production Events behavior.
 
-## Owner actions pending
-
-Publisher identity selection, public support, privacy and terms pages on
-qyl.at, a reviewer account with isolated sample data, the demo recording,
-legal attestations, submission and publication. Agents prepare and list
-these; they do not perform them.
+All five client connections, production Events lifecycle and modern request
+header proof, deployed commit, reviewer account, demo recording, publisher
+identity, targeting, public pages, attestations, submission and publication
+remain in the [owner-action index](MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending)
+and [submission handoff](submission/README.md#owner-fields-still-required).
+No current portal state is established by this repository work.
