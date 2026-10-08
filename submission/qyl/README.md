@@ -9,9 +9,8 @@ Instead of reading raw log dumps, the model asks compact questions. Which
 sessions are failing? What happened inside this trace? Which log records
 belong to it? How did this metric move over the last hour? qyl returns the
 collector's actual answers, including empty results and upstream errors, and
-can render them in an interactive Trace Explorer and MCP Dashboard. In
-clients that support MCP Events, qyl notifies the model about new trace
-errors. qyl measures and correlates; the agent reasons and acts.
+can render them in an interactive Trace Explorer and MCP Dashboard. On deployments and clients that support MCP Events, an explicit
+subscription can notify the client about new trace errors. qyl measures and correlates; the agent reasons and acts.
 
 ## What it needs
 
@@ -23,8 +22,7 @@ errors. qyl measures and correlates; the agent reasons and acts.
 ## Tools
 
 Every tool in the current server catalog is read-only and carries the
-matching annotations, so clients can run them without a per-call
-confirmation. `list_sessions`, `list_traces`, `get_trace` and `search_logs`
+matching annotations. Confirmation behavior is controlled by the client. `list_sessions`, `list_traces`, `get_trace` and `search_logs`
 read telemetry; `list_metrics`, `get_metric_series` and `query_metric` read
 metrics; `display_traces` and `display_mcp_dashboard` open the interactive
 viewers; `ci_log` reads CI runs whose telemetry follows qyl's CI emitter

@@ -1,73 +1,66 @@
-# qyl public submission preparation
+# qyl directory preparation
 
-Updated 8 October 2026. Three directory records are prepared from this
-folder. None is uploaded, submitted, approved or published. Status is
-recorded in the [evidence ledger](../MCP-V2-INTEROP-TODO.md); requirements
-and the work order are in [goal-objective.md](../goal-objective.md).
+Checked 2026-10-08. This is local preparation, with reproducible commands and
+actual outputs in [step-5 evidence](../docs/evidence/2026-10-08-step5.md).
+The package is **incomplete for submission**: owner identity, targeting,
+reviewer access, demo and public policy/support URLs remain open. No current
+portal status is established by these local checks.
 
-| Record | Portal | Source | State |
-| --- | --- | --- | --- |
-| OPENAI_PLUGIN | https://platform.openai.com/plugins | `qyl/` as a ZIP | local draft |
-| ANTHROPIC_CONNECTOR | https://claude.ai/directory/manage, kind "MCP connector" | `https://mcp.qyl.at/mcp` | not created |
-| ANTHROPIC_PLUGIN | https://claude.ai/directory/manage, kind "Plugin bundle" | repository `ANcpLua/qyl.mcp`, plugin path `submission/qyl`, a branch or tag | not created |
+## Three separate records
 
-## What `qyl/` contains today
+These targets and fields follow `goal-objective.md`, step 5; they are
+preparation instructions, not claims of portal creation or approval.
 
-- `plugin.json`: Agent Plugins 1.0 manifest with `$schema`, name `qyl`,
-  version 1.0.0, and `extensions.com.openai` holding the listing copy, three
-  default prompts, five positive and three negative review cases, release
-  notes and the free-use declaration.
-- `mcp.json`: one `streamable-http` server at `https://mcp.qyl.at/mcp`.
-  Authentication is discovered from the server's 401 and resource metadata.
-  No credentials are included.
-- `assets/qyl-icon.png`: 1254 × 1254 PNG for listing and composer.
+| Record | Prepared source / observed local state | Owner destination and remaining fields |
+| --- | --- | --- |
+| OPENAI_PLUGIN | [Draft ZIP](packages/qyl-openai-1.0.0-draft.zip), six source-identical files; both root manifests schema-valid. | `https://platform.openai.com/plugins`; select publisher, countries, supply support/privacy/terms URLs, reviewer access and `review.demo_recording_url`, then validate the saved draft. |
+| ANTHROPIC_CONNECTOR | Endpoint `https://mcp.qyl.at/mcp`; unauthenticated challenge and resource metadata observed in [step 4](../docs/evidence/2026-10-08-step4.md#endpoint). No connector portal record is evidenced. | `https://claude.ai/directory/manage`, kind **MCP connector**; supply a fully populated isolated test account, documentation URL, privacy URL, support contact, icon, slug and category. Goal step 5 identifies the default route as Community listing after automatic scan; this is not an observed listing. |
+| ANTHROPIC_PLUGIN | `qyl/.claude-plugin/plugin.json`, `.mcp.json`, README, LICENSE and shared skill exist; local Claude validator passes. No bundle portal record is evidenced. | Same portal, kind **Plugin bundle**; repository `ANcpLua/qyl.mcp`, plugin path `submission/qyl`, branch `main` or owner-selected tag (**not a commit SHA**). Owner arranges Claude GitHub App access; repository may remain private during validation and must be public to go live per goal step 5. |
 
-The package version (1.0.0) and the service version in `server/package.json`
-(7.2.0) identify different artifacts.
+## Package verification
 
-## What `qyl/` still needs
+On 2026-10-08, the commands in [step-5 evidence](../docs/evidence/2026-10-08-step5.md)
+validated `plugin.json` and `mcp.json` against their fetched `$schema` documents,
+then checked the ZIP against the source bytes. The root plugin has
+`extensions.com.openai`, one server, five positive and three negative cases.
+The README contains 269 words outside code blocks. The shared skill remains
+identical for both plugin formats.
 
-- `skills/qyl-investigate/SKILL.md`: the agent workflow shared by both plugin
-  formats (goal step 3).
-- `.claude-plugin/plugin.json` (name, displayName, version, description,
-  author, license), `.mcp.json` pointing at `https://mcp.qyl.at/mcp`,
-  `README.md` with at least 40 words outside code blocks, and a `LICENSE`
-  file: the Anthropic bundle (goal step 5).
-- Listing text that matches the tools: qyl measures and correlates, the agent
-  reasons and acts. No remediation, fixing or continuous monitoring is
-  promised.
-- For OpenAI review: website, support, privacy and terms URLs, the publisher
-  identity, `review.demo_recording_url`, and the domain challenge at
-  `https://mcp.qyl.at/.well-known/openai-apps-challenge`.
-- For the Anthropic connector: test credentials for a fully populated
-  account, documentation URL, privacy URL, support contact, icon, categories
-  and slug.
-- A ZIP check against the OpenAI portal validator, because the folder then
-  also contains `.claude-plugin/`. Exclude it when zipping if the validator
-  objects.
+The OpenAI ZIP excludes `.claude-plugin/` and `.mcp.json` deliberately, so it
+uses only the root portable manifests. The Anthropic files stay in `qyl/`.
+This chooses the exclusion option in goal step 5; no portal validator ran.
+Schema validation does not validate all `com.openai` review requirements.
 
-## Directory rules this folder is held to
+The existing icon is PNG, 1254 × 1254, 979540 bytes (`sips` and `wc` outputs
+in the evidence record). The package has no reviewer credentials or app
+bindings. Source author metadata is not proof of a verified publisher.
 
-- Separate read and write tools; `title` plus accurate `readOnlyHint` or
-  `destructiveHint` on every tool; descriptions that match behavior and do
-  not address the model.
-- Tools call qyl's own APIs only. No actions in third-party systems.
-- Responses proportional to the question; no raw dumps.
-- No conversation data collected beyond what a tool needs, not even for
-  logs.
-- Free to use, no purchases, no financial transactions.
+## Owner fields still required
 
-Sources:
-[Anthropic connector checklist](https://claude.com/docs/connectors/building/review-criteria),
-[Anthropic plugin checklist](https://claude.com/docs/plugins/pre-submission-checklist),
-[Anthropic directory policy](https://support.claude.com/en/articles/13145358-anthropic-software-directory-policy),
-[OpenAI submission](https://developers.openai.com/plugins/deploy/submission),
-[OpenAI plugin guidelines](https://developers.openai.com/plugins/plugin-guidelines),
-[Submit a Claude plugin to OpenAI](https://developers.openai.com/plugins/guides/submit-claude-plugin).
+| Item | Exact next owner action |
+| --- | --- |
+| Publisher identity | Choose and verify the intended publisher in the OpenAI portal. Then supply the exact public name if needed; `developerName` is currently omitted. |
+| Country targeting | Select the intended countries or explicitly choose all eligible countries. `publication.countries` is omitted; no broad targeting is inferred. |
+| Website, support, privacy, terms | Recheck the existing `https://qyl.at/` homepage for the final listing; approve and publish the [public-page drafts](public-pages-draft.md). Supply the actual URLs. Then add OpenAI `supportURL`, `privacyPolicyURL`, `termsOfServiceURL` and Anthropic `supportUrl`, `privacyPolicyUrl`, `termsOfServiceUrl`. Missing URLs stay absent. |
+| Reviewer account | Provide an isolated populated Collector project and OAuth account that reviewers can use without the owner's mailbox, phone or private network. Enter credentials only in private portal fields. |
+| Demo recording | Record the walkthrough below in a working owner client and supply a reviewer-accessible playback URL; only then set `review.demo_recording_url`. |
+| Hosted connection and review cases | Run the exact five positive and three negative prompts in `qyl/plugin.json` through the saved owner-client connection. Record actual calls/results and status per case. All eight are **not run** as hosted review cases in this preparation. |
+| Legal attestations, submission, publication | Owner reviews and performs these separately. An uploaded draft or a schema-valid ZIP does not establish approval or publication. |
 
-## Owner actions
+Free use with no purchases is the explicit owner decision in
+[goal-objective.md](../goal-objective.md#owner-decisions); no future-commerce
+or country commitment is inferred from it.
 
-Publisher identity, public pages on qyl.at, the reviewer account, the demo
-recording, attestations, submission and publication are the owner's. Agents
-prepare the files above and record what is missing; they do not upload or
-submit.
+## Recording walkthrough for the owner
+
+Use the prompts and expected behavior in `qyl/plugin.json` as the test contract.
+Prepare sample traces, sessions, metrics and error logs for the named service
+`qyl-mcp-interop-oct7` in the isolated project. Show the plugin version and a
+successful OAuth connection, then record trace discovery/detail, filtered error
+logs, metric discovery, session discovery and the Trace Explorer. Refresh the
+viewer and show that the original query is preserved. Finish with the deletion,
+rollback and public-web-search negative prompts, showing the stated limitations.
+Keep credentials and unrelated telemetry off screen. Play the recording back,
+verify readable results, host it for reviewers and supply the final URL.
+
+This is a recording plan, not a recording or a passed rehearsal.
