@@ -530,3 +530,16 @@ imports and a justified marker for the Events JSON Schema.
 [Full before/after and test output](docs/evidence/2026-10-08-followup-03.md)
 includes the single reasoned `TS-RAW-SHAPE` allowance and installed Zod factory
 identity. This is local evidence; the external skill is not added to CI.
+
+## Revised goal — point 4: HTTP contract tests, 2026-10-08
+
+| Check | Dated command and actual output |
+| --- | --- |
+| Protocol header/body mismatch | 2026-10-08: `QYL_MCP_TELEMETRY=0 QYL_MCP_NATIVE_STATE_PATH=/private/tmp/qyl-followup-4/native.json bun run --cwd server test` passed `HTTP protocol-version mismatch returns 400 and -32020`. |
+| Missing per-request capabilities | Same dated command passed `HTTP missing clientCapabilities returns 400 and -32602`, including the missing-key diagnostic. |
+| Catalog cache and order | Same dated command passed `HTTP tools/list carries cache hints and preserves order across requests`: two direct factory-fetch responses, 11 tools each, `ttlMs: 300000`, `cacheScope: public`, unchanged returned order. |
+| Combined gates | Same dated command: 161 passed, 0 failed. `bun run lint` exited 0; `bun run verify:sdk` reported 5 passed and the seven-manifest boundary success. |
+
+[Exact commands and output](docs/evidence/2026-10-08-followup-04.md) record local
+verification and the preceding point's merge. The verify CI job already runs
+this server test glob; its result is recorded by the PR checks.
