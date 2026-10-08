@@ -1,0 +1,15 @@
+{
+  "name": "qyl",
+  "displayName": "qyl",
+  "version": "1.0.0",
+  "description": "Investigate traces, logs, metrics and sessions from your authorized qyl collector through the hosted qyl MCP server.",
+  "author": {
+    "name": "Alexander Nachtmann",
+    "url": "https://qyl.at/"
+  },
+  "homepage": "https://qyl.at/",
+  "repository": "https://github.com/ANcpLua/qyl.mcp",
+  "documentationUrl": "https://github.com/ANcpLua/qyl.mcp#readme",
+  "license": "MIT",
+  "keywords": ["observability", "opentelemetry", "traces", "logs", "metrics", "mcp"]
+}

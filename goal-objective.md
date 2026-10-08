@@ -32,10 +32,10 @@ Everything in this section was checked in the repository on 8 October 2026.
   `_meta.ui.visibility: ["app"]`. A `trace.error` Events implementation exists
   in `server/src/events.ts`; account and project scoping exists in
   `server/src/collector-access.ts`.
-- An OpenAI plugin draft exists in `submission/qyl/` (`plugin.json`,
-  `mcp.json`, icon). `submission/README.md` states that it is incomplete and
-  has not been uploaded or submitted. No Anthropic plugin bundle exists yet:
-  there is no `.claude-plugin/plugin.json` and no `.mcp.json` in `main`.
+- `submission/qyl/` holds the OpenAI plugin draft (`plugin.json`,
+  `mcp.json`, icon), the Anthropic bundle files (`.claude-plugin/plugin.json`,
+  `.mcp.json`, `README.md`, `LICENSE`) and the shared agent skill
+  `skills/qyl-investigate/SKILL.md`. Nothing in it is uploaded or submitted.
 - The main checkout carries uncommitted documentation and two new submission
   drafts (`submission/demo-runbook.md`, `submission/public-pages-draft.md`).
   Preserve them; do not commit them onto `main` unrebased, because that tree
@@ -129,20 +129,28 @@ actually does it.
    uncommitted working tree in the main checkout untouched.
 2. **Review-readiness fixes** (Anthropic connector checklist, Directory Policy
    §1D and §5B, OpenAI plugin guidelines):
-   - `get_trace`: add `errors_only`, `max_spans` and `include_attributes` in
-     `server/src/server.ts` and `server/src/data.ts`; drop "every span" from
-     the description.
-   - `ci_log`: remove it from the public manifest (preferred; `list_sessions`
-     covers the rest), or make `CI_SERVICE_PREFIX` in `server/src/ci.ts` a
-     required `service_prefix` parameter. A default of `qyl-ci` still returns
-     nothing for other users.
+   - `get_trace`: its input schema is the contract binding
+     `Mcp.Tools.GetTraceInput` from `@ancplua/qyl-api-schema`, so new
+     parameters (`errors_only`, `max_spans`, `include_attributes`) are a
+     contract change in ANcpLua/qyl-api-schema first and are not required for
+     this goal. In this repository: make the description state honestly that
+     the full span tree is returned and point to `display_traces` and
+     `search_logs` for large traces.
+   - `ci_log`: its input schema is the contract binding `Mcp.Tools.CiLogInput`,
+     so a `service_prefix` parameter is also a contract change. In this
+     repository: make the description state the emitter convention from
+     `server/src/ci.ts` (sessions whose resource `service.name` starts with
+     `qyl-ci`, one span per phase with a `ci.leg` attribute), so any CI that
+     emits it can use the tool; or remove the tool from the public manifest if
+     that is preferred.
    - `fetch_telemetry`: remove "The model should NOT call this tool directly"
      from the description; the visibility is already correct.
    - Check every description against "schema and annotation equal behavior".
    - If write tools are added, give each its own tool with honest hints and
      update negative test cases 1 and 2 in `submission/qyl/plugin.json`.
-3. **Ship an agent skill** shared by both plugin formats at
-   `submission/qyl/skills/qyl-investigate/SKILL.md`: start with `list_sessions` and
+3. **Agent skill.** `submission/qyl/skills/qyl-investigate/SKILL.md` exists
+   on `main` and is shared by both plugin formats; keep it in step with the
+   tool descriptions. Its workflow: start with `list_sessions` and
    `list_traces`; drill with `get_trace`, then `search_logs` on the same
    `trace_id` with `severity_min` 17; metrics via `list_metrics`,
    `get_metric_series`, `query_metric`; tool health via
@@ -161,10 +169,11 @@ actually does it.
      URL, support contact, icon. The default result is a Community listing
      after the automatic scan.
    - Anthropic plugin bundle in the same folder as the OpenAI draft:
-     `submission/qyl/.claude-plugin/plugin.json` (name, displayName, version,
-     description, author, license), `submission/qyl/.mcp.json` pointing at
-     `https://mcp.qyl.at/mcp`, a `README.md` of at least 40 words outside
-     code blocks, a `LICENSE` file, and the shared `skills/`. Portal fields:
+     `submission/qyl/.claude-plugin/plugin.json`, `submission/qyl/.mcp.json`
+     pointing at `https://mcp.qyl.at/mcp`, `README.md`, `LICENSE` and the
+     shared `skills/` exist on `main`. Add `supportUrl`, `privacyPolicyUrl`
+     and `termsOfServiceUrl` once the owner publishes those pages. Portal
+     fields:
      repository `ANcpLua/qyl.mcp`, plugin path `submission/qyl`, a branch or
      tag (no commit). The repository may stay private during validation and
      must be public to go live, with the Claude GitHub App installed.
@@ -174,6 +183,10 @@ actually does it.
      OpenAI accepts Claude-compatible manifests and `extensions.com.openai`
      takes precedence, but check the ZIP against the portal validator or
      exclude `.claude-plugin/` when zipping.
+   - Local branch `codex/handoff-2026-10-08` carries reusable drafts:
+     `developerName`, `category`, logo paths and release notes in
+     `submission/qyl/plugin.json`, and `submission/public-pages-draft.md` with
+     support, privacy and terms text. Reuse the text, not its claims.
    - Public support, privacy and terms pages on qyl.at and a reviewer account
      with isolated sample data are owner decisions; record what is missing,
      do not invent it.
@@ -194,9 +207,9 @@ repository without an owner action.
    CI, and `FileNativeExecutionRepository` records contain no `arguments` and
    no `_meta`.
 2. `server/tool-manifest.snapshot.json` contains no description that
-   addresses the model; `get_trace` accepts `errors_only`, `max_spans` and
-   `include_attributes`; `ci_log` is absent from the public manifest or
-   requires `service_prefix`.
+   addresses the model, and the `get_trace` and `ci_log` descriptions state
+   their scope as described in step 2. Contract-level parameter additions
+   are tracked in ANcpLua/qyl-api-schema and are not part of this goal.
 3. `submission/qyl/skills/qyl-investigate/SKILL.md`,
    `submission/qyl/.claude-plugin/plugin.json`, `submission/qyl/.mcp.json`,
    `submission/qyl/README.md` (at least 40 words outside code blocks) and
