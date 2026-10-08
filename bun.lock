@@ -20,10 +20,10 @@
       "name": "qyl-mcp-dashboard",
       "version": "1.1.1",
       "dependencies": {
-        "@ancplua/qyl-api-schema": "11.2.0",
+        "@ancplua/qyl-api-schema": "11.3.0",
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
-        "qyl-mcp-server": "workspace:7.1.0",
+        "qyl-mcp-server": "7.2.0",
         "react": "19.3.0",
         "react-dom": "19.3.0",
         "zod": "4.6.5",
@@ -44,7 +44,7 @@
         "qyl-mcp-server": "dist/main.js",
       },
       "dependencies": {
-        "@ancplua/qyl-api-schema": "11.2.0",
+        "@ancplua/qyl-api-schema": "11.3.0",
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
         "@opentelemetry/api": "1.9.1",
@@ -74,7 +74,7 @@
       "name": "qyl-mcp-workbench",
       "version": "1.1.1",
       "dependencies": {
-        "@ancplua/qyl-api-schema": "11.2.0",
+        "@ancplua/qyl-api-schema": "11.3.0",
         "@modelcontextprotocol/client": "2.3.1",
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
@@ -82,7 +82,7 @@
         "@opentelemetry/sdk-trace-base": "2.11.0",
         "@opentelemetry/semantic-conventions": "1.43.0",
         "express": "5.2.1",
-        "qyl-mcp-server": "7.1.1",
+        "qyl-mcp-server": "7.2.0",
         "zod": "4.6.5",
       },
       "devDependencies": {
@@ -97,7 +97,7 @@
     },
   },
   "packages": {
-    "@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@11.2.0", "", { "peerDependencies": { "@typespec/compiler": "^1.16.0", "@typespec/events": "^0.86.0", "@typespec/http": "^1.16.0", "@typespec/openapi": "^1.16.0", "@typespec/openapi3": "^1.16.0", "@typespec/sse": "^0.86.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-bEcd0MF4boOu2zB3mni8LJARjc/EaYVu65B+cdlHQPxb+09H99jMFqIdciZdhikIqxTXfoxjMWcoxZTtVRwf7w=="],
+    "@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@11.3.0", "", { "peerDependencies": { "@typespec/compiler": "~1.16.0", "@typespec/events": "^0.86.0", "@typespec/http": "~1.16.0", "@typespec/openapi": "~1.16.0", "@typespec/openapi3": "~1.16.0", "@typespec/sse": "^0.86.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-BAAIwBUMb3VVbVVErDEjTlsno1qqHigNSh8dsRVxXaDeFEcTYkLMp+eClFA1AEJAJbEAIQlcdY7i/sVvX3oFYQ=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.17", "", { "peerDependencies": { "hono": "^4" } }, "sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ=="],
 

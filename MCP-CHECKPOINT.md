@@ -14,12 +14,13 @@ this sequence. New point 1 removes protocol logging; its local results are in
 [the follow-up evidence](docs/evidence/2026-10-08-followup-01.md). Its merge/CI
 status must be read from its PR, not inferred from local tests.
 
-Point 8's schema PR is merged and schema release 11.3.0 is now published.
-The remaining blocker is Collector main's 11.2.0 pin: the unchanged lockstep
-gate rejects a unilateral qyl.mcp bump. The [refreshed dated registry, Collector
-commit and candidate-gate output](docs/evidence/2026-10-08-followup-15.md#release-blocker-refreshed-after-owner-release)
-supersedes the earlier missing-release prerequisite. Consumer bump and runtime
-options remain open under the permitted Done when 5 blocker alternative.
+Point 8's Collector prerequisite is merged in [qyl PR #642](https://github.com/ANcpLua/qyl/pull/642).
+The local Collector checkout is on that merged `main`; `verify:pins` confirms
+11.3.0 on both sides. The consumer now implements the three trace options and
+the CI service prefix. [Option-A evidence](docs/evidence/2026-10-08-point-8-options.md)
+supersedes the earlier Collector-pin blocker. Its own PR still requires the
+four review/CI gates. Production handshake evidence requires the Collector
+deployment first; the owner supplies the Inspector proof.
 
 The [release contract map](release/contract.md) and [owner handoff](release/README.md)
 connect all revised points and Done-when criteria to the ledger and dated
@@ -32,8 +33,8 @@ with explicit owner fields. Final completion still requires checking the merged
 
 | State | Dated evidence |
 | --- | --- |
-| Split SDK 2.3.1, contract package 11.2.0, server source version 7.2.0. | [Step-7 package command/output](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory). |
-| 11 read-only tools; ten model-facing and app-only `fetch_telemetry`; descriptions match step 2. | Same manifest inventory; [step-2 comparison](MCP-V2-INTEROP-TODO.md#step-2--tool-descriptions) proves only descriptions changed. |
+| Split SDK 2.3.1, contract package 11.3.0, server source version 7.2.0. | [Option-A pins and manifest evidence](docs/evidence/2026-10-08-point-8-options.md); [earlier package inventory](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory). |
+| 11 read-only tools; ten model-facing and app-only `fetch_telemetry`; trace/CI descriptions now include point-8 options. | [Option-A manifest comparison](docs/evidence/2026-10-08-point-8-options.md); earlier inventory retained in step 7. |
 | Incoming native records exclude arguments, `_meta` and result bodies. | [Strict schema source](docs/evidence/2026-10-08-step7.md#native-records) and [regression evidence](MCP-V2-INTEROP-TODO.md#step-1--rules-and-native-call-records). |
 | Build, 337 tests, transport, SDK, lint and project-isolation checks passed locally. | [Step-4 transcript](docs/evidence/2026-10-08-step4.md). The initial OTLP failure and successful fresh-main Collector rerun are both retained. |
 | Inspector 2.9.0 passed modern/legacy discovery and schema portability. | [Black-box command/output](docs/evidence/2026-10-08-step4.md#both-era). |

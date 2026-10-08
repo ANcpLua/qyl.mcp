@@ -11,6 +11,7 @@ import {
   FetchTelemetryOutputSchema,
   GetTraceInputSchema,
   GetTraceOutputSchema,
+  CiLogInputSchema,
   ListSessionsInputSchema,
   ListSessionsOutputSchema,
   ListTracesInputSchema,
@@ -60,9 +61,23 @@ test("published telemetry schemas own defaults, bounds, and required tool inputs
   assert(!ListTracesInputSchema.safeParse({ limit: 1.5 }).success);
 
   const traceId = "0".repeat(32);
-  assert.deepEqual(GetTraceInputSchema.parse({ trace_id: traceId }), { trace_id: traceId });
+  assert.deepEqual(GetTraceInputSchema.parse({ trace_id: traceId }), {
+    trace_id: traceId, errors_only: false, include_attributes: true,
+  });
   assert(!GetTraceInputSchema.safeParse({}).success);
   assert(!GetTraceInputSchema.safeParse({ trace_id: "short" }).success);
+  for (const max_spans of [0, 1001, 1.5]) {
+    assert(!GetTraceInputSchema.safeParse({ trace_id: traceId, max_spans }).success);
+  }
+  for (const max_spans of [1, 1000]) {
+    assert(GetTraceInputSchema.safeParse({ trace_id: traceId, max_spans }).success);
+  }
+  assert(!GetTraceInputSchema.safeParse({ trace_id: traceId, errors_only: "true" }).success);
+  assert(!GetTraceInputSchema.safeParse({ trace_id: traceId, include_attributes: "false" }).success);
+  assert.deepEqual(CiLogInputSchema.parse({}), { service_prefix: "qyl-ci", limit: 10 });
+  assert(!CiLogInputSchema.safeParse({ service_prefix: "" }).success);
+  assert(!CiLogInputSchema.safeParse({ service_prefix: "x".repeat(257) }).success);
+  assert(CiLogInputSchema.safeParse({ service_prefix: "x".repeat(256) }).success);
 
   assert.deepEqual(ListSessionsInputSchema.parse({}), { limit: 20 });
   assert.deepEqual(ListSessionsInputSchema.parse({ active_only: true }), {

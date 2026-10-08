@@ -63,6 +63,14 @@ an enabled module proves a client has been provisioned.
 **Telemetry** — `list_traces`, `get_trace`, `list_sessions`, `search_logs`,
 `ci_log`, `display_traces`, `display_mcp_dashboard`.
 
+`get_trace` returns every span by default. `errors_only` selects error spans;
+`max_spans` (1–1000) caps the result after filtering in Collector order.
+`include_attributes=false` omits span, resource, event, link and instrumentation
+scope attribute collections, including any returned root-span copy. Trace
+totals remain the Collector's totals; the text reports matching and returned
+counts. `ci_log.service_prefix` is case-sensitive, defaults to `qyl-ci`, and
+filters both recent runs and individual phase spans.
+
 **Metrics** — `list_metrics`, `get_metric_series`, `query_metric`. Read in that
 order: the catalog gives you an exact instrument name and how many attribute
 streams it has, series discovery tells you which attribute keys are worth

@@ -95,10 +95,14 @@ tool to the user's question and its limits, with dated manifest evidence.
 
 Start with sessions and traces, drill into one trace and its error logs,
 then discover metric instruments and series before querying. `get_trace`
-returns the complete span tree and can be large. `display_traces` supplies
-the waterfall and `search_logs` supplies filtered detail. `ci_log` accepts
-telemetry from any CI following its emitter convention; it is not a GitHub
-connector. The [shared skill](submission/qyl/skills/qyl-investigate/SKILL.md)
+returns the complete span tree by default. Use `errors_only` to select error
+spans, `max_spans` to cap the result after filtering, and
+`include_attributes=false` to omit attribute collections. Original trace totals
+are retained; the summary states how many matching spans were returned.
+`display_traces` supplies the waterfall and `search_logs` supplies filtered
+detail. `ci_log` accepts telemetry from any CI following its emitter convention;
+`service_prefix` selects services in both run lists and phase breakdowns and
+defaults to `qyl-ci`. The [shared skill](submission/qyl/skills/qyl-investigate/SKILL.md)
 contains the full workflow. [Description evidence](MCP-V2-INTEROP-TODO.md#step-3--agent-skill).
 
 The two viewers declare versioned resource URIs, a configured hosted origin
@@ -313,7 +317,8 @@ them. Review cases and the demo are drafts until run in an owner client.
 
 ## Contracts
 
-The inspected source pins `@ancplua/qyl-api-schema` 11.2.0, official split MCP
+The source pins `@ancplua/qyl-api-schema` 11.3.0, official split MCP
 SDK packages 2.3.1 and Zod 4.6.5. SDK major version and wire revision are
 independent. Server HTTP/stdio use SDK factories and negotiation defaults;
-Workbench uses automatic negotiation. [Package/serving evidence](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory).
+Workbench uses automatic negotiation. [Contract 11.3.0 evidence](docs/evidence/2026-10-08-point-8-options.md) and
+[package/serving evidence](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory).
