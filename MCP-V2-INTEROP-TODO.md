@@ -543,3 +543,18 @@ identity. This is local evidence; the external skill is not added to CI.
 [Exact commands and output](docs/evidence/2026-10-08-followup-04.md) record local
 verification and the preceding point's merge. The verify CI job already runs
 this server test glob; its result is recorded by the PR checks.
+
+## Revised goal — point 5: authorization and isolation, 2026-10-08
+
+Every row below uses `gh run view 37732682331 --repo ANcpLua/qyl.mcp --log`,
+read on 2026-10-08 (exit 0). [Dated source assertions and actual CI output](docs/evidence/2026-10-08-followup-05.md)
+record the scope of these fixtures; no production identity claim follows.
+
+| Case | Exact test name and actual output |
+| --- | --- |
+| Wrong audience | `token verification rejects the wrong token type, audience, or missing client ID` — `✔`, at `2026-10-08T05:30:35.0404189Z`; signed token with foreign audience is rejected. |
+| Missing scope | `bearer gate fails closed with the resource challenge and scopes` — `✔`, at `2026-10-08T05:30:34.0401921Z`; 403, `insufficient_scope`, `qyl:read` challenge. |
+| Expired token | `token validation rejects expiry, foreign issuers, missing RFC9068 claims and assertion tokens` — `✔`, at `2026-10-08T05:30:34.7990495Z`; signed `exp: 0` is rejected. |
+| Cross-subject project access | `verified account scope reaches model and viewer tools over 2026-07-28` and `verified account scope reaches model and viewer tools over 2025-11-25` — both `✔`, at `2026-10-08T05:30:32.6120565Z` and `2026-10-08T05:30:32.6715834Z`; forged metadata never switches project credentials, foreign trace ID fails, unassigned subject makes no upstream call. |
+| Signed-token HTTP integration | `real signed access tokens reach modern MCP tools with zero, one, or both extensions` — `✔` in the linked output; wrong audience/expiry return 401, insufficient scope returns 403 with resource and scope challenges. |
+| CI conclusion, including point 4 | `gh run view 37732682331 --repo ANcpLua/qyl.mcp --json conclusion,headSha,url,jobs` on 2026-10-08 returned `success` at head `0b0aa8d10b2841456aa708b0318f30050dd86d78`; lint, verify and the account/Events isolation step succeeded. Server tests: 161 passed. |
