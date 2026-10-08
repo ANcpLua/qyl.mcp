@@ -411,7 +411,7 @@ async function createHostedRuntime(
   const endpoint = config.publicUrl
     ? new URL("/mcp", config.publicUrl).href
     : `http://${urlHost(config.bindHost)}:${config.port}/mcp`;
-  console.log(`MCP server serving ${endpoint}`);
+  console.error(`MCP server serving ${endpoint}`);
 
   return { port: config.port, hostname: config.bindHost, fetch: createFetch(options) };
 }
