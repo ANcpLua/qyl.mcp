@@ -55,8 +55,8 @@ export function registerMetricsTools(server: McpServer): void {
     {
       title: "List Metrics",
       description:
-        "List the metric instruments recorded for this project: name, kind " +
-        "(gauge/sum/histogram), unit, how many attribute streams exist under each " +
+        "List the metric instruments recorded for this project: name, kind, " +
+        "unit, how many attribute streams exist under each " +
         "name, and when it was last written. The returned names are metric_name " +
         "inputs for get_metric_series and query_metric.",
       inputSchema: operationInputSchema<ListMetricsArgs>(METRICS_PATH),
