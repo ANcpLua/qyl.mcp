@@ -57,8 +57,12 @@ rely on. Everything else is judgment.
   providers are not qyl tools. qyl diagnoses and proposes; the agent acts
   through its own connectors. Both directories reject unofficial third-party
   connectors.
-- Descriptions describe the tool, not the model's behavior. No "the model
-  should…" sentences. Hide app-only tools with `_meta.ui.visibility: ["app"]`.
+- Descriptions state what the tool does and when to use it; both directories
+  ask for both. Phrase the "when" as the user's need ("when the user wants to
+  see the trace waterfall", "start here to find instrument names"), never as
+  an order to the model ("the model should not call this"), and never as a
+  restriction on other servers' tools. Hide app-only tools with
+  `_meta.ui.visibility: ["app"]`.
 - Responses stay proportional to the question: filters, limits and a way to
   leave out bulk data. Empty results and upstream errors are reported as such,
   never replaced with demo data.
