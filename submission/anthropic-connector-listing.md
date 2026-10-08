@@ -15,10 +15,13 @@ was read on that date; the evidence records its retrieval command and checks.
 | Categories | Developer tools — one proposed category; OWNER FIELD: confirm the matching option offered by the portal. |
 | Documentation URL | https://github.com/ANcpLua/qyl.mcp#readme |
 | Privacy URL | OWNER FIELD: approve and publish the [privacy draft](public-pages-draft.md), then supply and verify its actual HTTPS URL. |
-| Support contact | OWNER FIELD: supply the monitored public support address or contact destination. |
+| Support contact | anfh22@outlook.com — owner-supplied preparation value; OWNER FIELD: confirm monitoring and the final public support route before publication. |
 | Icon | [qyl icon](qyl/assets/qyl-icon.png) |
-| Slug | qyl — proposed; OWNER FIELD: confirm availability and final spelling before publication. |
+| Slug | qyl — spelling confirmed in the owner-supplied WIP; OWNER FIELD: confirm portal availability before publication. |
 | Server URL | https://mcp.qyl.at/mcp |
+
+Support contact, slug and documentation URL were supplied/confirmed in the
+[owner-provided WIP, read on 2026-10-08](../docs/evidence/2026-10-08-followup-15.md#owner-supplied-wip-values); this does not establish a portal record.
 
 ## Description
 
@@ -29,8 +32,8 @@ Investigate traces, logs, metrics, sessions and CI telemetry from your authorize
 The description follows the committed tool manifest and shared investigation
 skill, inspected by the commands in [point-9 evidence](../docs/evidence/2026-10-08-followup-09.md).
 The new trace-projection and configurable CI-prefix options are deliberately
-absent from this draft: their release/runtime work remains blocked as recorded
-in [point 8](../docs/evidence/2026-10-08-followup-08.md).
+absent from this draft: their Collector-lockstep/runtime work remains open as recorded
+in [the refreshed point-8 blocker](../docs/evidence/2026-10-08-followup-15.md#release-blocker-refreshed-after-owner-release).
 
 Users need an OAuth account authorized for the intended Collector project and
 recorded telemetry. The owner verifies the actual Claude connection and every

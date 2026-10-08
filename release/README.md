@@ -3,8 +3,8 @@
 Dated 2026-10-08. Read the [contract map](contract.md), the controlling
 [objective](../goal-objective.md), [ledger](../MCP-V2-INTEROP-TODO.md) and
 [command/output evidence](../docs/evidence/2026-10-08-followup-13.md) together.
-The map distinguishes completed repository work, the permitted schema-release
-blocker and pending point 15. This directory does not authorize a release
+The map distinguishes repository work, the permitted Collector-lockstep blocker
+and pending owner actions. This directory does not authorize a release
 or establish a submitted/published portal state.
 
 ## Reproducing repository checks
@@ -63,18 +63,18 @@ actual output for each completed observation.
 
 | Owner action | Exact next step and source |
 | --- | --- |
-| Publisher identity and countries | Choose/verify the intended publisher and public name; choose country targeting. Supply the approved values for the [mapped manifest fields](../submission/README.md#owner-fields-still-required). Existing source author metadata is not publisher verification. |
-| Public pages and private contact | Resolve operational facts and contacts in the [public-page draft](../submission/public-pages-draft.md), approve and publish on qyl.at, inspect anonymously, then supply the actual support/privacy/terms URLs. Point 15 must restore the required sections before this approval. |
+| Publisher identity and countries | Verify the intended publisher and public name; the supplied WIP proposes `ancplua` pending portal confirmation. Country targeting is owner-selected as all eligible countries, with portal application still pending. Supply the approved values for the [mapped manifest fields](../submission/README.md#owner-fields-still-required). Existing source author metadata is not publisher verification. |
+| Public pages and private contact | Resolve operational facts and contacts in the [public-page draft](../submission/public-pages-draft.md), approve and publish on qyl.at, inspect anonymously, then supply the actual support/privacy/terms URLs. [Point 15](../docs/evidence/2026-10-08-followup-15.md) restores the required sections with explicit owner fields. |
 | Reviewer account | Create a populated isolated Collector project and OAuth reviewer account, usable without the owner's mailbox, phone or private network. Put credentials only in private portal fields; use the [connector access instructions](../submission/anthropic-connector-listing.md). |
 | Demo and review cases | Follow the [recording walkthrough](../submission/README.md#recording-walkthrough-for-the-owner); run and record the five positive and three negative manifest cases, then supply a reviewer-accessible playback URL. |
-| Five actual clients | Run ChatGPT, Codex, claude.ai, Claude Code and MCP Inspector against the hosted service with the isolated account, following the [exact client procedures](../MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending). Inspector 2.9.0 modern evidence must include the captured `MCP-Protocol-Version: 2026-07-28` header and actual tool results. Local fixture discovery is not that proof. |
+| Five actual clients | Inspector DCR is currently blocked by the owner-reported Auth0 `too_many_entities` response. The supplied WIP assigns tenant review and a fixed Inspector client to Advisor 1; retry with that public client ID when supplied. [Reported blocker and WIP](../docs/evidence/2026-10-08-followup-15.md#owner-reported-inspector-connection-blocker). Run ChatGPT, Codex, claude.ai, Claude Code and MCP Inspector against the hosted service with the isolated account, following the [exact client procedures](../MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending). Inspector 2.9.0 modern evidence must include the captured `MCP-Protocol-Version: 2026-07-28` header and actual tool results. Local fixture discovery is not that proof. |
 | Production Events lifecycle | Follow the same ledger's `events/list`, subscribe, signed matching delivery, nonmatching filter, persistence, renewal, unsubscribe and revocation steps. Record bounded delivery/no-delivery windows without keys. |
 | Deployment before reviewer access | Re-observe the active Railway deployment ID and source commit and compare with intended main. [Point 6](../docs/evidence/2026-10-08-followup-06.md) is a dated snapshot, not a guarantee about the next deployment. |
 | Challenge token | Copy the portal token into `OPENAI_APPS_CHALLENGE` on the intended deployment, check the plaintext route and complete portal verification; [point 7](../docs/evidence/2026-10-08-followup-07.md) observed 404 before this action. |
-| Contract release | Publish the schema release containing PR #36 before the deferred consumer bump and runtime option implementation; [point 8](../docs/evidence/2026-10-08-followup-08.md) names the exact blocker and follow-through. |
+| Collector contract prerequisite | Schema 11.3.0 is published. Coordinate the Collector main bump from 11.2.0, then qyl.mcp can bump and implement/test the new options; [refreshed blocker](../docs/evidence/2026-10-08-followup-15.md#release-blocker-refreshed-after-owner-release) includes the failing candidate gate. |
 | Attestations and publication | Review the seven connector acknowledgement fields and all other applicable portal attestations, validate the three separate records, then decide and perform submission/publication. [Scope exclusions](../docs/evidence/2026-10-08-followup-11.md) still apply. |
 
 No portal action, publisher verification, public-page publication, credential
-creation, client login, challenge-token setting or schema release is established
+creation, client login, challenge-token setting or schema release by this goal agent is established
 by these repository checks. The agent prepares these instructions and artifacts;
 the owner performs the actions above.
