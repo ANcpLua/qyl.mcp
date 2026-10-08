@@ -6,7 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { createMcpHandler, ProtocolError, type AuthInfo } from "@modelcontextprotocol/server";
-import { z } from "zod";
+import * as z from "zod/v4";
 import {
   CALLBACK_ENDPOINT_ERROR,
   DEFAULT_TTL_MS,

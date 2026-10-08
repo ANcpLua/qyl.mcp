@@ -6,7 +6,7 @@
  *
  * Auth0 Management API: users/{id}, users/{id}/permissions, client-grants, grants.
  */
-import { z } from "zod";
+import * as z from "zod/v4";
 import type { Principal } from "./events.js";
 import { QYL_MCP_ISSUER, QYL_MCP_RESOURCE, QYL_MCP_SCOPE } from "./oauth.js";
 

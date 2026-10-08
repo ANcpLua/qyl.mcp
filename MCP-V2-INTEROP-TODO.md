@@ -513,3 +513,20 @@ The evidence retains the initial fixture cleanup timeout and overly broad
 stdout assertion, along with the corrected fixture and successful output.
 The earlier HTTP-banner assessment describes the prior source; this point
 changes that application banner's stream without changing the stdio path.
+
+## Revised goal — point 3: static drift resolved, 2026-10-08
+
+The earlier 31-finding scan and four assessments remain historical evidence
+from PR #95. The revised owner instruction now authorizes explicit `zod/v4`
+imports and a justified marker for the Events JSON Schema.
+
+| Check | Dated command and actual output |
+| --- | --- |
+| Preceding point merged | 2026-10-08: `gh pr view 101 --repo ANcpLua/qyl.mcp --json state,mergedAt,mergeCommit,headRefOid,statusCheckRollup` returned `MERGED`, merge `ac2faefa794121fcbfb75d8984c8e75b5859c0c8`, all four required checks `SUCCESS` at head `5612068`. |
+| Drift checker | 2026-10-08: `node /Users/alexandernachtmann/RiderProjects/mcp-builder-v2/skills/mcp-builder-v2/scripts/check_v2.mjs /Users/alexandernachtmann/RiderProjects/qyl.mcp/server` returned `0 error(s), 0 warning(s) in 146 file(s)` and `GREEN: no v1 fingerprints at error severity.`, exit 0 after the server test build. |
+| Checker integrity | 2026-10-08: `shasum -a 256` on the checker and `drift_rules.json`, then `diff` of before/after snapshots, returned unchanged hashes and no diff (exit 0). Exact commands and hashes are in [point-3 evidence](docs/evidence/2026-10-08-followup-03.md#unchanged-checker-and-rules). |
+| Tests and lint | 2026-10-08: `QYL_MCP_TELEMETRY=0 QYL_MCP_NATIVE_STATE_PATH=/private/tmp/qyl-followup-3/native.json bun run --cwd server test` passed 158 tests, 0 failed; `bun run lint` and `bun run verify:sdk` exited 0, SDK tests 5 passed. |
+
+[Full before/after and test output](docs/evidence/2026-10-08-followup-03.md)
+includes the single reasoned `TS-RAW-SHAPE` allowance and installed Zod factory
+identity. This is local evidence; the external skill is not added to CI.
