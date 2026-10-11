@@ -10,7 +10,9 @@ metadata:
     express 2.0.2, node 2.1.1. Package/source commands and actual output:
     docs/evidence/2026-10-08-followup-01.md (SDK skill and landing-page correction).
     Re-verified 2026-10-11 against the installed 2.3.1 .d.mts/.mjs: exports, error codes,
-    RegisteredTool handle, ServerNotifier, versionNegotiation modes, inputRequired builders.
+    RegisteredTool handle, ServerNotifier, versionNegotiation modes, inputRequired builders,
+    and the per-tool scopeChallenge (ScopeChallenge, requireScopes, the 403 it produces in both
+    eras, InsufficientScopeError on the client).
     Generic SDK reference material must be checked against installed types before use.
 
 ---
@@ -90,7 +92,7 @@ Full era matrix, serving patterns, sessions, notifications: `references/serving-
 
 | Working on | Read first |
 | --- | --- |
-| Tools, resources, prompts, structured output, annotations, schema conversion | `references/server-api.md` |
+| Tools, resources, prompts, structured output, annotations, schema conversion, per-tool scope challenges | `references/server-api.md` |
 | Error handling, `isError` vs `ProtocolError`, typed subclasses, error-code table | `references/errors-and-input.md` |
 | `input_required` / MRTR, `requestState`, elicitation, legacy shim | `references/errors-and-input.md` |
 | HTTP serving, stdio, sessions, resumability, notifications, `ServerEventBus`, scaling | `references/serving-and-eras.md` |

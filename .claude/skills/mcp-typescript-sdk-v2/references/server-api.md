@@ -52,6 +52,22 @@ results differs by era.
 are client-side hints — they never change how the SDK executes the tool; hosts use them for
 auto-approve / confirm decisions. qyl.mcp imports `ToolAnnotations` from the server package.
 
+### Per-tool scope challenges
+
+`registerTool` (also `registerResource` and `registerPrompt`) takes `scopeChallenge`, a
+`ScopeChallengeHandler`: `({ request, authInfo }) => ScopeChallenge | undefined`, where a
+challenge is `{ scopes: [scope, ...], errorDescription? }`. The SDK's HTTP serving runs it
+before the handler, on the modern per-request path and in the stateless legacy transport
+alike, and answers a challenge with `403` and `WWW-Authenticate: Bearer
+error="insufficient_scope", error_description=…, scope=…, resource_metadata=…`. The
+metadata URL is `authInfo.resourceMetadataUrl`, which `requireBearerAuth` stamps, or else
+the well-known URL derived from `authInfo.resource`. `requireScopes(...)` is the stock
+handler and returns nothing without `authInfo`, so stdio and unauthenticated serving never
+challenge. A transport without `setScopeChallengeResolver`, such as `InMemoryTransport`,
+runs no challenge, so keep an in-handler check as well. On the client, the Streamable HTTP
+transport answers the `403` with step-up re-authorization, or throws `InsufficientScopeError`
+when it has no OAuth provider. qyl.mcp's write tools use this (`server/src/tool-scopes.ts`).
+
 ### Registration handles
 
 `registerTool` returns a handle. `handle.update({...})`, `.enable()`, `.disable()`, `.remove()`

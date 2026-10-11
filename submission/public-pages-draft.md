@@ -193,7 +193,9 @@ authentication secrets through tool arguments, telemetry or support issues.
 
 Telemetry tools read the Collector's actual data. An empty result means no
 matching records were returned; it does not prove an application is healthy.
-The current tools cannot delete telemetry, deploy or roll back software, or
+The write tools change only the notes (annotations) and saved queries a user
+creates in their own project, and the delete tool removes only those. The
+current tools cannot delete telemetry, deploy or roll back software, or
 search the public internet. Notifications are optional and have separate
 subscription controls. [Tool and result evidence](../docs/evidence/2026-10-08-step7.md#package-and-tool-inventory).
 

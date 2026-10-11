@@ -8,9 +8,10 @@ repository or production service currently emits telemetry.
 
 ## Tool inventory, as of 2026-10-08
 
-All 11 tools have `readOnlyHint: true` and `destructiveHint: false` in the
-inspected manifest. Ten are model-facing; `fetch_telemetry` is app-only.
-The manifest's contract revision is `sha256:3605ae27d2edf632`.
+The 11 tools of that inventory have `readOnlyHint: true` and
+`destructiveHint: false` in the inspected manifest, and keep them. Ten are
+model-facing; `fetch_telemetry` is app-only. The manifest's contract revision
+was `sha256:3605ae27d2edf632`. The write tools below arrived on 2026-10-11.
 
 | Tool | User need and existing behavior | Limits / routing |
 | --- | --- | --- |
@@ -29,6 +30,25 @@ The manifest's contract revision is `sha256:3605ae27d2edf632`.
 Descriptions and input/annotation fields are in the source inventory above;
 query-restoration and empty-result behavior are covered in the
 [2026-10-08 local tests](docs/evidence/2026-10-08-step4.md#test).
+
+## Write tools, as of 2026-10-11
+
+Seven tools arrived with Contract 11.6.0 (revision `sha256:d926c3c6ab829cbf`).
+The five writes change only objects users create in qyl inside the caller's
+Collector project; no tool changes or deletes traces, logs or metrics.
+
+| Tool | User need and behavior | Hints and scope |
+| --- | --- | --- |
+| `create_annotation` | Record a finding as a plain-text note (at most 2000 characters) on a trace, span or session. | Not read-only, not destructive, not idempotent; `qyl:write`. |
+| `update_annotation` | Correct a note's text; the target stays fixed. A stale `etag` fails with `precondition_failed`. | Destructive, idempotent; `qyl:write`. |
+| `create_saved_query` | Name a filter over traces, logs or metrics to ask again later; names are unique per project (`conflict`). | Not read-only, not destructive, not idempotent; `qyl:write`. |
+| `update_saved_query` | Rename a saved query or change its description or filter; omitted fields keep their value. | Destructive, idempotent; `qyl:write`. |
+| `delete` | Remove one annotation or saved query by `kind`, `id` and `etag`. Alert rules follow with Contract 11.7.0. | Destructive, idempotent; `qyl:delete`. |
+| `list_saved_queries` | Find a stored question by name, optionally per signal; pages with `cursor`. | Read-only; `qyl:read`. |
+| `run_saved_query` | Answer a stored question now: trace summaries, log records or a metric range result. | Read-only; `qyl:read`. |
+
+`get_trace` and `list_sessions` return the annotations on what they read.
+Demo mode keeps no annotations or saved queries and refuses these tools.
 
 ## Applying the tools across repositories
 

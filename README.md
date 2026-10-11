@@ -23,7 +23,9 @@ Endpoint: `https://mcp.qyl.at/mcp`. On 2026-10-08, `curl` returned `401` with
 `resource_metadata`; the metadata identified that resource, issuer
 `https://qyl-eu.eu.auth0.com/` and scope `qyl:read`.
 [Exact commands and responses](docs/evidence/2026-10-08-step4.md#endpoint).
-These observations establish discovery, not a successful OAuth login.
+These observations establish discovery, not a successful OAuth login. The
+source's metadata now also lists `qyl:write` and `qyl:delete`, which only the
+[write tools](#write-tools) need; they ask for them through a step-up challenge.
 
 ### Connect
 
@@ -37,10 +39,10 @@ in the [client setup evidence](docs/evidence/2026-10-08-step7.md#client-setup-an
 
 | Client | Connection setting | Registration path |
 | --- | --- | --- |
-| ChatGPT web | In Plugins, choose **Add custom MCP server**, enter `https://mcp.qyl.at/mcp`, select OAuth and request `qyl:read`; create and install the personal plugin. | Choose CIMD, DCR or a provisioned OAuth client as offered. For CIMD, use the metadata document and callback shown by the connection page; stable metadata is `https://chatgpt.com/oauth/client.json` where issuer-bound callbacks are supported. |
+| ChatGPT web | In Plugins, choose **Add custom MCP server**, enter `https://mcp.qyl.at/mcp`, select OAuth and request `qyl:read` (add `qyl:write` and `qyl:delete` for the write tools); create and install the personal plugin. | Choose CIMD, DCR or a provisioned OAuth client as offered. For CIMD, use the metadata document and callback shown by the connection page; stable metadata is `https://chatgpt.com/oauth/client.json` where issuer-bound callbacks are supported. |
 | claude.ai | In **Customize → Connectors**, add a custom connector for `https://mcp.qyl.at/mcp`, select sign-in and complete OAuth. Organization users first need their owner to add the connector under organization settings. | Select Claude's published identity (CIMD), automatic registration (DCR), or a provisioned client. Public CIMD: `https://claude.ai/oauth/mcp-oauth-client-metadata`. |
 | Claude Code | Run `claude mcp add --transport http qyl https://mcp.qyl.at/mcp`, then open `/mcp` to authenticate. | Automatic CIMD/DCR discovery; if a provisioned client is required, use the CLI's `--client-id` and `--client-secret` prompt, with its actual callback registered. |
-| Codex CLI | Add the TOML below to the intended Codex configuration, then run `codex mcp login qyl --scopes qyl:read`. | Automatic CIMD/DCR selection; for a targeted registration check, the inspected CLI accepts `--oauth-client-registration cimd` or `dcr` on login. A configured client ID takes precedence. |
+| Codex CLI | Add the TOML below to the intended Codex configuration, then run `codex mcp login qyl --scopes qyl:read` (or `--scopes "qyl:read qyl:write qyl:delete"` for the write tools). | Automatic CIMD/DCR selection; for a targeted registration check, the inspected CLI accepts `--oauth-client-registration cimd` or `dcr` on login. A configured client ID takes precedence. |
 | MCP Inspector | Save the JSON below as `inspector-modern.json`; run `npx -y @modelcontextprotocol/inspector@2.9.0 --config inspector-modern.json`, complete OAuth with `qyl:read`, then invoke `tools/list`. | Use the provisioned client or registration flow offered by Inspector and the issuer. Record which path was used; registration alone does not grant resource access. |
 
 Codex configuration:
@@ -95,7 +97,8 @@ tool, structured metric matchers, the `fetch_telemetry` union);
 ### Tools and viewers
 
 The [generated manifest](server/tool-manifest.snapshot.json) is the tool
-contract. It has 11 read-only tools; `fetch_telemetry` is app-only through
+contract. It has 18 tools: 13 read tools annotated `readOnlyHint: true` and the
+five [write tools](#write-tools); `fetch_telemetry` is app-only through
 `_meta.ui.visibility: ["app"]`. The [tool matrix](QYL-MCP-MATRIX.md) maps each
 tool to the user's question and its limits, with dated manifest evidence.
 
@@ -110,6 +113,34 @@ detail. `ci_log` accepts telemetry from any CI following its emitter convention;
 `service_prefix` selects services in both run lists and phase breakdowns and
 defaults to `qyl-ci`. The [shared skill](submission/qyl/skills/qyl-investigate/SKILL.md)
 contains the full workflow. [Description evidence](MCP-V2-INTEROP-TODO.md#step-3--agent-skill).
+
+### Write tools
+
+Five tools change something, and only objects users create in qyl inside the
+caller's Collector project: annotations (plain-text notes of at most 2000
+characters on a trace, span or session) and saved queries (named filters for
+traces, logs or metrics). No tool deletes or edits traces, logs or metrics;
+retention alone removes telemetry. The hints follow the
+[2026-10-11 decision](docs/decisions/2026-10-11-qyl-dev-audit.md#write-tools):
+
+| Tool | Changes | Annotations | Scope |
+| --- | --- | --- | --- |
+| `create_annotation` | adds a note | `readOnlyHint: false`, `destructiveHint: false`, `idempotentHint: false` | `qyl:write` |
+| `update_annotation` | replaces a note's text | `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true` | `qyl:write` |
+| `create_saved_query` | adds a named filter | `readOnlyHint: false`, `destructiveHint: false`, `idempotentHint: false` | `qyl:write` |
+| `update_saved_query` | renames it or replaces its description or filter | `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true` | `qyl:write` |
+| `delete` | removes one annotation or saved query (`kind` is `annotation` or `saved_query`) | `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true` | `qyl:delete` |
+
+`openWorldHint` is `false` on all of them. `list_saved_queries` and
+`run_saved_query` read saved queries and keep `qyl:read`; `get_trace` and
+`list_sessions` return the annotations on what they read, so there is no
+annotation listing tool. Updates and deletes send the object's `etag` as
+`If-Match`: a stale etag is refused with `precondition_failed`, a duplicate
+saved-query name with `conflict`. Alert rules are not deletable yet: they
+arrive with Contract 11.7.0. On the hosted server a write call without its
+scope gets a `403` `insufficient_scope` challenge naming the scopes to request,
+in both protocol eras, before any Collector request. Demo mode keeps no such
+objects and refuses these tools.
 
 The two viewers declare versioned resource URIs, a configured hosted origin
 and empty external connection/resource CSP allowlists. Local tests cover
@@ -180,7 +211,7 @@ and [Workbench](docs/evidence/2026-10-08-step7.md#workbench).
 | Variable | Purpose |
 | --- | --- |
 | `QYL_COLLECTOR_URL` | Collector base URL; local default `http://127.0.0.1:5100`. |
-| `QYL_API_KEY` | Outgoing Collector credential. |
+| `QYL_API_KEY` | Outgoing Collector credential; the write tools need a key with the Collector's `write` and `delete` roles. |
 | `MCP_ALLOWED_HOSTS` | Comma-separated additional request hostnames, added to the public URL hostname for hosted HTTP. |
 | `MCP_ALLOWED_ORIGIN_HOSTS` | Comma-separated additional browser-origin hostnames, added to the public URL hostname for hosted HTTP. |
 | `QYL_PROJECT` | Server-configured Collector project scope; its default is stated in the [server README](server/README.md#configuration). |
@@ -250,7 +281,8 @@ This does not prove a provisioned client or successful token exchange.
 Operator setup:
 
 1. Register the resource audience `<public-url>/mcp`, RS256 access tokens and
-   `qyl:read`. Configure the provider capabilities required by startup.
+   the permissions `qyl:read`, `qyl:write` and `qyl:delete`. Configure the
+   provider capabilities required by startup.
 2. Provision the intended client using its current CIMD document or DCR,
    preserving its actual callback and authentication method.
 3. If DCR is needed, Enable **Dynamic Client Registration** and set
@@ -259,6 +291,11 @@ Operator setup:
 4. `qyl:read` exposes traces, logs, metrics, sessions, and CI evidence;
    grant it only to intended clients and users. Verify a real authenticated
    read and project isolation after deployment; discovery alone is insufficient.
+5. `qyl:write` lets a client create and update annotations and saved queries,
+   and `qyl:delete` lets it delete them, in the caller's project only; neither
+   reaches telemetry. Grant them only to users who should change those
+   objects; a token without them keeps the read tools. The Collector key the
+   server uses needs the Collector's `write` and `delete` roles as well.
 
 These setup requirements are also enforced as documentation requirements by
 `server/verify-deployment-guidance.mjs`; provider configuration is an owner action.
@@ -268,7 +305,9 @@ behavior and setting are also documented in the dated
 
 The source validates signatures, issuer, resource audience, expiry and scopes;
 malformed credentials, invalid tokens and insufficient scopes have separate
-error paths. Both `/.well-known/oauth-protected-resource/mcp` and
+error paths. A write tool called without `qyl:write` or `qyl:delete` is answered
+`403` with `error="insufficient_scope"` and the scopes to request, so the client
+can re-authorize for them. Both `/.well-known/oauth-protected-resource/mcp` and
 `/.well-known/oauth-protected-resource` describe the same `/mcp` resource.
 Auth0 is the OIDC issuer; qyl.mcp does not expose its own OIDC issuer discovery.
 For workspace domain claiming, the owner must verify any `openid`/`email`
@@ -299,7 +338,9 @@ The alternative source configuration uses `MCP_AUTH_PROVIDER=cloudflare-access`,
 The origin checks `Cf-Access-Jwt-Assertion`: issuer, application audience, expiry and subject,
 with RS256 signature validation. Configure and verify the Access application
 before selecting this mode. It does not establish that the public endpoint
-uses Access, and Auth0-backed Events cannot be enabled in this mode.
+uses Access, and Auth0-backed Events cannot be enabled in this mode. Access
+grants the read tools only: its assertion carries no qyl scopes, so the write
+tools answer `insufficient_scope`.
 [Source and local tests, 2026-10-08](docs/evidence/2026-10-08-step7.md#deployment-and-authentication).
 
 ### Directory preparation

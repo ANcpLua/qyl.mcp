@@ -2,7 +2,7 @@
   "name": "qyl",
   "displayName": "qyl",
   "version": "1.0.0",
-  "description": "Investigate the traces, logs, metrics, sessions and CI runs in your authorized qyl Collector project through the read-only tools of the hosted qyl MCP server.",
+  "description": "Investigate the traces, logs, metrics, sessions and CI runs in your authorized qyl Collector project with the hosted qyl MCP server, and keep annotations and saved queries beside them; no tool changes telemetry.",
   "author": {
     "name": "Alexander Nachtmann",
     "url": "https://qyl.at/"

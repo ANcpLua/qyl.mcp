@@ -287,7 +287,9 @@ unaddressed. Client hints only select presentation metadata.
   `versionNegotiation: { mode: "auto" }`.
 - Every hosted operation authorizes from validated credentials. Canonical
   resource `https://mcp.qyl.at/mcp`, issuer `https://qyl-eu.eu.auth0.com/`,
-  scope `qyl:read`, consistent with discovery and challenges. Tool arguments,
+  scope `qyl:read` on every request, plus `qyl:write` (create, update) and
+  `qyl:delete` (delete) for the write tools, consistent with discovery and
+  challenges. Tool arguments,
   UI inputs and request metadata never select credentials or another project.
 - Events may run through `MCP_EVENTS_STORE` on an authenticated deployment
   with persistent storage. Store only owner subject and client identifiers,
