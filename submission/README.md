@@ -50,9 +50,9 @@ the public documentation check.
 
 | Item | Exact next owner action |
 | --- | --- |
-| Publisher identity | Choose and verify the intended publisher in the OpenAI portal. The supplied WIP proposes `ancplua`; confirm the permitted public name in the portal. `developerName` is currently omitted. |
+| Publisher identity | The OpenAI organization `ancplua` is verified, and the owner chose `ancplua` as the public `developerName` (owner WIP, 2026-10-08). `developerName` is set; confirm in the submission form that the portal accepts that public name. |
 | Country targeting | The owner-supplied WIP selects all eligible countries; apply that selection in the portal. `publication.countries` remains omitted as directed. [Dated supplied values](../docs/evidence/2026-10-08-followup-15.md#owner-supplied-wip-values). |
-| Website, support, privacy, terms | Recheck the existing `https://qyl.at/` homepage for the final listing; approve and publish the [public-page drafts](public-pages-draft.md). Supply the actual URLs. Then add OpenAI `supportURL`, `privacyPolicyURL`, `termsOfServiceURL` and Anthropic `supportUrl`, `privacyPolicyUrl`, `termsOfServiceUrl`. Missing URLs stay absent. |
+| Website, support, privacy, terms | Done 2026-10-11: `https://qyl.at/`, `/support/`, `/privacy/` and `/terms/` are published and set as OpenAI `websiteURL`, `supportURL`, `privacyPolicyURL`, `termsOfServiceURL` and Anthropic `supportUrl`, `privacyPolicyUrl`, `termsOfServiceUrl`; the Anthropic `documentationUrl` is `https://qyl.at/docs/mcp/`. |
 | Reviewer account | Provide an isolated populated Collector project and OAuth account that reviewers can use without the owner's mailbox, phone or private network. Enter credentials only in private portal fields. |
 | Demo recording | Record the walkthrough below in a working owner client and supply a reviewer-accessible playback URL; only then set `review.demo_recording_url`. |
 | Hosted connection and review cases | Run the exact five positive and three negative prompts in `qyl/plugin.json` through the saved owner-client connection. Record actual calls/results and status per case. All eight are **not run** as hosted review cases in this preparation. |
@@ -75,10 +75,11 @@ the pages. Placeholder strings are not manifest values.
 | Verified public publisher name | Owner confirms existing `author` metadata | `extensions.com.openai.interface.developerName` |
 | Approved country selection | Owner supplies portal targeting if requested | `extensions.com.openai.publication.countries` |
 
-All five OpenAI fields and the three Anthropic URLs above remain absent, as
-verified in the linked evidence. After setting approved values, rerun both
-manifest validators and rebuild the ZIP; the current hash cannot cover those
-future edits.
+As of 2026-10-11 the three URLs and `developerName` are set in both manifests,
+and `publication.countries` stays omitted because the owner selects all eligible
+countries in the portal. Both manifest validators passed and the rebuilt ZIP has
+SHA-256 `84945a46440c94b20dd2f30bb88741652d3a793424abfb974f42bdaa99583882`; [commands and output](../docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#point-10-manifest-fields).
+`review.demo_recording_url` stays absent until a real recording exists.
 
 ## Recording walkthrough for the owner
 

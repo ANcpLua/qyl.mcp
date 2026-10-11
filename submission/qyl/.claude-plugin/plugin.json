@@ -9,7 +9,10 @@
   },
   "homepage": "https://qyl.at/",
   "repository": "https://github.com/ANcpLua/qyl.mcp",
-  "documentationUrl": "https://github.com/ANcpLua/qyl.mcp#readme",
+  "documentationUrl": "https://qyl.at/docs/mcp/",
+  "supportUrl": "https://qyl.at/support/",
+  "privacyPolicyUrl": "https://qyl.at/privacy/",
+  "termsOfServiceUrl": "https://qyl.at/terms/",
   "icon": "./assets/qyl-icon.png",
   "license": "MIT",
   "keywords": ["observability", "opentelemetry", "telemetry", "traces", "logs", "metrics", "sessions", "ci", "diagnostics", "mcp"]

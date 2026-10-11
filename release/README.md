@@ -43,15 +43,17 @@ For transport changes, the required `smoke` commands remain in AGENTS.md; the
 [HTTP both-era command](../docs/evidence/2026-10-08-followup-12.md) also records
 its Bun-only entry and conformance scope.
 
-The [listing-review rebuild](../MCP-V2-INTEROP-TODO.md#listing-review-2026-10-08)
-on 2026-10-08 produced local `submission/packages/qyl-openai-1.0.0-draft.zip`
-with SHA-256 `328dd9813dcbf10e581a722593b797f7ffd01f4ec6562ea3cc1ad9ae1f6aa4ce`.
-It supersedes the [point-10 rebuild](../docs/evidence/2026-10-08-followup-10.md)
-hash `16a6ffb523f90674572efc99dca430cf661d26aaa08f54d6680f7da0261fab5c`, which
-covered the earlier packaged README, manifest and skill.
+The [point-10 completion](../docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#point-10-manifest-fields) on 2026-10-11 set
+the published support, privacy and terms URLs, `developerName` and `./` icon
+paths, and produced local `submission/packages/qyl-openai-1.0.0-draft.zip` with
+SHA-256 `84945a46440c94b20dd2f30bb88741652d3a793424abfb974f42bdaa99583882`. It supersedes the
+[listing-review rebuild](../MCP-V2-INTEROP-TODO.md#listing-review-2026-10-08)
+hash `328dd9813dcbf10e581a722593b797f7ffd01f4ec6562ea3cc1ad9ae1f6aa4ce` and the
+earlier [point-10 rebuild](../docs/evidence/2026-10-08-followup-10.md) hash
+`16a6ffb523f90674572efc99dca430cf661d26aaa08f54d6680f7da0261fab5c`.
 That archive is Git-ignored. Rebuild and revalidate after any packaged-source
-change; do not apply this hash to future manifest edits. Missing URLs,
-publisher name and countries are mapped in the [submission handoff](../submission/README.md#owner-fields-still-required).
+change; do not apply this hash to future manifest edits. The remaining owner
+fields are mapped in the [submission handoff](../submission/README.md#owner-fields-still-required).
 
 For a newly authorized PR, follow [AGENTS.md](../AGENTS.md): a clean Codex
 review and the checks currently required by GitHub. Historical four-gate
@@ -77,7 +79,7 @@ actual output. This handoff does not authorize owner actions.
 | Owner action | Exact next step and source |
 | --- | --- |
 | Publisher identity and countries | Verify the intended publisher and public name; the supplied WIP proposes `ancplua` pending portal confirmation. Country targeting is owner-selected as all eligible countries, with portal application still pending. Supply the approved values for the [mapped manifest fields](../submission/README.md#owner-fields-still-required). Existing source author metadata is not publisher verification. |
-| Public pages and private contact | Resolve operational facts and contacts in the [public-page draft](../submission/public-pages-draft.md), approve and publish on qyl.at, inspect anonymously, then supply the actual support/privacy/terms URLs. [Point 15](../docs/evidence/2026-10-08-followup-15.md) restores the required sections with explicit owner fields. |
+| Public pages and private contact | Done: `https://qyl.at/support/`, `/privacy/` and `/terms/` are published (owner WIP, 2026-10-08) and set in both manifests ([2026-10-11 evidence](../docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#point-10-manifest-fields)). Keep the private reviewer contact out of public pages; [point 15](../docs/evidence/2026-10-08-followup-15.md) records the restored sections. |
 | Reviewer account | Create a populated isolated Collector project and OAuth reviewer account, usable without the owner's mailbox, phone or private network. Put credentials only in private portal fields; use the [connector access instructions](../submission/anthropic-connector-listing.md). |
 | Demo and review cases | Follow the [recording walkthrough](../submission/README.md#recording-walkthrough-for-the-owner); run and record the five positive and three negative manifest cases, then supply a reviewer-accessible playback URL. |
 | Five actual clients | Inspector DCR was reported blocked by Auth0 `too_many_entities` on 2026-10-08. That dated report does not establish a current failure or require another cleanup. Check existing owner evidence and use an already-provided fixed client where applicable. [Reported blocker and WIP](../docs/evidence/2026-10-08-followup-15.md#owner-reported-inspector-connection-blocker). Run ChatGPT, Codex, claude.ai, Claude Code and MCP Inspector against the hosted service with the isolated account, following the [exact client procedures](../MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending). Inspector 2.9.0 modern evidence must include the captured `MCP-Protocol-Version: 2026-07-28` header and actual tool results. Local fixture discovery is not that proof. |
