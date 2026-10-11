@@ -46,10 +46,10 @@ jobs:
       # It is now verify-contract-pins.mjs, invoked identically from CI and from
       # `bun run verify:pins`, so there is one implementation rather than a
       # workflow copy and a local approximation.
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+
       - name: Cross-repo contract pins must agree
         run: node verify-contract-pins.mjs
-
-      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
