@@ -50,6 +50,7 @@ import {
     ExecutionNotFoundError,
     ExecutionService,
     ExecutionValidationError,
+    isTerminal,
     type ExecutionRecord,
 } from "./execution-service.js";
 import {
@@ -1919,10 +1920,6 @@ async function waitForTerminal(service: ExecutionService, initial: ExecutionReco
             resolve(current);
         }
     });
-}
-
-function isTerminal(status: ExecutionRecord["status"]): boolean {
-    return status === "succeeded" || status === "failed" || status === "cancelled" || status === "timed_out";
 }
 
 function paginate<T>(values: readonly T[], request: Request, defaultLimit: number): { items: T[]; nextCursor?: string } {

@@ -133,12 +133,12 @@ export function validateJsonSchemaIsolated(
     });
 }
 
-function setWorkerDeadline(delayMs: number, onDeadline: () => void): () => void {
+export function setWorkerDeadline(delayMs: number, onDeadline: () => void): () => void {
     const deadline = setTimeout(onDeadline, delayMs);
     return () => clearTimeout(deadline);
 }
 
-function isWorkerReady(value: unknown): boolean {
+export function isWorkerReady(value: unknown): boolean {
     return isRecord(value) && value.kind === "ready";
 }
 
@@ -185,6 +185,6 @@ function isWorkerResult(value: unknown): value is Extract<
         && typeof issue.message === "string");
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }

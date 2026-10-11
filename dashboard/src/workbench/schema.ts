@@ -96,7 +96,7 @@ function cloneJson<T extends JsonValue>(value: T): T {
   return value;
 }
 
-function schemaTypes(schema: JsonSchema): readonly JsonSchemaType[] {
+export function schemaTypes(schema: JsonSchema): readonly JsonSchemaType[] {
   if (typeof schema.type === "string") return [schema.type];
   if (schema.type) return schema.type;
   if (schema.properties) return ["object"];

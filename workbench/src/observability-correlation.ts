@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { RequestId } from "@modelcontextprotocol/server";
-import type { ProtocolExecutionCorrelation } from "./protocol-journal.js";
+import { positiveInteger, type ProtocolExecutionCorrelation } from "./protocol-journal.js";
 import { SecretRedactor } from "./secret-redactor.js";
 
 const TRACE_ID_PATTERN = /^[0-9a-f]{32}$/iu;
@@ -224,11 +224,4 @@ function assertSeedMatches(
             throw new Error(`Execution correlation cannot change ${key}.`);
         }
     }
-}
-
-function positiveInteger(value: number, name: string): number {
-    if (!Number.isSafeInteger(value) || value <= 0) {
-        throw new Error(`${name} must be a positive integer.`);
-    }
-    return value;
 }

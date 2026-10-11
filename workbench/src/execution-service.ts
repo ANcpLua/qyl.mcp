@@ -1054,7 +1054,7 @@ function jsonPointer(path: PropertyKey[]): string {
     return `/${path.map((part) => String(part).replace(/~/gu, "~0").replace(/\//gu, "~1")).join("/")}`;
 }
 
-function isTerminal(status: ExecutionStatus): boolean {
+export function isTerminal(status: ExecutionStatus): boolean {
     return status === "succeeded" || status === "failed" || status === "cancelled" || status === "timed_out";
 }
 

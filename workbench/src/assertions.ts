@@ -9,7 +9,12 @@ import type {
     WorkbenchSchemaAssertion,
     WorkbenchTestAssertion,
 } from "@ancplua/qyl-api-schema/types";
-import { validateJsonSchemaIsolated } from "./json-schema-validator.js";
+import {
+    isRecord,
+    isWorkerReady,
+    setWorkerDeadline,
+    validateJsonSchemaIsolated,
+} from "./json-schema-validator.js";
 
 export type ExecutionOutcome =
     | "succeeded"
@@ -305,15 +310,6 @@ export function testPatternIsolated(
     });
 }
 
-function setWorkerDeadline(delayMs: number, onDeadline: () => void): () => void {
-    const deadline = setTimeout(onDeadline, delayMs);
-    return () => clearTimeout(deadline);
-}
-
-function isWorkerReady(value: unknown): boolean {
-    return isRecord(value) && value.kind === "ready";
-}
-
 function isPatternWorkerOutcome(value: unknown): value is PatternWorkerOutcome {
     if (!isRecord(value) || typeof value.kind !== "string") return false;
     if (value.kind === "result") return typeof value.passed === "boolean";
@@ -380,10 +376,6 @@ export function isPartialMatch(actual: unknown, expected: unknown): boolean {
     }
 
     return false;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function result(

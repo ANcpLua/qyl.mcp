@@ -11,6 +11,7 @@ import {
   formatJson,
   initialValueForSchema,
   parseJsonValue,
+  schemaTypes,
   validateJsonSchema,
   type JsonSchema,
   type JsonSchemaType,
@@ -43,14 +44,6 @@ function objectValue(value: JsonValue | undefined): Record<string, JsonValue> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? value
     : {};
-}
-
-function schemaTypes(schema: JsonSchema): readonly JsonSchemaType[] {
-  if (typeof schema.type === "string") return [schema.type];
-  if (schema.type) return schema.type;
-  if (schema.properties) return ["object"];
-  if (schema.items) return ["array"];
-  return [];
 }
 
 function typeOfValue(value: JsonValue | undefined): JsonSchemaType | undefined {

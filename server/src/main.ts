@@ -15,7 +15,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createServer } from "./server.js";
 import { assertCollectorContractRevision } from "./contract-handshake.js";
-import { dnsRebindingResponse, isLoopbackBindHost } from "./http-security.js";
+import { dnsRebindingResponse, isLoopbackBindHost, unique } from "./http-security.js";
 import { loadHostedOAuth, QYL_MCP_ISSUER } from "./oauth.js";
 import { createResourceAuthorization } from "./authorization.js";
 import { readAuthorizationExtensions } from "./auth-extensions.js";
@@ -50,10 +50,6 @@ function commaSeparated(value: string | undefined): string[] {
     .split(",")
     .map((entry) => entry.trim())
     .filter(Boolean);
-}
-
-function unique(values: readonly string[]): string[] {
-  return [...new Set(values)];
 }
 
 function configuredPublicUrl(environment: NodeJS.ProcessEnv): URL | undefined {

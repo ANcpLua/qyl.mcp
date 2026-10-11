@@ -6,7 +6,7 @@ import type {
   WorkbenchEvaluationSummary as EvaluationSummary,
 } from "@ancplua/qyl-api-schema/types";
 import { JsonCodeView } from "./JsonCodeView.js";
-import { formatDuration } from "./execution.js";
+import { formatDuration, formatTimestamp } from "./execution.js";
 
 interface EvaluationsWorkspaceProps {
   runs: EvaluationRun[];
@@ -17,12 +17,6 @@ interface EvaluationsWorkspaceProps {
   onCompare: (baselineRunId: string, candidateRunId: string) => Promise<void>;
   onExport: (runId: string, format: "json" | "report") => Promise<void>;
   onRefreshExport: () => Promise<void>;
-}
-
-function formatTimestamp(value: string | undefined): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.valueOf()) ? value : date.toLocaleString();
 }
 
 function formatPercent(value: number | undefined): string {

@@ -1,10 +1,10 @@
 // Telemetry reaches the DOM only through textContent; SVG attributes are numeric or constant.
 import {
   App,
-  applyDocumentTheme,
-  applyHostFonts,
-  applyHostStyleVariables,
-  type McpUiHostContext,
+  formatCompact,
+  handleHostContextChanged,
+  sigFig,
+  toolErrorText,
 } from "./mcp-app-client.ts";
 import type {
   McpDashboardBucket as McpBucket,
@@ -68,29 +68,6 @@ const windowButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>(".win-btn"),
 );
 
-function sigFig(v: number): string {
-  if (v >= 100) return String(Math.round(v));
-  const s = v >= 10 ? v.toFixed(1) : v.toFixed(2);
-  return s.replace(/\.?0+$/, "");
-}
-
-function formatCompact(n: number): string {
-  if (!Number.isFinite(n)) return "—";
-  if (n < 1000) return String(n);
-  for (const [div, suffix] of [
-    [1e9, "B"],
-    [1e6, "M"],
-    [1e3, "K"],
-  ] as const) {
-    if (n >= div) {
-      const v = n / div;
-      const s = v >= 100 ? Math.round(v).toString() : v.toFixed(1).replace(/\.0$/, "");
-      return `${s}${suffix}`;
-    }
-  }
-  return String(n);
-}
-
 function formatMs(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return "—";
   if (ms >= 1000) return `${sigFig(ms / 1000)} s`;
@@ -117,14 +94,6 @@ function formatBucketTime(iso: string, windowHours: number): string {
   const hm = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
   if (windowHours <= 48) return hm;
   return `${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })} ${hm}`;
-}
-
-function toolErrorText(result: CallToolResult): string | undefined {
-  const text = result.content
-    ?.map((c) => ("text" in c ? c.text : ""))
-    .filter(Boolean)
-    .join(" ");
-  return text || undefined;
 }
 
 function parseStatsPayload(result: CallToolResult): McpDashboardStats | null {
@@ -784,24 +753,6 @@ emptyRefreshBtn.addEventListener("click", () => void fetchStats());
 retryBtn.addEventListener("click", () => void fetchStats());
 
 
-function handleHostContextChanged(ctx: McpUiHostContext) {
-  if (ctx.theme) {
-    applyDocumentTheme(ctx.theme);
-  }
-  if (ctx.styles?.variables) {
-    applyHostStyleVariables(ctx.styles.variables);
-  }
-  if (ctx.styles?.css?.fonts) {
-    applyHostFonts(ctx.styles.css.fonts);
-  }
-  if (ctx.safeAreaInsets) {
-    mainEl.style.paddingTop = `${ctx.safeAreaInsets.top}px`;
-    mainEl.style.paddingRight = `${ctx.safeAreaInsets.right}px`;
-    mainEl.style.paddingBottom = `${ctx.safeAreaInsets.bottom}px`;
-    mainEl.style.paddingLeft = `${ctx.safeAreaInsets.left}px`;
-  }
-}
-
 const app = new App({ name: "qyl MCP Dashboard", version: packageMetadata.version });
 
 app.onteardown = async () => {
@@ -837,13 +788,13 @@ app.ontoolcancelled = () => {
 
 app.onerror = console.error;
 
-app.onhostcontextchanged = handleHostContextChanged;
+app.onhostcontextchanged = (ctx) => handleHostContextChanged(ctx, mainEl);
 
 
 app.connect().then(() => {
   const ctx = app.getHostContext();
   if (ctx) {
-    handleHostContextChanged(ctx);
+    handleHostContextChanged(ctx, mainEl);
   }
 }).catch((error: unknown) => {
   showError(error instanceof Error ? error.message : String(error));
