@@ -47,20 +47,26 @@ On modern connections the 2025-era push channels (`ctx.mcpReq.elicitInput`,
 handler runs again with the responses. Works for `tools/call`, `prompts/get`, `resources/read`.
 
 ```ts
-import { inputRequired, acceptedContent, inputResponse } from '@modelcontextprotocol/server';
+import { inputRequired, acceptedContent, createRequestStateCodec } from '@modelcontextprotocol/server';
+
+// One codec per server. `verify` runs before every round that echoes state, so tampered or
+// expired state never reaches the handler (-32602 "Invalid or expired requestState").
+const stateCodec = createRequestStateCodec<{ confirmFor: string }>({ key: stateKey, ttlSeconds: 600 });
+const server = new McpServer(info, { requestState: { verify: stateCodec.verify } });
 
 async ({ env }, ctx): Promise<CallToolResult | InputRequiredResult> => {
-  const response = inputResponse(ctx.mcpReq.inputResponses, 'confirm');
-  if (response.kind === 'missing') {
+  // Honor a confirmation only on a round this handler opened for this env.
+  if (ctx.mcpReq.requestState<{ confirmFor: string }>()?.confirmFor !== env) {
     return inputRequired({
       inputRequests: {
         confirm: inputRequired.elicit({ message: `Deploy to ${env}?`, requestedSchema: confirmationSchema })
-      }
+      },
+      requestState: await stateCodec.mint({ confirmFor: env })
     });
   }
   const confirmed = acceptedContent(ctx.mcpReq.inputResponses, 'confirm', confirmationSchema);
   if (confirmed?.confirm !== true) {
-    return { content: [{ type: 'text', text: 'Deployment cancelled; no changes made.' }] };
+    return { content: [{ type: 'text', text: 'Deployment cancelled; no changes made.' }], isError: true };
   }
   // Perform the authorized deployment here; return success only after it succeeds.
   await deploy(env);
@@ -70,10 +76,14 @@ async ({ env }, ctx): Promise<CallToolResult | InputRequiredResult> => {
 
 Rules:
 
-- **Ask once**: ask only for a `missing` response. Decline, cancellation, accepted
-  `false`, or invalid confirmation ends the call without a write; none reopens the
-  same prompt. The deployment above is illustrative third-party application code,
-  not a capability of the qyl telemetry tools.
+- **Ask once, on a round you opened**: `inputResponses` is client-supplied, so a first call can
+  arrive carrying an accepted `confirm: true`. Honor an answer only when the verified
+  `requestState` shows this handler asked, for this `env`; otherwise ask. On that round, decline,
+  cancellation, accepted `false`, invalid content or a missing answer ends the call with
+  `isError: true` and no write, and none reopens the prompt. Without the `verify` hook,
+  `requestState()` returns the raw wire string, so the check fails closed and the handler keeps
+  asking. The deployment above is illustrative third-party application code, not a capability of
+  the qyl telemetry tools.
 - **Write-once handlers**: one handler runs on every round — read each answer first, request only
   the keys still missing. `inputRequests` is a map; one round carries every outstanding request.
   `inputResponses` holds only the latest round; nothing else survives between rounds.
