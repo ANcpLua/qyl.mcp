@@ -2,6 +2,9 @@
 # locally `mise install` does the same. dotnet also keeps global.json, which dotnet itself reads.
 [tools]
 "bun" = "1.4.2"
+# bun installs and runs the scripts; node runs `node --test`, the build and verify scripts,
+# and the published qyl-mcp-server, so it must stay inside every engines.node range (24.x).
+"node" = "24"
 
 [tasks.check]
 description = "The gate: what CI runs, in order"
