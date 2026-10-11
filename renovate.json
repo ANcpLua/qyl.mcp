@@ -5,6 +5,6 @@
   ],
   "description": "Pin the Bun that Renovate runs to the mise.toml version so regenerated bun.lock files keep the lockfileVersion CI (jdx/mise-action installing mise.toml) can read.",
   "constraints": {
-    "bun": "1.4.2"
+    "bun": "1.4.3"
   }
 }
