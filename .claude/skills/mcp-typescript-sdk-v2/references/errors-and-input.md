@@ -49,19 +49,28 @@ handler runs again with the responses. Works for `tools/call`, `prompts/get`, `r
 ```ts
 import { inputRequired, acceptedContent, createRequestStateCodec } from '@modelcontextprotocol/server';
 
-// One codec per server. `verify` runs before every round that echoes state, so tampered or
-// expired state never reaches the handler (-32602 "Invalid or expired requestState").
-const stateCodec = createRequestStateCodec<{ confirmFor: string }>({ key: stateKey, ttlSeconds: 600 });
+type Confirmation = { op: 'deploy'; env: string };
+
+// One codec per server. `verify` runs before every round that echoes state, so tampered, expired
+// or rebound state never reaches the handler (-32602 "Invalid or expired requestState").
+// `bind` ties state to the method and the verified caller; `principalOf` is your own lookup of the
+// subject your bearer verification stored in `ctx.http?.authInfo`.
+const stateCodec = createRequestStateCodec<Confirmation>({
+  key: stateKey,
+  ttlSeconds: 600,
+  bind: ctx => `${ctx.mcpReq.method}\0${principalOf(ctx)}`
+});
 const server = new McpServer(info, { requestState: { verify: stateCodec.verify } });
 
 async ({ env }, ctx): Promise<CallToolResult | InputRequiredResult> => {
-  // Honor a confirmation only on a round this handler opened for this env.
-  if (ctx.mcpReq.requestState<{ confirmFor: string }>()?.confirmFor !== env) {
+  // Honor a confirmation only on a round this handler opened, for this env and this caller.
+  const state = ctx.mcpReq.requestState<Confirmation>();
+  if (state?.op !== 'deploy' || state.env !== env) {
     return inputRequired({
       inputRequests: {
         confirm: inputRequired.elicit({ message: `Deploy to ${env}?`, requestedSchema: confirmationSchema })
       },
-      requestState: await stateCodec.mint({ confirmFor: env })
+      requestState: await stateCodec.mint({ op: 'deploy', env }, ctx)
     });
   }
   const confirmed = acceptedContent(ctx.mcpReq.inputResponses, 'confirm', confirmationSchema);
@@ -78,7 +87,8 @@ Rules:
 
 - **Ask once, on a round you opened**: `inputResponses` is client-supplied, so a first call can
   arrive carrying an accepted `confirm: true`. Honor an answer only when the verified
-  `requestState` shows this handler asked, for this `env`; otherwise ask. On that round, decline,
+  `requestState` shows this handler asked, for this `env`, under the same `bind` value (method and
+  verified caller, so another account or handler cannot reuse it); otherwise ask. On that round, decline,
   cancellation, accepted `false`, invalid content or a missing answer ends the call with
   `isError: true` and no write, and none reopens the prompt. Without the `verify` hook,
   `requestState()` returns the raw wire string, so the check fails closed and the handler keeps
