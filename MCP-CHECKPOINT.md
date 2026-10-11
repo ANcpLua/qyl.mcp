@@ -36,9 +36,32 @@ Point 10 selects each viewer's domain for the connected UI host: Claude's
 exact connector-URL hash, the configured HTTPS origin plus compatibility
 alias for ChatGPT, or neither domain field for unknown hosts.
 [Dated source and local verification](docs/evidence/2026-10-08-point-10-ui-domain.md)
-cover both viewers and both wire eras. The separate point-10 PR still needs
-its own four green gates; these checks do not establish rendering in the
-owner's authenticated Claude or ChatGPT session.
+cover both viewers and both wire eras.
+
+Point-10 progress checked **2026-10-11**: [PR #121](https://github.com/ANcpLua/qyl.mcp/pull/121)
+merged as `9a84bfe`. The following work is completed in follow-up
+[PR #130](https://github.com/ANcpLua/qyl.mcp/pull/130), commit `9ffb4f4`:
+
+- [x] Select the viewer domain per caller using both `clientInfo.name` and
+  `User-Agent`, including when the client name is unknown: Claude gets the
+  SHA-256 hash of the exact connector URL including `/mcp`, ChatGPT gets the
+  public origin, and unknown clients get no domain.
+- [x] Cover Claude by name, Claude by UA with an unknown name, both ChatGPT
+  UA variants with an unknown name, and an unknown client in regression tests.
+  `QYL_MCP_TELEMETRY=0 bun run test` on 2026-10-11 passed 362 tests on `9ffb4f4`.
+- [x] Restore the point-9 checkpoint lines recording PR #120 merged as
+  `ee4c5a0` with all four gates green.
+
+Verification on 2026-10-11: `gh pr view 121 --json state,mergeCommit` returned
+`MERGED` and `9a84bfea9c4484f03c83a4153ed853237636703b`.
+`gh pr view 130 --json state,headRefOid,statusCheckRollup` returned `OPEN`,
+head `9ffb4f4de48e4db3ace270ec04c0ff4e5e36539c`, and `SUCCESS` for `lint`
+and `verify` ([CI run](https://github.com/ANcpLua/qyl.mcp/actions/runs/38108693234)).
+
+These checkmarks credit PR #130; this documentation update does not copy its
+implementation into this branch. The remaining point-10 review/merge work
+and authenticated Claude/ChatGPT rendering evidence remain pending under the
+existing requirements. Other point-10 work is unchanged.
 
 The [release contract map](release/contract.md) and [owner handoff](release/README.md)
 connect all revised points and Done-when criteria to the ledger and dated
