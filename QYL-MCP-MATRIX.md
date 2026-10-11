@@ -8,7 +8,7 @@ repository or production service currently emits telemetry.
 
 All 11 tools have `readOnlyHint: true` and `destructiveHint: false` in the
 inspected manifest. Ten are model-facing; `fetch_telemetry` is app-only.
-The manifest's contract revision is `sha256:382526f13652d18b`.
+The manifest's contract revision is `sha256:3605ae27d2edf632`.
 
 | Tool | User need and existing behavior | Limits / routing |
 | --- | --- | --- |

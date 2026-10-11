@@ -81,10 +81,10 @@ defaults to loopback port 3001. `QYL_API_KEY` is an outgoing Collector
 credential, not an incoming MCP login.
 [Configuration and serving source](docs/evidence/2026-10-08-step7.md#configuration-and-serving).
 
-`npm view qyl-mcp-server version` returned `7.1.1` on 2026-10-08; the current
-source declares `7.2.0`. A fresh npm consumer test remains open, so checkout
-results are not attributed to the registry package.
-[Registry observation](docs/evidence/2026-10-08-step4.md#npm).
+The release workflow publishes `qyl-mcp-server` with provenance and smokes
+clean `npx` consumers in both protocol eras before a release counts; on
+2026-10-11 it published `7.2.0` that way. The source declares `7.2.1`.
+[7.2.0 publish run](https://github.com/ANcpLua/qyl.mcp/actions/runs/38105485890).
 
 ### Tools and viewers
 
@@ -327,7 +327,7 @@ them. Review cases and the demo are drafts until run in an owner client.
 
 ## Contracts
 
-The source pins `@ancplua/qyl-api-schema` 11.3.1, official split MCP
+The source pins `@ancplua/qyl-api-schema` 11.4.0, official split MCP
 SDK packages 2.3.1 and Zod 4.6.5. SDK major version and wire revision are
 independent. Server HTTP/stdio use SDK factories and negotiation defaults;
 Workbench uses automatic negotiation. [Contract 11.3.0 evidence](docs/evidence/2026-10-08-point-8-options.md) and

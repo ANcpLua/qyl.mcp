@@ -173,6 +173,15 @@ real ChatGPT demonstration are separate checks before upload.
 
 ## Release notes
 
+### 7.2.1
+
+- Contract package `@ancplua/qyl-api-schema` 11.4.0 (TypeSpec 1.17). The
+  contract revision is now `sha256:3605ae27d2edf632`. The server refuses to
+  start against a Collector that advertises another revision, so run it with a
+  Collector built from `Qyl.Api.Contracts` 11.4.0.
+- OpenTelemetry 0.223.0 / 2.12.0 and the remaining dependencies at their latest
+  releases.
+
 ### 7.2.0
 
 - Removed deprecated MCP logging capability and per-call log notifications;
@@ -186,6 +195,13 @@ real ChatGPT demonstration are separate checks before upload.
 - Workbench telemetry recognizes the SDK's per-request server factory so native
   tool spans are not duplicated by the surrounding protocol journal, while
   failed server construction still produces a correlated failure span.
+- `get_trace` accepts optional `errors_only`, `max_spans` and
+  `include_attributes`; `ci_log` accepts an optional `service_prefix` (default
+  `qyl-ci`).
+- Advertised output schemas use portable spelling (`additionalProperties: true`,
+  `anyOf` instead of type arrays); validation is unchanged.
+- MCP Apps viewers declare the UI domain Claude and ChatGPT each expect, and
+  none for other hosts.
 
 ### 7.1.1
 
