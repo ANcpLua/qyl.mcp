@@ -67,6 +67,19 @@ function codeForStatus(status: number): ToolErrorCode {
 }
 
 /**
+ * A body the contract does not allow. During a deploy window the edge answers
+ * with an HTML 502/503, and a rate limiter with an empty 429; there the status
+ * is the truer signal, so 429 and 5xx keep their retryable codes. Every other
+ * unexpected body is a contract mismatch.
+ */
+function codeForUnexpectedBody(response: Response): ToolErrorCode {
+  if (!response.ok && (response.status === 429 || response.status >= 500)) {
+    return codeForStatus(response.status);
+  }
+  return "contract_mismatch";
+}
+
+/**
  * Error with a message already suitable for showing to the model/user, and a
  * stable `code`. Without an explicit code, a response status decides it, a
  * connection failure is `collector_unreachable`, and anything else is the
@@ -367,7 +380,7 @@ async function collectorRequest(
       `collector returned invalid JSON (${response.status} ${response.statusText}) for ${pathname}`,
       false,
       response.status,
-      "contract_mismatch",
+      codeForUnexpectedBody(response),
     );
   }
 
@@ -378,7 +391,7 @@ async function collectorRequest(
         `collector contract mismatch for ${pathname}: expected application/problem+json, got ${mediaType ?? "no content type"}`,
         false,
         response.status,
-        "contract_mismatch",
+        codeForUnexpectedBody(response),
       );
     }
     const problem = parseProblemDetails(responseBody);
@@ -387,7 +400,7 @@ async function collectorRequest(
         `collector contract mismatch for ${pathname}: invalid Problem Details body`,
         false,
         response.status,
-        "contract_mismatch",
+        codeForUnexpectedBody(response),
       );
     }
     throw new CollectorError(

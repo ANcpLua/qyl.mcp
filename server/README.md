@@ -173,6 +173,14 @@ real ChatGPT demonstration are separate checks before upload.
 
 ## Release notes
 
+### 7.3.1
+
+- Transient answers without a contract body keep their status code: an HTML
+  `502`/`503` from the edge during a deploy window, or an empty `429`, now
+  yield `collector_error` or `collector_rate_limited` with `retryable: true`
+  instead of `contract_mismatch`. Any other unexpected body stays
+  `contract_mismatch`.
+
 ### 7.3.0
 
 - Every failed tool call now carries `structuredContent.error` with a stable

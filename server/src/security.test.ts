@@ -60,6 +60,37 @@ test("collector Problem Details cannot inject remote detail into tool-facing err
   }
 });
 
+test("transient answers without a contract body keep their retryable status code", async () => {
+  const cases = [
+    { status: 502, type: "text/html", body: "<html>bad gateway</html>", code: "collector_error", retryable: true },
+    { status: 429, type: undefined, body: "", code: "collector_rate_limited", retryable: true },
+    { status: 400, type: "text/plain", body: "nope", code: "contract_mismatch", retryable: false },
+  ];
+  for (const expected of cases) {
+    const listener = createServer((_request, response) => {
+      response.writeHead(expected.status, expected.type === undefined ? {} : { "content-type": expected.type });
+      response.end(expected.body);
+    });
+    await listen(listener);
+    const address = listener.address();
+    assert(address && typeof address === "object");
+    const previous = process.env.QYL_COLLECTOR_URL;
+    process.env.QYL_COLLECTOR_URL = `http://127.0.0.1:${address.port}`;
+    try {
+      await assert.rejects(collectorGet("/failure"), (error: unknown) => {
+        assert(error instanceof CollectorError);
+        assert.equal(error.code, expected.code, `status ${expected.status}`);
+        const structured = toolError(error).structuredContent as { error: { retryable: boolean } };
+        assert.equal(structured.error.retryable, expected.retryable, `status ${expected.status}`);
+        return true;
+      });
+    } finally {
+      restoreEnvironment("QYL_COLLECTOR_URL", previous);
+      await close(listener);
+    }
+  }
+});
+
 test("collector requests fail closed on the configured timeout", async () => {
   const listener = createServer((_request, response) => {
     setTimeout(() => {
