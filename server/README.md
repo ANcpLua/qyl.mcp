@@ -173,6 +173,18 @@ real ChatGPT demonstration are separate checks before upload.
 
 ## Release notes
 
+### 7.2.2
+
+- MCP Apps viewers check both the SDK client name and the `User-Agent` when
+  choosing their domain. A recognized client name wins over a conflicting
+  User-Agent, and an unknown name no longer hides a recognized one; 7.2.0 and
+  7.2.1 read the User-Agent only when no client name was sent. When neither is
+  recognized, `ui.domain` and `openai/widgetDomain` are both omitted and the
+  host uses its default sandbox.
+- The viewers are now `ui://qyl-explorer/mcp-app-v6.html` and
+  `ui://qyl-explorer/mcp-dashboard-v4.html`, so hosts drop metadata cached for
+  the previous versions.
+
 ### 7.2.1
 
 - Contract package `@ancplua/qyl-api-schema` 11.4.0 (TypeSpec 1.17). The
