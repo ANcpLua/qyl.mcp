@@ -4,7 +4,8 @@
 "bun" = "1.4.3"
 # bun installs and runs the scripts; node runs `node --test`, the build and verify scripts,
 # and the published qyl-mcp-server, so it must stay inside every engines.node range (24.x).
-"node" = "24"
+# Exact like bun: CI, Railway builds and local mise resolve the same Node.
+"node" = "24.21.0"
 
 [tasks.check]
 description = "The gate: what CI runs, in order"
