@@ -18,9 +18,11 @@ latency and MCP tool behavior from that recorded data.
 ## What it needs
 
 - An account that may read a qyl Collector project with recorded telemetry.
-  Sign-in uses OAuth through qyl's Auth0 tenant, and the tools require the
-  `qyl:read` scope. The server decides which Collector project an account
-  can read; tool arguments never select another project.
+  Sign-in uses OAuth through qyl's Auth0 tenant. The read tools require the
+  `qyl:read` scope; creating and updating annotations and saved queries also
+  requires `qyl:write`, and deleting them `qyl:delete`. The server decides
+  which Collector project an account can use; tool arguments never select
+  another project.
 - Nothing else: the plugin runs no local code and contains no API keys or
   other credentials.
 
@@ -30,7 +32,9 @@ The plugin declares one remote MCP server. When a tool is used, your client
 sends an MCP request with the tool name and its arguments (for example a
 trace ID, service name or time window) and your OAuth access token to
 `https://mcp.qyl.at/mcp`. The server reads the matching records from your
-Collector project and returns them to your client. The server's own records of
+Collector project and returns them to your client. When you ask for a note or
+a saved query, the server stores its text, target or filter in your Collector
+project, where you can change or delete it again. The server's own records of
 incoming tool calls keep only the tool name, timing, status and error type,
 not arguments or conversation text.
 
@@ -43,8 +47,10 @@ removed. It holds no OAuth tokens and no copied telemetry.
 
 ## Tools
 
-Every tool in the current catalog only reads data and is annotated as
-read-only. Your client decides when to ask for confirmation.
+Most tools only read data and are annotated as read-only. Five tools change
+something, and only notes and saved queries you create: they are annotated as
+not read-only, and the ones that replace or remove an existing object as
+destructive. Your client decides when to ask for confirmation.
 
 | Tool | Use it to |
 | --- | --- |
@@ -55,6 +61,10 @@ read-only. Your client decides when to ask for confirmation.
 | `ci_log` | Read CI runs that follow qyl's CI telemetry convention, failed phases first. |
 | `display_traces`, `display_mcp_dashboard` | Open the Trace Explorer or the MCP Dashboard. |
 | `fetch_telemetry` | Used only by the Trace Explorer to refresh or filter its view; hidden from the model. |
+| `create_annotation`, `update_annotation` | Leave a note of at most 2000 characters on a trace, span or session, or correct it. `get_trace` and `list_sessions` show the notes. |
+| `create_saved_query`, `update_saved_query` | Save a named filter for traces, logs or metrics, or change it. |
+| `list_saved_queries`, `run_saved_query` | Find a saved query and run it against the current telemetry. |
+| `delete` | Delete one note or saved query. It cannot delete telemetry. |
 
 The bundled skill `skills/qyl-investigate/SKILL.md` describes the
 investigation workflow these tools are designed for.
@@ -69,14 +79,17 @@ investigation workflow these tools are designed for.
 ## Limits and troubleshooting
 
 - qyl cannot delete or change telemetry, deploy or roll back services, or
-  search the public web.
+  search the public web. Its write tools change only the notes and saved
+  queries in your project.
 - An empty result means nothing matching was recorded in your project. It
   does not show that a system is healthy.
 - Most tools take limits and filters. `get_trace` returns the full span
   tree, which can be large; `display_traces` shows it as a waterfall, and
   `search_logs` narrows logs by trace, service, severity or text.
 - If sign-in fails or requests are rejected, reconnect qyl in your client and
-  sign in with an account that has the `qyl:read` scope.
+  sign in with an account that has the `qyl:read` scope. A write that is
+  refused for a missing `qyl:write` or `qyl:delete` scope asks your client to
+  sign in again with that scope.
 - If a tool reports that no Collector project is assigned to your account,
   ask the qyl operator for project access.
 - The Trace Explorer and MCP Dashboard appear only in clients that display

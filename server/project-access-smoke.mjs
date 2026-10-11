@@ -19,7 +19,7 @@ import { createMcpHandler } from "@modelcontextprotocol/server";
 import { createResourceAuthorization } from "./dist/authorization.js";
 import { API_KEY_HEADER, PROJECT_HEADER } from "./dist/contract-headers.js";
 import { EventsRuntime, createEventStore } from "./dist/events.js";
-import { QYL_MCP_RESOURCE, QYL_MCP_SCOPE } from "./dist/oauth.js";
+import { QYL_MCP_DELETE_SCOPE, QYL_MCP_RESOURCE, QYL_MCP_SCOPE, QYL_MCP_WRITE_SCOPE } from "./dist/oauth.js";
 import { createServer } from "./dist/server.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -44,7 +44,8 @@ for (const key of Object.keys(collectorEnv)) {
 Object.assign(collectorEnv, {
   DOTNET_ENVIRONMENT: "Development", QYL_BIND_ADDRESS: "127.0.0.1", QYL_PORT: String(port),
   QYL_OTLP_PORT: "0", QYL_GRPC_PORT: "0", QYL_OTLP_AUTH_MODE: "ApiKey",
-  QYL_OTLP_PROJECT_KEYS: JSON.stringify(Object.fromEntries(fixtures.map((f) => [f.project, [f.apiKey]]))),
+  QYL_OTLP_PROJECT_KEYS: JSON.stringify(Object.fromEntries(fixtures.map((f) =>
+    [f.project, [{ key: f.apiKey, roles: ["ingest", "read", "write", "delete"] }]]))),
   QYL_DATA_PATH: join(temp, "project-scope.duckdb"),
 });
 const collector = spawn(existsSync(executable) ? executable : "dotnet",
@@ -141,7 +142,7 @@ try {
     verifier: { async verifyAccessToken(token) {
       const f = fixtures.find((entry) => entry.token === token);
       if (!f && token !== "unassigned-local-test") throw new Error("unknown test token");
-      return { token, clientId: "local-scope-test", scopes: [QYL_MCP_SCOPE],
+      return { token, clientId: "local-scope-test", scopes: [QYL_MCP_SCOPE, QYL_MCP_WRITE_SCOPE, QYL_MCP_DELETE_SCOPE],
         resource: new URL(QYL_MCP_RESOURCE), expiresAt: Math.floor(Date.now() / 1_000) + 300,
         extra: { subject: f?.subject ?? "auth0|unassigned-local-test" } };
     } },
@@ -167,6 +168,8 @@ try {
     ["fetch_telemetry", { view: "trace", trace_id: f.traceId }],
     ["fetch_telemetry", { view: "logs" }], ["fetch_telemetry", { view: "mcp_stats", hours: 1 }],
   ];
+  const writeTools = ["create_annotation", "update_annotation", "create_saved_query", "update_saved_query",
+    "delete", "list_saved_queries", "run_saved_query"];
   for (const revision of ["2026-07-28", "2025-11-25"]) {
     async function connect(token) {
       const client = new Client({ name: "project-smoke", version: "1.0.0" }, {
@@ -179,12 +182,14 @@ try {
       assert.equal(client.getNegotiatedProtocolVersion(), revision);
       return client;
     }
-    await Promise.all(fixtures.map(async (f) => {
+    let toolCount = 0;
+    const written = await Promise.all(fixtures.map(async (f) => {
       const client = await connect(f.token);
       const foreign = fixtures.find((entry) => entry !== f);
       const { tools } = await client.listTools();
+      toolCount = tools.length;
       assert.deepEqual(tools.map((tool) => tool.name).sort((a, b) => a.localeCompare(b)),
-        [...new Set(cases(f).map(([name]) => name))].sort((a, b) => a.localeCompare(b)));
+        [...new Set([...cases(f).map(([name]) => name), ...writeTools])].sort((a, b) => a.localeCompare(b)));
       for (const [name, args] of cases(f)) {
         const result = await client.callTool({ name, arguments: args,
           _meta: { subject: foreign.subject, project: foreign.project } });
@@ -205,14 +210,70 @@ try {
         assert.equal(denied.isError, true, `${name} accepted a foreign trace`);
         assert(!JSON.stringify(denied).includes(foreign.marker));
       }
+
+      // Writes land in the verified subject's project whatever _meta claims,
+      // and a note attaches only to that project's own telemetry.
+      const claim = { _meta: { subject: foreign.subject, project: foreign.project } };
+      const created = await client.callTool({ name: "create_annotation", arguments: {
+        target: { kind: "trace", trace_id: f.traceId }, text: `${f.marker} ${revision} note` }, ...claim });
+      assert(!created.isError, `${revision} ${f.project} create_annotation: ${JSON.stringify(created)}`);
+      const note = created.structuredContent.annotation;
+      const crossTarget = await client.callTool({ name: "create_annotation", arguments: {
+        target: { kind: "trace", trace_id: foreign.traceId }, text: "cross-project note" } });
+      assert.equal(crossTarget.structuredContent?.error?.code, "not_found", "a note on a foreign trace was accepted");
+      const readBack = await client.callTool({ name: "get_trace", arguments: { trace_id: f.traceId } });
+      assert(JSON.stringify(readBack.structuredContent?.annotations ?? []).includes(note.id), "get_trace lost the note");
+      const query = await client.callTool({ name: "create_saved_query", arguments: {
+        name: `${f.marker}_${revision}`, filter: { signal: "traces", lookback_minutes: 60 } }, ...claim });
+      assert(!query.isError, `${revision} ${f.project} create_saved_query: ${JSON.stringify(query)}`);
+      const renamed = await client.callTool({ name: "update_saved_query", arguments: {
+        id: query.structuredContent.saved_query.id, etag: query.structuredContent.saved_query.etag,
+        name: `${f.marker}_${revision}_renamed` } });
+      assert(!renamed.isError, `${revision} ${f.project} update_saved_query: ${JSON.stringify(renamed)}`);
+      const saved = renamed.structuredContent.saved_query;
+      const listed = JSON.stringify(await client.callTool({ name: "list_saved_queries", arguments: {} }));
+      assert(listed.includes(saved.id) && !listed.includes(foreign.marker), "list_saved_queries crossed projects");
+      const ran = JSON.stringify(await client.callTool({ name: "run_saved_query", arguments: { id: saved.id } }));
+      assert(ran.includes(f.traceId) && !ran.includes(foreign.traceId), "run_saved_query crossed projects");
+      return { f, client, note, saved };
     }));
+    // Each account now tries the other's objects by id and etag: the Collector
+    // answers from the caller's project, where they do not exist.
+    for (const { f, client } of written) {
+      const other = written.find((entry) => entry.f !== f);
+      /** @type {ReadonlyArray<readonly [string, Record<string, unknown>]>} */
+      const takeovers = [
+        ["update_annotation", { id: other.note.id, etag: other.note.etag, text: "takeover" }],
+        ["delete", { kind: "annotation", id: other.note.id, etag: other.note.etag }],
+        ["update_saved_query", { id: other.saved.id, etag: other.saved.etag, name: "takeover" }],
+        ["run_saved_query", { id: other.saved.id }],
+        ["delete", { kind: "saved_query", id: other.saved.id, etag: other.saved.etag }],
+      ];
+      for (const [name, args] of takeovers) {
+        const denied = await client.callTool({ name, arguments: args });
+        assert.equal(denied.structuredContent?.error?.code, "not_found", `${revision} ${f.project} ${name} reached a foreign object`);
+      }
+    }
+    for (const { client, note, saved } of written) {
+      for (const args of [
+        { kind: "annotation", id: note.id, etag: note.etag },
+        { kind: "saved_query", id: saved.id, etag: saved.etag },
+      ]) {
+        const removed = await client.callTool({ name: "delete", arguments: args });
+        assert.equal(removed.structuredContent?.deleted, true, `${revision} delete ${args.kind}: ${JSON.stringify(removed)}`);
+      }
+    }
     const unassigned = await connect("unassigned-local-test");
-    for (const [name, args] of cases(fixtures[0])) {
+    /** @type {ReadonlyArray<readonly [string, Record<string, unknown>]>} */
+    const unassignedCases = [...cases(fixtures[0]),
+      ["create_annotation", { target: { kind: "trace", trace_id: fixtures[0].traceId }, text: "unassigned" }],
+      ["list_saved_queries", {}]];
+    for (const [name, args] of unassignedCases) {
       const result = await unassigned.callTool({ name, arguments: args });
       assert.equal(result.isError, true, `${name} accepted an unassigned account`);
       assert.match(JSON.stringify(result), /No Collector project is assigned/u);
     }
-    console.log(`ok ${revision}: all 11 tools and viewer paths isolate concurrent accounts; foreign trace IDs and unassigned accounts denied`);
+    console.log(`ok ${revision}: all ${toolCount} tools and viewer paths isolate concurrent accounts; writes stay in each account's project; foreign trace IDs, foreign objects and unassigned accounts denied`);
   }
 
   const store = createEventStore(join(temp, "events.json"));

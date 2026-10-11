@@ -79,7 +79,7 @@ class CompletionAuditTests(unittest.TestCase):
         value = json.loads(saved)
         value["tools"].pop()
         path.write_text(json.dumps(value))
-        with self.assertRaisesRegex(completion.AuditFailure, "11 distinct tools"):
+        with self.assertRaisesRegex(completion.AuditFailure, "18 distinct tools"):
             self.audit()
 
     def test_record_payload_fields_and_unreviewed_shapes_fail_closed(self):

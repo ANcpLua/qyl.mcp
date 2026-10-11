@@ -12,6 +12,8 @@ import {
   type OAuthTokenVerifier,
 } from "@modelcontextprotocol/server";
 
+import { McpScopeValues } from "@ancplua/qyl-api-schema/types";
+
 import {
   fetchAuthorizationServerMetadata,
   secureMetadataUrl,
@@ -24,7 +26,18 @@ import {
 
 export const QYL_MCP_ISSUER = "https://qyl-eu.eu.auth0.com/";
 export const QYL_MCP_RESOURCE = "https://mcp.qyl.at/mcp";
-export const QYL_MCP_SCOPE = "qyl:read";
+/** Every hosted request carries it: the read tools, the viewers and Events. */
+export const QYL_MCP_SCOPE = McpScopeValues.read;
+/** The create and update tools add it: annotations and saved queries. */
+export const QYL_MCP_WRITE_SCOPE = McpScopeValues.write;
+/** The one delete tool adds it. No scope deletes telemetry. */
+export const QYL_MCP_DELETE_SCOPE = McpScopeValues.delete;
+/** What the protected-resource metadata advertises in `scopes_supported`. */
+export const QYL_MCP_SCOPES_SUPPORTED: readonly string[] = [
+  QYL_MCP_SCOPE,
+  QYL_MCP_WRITE_SCOPE,
+  QYL_MCP_DELETE_SCOPE,
+];
 
 export interface HostedOAuth {
   readonly requiredScopes: string[];
@@ -116,8 +129,10 @@ export async function loadHostedOAuth(
   validateAuthorizationExtensions(oauthMetadata, extensions);
   const jwksUrl = secureMetadataUrl(oauthMetadata.jwks_uri, "jwks_uri");
   return {
+    // Only reads are required of every request; the write tools ask for their
+    // own scope through a step-up challenge (tool-scopes.ts).
     requiredScopes: [QYL_MCP_SCOPE],
-    scopesSupported: [QYL_MCP_SCOPE],
+    scopesSupported: [...QYL_MCP_SCOPES_SUPPORTED],
     oauthMetadata,
     extensions,
     verifier: createJwtTokenVerifier({

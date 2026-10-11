@@ -23,7 +23,7 @@
         "@ancplua/qyl-api-schema": "11.6.0",
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
-        "qyl-mcp-server": "7.4.0",
+        "qyl-mcp-server": "7.5.0",
         "react": "19.3.0",
         "react-dom": "19.3.0",
         "zod": "4.6.5",
@@ -39,7 +39,7 @@
     },
     "server": {
       "name": "qyl-mcp-server",
-      "version": "7.4.0",
+      "version": "7.5.0",
       "bin": {
         "qyl-mcp-server": "dist/main.js",
       },
@@ -79,7 +79,7 @@
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
         "express": "5.3.0",
-        "qyl-mcp-server": "7.4.0",
+        "qyl-mcp-server": "7.5.0",
         "zod": "4.6.5",
       },
       "devDependencies": {

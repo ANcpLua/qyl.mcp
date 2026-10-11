@@ -38,7 +38,10 @@ with PKCE S256, both `private_key_jwt` and `none` for ChatGPT CIMD compatibility
 `none` for Claude CIMD, and issuer identification. Auth0 owns registration and token
 issuance; this server validates resource-bound RFC 9068 access tokens on every
 MCP request. It rejects malformed/query credentials, invalid tokens and
-insufficient scopes with distinct 400/401/403 responses.
+insufficient scopes with distinct 400/401/403 responses. Every request needs
+`qyl:read`; a write tool called without `qyl:write` or `qyl:delete` gets a
+`403` with `error="insufficient_scope"` naming the scopes to request, in both
+protocol eras, before the handler runs.
 
 Optional resource-server integrations are selected explicitly:
 
@@ -97,12 +100,29 @@ with `cursor` like the telemetry lists.
 model. Its input is one of four shapes selected by `view` (`traces`, `trace`,
 `logs`, `mcp_stats`); the `trace` view requires `trace_id` at the schema layer.
 
+**Writes** — `create_annotation`, `update_annotation`, `create_saved_query`,
+`update_saved_query` and `delete` change only objects users create in qyl, in
+the caller's Collector project: annotations (plain-text notes of at most 2000
+characters on a trace, span or session) and saved queries (named filters for
+traces, logs or metrics). `delete` takes `kind` (`annotation` or
+`saved_query`; alert rules follow with Contract 11.7.0), `id` and `etag`. No
+tool deletes or edits traces, logs or metrics; retention removes telemetry.
+Updates and deletes send the `etag` as `If-Match`: a stale one fails with
+`precondition_failed`, a duplicate saved-query name with `conflict`.
+`list_saved_queries` and `run_saved_query` read saved queries; `get_trace` and
+`list_sessions` return the annotations on what they read. Demo mode keeps none
+of these objects and refuses these tools.
+
 **Failures** — every failed call returns `isError: true`, the message as text,
 and `structuredContent.error = { code, message, retryable }` with the
 contract's `ToolErrorCode`.
 
-Every tool is read-only: the server queries the configured collector and never
-mutates it. On the hosted server they all sit behind the single `qyl:read` scope.
+The thirteen read tools carry `readOnlyHint: true` and only query the
+configured collector. The create tools carry `destructiveHint: false` and
+`idempotentHint: false`; the update tools and `delete` carry
+`destructiveHint: true` and `idempotentHint: true`. On the hosted server
+`qyl:read` covers the read tools, `qyl:write` adds the create and update tools,
+and `qyl:delete` adds `delete`.
 
 The `display_*` tools return MCP Apps UI resources as single-file viewers.
 
@@ -134,7 +154,7 @@ multi-tenant audit log.
 | Variable | Meaning |
 | --- | --- |
 | `QYL_COLLECTOR_URL` | Collector read API base; default `http://127.0.0.1:5100`. Also the OTLP base when set. |
-| `QYL_API_KEY` | Collector read and OTLP credential. Outgoing only. |
+| `QYL_API_KEY` | Collector credential for reads and OTLP; the write tools need the Collector's `write` and `delete` roles on it. Outgoing only. |
 | `QYL_PROJECT` | Server-owned collector project scope. Unset, the server sends no project-scope header, so the Collector's default project applies; the Events subscription source key records that as `default`. Never accepted as tool input. This is the only place that states the default; other documents link here. |
 | `MCP_COLLECTOR_PROJECTS` | Optional secret JSON mapping validated Auth0 subjects to project-bound Collector keys; see account isolation below. |
 | `QYL_OTLP_ENDPOINT` | Optional OTLP base for self-telemetry. |
@@ -182,14 +202,29 @@ assignment revokes its Events subscription on the next access check. Project
 keys are redacted from text and structured results, including keys nested in
 this JSON configuration. Keep the map in host secrets and out of the plugin ZIP.
 
-`bun run smoke:projects` from the repository root checks all eleven tools,
-viewer query paths, both protocol eras and Events against a real local
-Collector with two temporary projects. Set `QYL_COLLECTOR_PROJECT` to its
+`bun run smoke:projects` from the repository root checks every tool, the
+writes included, viewer query paths, both protocol eras and Events against a
+real local Collector with two temporary projects. Set `QYL_COLLECTOR_PROJECT` to its
 `.csproj` when using a different checkout. The script uses local test identities
 and an in-process signed webhook receiver; the hosted reviewer OAuth login and
 real ChatGPT demonstration are separate checks before upload.
 
 ## Release notes
+
+### 7.5.0
+
+- Write tools, each a separate tool so a host can approve it on its own:
+  `create_annotation` and `update_annotation` (notes on a trace, span or
+  session), `create_saved_query` and `update_saved_query` (named filters), and
+  one `delete` for either kind. They change only those objects, in the
+  caller's Collector project; no tool deletes or edits telemetry.
+  `list_saved_queries` and `run_saved_query` read saved queries, and
+  `get_trace` and `list_sessions` return annotations.
+- Scopes: `qyl:write` for create and update, `qyl:delete` for `delete`;
+  `qyl:read` alone keeps the read tools. The protected-resource metadata lists
+  all three, and a call without the scope it needs gets a `403`
+  `insufficient_scope` challenge. The Collector key needs the `write` and
+  `delete` roles.
 
 ### 7.4.0
 

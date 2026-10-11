@@ -154,17 +154,29 @@ try {
   );
   const discovery = await discoveryResponse.json();
   check(
-    "real SDK discovery returns eleven tools and server surfaces",
-    discoveryResponse.ok && discovery.tools?.count === 11 && Array.isArray(discovery.prompts?.items),
+    "real SDK discovery returns eighteen tools and server surfaces",
+    discoveryResponse.ok && discovery.tools?.count === 18 && Array.isArray(discovery.prompts?.items),
   );
+  const writeTools = new Set(["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "delete"]);
   check(
     "all qyl inspection tools publish complete read-only safety annotations",
     discovery.tools?.items
-      ?.every((tool) =>
+      ?.filter((tool) => !writeTools.has(tool.name))
+      .every((tool) =>
         tool.annotations?.readOnlyHint === true
         && tool.annotations?.destructiveHint === false
         && tool.annotations?.idempotentHint === true
         && tool.annotations?.openWorldHint === false),
+  );
+  check(
+    "the five qyl write tools are not read-only, and update and delete are destructive",
+    discovery.tools?.items
+      ?.filter((tool) => writeTools.has(tool.name))
+      .every((tool) =>
+        tool.annotations?.readOnlyHint === false
+        && tool.annotations?.destructiveHint === !tool.name.startsWith("create_")
+        && tool.annotations?.openWorldHint === false)
+      && discovery.tools?.items?.filter((tool) => writeTools.has(tool.name)).length === 5,
   );
 
   const executionUrl = `${baseUrl}/workbench/workspaces/default/servers/${serverId}/executions`;

@@ -80,25 +80,61 @@ console.log("tools/list");
 const { tools } = await client.listTools();
 const names = tools.map((t) => t.name).sort();
 check(
-  "exactly the eleven supported tools",
-  names.length === 11 &&
+  "exactly the eighteen supported tools",
+  names.length === 18 &&
     JSON.stringify(names) ===
       JSON.stringify(
         [
           "ci_log",
+          "create_annotation",
+          "create_saved_query",
+          "delete",
           "display_mcp_dashboard",
           "display_traces",
           "fetch_telemetry",
           "get_metric_series",
           "get_trace",
           "list_metrics",
+          "list_saved_queries",
           "list_sessions",
           "list_traces",
           "query_metric",
+          "run_saved_query",
           "search_logs",
+          "update_annotation",
+          "update_saved_query",
         ].sort(),
       ),
   `got: ${names.join(", ")}`,
+);
+
+// Writes change only annotations and saved queries; their hints say so, and
+// demo mode, which has no Collector project to keep them in, refuses them.
+const hints = (name) => JSON.stringify(tools.find((t) => t.name === name)?.annotations);
+check(
+  "create tools are additive, update and delete destructive and idempotent",
+  hints("create_annotation") === JSON.stringify({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }) &&
+    hints("create_saved_query") === hints("create_annotation") &&
+    hints("update_annotation") === JSON.stringify({ readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }) &&
+    hints("update_saved_query") === hints("update_annotation") &&
+    hints("delete") === hints("update_annotation"),
+  `${hints("create_annotation")} ${hints("update_annotation")} ${hints("delete")}`,
+);
+check(
+  "every other tool stays read-only",
+  tools
+    .filter((t) => !["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "delete"].includes(t.name))
+    .every((t) => t.annotations?.readOnlyHint === true && t.annotations?.destructiveHint === false),
+);
+const demoWrite = await callTool(client, "create_annotation", {
+  target: { kind: "trace", trace_id: "0af7651916cd43dd8448eb211c80319c" },
+  text: "smoke",
+});
+check(
+  "demo mode refuses a write with a stable code",
+  demoWrite.isError === true && demoWrite.structuredContent?.error?.code === "invalid_argument" &&
+    /needs a live qyl Collector/u.test(demoWrite.content?.[0]?.text ?? ""),
+  JSON.stringify(demoWrite),
 );
 
 const displayTraces = tools.find((t) => t.name === "display_traces");
@@ -399,7 +435,7 @@ try {
     },
   }));
   check("stock client negotiated the legacy era", legacyClient.getProtocolEra() === "legacy");
-  check("legacy catalog has all 11 tools", (await legacyClient.listTools()).tools.length === 11);
+  check("legacy catalog has all 18 tools", (await legacyClient.listTools()).tools.length === 18);
   const metrics = await legacyClient.callTool({ name: "list_metrics", arguments: {} });
   check("legacy read tool returns real demo metrics", !metrics.isError && metrics.structuredContent?.items?.length === 3, JSON.stringify(metrics));
   const invalid = await legacyClient.callTool({ name: "get_trace", arguments: {} });

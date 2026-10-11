@@ -14,7 +14,10 @@ import { createServer, registerViewerResource } from "./server.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS } from "./tools.js";
 import { QYL_MCP_SCOPE } from "./oauth.js";
 
-test("qyl tools publish read-only safety annotations", async () => {
+/** The tools that change annotations or saved queries; write-tools.test.ts pins their hints. */
+const WRITE_TOOLS = new Set(["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "delete"]);
+
+test("qyl read tools publish read-only safety annotations", async () => {
   const connection = await connectModernTestClient(
     { name: "tool-annotations-test", version: "1.0.0" },
     () => createServer({ nativeExecution: false }),
@@ -26,19 +29,26 @@ test("qyl tools publish read-only safety annotations", async () => {
       tools.map((tool) => tool.name).sort(),
       [
         "ci_log",
+        "create_annotation",
+        "create_saved_query",
+        "delete",
         "display_mcp_dashboard",
         "display_traces",
         "fetch_telemetry",
         "get_metric_series",
         "get_trace",
         "list_metrics",
+        "list_saved_queries",
         "list_sessions",
         "list_traces",
         "query_metric",
+        "run_saved_query",
         "search_logs",
+        "update_annotation",
+        "update_saved_query",
       ],
     );
-    for (const tool of tools) {
+    for (const tool of tools.filter((candidate) => !WRITE_TOOLS.has(candidate.name))) {
       assert.deepEqual(tool.annotations, READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, tool.name);
       assert.deepEqual(tool._meta?.securitySchemes, [
         { type: "oauth2", scopes: [QYL_MCP_SCOPE] },
@@ -76,7 +86,7 @@ test("qyl server factory serves protocol revision 2026-07-28 over the fetch entr
       cacheScope: string;
     };
     const { tools } = toolsResult;
-    assert.equal(tools.length, 11);
+    assert.equal(tools.length, 18);
     assert.equal(toolsResult.ttlMs, 300_000);
     assert.equal(toolsResult.cacheScope, "public");
     const discover = client.getDiscoverResult() as ReturnType<Client["getDiscoverResult"]> & {

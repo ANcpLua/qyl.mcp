@@ -17,7 +17,8 @@ The public endpoint's unauthenticated challenge and metadata were observed at
 No release PR or version response substitutes for this observation.
 
 The Auth0 source validates audience, issuer, expiry and `qyl:read` and gates
-hosted requests. Collector URL, credential and project are server configuration.
+hosted requests; since 2026-10-11 the write tools also require `qyl:write`
+(create, update) or `qyl:delete` (delete). Collector URL, credential and project are server configuration.
 With `MCP_COLLECTOR_PROJECTS`, the verified subject selects a configured project
 and credential; without it, the source also supports single-project operation.
 No current production mapping or reviewer isolation is established here.
@@ -34,6 +35,7 @@ interval. [Events source](../docs/evidence/2026-10-08-step7.md#events).
 | --- | --- | --- |
 | OAuth token and validated claims | Authenticate and authorize a request; Events persist owner subject/client ID, not the subscriber's access or refresh token. Provider/client retention is outside this source observation. | [Authentication](../docs/evidence/2026-10-08-step7.md#deployment-and-authentication), [Events schema](../docs/evidence/2026-10-08-step7.md#inventory-and-allowlist-source). |
 | Tool arguments and Collector results | Execute the requested query and return traces, logs, metrics or sessions to the client/viewer. Hosted HTTP with `MCP_PUBLIC_URL` disables the local native store; native record fields exclude arguments, metadata and result bodies. | [Serving](../docs/evidence/2026-10-08-step7.md#configuration-and-serving), [native schema](../docs/evidence/2026-10-08-step7.md#native-records). |
+| Annotations and saved queries (since 2026-10-11) | Created only when the user asks: a note's text and its trace, span or session target, or a saved query's name, description and filter. The Collector stores them in the caller's project with an id, timestamps and an etag; the MCP server keeps no copy. `update_*` replaces them and `delete` removes one; no write path reaches telemetry. | [Write-tool decision](../docs/decisions/2026-10-11-qyl-dev-audit.md#write-tools). |
 | Events subscription | Persist `id`, `subject`, `clientId`, event name, `arguments` (optional `service_name`), callback URL, current/previous signing secret and rotation expiry, `refreshBefore` and `updatedAt`. No copied Collector telemetry is in this schema. | [Stored subscription schema](../docs/evidence/2026-10-08-step7.md#inventory-and-allowlist-source). |
 | Delivery bookkeeping | In-memory seen-trace, verification and in-flight state; delivered events use `cursor: null`. The persisted subscription schema contains no replay queue. | [Delivery and schema](../docs/evidence/2026-10-08-step7.md#inventory-and-allowlist-source). |
 | Auth0 management access | Host credentials support ongoing account/grant/consent/permission checks. The checker caches access results in memory; it does not add management tokens to subscription records. | [Authorization checker](../docs/evidence/2026-10-08-step7.md#events). |
@@ -70,7 +72,7 @@ are not proof of physical erasure, encryption or backup deletion.
 | Collector retention and deletion | Inspect the active Collector retention configuration and deployed implementation, run an approved expiry fixture, and record date, inputs and actual deletion results. |
 | Hosting/edge logs and backups | Inspect current provider log-retention and volume-backup settings; record date, service IDs and redacted output, including provider recovery-copy limitations. |
 | Events lifecycle in production | Run the subscribe, matching/non-matching delivery, restart, renewal, unsubscribe and revocation procedures in the [owner checklist](../MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending), retaining actual results. |
-| Deletion outside the MCP store | Establish and document how the owner handles Collector data, identity/consent records and copies already returned to clients; removing a subscription alone is not that process. |
+| Deletion outside the MCP store | Establish and document how the owner handles Collector data, identity/consent records and copies already returned to clients; removing a subscription alone is not that process. The `delete` tool removes one annotation or saved query from the Collector project; whether and when the Collector erases it physically, and from backups, is the Collector's retention to record. |
 
 ## Remaining publisher decisions
 

@@ -11,9 +11,9 @@
         "displayName": "qyl",
         "category": "Developer Tools",
         "shortDescription": "Investigate your telemetry",
-        "longDescription": "qyl lets you investigate the telemetry your services send to a qyl Collector. List recent traces and sessions, follow one trace through its spans, find the error logs that belong to it, discover recorded metric instruments and their attribute streams, and compare a metric over time or across groups. CI pipelines that follow qyl's CI telemetry convention can be read run by run, with failed phases first. In clients that display MCP Apps, the Trace Explorer shows a span waterfall with correlated logs, and the MCP Dashboard shows request, error and latency figures for each MCP tool and server. qyl is built for developers and operators whose services already send OpenTelemetry traces, logs and metrics to qyl. Sign-in uses OAuth with the qyl:read scope, and the server decides which Collector project your account can read. Every tool only reads data and reports the Collector's actual results, including empty results and errors; an empty result means nothing matching was recorded, not that a system is healthy. qyl cannot delete or change telemetry, deploy or roll back services, or search the public web. Optional trace-error notifications use MCP Events where both the client and the qyl deployment support them, and start only after an explicit subscription.",
+        "longDescription": "qyl lets you investigate the telemetry your services send to a qyl Collector. List recent traces and sessions, follow one trace through its spans, find the error logs that belong to it, discover recorded metric instruments and their attribute streams, and compare a metric over time or across groups. CI pipelines that follow qyl's CI telemetry convention can be read run by run, with failed phases first. In clients that display MCP Apps, the Trace Explorer shows a span waterfall with correlated logs, and the MCP Dashboard shows request, error and latency figures for each MCP tool and server. qyl is built for developers and operators whose services already send OpenTelemetry traces, logs and metrics to qyl. You can also leave a note (an annotation) on a trace, span or session and save a named filter (a saved query) to run again later; these notes and filters, in your own project, are the only things qyl changes, and qyl deletes nothing but them. Sign-in uses OAuth: the qyl:read scope covers reading, qyl:write adds creating and updating annotations and saved queries, and qyl:delete adds deleting them. The server decides which Collector project your account can use. Every reading tool reports the Collector's actual results, including empty results and errors; an empty result means nothing matching was recorded, not that a system is healthy. qyl cannot delete or change telemetry, deploy or roll back services, or search the public web. Optional trace-error notifications use MCP Events where both the client and the qyl deployment support them, and start only after an explicit subscription.",
         "developerName": "ancplua",
-        "capabilities": ["Read"],
+        "capabilities": ["Read", "Write"],
         "websiteURL": "https://qyl.at/",
         "supportURL": "https://qyl.at/support/",
         "privacyPolicyURL": "https://qyl.at/privacy/",
@@ -64,11 +64,11 @@
           ],
           "negative": [
             {
-              "description": "qyl has no tool that deletes or changes telemetry; every qyl tool only reads. Expected: the answer explains that qyl cannot delete records, calls no qyl tool and does not claim that anything was removed.",
+              "description": "qyl has no tool that deletes or changes telemetry; its write tools change only annotations and saved queries, and its delete tool removes only those. Expected: the answer explains that qyl cannot delete traces or other telemetry, calls no qyl tool and does not claim that anything was removed.",
               "prompt": "Using only the qyl plugin, delete every error trace from my collector so the dashboard looks healthy."
             },
             {
-              "description": "qyl has no deployment or rollback tool; it only reads telemetry. Expected: the answer explains that qyl cannot roll back the deployment, calls no qyl tool and does not claim that a rollback happened.",
+              "description": "qyl has no deployment or rollback tool; it reads telemetry and changes only its own annotations and saved queries. Expected: the answer explains that qyl cannot roll back the deployment, calls no qyl tool and does not claim that a rollback happened.",
               "prompt": "Using only the qyl plugin, roll back the production deployment to its previous version now."
             },
             {
@@ -79,7 +79,7 @@
         }
       },
       "publication": {
-        "release_notes": "Version 1.0.0, the first qyl plugin package. It connects the hosted qyl MCP server with OAuth sign-in (qyl:read scope): read-only tools for traces, logs, metrics, sessions and CI runs, the Trace Explorer and MCP Dashboard viewers, and optional trace-error notifications through MCP Events where the client and deployment support them. It also bundles the qyl-investigate skill."
+        "release_notes": "Version 1.0.0, the first qyl plugin package. It connects the hosted qyl MCP server with OAuth sign-in (qyl:read to read; qyl:write and qyl:delete to create, change and delete annotations and saved queries): read tools for traces, logs, metrics, sessions and CI runs, write tools for notes on telemetry and saved queries that never change telemetry, the Trace Explorer and MCP Dashboard viewers, and optional trace-error notifications through MCP Events where the client and deployment support them. It also bundles the qyl-investigate skill."
       }
     }
   }
