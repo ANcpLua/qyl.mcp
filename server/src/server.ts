@@ -31,20 +31,20 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import packageMetadata from "../package.json" with { type: "json" };
 import { DASHBOARD_RESOURCE_URI, RESOURCE_URI } from "./config.js";
-import { CollectorError } from "./collector.js";
 import {
   DisplayMcpDashboardInputSchema,
   DisplayMcpDashboardOutputSchema,
   DisplayTracesInputSchema,
   DisplayTracesOutputSchema,
   FetchTelemetryInputSchema,
+  FetchTelemetryOutputSchema,
   compactOutputSchema,
+  objectRootInputSchema,
 } from "./contract-validation.js";
 import {
   fetchLogs,
   fetchMcpStats,
   fetchTrace,
-  fetchTraces,
   fetchTracesForDisplay,
 } from "./data.js";
 import {
@@ -328,68 +328,66 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
     {
       title: "Fetch Telemetry",
       description:
-        "Fetch traces, a single trace, or logs for the trace explorer UI when the " +
-        "user refreshes the view or changes its filters.",
-      inputSchema: FetchTelemetryInputSchema,
-      // No outputSchema: this tool is `_meta.ui.visibility: ["app"]`, so its only
-      // caller is the bundled viewer, which is compiled against the generated
-      // TypeScript types and never reads the advertised schema. Publishing one
-      // anyway put the whole telemetry tree into every client's `tools/list`
-      // (68 KB of the 232 KB manifest) to describe a shape no model may call.
-      // Structured content is still returned and still typed by the generated
-      // contract at compile time, and contracts.test.ts still parses these bodies
-      // against FetchTelemetryOutputSchema, so the shape stays pinned to the contract.
+        "Fetch traces, a single trace, logs or MCP stats for the viewers when the " +
+        "user refreshes a view or changes its filters. The input is one of four " +
+        "shapes selected by view; view \"trace\" requires trace_id.",
+      // The contract spells the input as a discriminated union over `view`, so
+      // `view: "trace"` requires `trace_id` at the schema layer; the wrapper
+      // publishes it with the object root MCP requires.
+      inputSchema: objectRootInputSchema(FetchTelemetryInputSchema),
+      outputSchema: compactOutputSchema(FetchTelemetryOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: { ...TELEMETRY_TOOL_AUTH_META, ui: { visibility: ["app"] } },
     },
-    (
-      { view, trace_id, service_name, severity_min, query, limit, hours }: FetchTelemetryInput,
-      ctx: ServerContext,
-    ): Promise<CallToolResult> =>
+    (args: FetchTelemetryInput, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, 1, async (scope) => {
-        if (view === "mcp_stats") {
-          const stats = await fetchMcpStats(hours ?? 24, scope.collector);
-          await scope.step(`Aggregated ${stats.totals.requests} MCP request(s)`);
-          const output: FetchTelemetryOutput = { stats, mode: stats.mode };
-          return telemetryToolResult(
-            `Fetched MCP stats: ${stats.totals.requests} requests over ${hours ?? 24}h (${stats.mode} mode).`,
-            output,
-          );
-        }
-
-        if (view === "trace") {
-          if (!trace_id) {
-            throw new CollectorError('view "trace" requires a `trace_id`.');
+        switch (args.view) {
+          case "mcp_stats": {
+            const hours = args.hours ?? 24;
+            const stats = await fetchMcpStats(hours, scope.collector);
+            await scope.step(`Aggregated ${stats.totals.requests} MCP request(s)`);
+            const output: FetchTelemetryOutput = { stats, mode: stats.mode };
+            return telemetryToolResult(
+              `Fetched MCP stats: ${stats.totals.requests} requests over ${hours}h (${stats.mode} mode).`,
+              output,
+            );
           }
-          const { trace, mode } = await fetchTrace(trace_id, scope.collector);
-          await scope.step(`Fetched trace ${trace_id}`);
-          const output: FetchTelemetryOutput = { trace, mode };
-          return telemetryToolResult(
-            `Fetched trace ${shortId(trace.trace_id)} (${trace.span_count} spans, ${mode} mode).`,
-            output,
-          );
+          case "trace": {
+            const { trace, mode } = await fetchTrace(args.trace_id, scope.collector);
+            await scope.step(`Fetched trace ${args.trace_id}`);
+            const output: FetchTelemetryOutput = { trace, mode };
+            return telemetryToolResult(
+              `Fetched trace ${shortId(trace.trace_id)} (${trace.span_count} spans, ${mode} mode).`,
+              output,
+            );
+          }
+          case "logs": {
+            const { logs, mode } = await fetchLogs(
+              {
+                trace_id: args.trace_id,
+                service_name: args.service_name,
+                severity_min: args.severity_min,
+                query: args.query,
+                limit: args.limit ?? 50,
+              },
+              scope.collector,
+            );
+            await scope.step(`Fetched ${logs.length} log record(s)`);
+            const output: FetchTelemetryOutput = { logs, mode };
+            return telemetryToolResult(`Fetched ${logs.length} logs (${mode} mode).`, output);
+          }
+          case "traces": {
+            // A trace_id on the traces view returns that one trace as the list,
+            // selected, which is what the explorer asks for when it opens a trace.
+            const { traces, mode } = await fetchTracesForDisplay(
+              { trace_id: args.trace_id, limit: args.limit ?? 20 },
+              scope.collector,
+            );
+            await scope.step(`Fetched ${traces.length} trace(s)`);
+            const output: FetchTelemetryOutput = { traces, mode };
+            return telemetryToolResult(`Fetched ${traces.length} traces (${mode} mode).`, output);
+          }
         }
-
-        if (view === "logs") {
-          const { logs, mode } = await fetchLogs(
-            { trace_id, service_name, severity_min, query, limit: limit ?? 50 },
-            scope.collector,
-          );
-          await scope.step(`Fetched ${logs.length} log record(s)`);
-          const output: FetchTelemetryOutput = { logs, mode };
-          return telemetryToolResult(
-            `Fetched ${logs.length} logs (${mode} mode).`,
-            output,
-          );
-        }
-
-        const { traces, mode } = await fetchTraces(limit ?? 20, scope.collector);
-        await scope.step(`Fetched ${traces.length} trace(s)`);
-        const output: FetchTelemetryOutput = { traces, mode };
-        return telemetryToolResult(
-          `Fetched ${traces.length} traces (${mode} mode).`,
-          output,
-        );
       }),
   );
 

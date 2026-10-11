@@ -150,7 +150,7 @@ export function registerCiTools(server: McpServer): void {
           const output: CiLogOutput = { run_id: args.run_id, phases, mode };
           return telemetryToolResult(summarizeCiRun(args.run_id, phases, mode, servicePrefix), output);
         }
-        const { sessions, mode } = await fetchSessions(50, undefined, scope.collector);
+        const { sessions, mode } = await fetchSessions({ limit: 50 }, scope.collector);
         const runs = filterCiSessions(sessions, servicePrefix)
           .slice(0, args.limit ?? 10)
           .map((session): CiRunSummary => ({

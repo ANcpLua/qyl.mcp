@@ -1,19 +1,29 @@
 /**
- * Metric reading over the contract 8.0.0 metrics API, live and demo.
+ * Metric reading over the contract metrics API, live and demo.
  *
  * Live mode forwards to the collector's three published operations and revalidates
  * the answer against the operation's own 200 body. Demo mode holds stored points
  * and runs the same bucketing and reducer the collector would, so a demo answer
- * honors step_ms, aggregation, group_by and the attribute matchers rather than
- * pretending they were applied — the invariant the rest of the demo dataset keeps.
+ * honors step_ms, aggregation, group_by, the attribute matchers and the cursor
+ * rather than pretending they were applied — the invariant the rest of the demo
+ * dataset keeps.
+ *
+ * The tool inputs are the contract's `Mcp.Tools.*Metric*` models (11.6.0). A
+ * matcher is structured, `{ key, op, value }`; the wire keeps the collector's
+ * `attr` / `attr_prefix` strings, so the tool layer serializes `eq` and `prefix`
+ * to them and nothing else.
  */
 
 import type {
+  GetMetricSeriesInput,
+  ListMetricsInput,
   MetricAggregation,
+  MetricAttributeMatcher,
   MetricDescriptor,
   MetricQueryResult,
   MetricSeries,
   MetricSeriesResult,
+  QueryMetricInput,
   Attribute,
 } from "@ancplua/qyl-api-schema/types";
 import { attributeIdentity, formatAttributeValue } from "@ancplua/qyl-api-schema/runtime";
@@ -32,57 +42,50 @@ import {
   MetricSeriesListResponseSchema,
 } from "./contract-validation.js";
 import { getDemoMetrics, type DemoMetricStream } from "./demo.js";
+import { demoPage, type Page } from "./paging.js";
 import { redactTelemetry } from "./telemetry-redaction.js";
 import type { Mode } from "./wire.js";
 
 const METRICS_PATH = "/api/v1/metrics";
 
-/** Tool arguments, mirroring the published operation parameters that shape them. */
-export interface ListMetricsArgs {
-  name_prefix?: string;
-  limit?: number;
+/** Tool arguments are the published tool input models. */
+export type ListMetricsArgs = ListMetricsInput;
+export type MetricSeriesArgs = GetMetricSeriesInput;
+export type QueryMetricArgs = QueryMetricInput;
+
+/** A page of metric items with the mode it came from; the cursor is added after redaction. */
+export interface MetricPage<T> {
+  items: T[];
+  hasMore: boolean;
+  nextCursor?: string;
+  mode: Mode;
 }
 
-export interface MetricSeriesArgs {
-  metric_name: string;
-  attr?: readonly string[];
-  attr_prefix?: readonly string[];
-  limit?: number;
-}
-
-export interface QueryMetricArgs {
-  metric_name: string;
-  start_time: string;
-  end_time: string;
-  step_ms?: number;
-  aggregation?: MetricAggregation;
-  group_by?: readonly string[];
-  attr?: readonly string[];
-  attr_prefix?: readonly string[];
-  series_limit?: number;
-}
-
-interface Matcher {
-  key: string;
-  value: string;
+function metricPage<T>(page: Page<T>, mode: Mode): MetricPage<T> {
+  return {
+    ...redactTelemetry({ items: page.items, mode }),
+    hasMore: page.hasMore,
+    ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }),
+  };
 }
 
 /**
- * `key=value` and `key=prefix` are the published spellings of both matcher
- * lists. A matcher without `=` is the model's mistake, not the collector's, so
- * it fails here with the offending text rather than reaching the wire as a
- * silently ignored filter.
+ * The collector's published spellings of the two matcher lists: `eq` becomes
+ * `attr=key=value`, `prefix` becomes `attr_prefix=key=value`. The collector
+ * splits on the first `=`, so a value containing `=` survives.
  */
-function parseMatchers(raw: readonly string[] | undefined, parameter: string): Matcher[] {
-  return (raw ?? []).map((entry) => {
-    const separator = entry.indexOf("=");
-    if (separator <= 0) {
-      throw new CollectorError(
-        `${parameter} entries are written 'key=value'; received ${JSON.stringify(entry)}`,
-      );
-    }
-    return { key: entry.slice(0, separator), value: entry.slice(separator + 1) };
-  });
+function wireMatchers(
+  matchers: readonly MetricAttributeMatcher[] | undefined,
+): { attr: string[] | undefined; attr_prefix: string[] | undefined } {
+  const attr: string[] = [];
+  const attr_prefix: string[] = [];
+  for (const matcher of matchers ?? []) {
+    (matcher.op === "eq" ? attr : attr_prefix).push(`${matcher.key}=${matcher.value}`);
+  }
+  return {
+    attr: attr.length === 0 ? undefined : attr,
+    attr_prefix: attr_prefix.length === 0 ? undefined : attr_prefix,
+  };
 }
 
 function attributeFormatted(attributes: readonly Attribute[], key: string): string | undefined {
@@ -92,15 +95,14 @@ function attributeFormatted(attributes: readonly Attribute[], key: string): stri
 
 function matchesStream(
   stream: DemoMetricStream,
-  exact: readonly Matcher[],
-  prefixes: readonly Matcher[],
+  matchers: readonly MetricAttributeMatcher[] | undefined,
 ): boolean {
   const read = (key: string): string | undefined =>
     key === "service.name" ? stream.serviceName : attributeFormatted(stream.attributes, key);
-  return (
-    exact.every((matcher) => read(matcher.key) === matcher.value) &&
-    prefixes.every((matcher) => read(matcher.key)?.startsWith(matcher.value) === true)
-  );
+  return (matchers ?? []).every((matcher) => {
+    const value = read(matcher.key);
+    return matcher.op === "eq" ? value === matcher.value : value?.startsWith(matcher.value) === true;
+  });
 }
 
 /** Stable across rebuilds because it is derived from identity, not from order. */
@@ -119,15 +121,14 @@ function demoSeriesId(stream: DemoMetricStream): string {
   return hash.toString(16).padStart(8, "0");
 }
 
-/**
- * `hasMore` is the page's own flag: the collector's `has_more` live, and
- * "more matched than `limit`" in demo mode. The tools pass it through so a
- * truncated catalog never reads as a complete one.
- */
+function demoNotFound(metricName: string): CollectorError {
+  return new CollectorError(`metric not found: ${metricName}`, false, undefined, "not_found");
+}
+
 export async function listMetrics(
   args: ListMetricsArgs,
   options: CollectorRequestOptions = {},
-): Promise<{ metrics: MetricDescriptor[]; hasMore: boolean; mode: Mode }> {
+): Promise<MetricPage<MetricDescriptor>> {
   const mode = await resolveMode();
   const limit = args.limit ?? 200;
 
@@ -139,13 +140,13 @@ export async function listMetrics(
       if (bucket) bucket.push(stream);
       else byName.set(stream.name, [stream]);
     }
-    const sorted = [...byName.entries()]
-      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
-    const metrics = sorted
-      .slice(0, limit)
+    const metrics = [...byName.entries()]
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
       .map(([name, streams]): MetricDescriptor => {
         const [first] = streams;
-        if (first === undefined) throw new CollectorError(`demo metric ${name} has no streams`, false, undefined, "internal");
+        if (first === undefined) {
+          throw new CollectorError(`demo metric ${name} has no streams`, false, undefined, "internal");
+        }
         const lastSeen = Math.max(
           ...streams.map((stream) => stream.points.at(-1)?.atMs ?? 0),
         );
@@ -160,41 +161,35 @@ export async function listMetrics(
           last_seen: new Date(lastSeen).toISOString(),
         };
       });
-    return redactTelemetry({ metrics, hasMore: sorted.length > limit, mode });
+    return metricPage(demoPage(metrics, limit, args.cursor), mode);
   }
 
   const body = await collectorGet(
     METRICS_PATH,
-    { name_prefix: args.name_prefix, limit },
+    { name_prefix: args.name_prefix, limit, cursor: args.cursor },
     options,
   );
-  const page = parseCollectorPage(
-    body,
-    METRICS_PATH,
-    MetricsListResponseSchema,
-    parseCollectorMetricDescriptor,
+  return metricPage(
+    parseCollectorPage(body, METRICS_PATH, MetricsListResponseSchema, parseCollectorMetricDescriptor),
+    mode,
   );
-  return redactTelemetry({ metrics: page.items, hasMore: page.hasMore, mode });
 }
 
 export async function listMetricSeries(
   args: MetricSeriesArgs,
   options: CollectorRequestOptions = {},
-): Promise<{ series: MetricSeries[]; hasMore: boolean; mode: Mode }> {
+): Promise<MetricPage<MetricSeries>> {
   const mode = await resolveMode();
   const limit = args.limit ?? 200;
-  const exact = parseMatchers(args.attr, "attr");
-  const prefixes = parseMatchers(args.attr_prefix, "attr_prefix");
 
   if (mode === "demo") {
     const streams = getDemoMetrics().filter(
-      (stream) =>
-        stream.name === args.metric_name && matchesStream(stream, exact, prefixes),
+      (stream) => stream.name === args.metric_name && matchesStream(stream, args.matchers),
     );
     if (streams.length === 0 && !getDemoMetrics().some((s) => s.name === args.metric_name)) {
-      throw new CollectorError(`metric not found: ${args.metric_name}`, false, undefined, "not_found");
+      throw demoNotFound(args.metric_name);
     }
-    const series = streams.slice(0, limit).map((stream): MetricSeries => ({
+    const series = streams.map((stream): MetricSeries => ({
       series_id: demoSeriesId(stream),
       name: stream.name,
       kind: stream.kind,
@@ -204,27 +199,22 @@ export async function listMetricSeries(
       first_seen: new Date(stream.points[0]?.atMs ?? 0).toISOString(),
       last_seen: new Date(stream.points.at(-1)?.atMs ?? 0).toISOString(),
     }));
-    return redactTelemetry({ series, hasMore: streams.length > limit, mode });
+    return metricPage(demoPage(series, limit, args.cursor), mode);
   }
 
   const path = `${METRICS_PATH}/${encodeURIComponent(args.metric_name)}/series`;
   try {
     const body = await collectorGet(
       path,
-      { attr: args.attr, attr_prefix: args.attr_prefix, limit },
+      { ...wireMatchers(args.matchers), limit, cursor: args.cursor },
       options,
     );
-    const page = parseCollectorPage(
-      body,
-      path,
-      MetricSeriesListResponseSchema,
-      parseCollectorMetricSeries,
+    return metricPage(
+      parseCollectorPage(body, path, MetricSeriesListResponseSchema, parseCollectorMetricSeries),
+      mode,
     );
-    return redactTelemetry({ series: page.items, hasMore: page.hasMore, mode });
   } catch (error) {
-    if (error instanceof CollectorError && error.status === 404) {
-      throw new CollectorError(`metric not found: ${args.metric_name}`, false, undefined, "not_found");
-    }
+    if (error instanceof CollectorError && error.status === 404) throw demoNotFound(args.metric_name);
     throw error;
   }
 }
@@ -283,15 +273,13 @@ export async function queryMetric(
   const stepMs = args.step_ms ?? 60_000;
   const aggregation = args.aggregation ?? "avg";
   const seriesLimit = args.series_limit ?? 50;
-  const exact = parseMatchers(args.attr, "attr");
-  const prefixes = parseMatchers(args.attr_prefix, "attr_prefix");
 
   if (mode === "demo") {
     const streams = getDemoMetrics().filter(
-      (stream) => stream.name === args.metric_name && matchesStream(stream, exact, prefixes),
+      (stream) => stream.name === args.metric_name && matchesStream(stream, args.matchers),
     );
     if (!getDemoMetrics().some((stream) => stream.name === args.metric_name)) {
-      throw new CollectorError(`metric not found: ${args.metric_name}`, false, undefined, "not_found");
+      throw demoNotFound(args.metric_name);
     }
     const startMs = Date.parse(args.start_time);
     const endMs = Date.parse(args.end_time);
@@ -354,17 +342,14 @@ export async function queryMetric(
         step_ms: stepMs,
         aggregation,
         group_by: args.group_by,
-        attr: args.attr,
-        attr_prefix: args.attr_prefix,
+        ...wireMatchers(args.matchers),
         series_limit: seriesLimit,
       },
       options,
     );
     return redactTelemetry({ result: parseCollectorMetricQueryResult(body, path), mode });
   } catch (error) {
-    if (error instanceof CollectorError && error.status === 404) {
-      throw new CollectorError(`metric not found: ${args.metric_name}`, false, undefined, "not_found");
-    }
+    if (error instanceof CollectorError && error.status === 404) throw demoNotFound(args.metric_name);
     throw error;
   }
 }

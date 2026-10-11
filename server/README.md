@@ -63,6 +63,16 @@ an enabled module proves a client has been provisioned.
 **Telemetry** — `list_traces`, `get_trace`, `list_sessions`, `search_logs`,
 `ci_log`, `display_traces`, `display_mcp_dashboard`.
 
+`list_traces` filters by a `start_time`/`end_time` window (RFC 3339, start
+inclusive, end exclusive), `service_name` (traces with a span from that
+service) and `errors_only`. `list_sessions` filters by `active_only` and the
+same window on the session start. `search_logs` filters by `trace_id`,
+`session_id`, `service_name`, `severity_min`, a body substring `query` and the
+window. Every list tool pages the same way: the output carries `has_more` and,
+when more exist, `next_cursor`; pass it back as `cursor` with the same filters
+for the next page. A cursor is opaque; one that is not ours is refused with
+`invalid_argument` rather than answered with the first page again.
+
 `get_trace` returns every span by default. `errors_only` selects error spans;
 `max_spans` (1–1000) caps the result after filtering in Collector order.
 `include_attributes=false` omits span, resource, event, link and instrumentation
@@ -75,13 +85,21 @@ filters both recent runs and individual phase spans.
 order: the catalog gives you an exact instrument name and how many attribute
 streams it has, series discovery tells you which attribute keys are worth
 grouping or filtering on, and the range query answers the actual question —
-a window, a bucket width (`step_ms`), a reducer (`avg`, `min`, `max`, `sum`,
-`count`, `last`, `p50`, `p90`, `p95`, `p99`), optional `group_by` keys, and
-optional `attr` / `attr_prefix` matchers written `key=value`. One bucket
-spanning the whole window collapses the answer to a single number.
+a window, a bucket width in whole milliseconds (`step_ms`), a reducer (`avg`,
+`min`, `max`, `sum`, `count`, `last`, `p50`, `p90`, `p95`, `p99`), optional
+`group_by` keys, and optional `matchers`, each `{ key, op, value }` with `op`
+`eq` (exact) or `prefix`; the server serializes them to the Collector's
+`attr` / `attr_prefix` parameters. One bucket spanning the whole window
+collapses the answer to a single number. The catalog and the series list page
+with `cursor` like the telemetry lists.
 
 **App-only** — `fetch_telemetry` is called by the bundled MCP Apps, not by a
-model.
+model. Its input is one of four shapes selected by `view` (`traces`, `trace`,
+`logs`, `mcp_stats`); the `trace` view requires `trace_id` at the schema layer.
+
+**Failures** — every failed call returns `isError: true`, the message as text,
+and `structuredContent.error = { code, message, retryable }` with the
+contract's `ToolErrorCode`.
 
 Every tool is read-only: the server queries the configured collector and never
 mutates it. On the hosted server they all sit behind the single `qyl:read` scope.
@@ -172,6 +190,27 @@ and an in-process signed webhook receiver; the hosted reviewer OAuth login and
 real ChatGPT demonstration are separate checks before upload.
 
 ## Release notes
+
+### 7.4.0
+
+- Contract package `@ancplua/qyl-api-schema` 11.6.0 (revision
+  `sha256:d926c3c6ab829cbf`). The hosted server starts only against a
+  Collector built from `Qyl.Api.Contracts` 11.6.0, so the Collector deploys
+  first.
+- Paging on every list tool: `list_traces`, `list_sessions`, `search_logs`,
+  `list_metrics` and `get_metric_series` return `has_more` and `next_cursor`
+  and take `cursor`. Demo mode pages too, with its own opaque cursor.
+- `list_traces` filters: `start_time`, `end_time`, `service_name`,
+  `errors_only`. `list_sessions` and `search_logs` take the window;
+  `search_logs` also takes `session_id`.
+- Metric matchers are structured: `matchers: [{ key, op: "eq" | "prefix",
+  value }]` replaces the `attr` / `attr_prefix` strings on `get_metric_series`
+  and `query_metric`; `step_ms` and `hours` are integers.
+- `fetch_telemetry` input is a discriminated union over `view`, published with
+  an object root, and the tool now advertises its output schema. The `traces`
+  view accepts a `trace_id` to return that one trace selected.
+- Every tool output model admits `error`; the server's error codes are the
+  contract's `ToolErrorCode` enum.
 
 ### 7.3.1
 

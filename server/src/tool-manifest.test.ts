@@ -44,7 +44,10 @@ test("telemetry tools advertise portable output schema spellings through the SDK
   const { tools } = JSON.parse(await buildToolManifest()) as {
     tools: { name: string; outputSchema: unknown }[];
   };
-  const affected = ["display_traces", "get_trace", "list_traces", "search_logs", "get_metric_series", "query_metric"];
+  const affected = [
+    "display_traces", "get_trace", "list_traces", "search_logs", "get_metric_series", "query_metric",
+    "fetch_telemetry",
+  ];
   for (const name of affected) {
     const tool = tools.find((candidate) => candidate.name === name);
     assert.ok(tool, name);
@@ -52,4 +55,19 @@ test("telemetry tools advertise portable output schema spellings through the SDK
     assert.doesNotMatch(schema, /"additionalProperties":\{\}/u, name);
     assert.doesNotMatch(schema, /"type":\[/u, name);
   }
+});
+
+test("every tool input schema is an object at its root, the discriminated union included", async () => {
+  const { tools } = JSON.parse(await buildToolManifest()) as {
+    tools: { name: string; inputSchema: { type?: unknown; oneOf?: unknown[]; allOf?: unknown } }[];
+  };
+  assert.ok(tools.length > 0);
+  for (const tool of tools) {
+    // MCP requires `inputSchema.type: "object"`; hosts validate it on tools/list.
+    assert.equal(tool.inputSchema.type, "object", tool.name);
+  }
+  const fetchTelemetry = tools.find((tool) => tool.name === "fetch_telemetry");
+  assert.ok(fetchTelemetry);
+  assert.equal(fetchTelemetry.inputSchema.oneOf?.length, 4, "one variant per view");
+  assert.equal(fetchTelemetry.inputSchema.allOf, undefined, "the union is hoisted to the root");
 });

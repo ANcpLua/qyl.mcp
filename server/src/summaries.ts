@@ -56,9 +56,27 @@ function modeNote(mode: Mode): string {
   return mode === "demo" ? " [demo data]" : "";
 }
 
-export function summarizeTraceTable(traces: QylTrace[], mode: Mode): string {
+/**
+ * The paging line every list summary ends with when a page is not the whole
+ * result. A complete result says nothing, so a terse answer stays terse; a
+ * truncated one tells the model exactly how to continue instead of leaving
+ * `has_more` to be noticed in the structured output.
+ */
+export function pageNote(page: { hasMore: boolean }): string {
+  return page.hasMore
+    ? "\nMore results exist: call again with cursor = next_cursor and the same filters."
+    : "";
+}
+
+/** `(errors only, service checkout-api, from 2026-10-11T00:00:00Z)` for a filtered list header. */
+export function filterNote(parts: readonly (string | undefined)[]): string {
+  const present = parts.filter((part): part is string => part !== undefined);
+  return present.length === 0 ? "" : ` (${present.join(", ")})`;
+}
+
+export function summarizeTraceTable(traces: QylTrace[], mode: Mode, filters = ""): string {
   const lines = [
-    `Traces (${traces.length})${modeNote(mode)}`,
+    `Traces (${traces.length})${filters}${modeNote(mode)}`,
     "",
     "| Trace | Root span | Spans | Duration | Status | Services |",
     "|-------|-----------|-------|----------|--------|----------|",
@@ -105,9 +123,9 @@ export function summarizeTrace(trace: QylTrace, mode: Mode, rootExcluded = false
   return lines.join("\n");
 }
 
-export function summarizeSessions(sessions: QylSession[], mode: Mode): string {
+export function summarizeSessions(sessions: QylSession[], mode: Mode, filters = ""): string {
   const lines = [
-    `Sessions (${sessions.length})${modeNote(mode)}`,
+    `Sessions (${sessions.length})${filters}${modeNote(mode)}`,
     "",
     "| Session | State | Traces | Spans | Errors | Duration | GenAI |",
     "|---------|-------|--------|-------|--------|----------|-------|",

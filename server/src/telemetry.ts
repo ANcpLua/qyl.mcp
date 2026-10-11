@@ -229,6 +229,13 @@ export class McpTelemetry {
                 exporter: metricExporter,
                 exportIntervalMillis: FLUSH_INTERVAL_MS,
                 exportTimeoutMillis: EXPORT_TIMEOUT_MS,
+                // Data points per export, the same cap the span and log processors
+                // use per batch. The two histograms carry one point per attribute
+                // set, up to 2000 sets each in the SDK, and cumulative temporality
+                // resends every set on every collection; without the cap one
+                // collection is one 4000-point request against a 16 MiB Collector
+                // bound and one export timeout.
+                maxExportBatchSize: MAX_QUEUE,
             })],
         });
         const meter = this.metricProvider.getMeter(INSTRUMENTATION_SCOPE, Product.version);
