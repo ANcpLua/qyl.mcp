@@ -58,10 +58,9 @@ review and the checks currently required by GitHub. Historical four-gate
 results do not impose owner stamps after that ruleset is disabled. Resolve
 review findings and never set owner checks or bypass configured gates.
 PRs #121 and #130 are merged; [the checkpoint](../MCP-CHECKPOINT.md) records
-that result. Continue on **`codex/point-10-client-ui-domain`, targeting #134**,
-using the existing fixes and documentation. This handoff-editing session
-leaves those changes uncommitted and unpushed; it does not impose that limit
-permanently on #134. The [original sequence](../goal-objective.md#work-in-order)
+that result. Continue on **`codex/point-10-client-ui-domain`, targeting #136**;
+the branch commits the fixes and documentation and merges `main` through #135.
+The [original sequence](../goal-objective.md#work-in-order)
 is not a new request to repeat completed work.
 
 ## Owner handoff
@@ -70,7 +69,7 @@ These rows describe evidence needed under [goal section E](../goal-objective.md#
 not proof that every action remains undone. Reconcile each row with existing
 dated owner evidence before acting; do not recreate accounts, re-publish pages
 or repeat accepted observations just because an older checklist still lists
-them. The 7.2.1 release and 11.4.0 deployment are already recorded in the
+them. The 7.2.x releases and the 11.4.0 deployment are already recorded in the
 [2026-10-11 evidence](../docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md).
 For a genuine remaining gap, save date, command/client/version and redacted
 actual output. This handoff does not authorize owner actions.
@@ -83,7 +82,7 @@ actual output. This handoff does not authorize owner actions.
 | Demo and review cases | Follow the [recording walkthrough](../submission/README.md#recording-walkthrough-for-the-owner); run and record the five positive and three negative manifest cases, then supply a reviewer-accessible playback URL. |
 | Five actual clients | Inspector DCR was reported blocked by Auth0 `too_many_entities` on 2026-10-08. That dated report does not establish a current failure or require another cleanup. Check existing owner evidence and use an already-provided fixed client where applicable. [Reported blocker and WIP](../docs/evidence/2026-10-08-followup-15.md#owner-reported-inspector-connection-blocker). Run ChatGPT, Codex, claude.ai, Claude Code and MCP Inspector against the hosted service with the isolated account, following the [exact client procedures](../MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending). Inspector 2.9.0 modern evidence must include the captured `MCP-Protocol-Version: 2026-07-28` header and actual tool results. Local fixture discovery is not that proof. |
 | Production Events lifecycle | Follow the same ledger's `events/list`, subscribe, signed matching delivery, nonmatching filter, persistence, renewal, unsubscribe and revocation steps. Record bounded delivery/no-delivery windows without keys. |
-| Deployment before reviewer access | Re-observe the active Railway deployment ID and source commit and compare with intended main. [Point 6](../docs/evidence/2026-10-08-followup-06.md) is a dated snapshot, not a guarantee about the next deployment; the [2026-10-11 snapshot](../docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#production-deploy-order) records deployment `2c916c88` for `f495bf3`. |
+| Deployment before reviewer access | Re-observe the active Railway deployment ID and source commit and compare with intended main. [Point 6](../docs/evidence/2026-10-08-followup-06.md) is a dated snapshot, not a guarantee about the next deployment; the [2026-10-11 snapshot](../docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#production-deploy-order) records deployment `2c916c88` for `f495bf3` and the later `ffe24407` for `0f9fe4b` (7.2.2). |
 | Challenge token | Copy the portal token into `OPENAI_APPS_CHALLENGE` on the intended deployment, check the plaintext route and complete portal verification; [point 7](../docs/evidence/2026-10-08-followup-07.md) observed 404 before this action. |
 | Inspector evidence after Collector deployment | [qyl PR #653](https://github.com/ANcpLua/qyl/pull/653) merged the 11.4.0 pin. The [11.4.0 evidence](../docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#production-deploy-order) records Collector deployment `15e4efe7` serving revision `sha256:3605ae27d2edf632` and the hosted server's completed handshake; [Option-A evidence](../docs/evidence/2026-10-08-point-8-options.md) covers the earlier 11.3.0 pin. The owner supplies the separate authenticated Inspector evidence. |
 | Attestations and publication | Review the seven connector acknowledgement fields and all other applicable portal attestations, validate the three separate records, then decide and perform submission/publication. [Scope exclusions](../docs/evidence/2026-10-08-followup-11.md) still apply. |

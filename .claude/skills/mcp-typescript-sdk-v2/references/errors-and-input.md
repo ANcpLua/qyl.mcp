@@ -47,23 +47,53 @@ On modern connections the 2025-era push channels (`ctx.mcpReq.elicitInput`,
 handler runs again with the responses. Works for `tools/call`, `prompts/get`, `resources/read`.
 
 ```ts
-import { inputRequired, acceptedContent, inputResponse } from '@modelcontextprotocol/server';
+import { inputRequired, acceptedContent, createRequestStateCodec } from '@modelcontextprotocol/server';
+
+type Confirmation = { op: 'deploy'; env: string };
+
+// One codec per server. `verify` runs before every round that echoes state, so tampered, expired
+// or rebound state never reaches the handler (-32602 "Invalid or expired requestState").
+// `bind` ties state to the method and the verified caller; `principalOf` is your own lookup of the
+// subject your bearer verification stored in `ctx.http?.authInfo`.
+const stateCodec = createRequestStateCodec<Confirmation>({
+  key: stateKey,
+  ttlSeconds: 600,
+  bind: ctx => `${ctx.mcpReq.method}\0${principalOf(ctx)}`
+});
+const server = new McpServer(info, { requestState: { verify: stateCodec.verify } });
 
 async ({ env }, ctx): Promise<CallToolResult | InputRequiredResult> => {
-  const confirmed = acceptedContent(ctx.mcpReq.inputResponses, 'confirm', confirmationSchema);
-  if (confirmed?.confirm !== true) {
+  // Honor a confirmation only on a round this handler opened, for this env and this caller.
+  const state = ctx.mcpReq.requestState<Confirmation>();
+  if (state?.op !== 'deploy' || state.env !== env) {
     return inputRequired({
       inputRequests: {
         confirm: inputRequired.elicit({ message: `Deploy to ${env}?`, requestedSchema: confirmationSchema })
-      }
+      },
+      requestState: await stateCodec.mint({ op: 'deploy', env }, ctx)
     });
   }
+  const confirmed = acceptedContent(ctx.mcpReq.inputResponses, 'confirm', confirmationSchema);
+  if (confirmed?.confirm !== true) {
+    return { content: [{ type: 'text', text: 'Deployment cancelled; no changes made.' }], isError: true };
+  }
+  // Perform the authorized deployment here; return success only after it succeeds.
+  await deploy(env);
   return { content: [{ type: 'text', text: `Deployed to ${env}` }] };
 }
 ```
 
 Rules:
 
+- **Ask once, on a round you opened**: `inputResponses` is client-supplied, so a first call can
+  arrive carrying an accepted `confirm: true`. Honor an answer only when the verified
+  `requestState` shows this handler asked, for this `env`, under the same `bind` value (method and
+  verified caller, so another account or handler cannot reuse it); otherwise ask. On that round, decline,
+  cancellation, accepted `false`, invalid content or a missing answer ends the call with
+  `isError: true` and no write, and none reopens the prompt. Without the `verify` hook,
+  `requestState()` returns the raw wire string, so the check fails closed and the handler keeps
+  asking. The deployment above is illustrative third-party application code, not a capability of
+  the qyl telemetry tools.
 - **Write-once handlers**: one handler runs on every round — read each answer first, request only
   the keys still missing. `inputRequests` is a map; one round carries every outstanding request.
   `inputResponses` holds only the latest round; nothing else survives between rounds.

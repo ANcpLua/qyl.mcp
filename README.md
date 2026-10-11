@@ -83,8 +83,7 @@ credential, not an incoming MCP login.
 
 The release workflow publishes `qyl-mcp-server` with provenance and smokes
 clean `npx` consumers in both protocol eras before a release counts; on
-2026-10-11 it published `7.2.0` and `7.2.1` that way. This local source
-snapshot declares `7.2.1`; it does not track a later release automatically.
+2026-10-11 it published `7.2.0`, `7.2.1` and `7.2.2` that way. The source declares `7.2.2`.
 [Release and consumer evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases).
 
 ### Tools and viewers

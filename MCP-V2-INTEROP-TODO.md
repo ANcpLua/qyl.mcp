@@ -300,7 +300,7 @@ connector guidance. After the edit, the same temporary-environment
 | Unauthenticated MCP | `curl --silent --show-error --include https://mcp.qyl.at/mcp` | `HTTP/2 401`; `www-authenticate: Bearer scope="qyl:read", resource_metadata="https://mcp.qyl.at/.well-known/oauth-protected-resource/mcp"`; `{"error":"unauthorized"}`. |
 | Resource metadata | `curl --silent --show-error --include https://mcp.qyl.at/.well-known/oauth-protected-resource/mcp` | `HTTP/2 200`; `{"resource":"https://mcp.qyl.at/mcp","authorization_servers":["https://qyl-eu.eu.auth0.com/"],"scopes_supported":["qyl:read"]}`. |
 | npm latest | `npm view qyl-mcp-server version` | `7.1.1`. This is a registry observation, not evidence of publishing or a consumer test. |
-| npm latest, 2026-10-11 | `npm view qyl-mcp-server dist-tags --json` | `"latest": "7.2.1"`, published with provenance by the release workflow after its clean `npx` consumer smoke ([evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases)). |
+| npm latest, 2026-10-11 | `npm view qyl-mcp-server dist-tags --json` | `"latest": "7.2.1"`, then `"latest": "7.2.2"` after #133, each published with provenance by the release workflow after its clean `npx` consumer smoke ([evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases)). |
 
 ## Owner-only observations still pending
 
@@ -327,7 +327,7 @@ redacted actual output. Never record tokens, cookies or callback signing keys.
 | Automatic renewal | Observe the owner's client across its renewal time; retain before/after expiration and subscription/renewal responses, then a matching delivery. |
 | Unsubscribe stops delivery | Unsubscribe in the owner client, retain its response, emit a fresh matching test error and record the bounded no-delivery window. |
 | Revocation stops delivery | On a separate test subscription, revoke the isolated account's access, emit a fresh matching test error, and retain revocation timing plus the bounded no-delivery window. Restore access only by owner decision. |
-| npm fresh consumer | In a fresh temporary project, install the exact observed latest version (`qyl-mcp-server@7.2.1` on 2026-10-11), run the pinned Inspector 2.9.0 with modern and legacy configurations against its stdio command in explicit demo mode, and record discovery plus a read result in both eras. Neither the registry version nor the release workflow's CI consumer smoke is this proof. |
+| npm fresh consumer | In a fresh temporary project, install the exact observed latest version (`qyl-mcp-server@7.2.2` on 2026-10-11), run the pinned Inspector 2.9.0 with modern and legacy configurations against its stdio command in explicit demo mode, and record discovery plus a read result in both eras. Neither the registry version nor the release workflow's CI consumer smoke is this proof. |
 | Public directory statuses | For each of OPENAI_PLUGIN, ANTHROPIC_CONNECTOR and ANTHROPIC_PLUGIN, the owner reads the corresponding portal and records date, record identifier and actual draft/submitted/approved/published state. No portal state is established here. |
 
 ## Directory records
@@ -724,4 +724,5 @@ lockstep to 11.4.0, both npm releases and the production deploy order.
 | Contract 11.4.0 | 2026-10-11: ANcpLua/qyl-api-schema#42 merged as `5699b83`; `bun run compile` printed `emit-contract-revision: sha256:3605ae27d2edf632`; `npm view @ancplua/qyl-api-schema@11.4.0` returns `gitHead` `5699b83510ba6ea61732b0bad13f15afb4e7dc02` with SLSA provenance. |
 | Lockstep | 2026-10-11: before qyl PR #653 merged, `verify` on PR #131 printed `cross-repo contract skew: this repo pins @ancplua/qyl-api-schema 11.4.0, ANcpLua/qyl pins Qyl.Api.Contracts 11.3.1`; after merge `6a0cde7` the rerun passed `verify` including the snapshot test. PR #131 merged as `89be0fd`. |
 | Releases | 2026-10-11: publish runs `38105485890` and `38110188801` printed `+ qyl-mcp-server@7.2.0` and `+ qyl-mcp-server@7.2.1` and `npx consumers passed`; `npm view qyl-mcp-server dist-tags --json` returns `"latest": "7.2.1"`. |
+| Release 7.2.2 | 2026-10-11: #133 merged as `0f9fe4b`; publish run `38112247909` printed `+ qyl-mcp-server@7.2.2` and `npx consumers passed on attempt 4`; `npm view qyl-mcp-server@7.2.2` returns `gitHead` `0f9fe4bbf0787699cad5f8a53564625aa9ec8c7f` with SLSA provenance; Railway deployment `ffe24407` reached `SUCCESS` at 04:40:47Z. |
 | Deploy order | 2026-10-11: qyl-mcp deployment `79b6a48b` logged `contract-revision handshake failed: collector contract revision sha256:382526f13652d18b does not match this server's sha256:3605ae27d2edf632` at 03:27:07Z; after Collector deployment `15e4efe7` reached `SUCCESS` at 03:33:05Z, redeploy `01350460` brought `/healthz` back to `{"status":"ok"}` at 03:47:19Z. |

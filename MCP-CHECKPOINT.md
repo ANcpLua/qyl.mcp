@@ -41,7 +41,7 @@ cover both viewers and both wire eras.
 Point-10 progress checked **2026-10-11**: [PR #121](https://github.com/ANcpLua/qyl.mcp/pull/121)
 merged as `9a84bfe`. The following work is implemented in follow-up
 [PR #130](https://github.com/ANcpLua/qyl.mcp/pull/130), fixes `9ffb4f4` and `ef7727a`,
-and applied to this local branch:
+merged as `71df28b` and shipped in 7.2.2:
 
 - [x] Select the viewer domain per caller using both `clientInfo.name` and
   `User-Agent`, including when the client name is unknown: Claude gets the
@@ -87,15 +87,13 @@ choice. Unknown names can use a recognized UA; only when neither hint is
 recognized are both domain fields omitted, allowing the host's default sandbox.
 Omission alone does not disable the viewer or reject the client.
 
-The shared fixes and documentation are uncommitted working-tree changes on
-`codex/point-10-client-ui-domain` at the end of this handoff edit. The owner
-specified that the receiving agents continue **on this branch, targeting
-#134**, from those existing changes. The no-commit/no-push limit applies to
-this editing session, not permanently to that continuation. The implemented
+The fixes and the corrected documentation are committed on
+`codex/point-10-client-ui-domain`, which also merges `main` through #135; the
+receiving agents continue **on this branch, targeting #136**. The implemented
 items above are complete and must not become duplicate tasks. Observed client
 identifiers and authenticated Claude/ChatGPT rendering still need separate
 owner evidence; synthetic tests establish policy, not production compatibility.
-Release 7.2.2 belongs to #133. This edit changed no release version or dependency.
+Release 7.2.2 (#133) shipped the #130 fix; #134 and #135 corrected the SDK skill.
 
 Toolchain, contract and releases checked **2026-10-11**:
 [PR #126](https://github.com/ANcpLua/qyl.mcp/pull/126) pins Node 24 next to
@@ -103,7 +101,7 @@ Bun 1.4.3 in `mise.toml`, and CI no longer uses `setup-node`. The contract moved
 in lockstep to 11.4.0 (TypeSpec 1.17, revision `sha256:3605ae27d2edf632`):
 Collector [qyl PR #653](https://github.com/ANcpLua/qyl/pull/653) merged as
 `6a0cde7`, consumer [PR #131](https://github.com/ANcpLua/qyl.mcp/pull/131) as
-`89be0fd`. The release workflow published `qyl-mcp-server` 7.2.0 and 7.2.1 with
+`89be0fd`. The release workflow published `qyl-mcp-server` 7.2.0, 7.2.1 and 7.2.2 with
 provenance after clean `npx` consumers passed in both eras. The first 11.4.0
 deploy refused to start until the Collector served the new revision.
 [Dated evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md) records the commands, output and the deploy order this
@@ -120,7 +118,7 @@ with explicit owner fields. Final completion still requires checking the merged
 
 | State | Dated evidence |
 | --- | --- |
-| Split SDK 2.3.1, contract package 11.4.0 (revision `sha256:3605ae27d2edf632`), server source and npm version 7.2.1. | [11.4.0 lockstep and release evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md); [Option-A pins and manifest evidence](docs/evidence/2026-10-08-point-8-options.md); [earlier package inventory](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory). |
+| Split SDK 2.3.1, contract package 11.4.0 (revision `sha256:3605ae27d2edf632`), server source and npm version 7.2.2. | [11.4.0 lockstep and release evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md); [Option-A pins and manifest evidence](docs/evidence/2026-10-08-point-8-options.md); [earlier package inventory](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory). |
 | 11 read-only tools; ten model-facing and app-only `fetch_telemetry`; trace/CI descriptions now include point-8 options. | [Option-A manifest comparison](docs/evidence/2026-10-08-point-8-options.md); earlier inventory retained in step 7. |
 | Incoming native records exclude arguments, `_meta` and result bodies. | [Strict schema source](docs/evidence/2026-10-08-step7.md#native-records) and [regression evidence](MCP-V2-INTEROP-TODO.md#step-1--rules-and-native-call-records). |
 | Build, 337 tests, transport, SDK, lint and project-isolation checks passed locally. | [Step-4 transcript](docs/evidence/2026-10-08-step4.md). The initial OTLP failure and successful fresh-main Collector rerun are both retained. |
@@ -144,14 +142,14 @@ metadata; `npm view qyl-mcp-server version` returned 7.1.1 on 2026-10-08.
 [Exact output](docs/evidence/2026-10-08-step4.md#endpoint).
 These results do not prove the deployed commit, a fresh npm consumer, a real
 client connection or production Events behavior. On 2026-10-11 the registry
-returned `7.2.1`, and the release workflow's clean `npx` consumer smoke passed in
+returned `7.2.1`, then `7.2.2` after #133, and the release workflow's clean `npx` consumer smoke passed in
 both eras ([release evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases)). That is CI evidence, not the
 owner's pinned-Inspector consumer observation.
 
 The active deployment ID and commit were observed read-only in
 [point-6 evidence](docs/evidence/2026-10-08-followup-06.md); recheck that dated
 snapshot before reviewer access. The [2026-10-11 snapshot](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#production-deploy-order)
-records deployment `2c916c88` for `f495bf3`. All five client connections, production Events
+records deployment `2c916c88` for `f495bf3` and the later `ffe24407` for `0f9fe4b` (7.2.2). All five client connections, production Events
 lifecycle and modern request header proof, reviewer account, demo recording, publisher
 identity, targeting, public pages, attestations, submission and publication
 remain in the [owner-action index](MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending)
