@@ -1,5 +1,5 @@
 {
-  "contract_revision": "sha256:d926c3c6ab829cbf",
+  "contract_revision": "sha256:b29439eba28e752b",
   "tools": [
     {
       "name": "ci_log",
@@ -5012,11 +5012,11 @@
           },
           "has_more": {
             "type": "boolean",
-            "description": "Whether more items exist beyond this page. False only when the result is complete."
+            "description": "Whether more items exist beyond this page. False only when the result is complete; `next_cursor` is present exactly when this is true."
           },
           "next_cursor": {
             "type": "string",
-            "description": "Pass as `cursor` to the same tool with the same filters for the next page."
+            "description": "Pass as `cursor` to the same tool with the same filters for the next page. Absent on the last page."
           },
           "error": {
             "type": "object",
@@ -6760,11 +6760,11 @@
           },
           "has_more": {
             "type": "boolean",
-            "description": "Whether more items exist beyond this page. False only when the result is complete."
+            "description": "Whether more items exist beyond this page. False only when the result is complete; `next_cursor` is present exactly when this is true."
           },
           "next_cursor": {
             "type": "string",
-            "description": "Pass as `cursor` to the same tool with the same filters for the next page."
+            "description": "Pass as `cursor` to the same tool with the same filters for the next page. Absent on the last page."
           },
           "error": {
             "type": "object",
@@ -7207,11 +7207,11 @@
           },
           "has_more": {
             "type": "boolean",
-            "description": "Whether more items exist beyond this page. False only when the result is complete."
+            "description": "Whether more items exist beyond this page. False only when the result is complete; `next_cursor` is present exactly when this is true."
           },
           "next_cursor": {
             "type": "string",
-            "description": "Pass as `cursor` to the same tool with the same filters for the next page."
+            "description": "Pass as `cursor` to the same tool with the same filters for the next page. Absent on the last page."
           },
           "error": {
             "type": "object",
@@ -7540,11 +7540,11 @@
           },
           "has_more": {
             "type": "boolean",
-            "description": "Whether more items exist beyond this page. False only when the result is complete."
+            "description": "Whether more items exist beyond this page. False only when the result is complete; `next_cursor` is present exactly when this is true."
           },
           "next_cursor": {
             "type": "string",
-            "description": "Pass as `cursor` to the same tool with the same filters for the next page."
+            "description": "Pass as `cursor` to the same tool with the same filters for the next page. Absent on the last page."
           },
           "annotations": {
             "type": "array",
@@ -8531,11 +8531,11 @@
           },
           "has_more": {
             "type": "boolean",
-            "description": "Whether more items exist beyond this page. False only when the result is complete."
+            "description": "Whether more items exist beyond this page. False only when the result is complete; `next_cursor` is present exactly when this is true."
           },
           "next_cursor": {
             "type": "string",
-            "description": "Pass as `cursor` to the same tool with the same filters for the next page."
+            "description": "Pass as `cursor` to the same tool with the same filters for the next page. Absent on the last page."
           },
           "error": {
             "type": "object",
@@ -9224,7 +9224,7 @@
           },
           "limit": {
             "default": 100,
-            "description": "Page size for trace and log runs.",
+            "description": "Page size for trace and log runs; 100 when omitted.",
             "type": "integer",
             "minimum": 1,
             "maximum": 1000
@@ -10418,6 +10418,7 @@
           },
           "__schema132": {},
           "__schema133": {
+            "description": "Pass back as `cursor` for the next page of the same run. Absent on the last page.",
             "$ref": "#/$defs/__schema134"
           },
           "__schema134": {
@@ -10425,7 +10426,8 @@
             "description": "Opaque pagination cursor. Pass the `next_cursor` of one page to receive the\nnext page of the same query. Its content is not part of the contract and\nmust not be parsed or built by a client."
           },
           "__schema135": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether more items follow this page. `next_cursor` is present exactly when this is true."
           },
           "__schema136": {
             "type": "object",
@@ -10753,10 +10755,12 @@
             "$ref": "#/$defs/__schema124"
           },
           "__schema177": {
+            "description": "Pass back as `cursor` for the next page of the same run. Absent on the last page.",
             "$ref": "#/$defs/__schema134"
           },
           "__schema178": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether more items follow this page. `next_cursor` is present exactly when this is true."
           },
           "__schema179": {
             "type": "object",
@@ -11662,11 +11666,11 @@
           },
           "has_more": {
             "type": "boolean",
-            "description": "Whether more items exist beyond this page. False only when the result is complete."
+            "description": "Whether more items exist beyond this page. False only when the result is complete; `next_cursor` is present exactly when this is true."
           },
           "next_cursor": {
             "type": "string",
-            "description": "Pass as `cursor` to the same tool with the same filters for the next page."
+            "description": "Pass as `cursor` to the same tool with the same filters for the next page. Absent on the last page."
           },
           "error": {
             "type": "object",

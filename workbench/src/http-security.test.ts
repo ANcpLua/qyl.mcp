@@ -83,7 +83,8 @@ test("loopback guard rejects missing or rebound Host headers", async (context) =
     assert.equal(response.status, 403);
     assert.match(response.contentType ?? "", /^application\/problem\+json/);
     assert.deepEqual(JSON.parse(response.body), {
-        type: "about:blank",
+        type: "https://qyl.at/problems/forbidden",
+        code: "forbidden",
         title: "Forbidden",
         status: 403,
         detail: "Requests must use a loopback Host header.",

@@ -211,6 +211,25 @@ real ChatGPT demonstration are separate checks before upload.
 
 ## Release notes
 
+### 7.6.0
+
+- Contract 12.0.0 (`@ancplua/qyl-api-schema` 12.0.0, revision
+  `sha256:b29439eba28e752b`): the server is generated from it and refuses a
+  Collector on another revision, so it deploys only after the Collector serves
+  12.0.0.
+- Every problem the Collector or the workbench reports is RFC 9457 with a
+  `type` URI (`https://qyl.at/problems/<name>`) and a stable `code`. A tool
+  error's code now follows the problem's `code` (`not_found`, `conflict`,
+  `precondition_failed`, `precondition_required`, `collector_unauthorized`,
+  `collector_error`) and falls back to the HTTP status only for a body
+  without one.
+- One page limit on every list: 1 to 1000, 100 when omitted. The workbench
+  reads Collector logs in pages of 1000 following `next_cursor` (up to ten
+  pages, the same bound as before), and its protocol-event page defaults to
+  100. `next_cursor` is absent on the last page.
+- The workbench's HTTP errors no longer carry `X-Request-Id`; no server sent
+  it.
+
 ### 7.5.0
 
 - Write tools, each a separate tool so a host can approve it on its own:

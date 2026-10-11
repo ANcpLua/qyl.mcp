@@ -102,8 +102,23 @@ function savedQuery(overrides: Partial<SavedQuery> = {}): SavedQuery {
   } as SavedQuery;
 }
 
+// Contract 12.0.0 problems name their type URI and stable code; the collector picks both by status.
+const PROBLEM_TYPES: Record<number, [string, string]> = {
+  400: ["validation-failed", "validation_failed"],
+  401: ["unauthorized", "unauthorized"],
+  403: ["forbidden", "forbidden"],
+  404: ["not-found", "not_found"],
+  409: ["conflict", "conflict"],
+  412: ["precondition-failed", "precondition_failed"],
+  428: ["precondition-required", "precondition_required"],
+  500: ["internal-error", "internal_error"],
+  502: ["bad-gateway", "bad_gateway"],
+  503: ["service-unavailable", "service_unavailable"],
+};
+
 function problem(status: number, title: string): Response {
-  return Response.json({ type: "about:blank", title, status }, {
+  const [name, code] = PROBLEM_TYPES[status] ?? ["internal-error", "internal_error"];
+  return Response.json({ type: `https://qyl.at/problems/${name}`, code, title, status }, {
     status, headers: { "content-type": "application/problem+json" },
   });
 }

@@ -302,21 +302,34 @@ export function parseCollectorBody<T>(value: unknown, context: string, schema: z
   return parsed.data;
 }
 
-function normalizeProblemDetails(value: unknown): unknown {
-  const problem = asRecord(value, "error response");
-  if (problem.timestamp === undefined) return problem;
-  return {
-    ...problem,
-    timestamp: canonicalDateTime(problem.timestamp, "error response.timestamp"),
-  };
+function parseProblemDetails(value: unknown): ProblemDetails | undefined {
+  const parsed = ProblemDetailsSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
 }
 
-function parseProblemDetails(value: unknown): ProblemDetails | undefined {
-  try {
-    const parsed = ProblemDetailsSchema.safeParse(normalizeProblemDetails(value));
-    return parsed.success ? parsed.data : undefined;
-  } catch {
-    return undefined;
+// A Contract 12.0.0 problem names its type by a stable `code`, so the tool error code comes from
+// the body first and from the status only for a code this server does not map.
+function codeForProblem(problem: ProblemDetails, status: number): ToolErrorCode {
+  switch (problem.code) {
+    case "not_found":
+      return "not_found";
+    case "unauthorized":
+    case "forbidden":
+      return "collector_unauthorized";
+    case "conflict":
+      return "conflict";
+    case "precondition_failed":
+      return "precondition_failed";
+    case "precondition_required":
+      return "precondition_required";
+    case "internal_error":
+    case "bad_gateway":
+    case "service_unavailable":
+      return "collector_error";
+    case "validation_failed":
+      return "collector_rejected";
+    default:
+      return codeForStatus(status);
   }
 }
 
@@ -430,6 +443,7 @@ async function collectorRequest(
       `collector request failed (${response.status} ${response.statusText}) for ${pathname}`,
       false,
       response.status,
+      codeForProblem(problem, response.status),
     );
   }
 
