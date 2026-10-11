@@ -211,7 +211,7 @@ real ChatGPT demonstration are separate checks before upload.
 
 ## Release notes
 
-### 7.4.0
+### 7.5.0
 
 - Write tools, each a separate tool so a host can approve it on its own:
   `create_annotation` and `update_annotation` (notes on a trace, span or
@@ -225,6 +225,9 @@ real ChatGPT demonstration are separate checks before upload.
   all three, and a call without the scope it needs gets a `403`
   `insufficient_scope` challenge. The Collector key needs the `write` and
   `delete` roles.
+
+### 7.4.0
+
 - Contract package `@ancplua/qyl-api-schema` 11.6.0 (revision
   `sha256:d926c3c6ab829cbf`). The hosted server starts only against a
   Collector built from `Qyl.Api.Contracts` 11.6.0, so the Collector deploys
