@@ -6,7 +6,7 @@
  * server's startup handshake — on a push that changed nothing here.
  *
  * The check itself is older than this file; it lived as inline bash in
- * .github/workflows/ci.yml, which made it unrunnable before pushing. The
+ * CI only, which made it unrunnable before pushing. The
  * documented local gate (install/build/test/smoke/smoke:otlp) was therefore a
  * strict subset of the real one, and the only way to learn you had skewed the
  * pin was to lose a CI run to it. Extracting it is what makes the two gates the

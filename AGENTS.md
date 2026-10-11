@@ -20,8 +20,7 @@ finding is resolved.
 - Judge a PR against the rules in this file and the requirements it touches,
   not against requirements we never adopted. When a rule should change, change
   it here in the same PR and say why.
-- A clean Codex review plus the required CI checks is enough to merge.
-  CodeRabbit is optional.
+- A clean Codex review is enough to merge.
 - Version bumps and deliberate requirement changes are normal work.
 
 ## What must stay true
