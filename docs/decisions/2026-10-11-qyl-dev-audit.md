@@ -128,7 +128,7 @@ Order:
 | SCH-9 | Five list operations return `CursorPage` without a `cursor` parameter | **Contract 11.6.0** |
 | SCH-10 | `@nextLink` on an opaque cursor; `prevCursor` is never served | **Contract 12.0.0**: `@continuationToken`; delete `prevCursor` |
 | SCH-11 | Unused pagination, stream and error templates | **Contract 12.0.0**: delete them |
-| SCH-12 | The runner API has no `@useAuth` and returns a bare array | **Keep**: qyl's runner API binds loopback and rejects non-loopback callers (`QylRunnerApi.cs:43`); one `@doc` sentence records it (#47) |
+| SCH-12 | The runner API has no `@useAuth` and returns a bare array | **Keep**: qyl's runner API binds loopback and rejects a non-loopback remote endpoint or Host on every request, and checks Origin on mutations (`QylRunnerApi.cs:43,265-272`). The `@doc` sentence from #47 is being corrected to say so in the 11.6.0 draft |
 | SCH-13 | `x-otlp-api-key` names the query credential | **Keep** on the wire; roles per QYL-A2 |
 | SCH-14 | `ProblemDetails` carries headers inside the body model | **Contract 12.0.0** |
 | SCH-15 | Mixed operation-id styles for health | **Keep** |
@@ -163,7 +163,7 @@ Order:
 | AT-15 | `public/schemas/9.7.0:2` names the `Qyl.OpenTelemetry.SemanticConventions` repository | **Keep**: a repository name, not a package ID |
 | AT-16 | "does not require Node.js", then `npx` | **Fix**: "the optional stdio MCP server needs Node.js" |
 | AT-17 | The README says Node 24, while `engines` is `>=22.12.0` | **Fix**: pin mise to 24.21.0 (QYL-T3); keep `engines` |
-| AT-18 | Retention is stated as 28 and 30 days | **Fix**: name the scoreboard aggregates |
+| AT-18 | Retention is stated as 28 and 30 days | **Fix**, done (#35): 30 days is the collector's default `QYL_RETENTION_DAYS`, and 28 days is the Chrome UX Report field aggregate. No "scoreboard" exists |
 | AT-19 | "public directory submission is still in preparation" | **Owner** |
 | AT-20 | The Wrangler `compatibility_date` is 2026-07-23 | **Keep** |
 | AT-21 | The redundant `smoke` script | **Fix**: delete it |
@@ -224,7 +224,7 @@ Order:
 |---|---|---|
 | qyl | QYL-S1, S2, S3, S4, S6, S7, S8, C1, C2, C4, C6, C7, C8, A3, A7, A8, A10, T1, T2, T3; also the CLI's unused OpenTelemetry references and the re-pin to Hosting 23.1.0 / SemanticConventions 9.8.0 | #661 (`0a39e46`); 9.1.0 changelog #663 (`b90a83a4`) |
 | qyl | QYL-C3 | #664, in progress |
-| qyl.mcp | MCP-S1, S2, S3, S4, S5, S6, S10, C4, A1, A8; workbench's test-only OpenTelemetry references moved to devDependencies | #140 |
+| qyl.mcp | MCP-S1, S2, S3, S4, S5, S6, S10, C4, A1, A8; workbench's test-only OpenTelemetry references moved to devDependencies | #140 (`455d7a6`); released in 7.3.0 (#141, `e3b697d`); a follow-up error-classification fix in 7.3.1 (#143) |
 | qyl-api-schema | SCH-1, 2, 3, 4, 5, 7, 12, 17 (and the SCH-6 result) | #47 |
 | qyl.at | AT-8 to AT-14, AT-16, AT-18, AT-21 | #35 |
 | qyl.at | AT-17 / SEC-4 | #36 |
