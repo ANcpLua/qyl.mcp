@@ -7,6 +7,11 @@ connectors for agents. New capabilities are welcome, including tools that
 change something, as long as they are honest about what they do, how they
 are authorized, and stay inside qyl's own service.
 
+Before you change a tool, the contract, or a doc in any qyl-dev repo, read
+[the 2026-10-11 audit decisions](docs/decisions/2026-10-11-qyl-dev-audit.md):
+they fix which write tools come next, in which order, and how each known
+finding is resolved.
+
 ## How we review
 
 - Look for concrete regressions: what triggers it, which path is affected and
