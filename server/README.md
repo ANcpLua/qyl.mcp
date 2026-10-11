@@ -173,6 +173,21 @@ real ChatGPT demonstration are separate checks before upload.
 
 ## Release notes
 
+### 7.3.0
+
+- Every failed tool call now carries `structuredContent.error` with a stable
+  `code`, the `message` and `retryable`, next to the unchanged text content and
+  `isError: true`. Codes: `invalid_argument`, `not_found`, `no_project_access`,
+  `collector_unreachable`, `collector_timeout`, `cancelled`,
+  `collector_unauthorized`, `collector_rate_limited`, `collector_rejected`,
+  `collector_error`, `contract_mismatch`, `internal`. Additive: clients that read
+  only the text see no change.
+- `list_metrics` and `get_metric_series` report the page's own `has_more`
+  instead of a hardcoded `false`, so a catalog truncated by `limit` no longer
+  reads as complete.
+- Contract package `@ancplua/qyl-api-schema` stays 11.5.0 (revision
+  `sha256:3605ae27d2edf632`); no Collector change is needed.
+
 ### 7.2.3
 
 - Contract package `@ancplua/qyl-api-schema` 11.5.0. The release changes only
