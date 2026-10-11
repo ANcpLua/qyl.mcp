@@ -51,6 +51,11 @@ export function isRetryableToolError(code: ToolErrorCode): boolean {
 function codeForStatus(status: number): ToolErrorCode {
   if (status === 404) return "not_found";
   if (status === 401 || status === 403) return "collector_unauthorized";
+  // The write routes' answers: a duplicate name or reused retry key, a stale
+  // If-Match etag, and a missing If-Match.
+  if (status === 409) return "conflict";
+  if (status === 412) return "precondition_failed";
+  if (status === 428) return "precondition_required";
   if (status === 429) return "collector_rate_limited";
   if (status >= 500) return "collector_error";
   return "collector_rejected";
@@ -246,6 +251,11 @@ export interface CollectorRequestOptions {
   signal?: AbortSignal;
   /** Host-selected access for the verified caller; never a tool input. */
   access?: CollectorAccess;
+  /**
+   * Contract-named request headers one operation takes, such as `If-Match`.
+   * They never replace the credential or project headers.
+   */
+  headers?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -282,6 +292,16 @@ export function parseCollectorPage<
   }
 }
 
+/**
+ * Validate one whole response body against its generated operation schema,
+ * for the operations that answer with a single resource rather than a page.
+ */
+export function parseCollectorBody<T>(value: unknown, context: string, schema: z.ZodType<T>): T {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) throw contractMismatch(context, parsed.error);
+  return parsed.data;
+}
+
 function normalizeProblemDetails(value: unknown): unknown {
   const problem = asRecord(value, "error response");
   if (problem.timestamp === undefined) return problem;
@@ -307,7 +327,7 @@ function parseProblemDetails(value: unknown): ProblemDetails | undefined {
  */
 async function collectorRequest(
   pathname: string,
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PATCH" | "DELETE",
   params: CollectorQueryParams,
   body: unknown,
   options: CollectorRequestOptions,
@@ -334,6 +354,7 @@ async function collectorRequest(
     : timeout;
   const headers = {
     accept: "application/json",
+    ...options.headers,
     ...collectorHeaders(options.access),
     ...(body === undefined ? {} : { "content-type": "application/json" }),
   };
@@ -369,6 +390,10 @@ async function collectorRequest(
       true,
     );
   }
+
+  // A DELETE answers 204 with no body; the caller's operation decides
+  // whether an empty answer is one its contract allows.
+  if (response.status === 204) return undefined;
 
   let responseBody: unknown;
   try {
@@ -431,6 +456,21 @@ export function collectorPost(
   options: CollectorRequestOptions = {},
 ): Promise<unknown> {
   return collectorRequest(pathname, "POST", {}, body, options);
+}
+
+export function collectorPatch(
+  pathname: string,
+  body: unknown,
+  options: CollectorRequestOptions = {},
+): Promise<unknown> {
+  return collectorRequest(pathname, "PATCH", {}, body, options);
+}
+
+export function collectorDelete(
+  pathname: string,
+  options: CollectorRequestOptions = {},
+): Promise<unknown> {
+  return collectorRequest(pathname, "DELETE", {}, undefined, options);
 }
 
 export function resolveMode(): Promise<Mode> {

@@ -58,7 +58,7 @@ test("the hosted profile requires CIMD, DCR, PKCE, both client methods and issue
   const auth = await loadHostedOAuth(resource);
   assert.deepEqual(auth.extensions, []);
   assert.equal(auth.oauthMetadata.registration_endpoint, `${issuer}oidc/register`);
-  assert.deepEqual(auth.scopesSupported, ["qyl:read"]);
+  assert.deepEqual(auth.scopesSupported, ["qyl:read", "qyl:write", "qyl:delete"]);
 });
 
 test("discovery falls back to OIDC and preserves extension metadata without redirects", async (t) => {
@@ -147,7 +147,8 @@ test("real signed access tokens reach modern MCP tools with zero, one, or both e
     };
     const discovery = await fetch(new Request(`${resource.origin}/.well-known/oauth-protected-resource/mcp`));
     assert.deepEqual(await discovery.json(), {
-      resource: resource.href, authorization_servers: [issuer], scopes_supported: ["qyl:read"],
+      resource: resource.href, authorization_servers: [issuer],
+      scopes_supported: ["qyl:read", "qyl:write", "qyl:delete"],
     });
     for (const subject of ["auth0|interactive-user", "service-client@clients", "enterprise|user"]) {
       const signed = await token({ sub: subject });

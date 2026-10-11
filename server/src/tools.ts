@@ -37,6 +37,7 @@ import {
   summarizeTraceTable,
 } from "./summaries.js";
 import { runTool } from "./request-scope.js";
+import { readSessionAnnotations, readTraceAnnotations } from "./collector-resources.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 import { QYL_MCP_SCOPE } from "./oauth.js";
 import type { QylSpan, QylTrace } from "./wire.js";
@@ -175,6 +176,8 @@ export function registerTelemetryTools(server: McpServer): void {
         "and include_attributes=false omits attribute collections. Trace totals " +
         "are preserved and the summary reports returned and matching counts. " +
         "The root span is omitted when excluded by the filter or cap. " +
+        "It also returns the annotations on the trace and its spans, with the id and " +
+        "etag that update_annotation and delete take. " +
         "display_traces provides the visual waterfall.",
       inputSchema: GetTraceInputSchema,
       outputSchema: compactOutputSchema(GetTraceOutputSchema),
@@ -182,16 +185,22 @@ export function registerTelemetryTools(server: McpServer): void {
       _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: GetTraceInput, ctx: ServerContext): Promise<CallToolResult> =>
-      runTool(ctx, 1, async (scope) => {
+      runTool(ctx, 2, async (scope) => {
         const { trace, mode } = await fetchTrace(args.trace_id, scope.collector);
         await scope.step(`Fetched trace ${args.trace_id} (${trace.span_count} spans)`);
         const projected = projectTrace(trace, args);
-        const output: GetTraceOutput = { trace: projected.trace, mode };
+        const notes = await readTraceAnnotations(args.trace_id, scope);
+        const output: GetTraceOutput = {
+          trace: projected.trace,
+          mode,
+          ...(notes.annotations === undefined ? {} : { annotations: notes.annotations }),
+        };
         const rootExcluded = trace.root_span !== undefined && projected.trace.root_span === undefined;
         const summary = summarizeTrace(projected.trace, mode, rootExcluded) +
           `\nReturned ${projected.trace.spans.length} of ${projected.matchingSpanCount} matching spans ` +
           `(${trace.span_count} total)${args.errors_only ? "; error status only" : ""}.` +
-          (args.include_attributes === false ? " Attribute collections omitted." : "");
+          (args.include_attributes === false ? " Attribute collections omitted." : "") +
+          notes.text;
         return telemetryToolResult(summary, output);
       }),
   );
@@ -205,7 +214,8 @@ export function registerTelemetryTools(server: McpServer): void {
         "with trace/span/error counts, state, and GenAI token usage where present. " +
         "Filters: active_only and a start_time/end_time window (RFC 3339) on the " +
         "session start. Pages: when has_more is true, pass next_cursor as cursor with " +
-        "the same filters for the next page. " +
+        "the same filters for the next page. It also returns the annotations on the " +
+        "listed sessions. " +
         "display_traces accepts a session_id to show that session's traces in the explorer.",
       inputSchema: ListSessionsInputSchema,
       outputSchema: compactOutputSchema(ListSessionsOutputSchema),
@@ -213,7 +223,7 @@ export function registerTelemetryTools(server: McpServer): void {
       _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: ListSessionsInput, ctx: ServerContext): Promise<CallToolResult> =>
-      runTool(ctx, 1, async (scope) => {
+      runTool(ctx, 2, async (scope) => {
         const page = await fetchSessions(
           {
             limit: args.limit ?? 20,
@@ -225,15 +235,17 @@ export function registerTelemetryTools(server: McpServer): void {
           scope.collector,
         );
         await scope.step(`Fetched ${page.sessions.length} session(s)`);
+        const notes = await readSessionAnnotations(page.sessions.map((session) => session.session_id), scope);
         const output: ListSessionsOutput = {
           sessions: page.sessions,
           mode: page.mode,
           has_more: page.hasMore,
           ...(page.nextCursor === undefined ? {} : { next_cursor: page.nextCursor }),
+          ...(notes.annotations === undefined ? {} : { annotations: notes.annotations }),
         };
         const filters = filterNote([args.active_only ? "active only" : undefined, ...windowNote(args)]);
         return telemetryToolResult(
-          summarizeSessions(page.sessions, page.mode, filters) + pageNote(page),
+          summarizeSessions(page.sessions, page.mode, filters) + pageNote(page) + notes.text,
           output,
         );
       }),

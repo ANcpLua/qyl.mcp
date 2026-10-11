@@ -40,3 +40,12 @@ export const PROJECT_HEADER = requiredHeaderName(
   qylOpenApi.components.parameters.ProjectScopeHeader,
   "published Qyl project-scope parameter",
 );
+
+/**
+ * Header carrying the etag a PATCH or DELETE changes (`Common.IfMatchHeader`
+ * parameter): a stale tag is answered 412, a missing one 428.
+ */
+export const IF_MATCH_HEADER = requiredHeaderName(
+  qylOpenApi.components.parameters["Common.IfMatchHeader"],
+  "published Qyl If-Match precondition parameter",
+);

@@ -25,7 +25,7 @@ run = [
 ]
 
 [tasks.hosted-eval]
-description = "The eleven tools against mcp.qyl.at with a token from the Keychain"
+description = "Every tool against mcp.qyl.at with a token from the Keychain"
 run = [
   "tools/hosted-eval/run.sh",
 ]

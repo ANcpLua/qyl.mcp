@@ -34,8 +34,9 @@ export function readAccessConfig(environment: Readonly<Record<string, string | u
 
 /** Access validates the client's opaque OAuth token at the edge. The origin
  * accepts only its signed assertion, including on the direct Railway hostname.
- * Membership of this Access app authorizes the server's read-only tool surface;
- * the assertion does not carry an OAuth client ID or qyl scopes.
+ * Membership of this Access app authorizes the read tools (`qyl:read`); the
+ * assertion carries no OAuth client ID or qyl scopes, so the write tools,
+ * which need `qyl:write` or `qyl:delete`, answer `insufficient_scope` here.
  */
 export function createCloudflareAccessAuth(params: AccessConfig & {
   resource: URL;

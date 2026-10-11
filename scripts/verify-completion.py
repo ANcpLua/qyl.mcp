@@ -92,9 +92,12 @@ def check_native_record(source):
             f"native record must contain only reviewed metadata fields; found {fields}")
 
 
+TOOL_COUNT = 18
+
+
 def check_descriptions(tools):
-    require(len(tools) == 11 and len({t["name"] for t in tools}) == 11,
-            "manifest must describe all 11 distinct tools")
+    require(len(tools) == TOOL_COUNT and len({t["name"] for t in tools}) == TOOL_COUNT,
+            f"manifest must describe all {TOOL_COUNT} distinct tools")
     for tool in tools:
         description = tool.get("description", "")
         require("when the user" in description.lower(), f"{tool['name']}: missing user-need description")
@@ -176,7 +179,7 @@ def audit(root=ROOT):
         f"PASS: {len(REQUIRED_BUNDLE_FILES)} bundle files and {len(REQUIRED_HANDOFF_FILES)} handoff files",
         "PASS: plugin.json and mcp.json validate against submission/schemas (Draft 2020-12)",
         f"PASS: README {words} words outside code blocks (minimum 40)",
-        "PASS: all 11 tool descriptions state user need without model instructions",
+        f"PASS: all {TOOL_COUNT} tool descriptions state user need without model instructions",
         "PASS: strict native record contains only reviewed metadata; no arguments/_meta",
         "PASS: ledger has no not-recorded table rows",
         f"PASS: {links} local documentation/evidence links and heading anchors resolve",

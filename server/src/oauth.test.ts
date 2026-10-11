@@ -8,8 +8,10 @@ import {
 } from "jose";
 import { hostedAuth, readStreamableHTTPConfig } from "./main.js";
 import {
+  QYL_MCP_DELETE_SCOPE,
   QYL_MCP_ISSUER,
   QYL_MCP_SCOPE,
+  QYL_MCP_WRITE_SCOPE,
   createJwtTokenVerifier,
   loadHostedOAuth,
 } from "./oauth.js";
@@ -51,11 +53,12 @@ test("a reachable deployment cannot start without the public URL that builds the
   );
 });
 
-test("hosted OAuth requires and advertises read access only", async () => {
+test("hosted OAuth requires read access and advertises the write and delete scopes", async () => {
   await withMockFetch(authMetadata(), async () => {
     const oauth = await loadHostedOAuth(resource);
     assert.deepEqual(oauth.requiredScopes, [QYL_MCP_SCOPE]);
-    assert.deepEqual(oauth.scopesSupported, [QYL_MCP_SCOPE]);
+    assert.deepEqual(oauth.scopesSupported, [QYL_MCP_SCOPE, QYL_MCP_WRITE_SCOPE, QYL_MCP_DELETE_SCOPE]);
+    assert.deepEqual(oauth.scopesSupported, ["qyl:read", "qyl:write", "qyl:delete"]);
     assert.equal(oauth.oauthMetadata.issuer, issuer);
   });
 });

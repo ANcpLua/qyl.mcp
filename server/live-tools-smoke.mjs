@@ -3,8 +3,10 @@
  *
  * Starts the installed `qyl` tool (`qyl up`) with a hard timeout, sends OTLP/JSON
  * traces, logs and metrics to its receiver, then drives `dist/main.js --stdio`
- * in live mode through the MCP client and calls all eleven tools, then repeats
- * tools/list and one call over Streamable HTTP against a second process. Prints one
+ * in live mode through the MCP client and calls every tool — the write tools
+ * through one annotation and one saved query it creates, changes and deletes
+ * again — then repeats tools/list and one call over Streamable HTTP against a
+ * second process. The Collector must serve Contract 11.6.0. Prints one
  * line per tool with isError, the structured-content keys and the first
  * numbers that matter, so a reader can judge "useful" as well as "works".
  *
@@ -116,7 +118,7 @@ const call = async (name, args) => { const r = await client.callTool({ name, arg
 try {
   await client.connect(transport);
   const { tools } = await client.listTools();
-  ok("11 tools listed", tools.length === 11, tools.map((t) => t.name).join(","));
+  ok("18 tools listed", tools.length === 18, tools.map((t) => t.name).join(","));
   const windowArgs = { start_time: new Date(Date.now() - 3_600_000).toISOString(), end_time: new Date(Date.now() + 60_000).toISOString() };
 
   let r = await call("list_traces", { limit: 20 });
@@ -149,6 +151,40 @@ try {
   ok("display_mcp_dashboard aggregates the mcp.method.name span", !r.isError && JSON.stringify(r.structuredContent ?? r).includes("tools/call"));
   r = await call("fetch_telemetry", { view: "traces", limit: 5 });
   ok("fetch_telemetry (app plumbing) answers", !r.isError);
+
+  // ------------------------------------------------------------ write tools
+  // Local stdio has no OAuth: the Collector key decides what may change. Each
+  // object the smoke creates is deleted again; the telemetry stays as sent.
+  r = await call("create_annotation", { target: { kind: "trace", trace_id: traceId }, text: "live smoke note" });
+  const note = r.structuredContent?.annotation;
+  ok("create_annotation attaches a note to the smoke trace", !r.isError && note?.target?.trace_id === traceId, summary(r));
+  r = await call("get_trace", { trace_id: traceId });
+  ok("get_trace reads the note back", JSON.stringify(r.structuredContent?.annotations ?? []).includes("live smoke note"));
+  r = await call("update_annotation", { id: note?.id, etag: note?.etag, text: "live smoke note, edited" });
+  const edited = r.structuredContent?.annotation;
+  ok("update_annotation replaces the text and moves the etag", !r.isError && edited?.etag !== note?.etag, summary(r));
+  r = await call("update_annotation", { id: note?.id, etag: note?.etag, text: "stale" });
+  ok("a stale etag is refused as precondition_failed", r.structuredContent?.error?.code === "precondition_failed", summary(r));
+  const queryName = `${sessionId}-query`;
+  r = await call("create_saved_query", { name: queryName, filter: { signal: "traces", lookback_minutes: 60 } });
+  const saved = r.structuredContent?.saved_query;
+  ok("create_saved_query stores a trace filter", !r.isError && saved?.name === queryName, summary(r));
+  r = await call("create_saved_query", { name: queryName, filter: { signal: "traces" } });
+  ok("a duplicate name is refused as conflict", r.structuredContent?.error?.code === "conflict", summary(r));
+  r = await call("list_saved_queries", { signal: "traces" });
+  ok("list_saved_queries lists it", JSON.stringify(r.structuredContent ?? r).includes(saved?.id ?? "missing"));
+  r = await call("run_saved_query", { id: saved?.id });
+  ok("run_saved_query finds the smoke trace", !r.isError && JSON.stringify(r.structuredContent ?? r).includes(traceId), summary(r));
+  r = await call("delete", { kind: "saved_query", id: saved?.id, etag: saved?.etag });
+  ok("delete removes the saved query", r.structuredContent?.deleted === true, summary(r));
+  r = await call("delete", { kind: "annotation", id: edited?.id, etag: edited?.etag });
+  ok("delete removes the annotation", r.structuredContent?.deleted === true, summary(r));
+  r = await call("get_trace", { trace_id: traceId });
+  ok(
+    "the trace is unchanged by every write and its annotations are gone",
+    !r.isError && (r.structuredContent?.trace?.spans?.length ?? 0) >= 2 && (r.structuredContent?.annotations ?? []).length === 0,
+    summary(r),
+  );
 
   // ------------------------------------------------------------ HTTP transport
   const port = 3000 + Math.floor(Math.random() * 3000);

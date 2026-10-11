@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { LOG_LEVEL_META_KEY } from "@modelcontextprotocol/client";
 import { connectModernTestClient, type ModernTestClient } from "./modern-test-client.test-helper.js";
+import { getDemo } from "./demo.js";
 import { createServer } from "./server.js";
 
 interface ProgressUpdate {
@@ -87,7 +88,6 @@ test("every one-round-trip tool reports the round trip and the final step", asyn
     try {
       const calls: Array<{ name: string; arguments: Record<string, unknown>; first: RegExp }> = [
         { name: "list_traces", arguments: { limit: 3 }, first: /^Fetched \d+ trace\(s\)$/u },
-        { name: "list_sessions", arguments: {}, first: /^Fetched \d+ session\(s\)$/u },
         { name: "search_logs", arguments: { limit: 5 }, first: /^Fetched \d+ log record\(s\)$/u },
         { name: "ci_log", arguments: {}, first: /^Found \d+ CI run\(s\) among \d+ session\(s\)$/u },
         { name: "list_metrics", arguments: {}, first: /^Fetched \d+ metric instrument\(s\)$/u },
@@ -111,6 +111,33 @@ test("every one-round-trip tool reports the round trip and the final step", asyn
         assert.deepEqual(updates.map((update) => update.total), [2, 2], call.name);
         assert.match(updates[0]!.message ?? "", call.first, call.name);
         assert.equal(updates[1]!.message, "Result ready", call.name);
+      }
+    } finally {
+      await connection.close();
+    }
+  });
+});
+
+test("get_trace and list_sessions report the annotation read-back as a step of its own", async () => {
+  await withEnv({ QYL_DEMO: "1" }, async () => {
+    const connection = await demoConnection();
+    try {
+      const calls: Array<{ name: string; arguments: Record<string, unknown>; first: RegExp }> = [
+        { name: "list_sessions", arguments: {}, first: /^Fetched \d+ session\(s\)$/u },
+        { name: "get_trace", arguments: { trace_id: getDemo().traces[0]!.trace_id }, first: /^Fetched trace [0-9a-f]{32} \(\d+ spans\)$/u },
+      ];
+      for (const call of calls) {
+        const updates: ProgressUpdate[] = [];
+        const result = await connection.client.callTool(
+          { name: call.name, arguments: call.arguments },
+          { onprogress: (update) => void updates.push(update) },
+        );
+        assert.equal(result.isError, undefined, call.name);
+        assert.deepEqual(updates.map((update) => update.progress), [1, 2, 3], call.name);
+        assert.deepEqual(updates.map((update) => update.total), [3, 3, 3], call.name);
+        assert.match(updates[0]!.message ?? "", call.first, call.name);
+        assert.equal(updates[1]!.message, "Demo data carries no annotations", call.name);
+        assert.equal(updates[2]!.message, "Result ready", call.name);
       }
     } finally {
       await connection.close();

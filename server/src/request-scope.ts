@@ -26,6 +26,7 @@ import {
 } from "./collector.js";
 import { CollectorAccessError, collectorAccessForSubject } from "./collector-access.js";
 import { redactTelemetryText } from "./telemetry-redaction.js";
+import { InsufficientScopeError, WWW_AUTHENTICATE_META_KEY } from "./tool-scopes.js";
 
 /** What a tool's work receives: collector options and a progress step. */
 export interface ToolScope {
@@ -55,6 +56,9 @@ export function describeToolError(err: unknown): ToolErrorDetail {
   if (err instanceof CollectorAccessError) {
     return { code: "no_project_access", message: err.message, retryable: false };
   }
+  if (err instanceof InsufficientScopeError) {
+    return { code: "insufficient_scope", message: err.message, retryable: false };
+  }
   return { code: "internal", message: "Telemetry request failed.", retryable: false };
 }
 
@@ -71,6 +75,10 @@ export function toolError(err: unknown): CallToolResult {
     content: [{ type: "text", text: message }],
     structuredContent: { error: { code: detail.code, message, retryable: detail.retryable } },
     isError: true,
+    // The challenge a client answers with step-up authorization (tool-scopes.ts).
+    ...(err instanceof InsufficientScopeError
+      ? { _meta: { [WWW_AUTHENTICATE_META_KEY]: [err.challenge] } }
+      : {}),
   };
 }
 

@@ -220,6 +220,1141 @@
       }
     },
     {
+      "name": "create_annotation",
+      "title": "Create Annotation",
+      "description": "Attach a plain-text note of at most 2000 characters to a trace, a span or a session in the user's qyl project when the user wants to record a finding next to the telemetry. The note leaves the telemetry it points at unchanged; get_trace and list_sessions return it with its id and etag. Each call adds a new annotation.",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read",
+              "qyl:write"
+            ]
+          }
+        ]
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "target": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "trace"
+                  },
+                  "trace_id": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 32,
+                    "pattern": "^[a-f0-9]{32}$",
+                    "examples": [
+                      "0af7651916cd43dd8448eb211c80319c"
+                    ],
+                    "description": "Unique trace identifier (32 lowercase hex characters)"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "trace_id"
+                ],
+                "additionalProperties": false,
+                "description": "An annotation on one whole trace."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "span"
+                  },
+                  "trace_id": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 32,
+                    "pattern": "^[a-f0-9]{32}$",
+                    "examples": [
+                      "0af7651916cd43dd8448eb211c80319c"
+                    ],
+                    "description": "Unique trace identifier (32 lowercase hex characters)"
+                  },
+                  "span_id": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 16,
+                    "pattern": "^[a-f0-9]{16}$",
+                    "examples": [
+                      "b7ad6b7169203331"
+                    ],
+                    "description": "Unique span identifier (16 lowercase hex characters)"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "trace_id",
+                  "span_id"
+                ],
+                "additionalProperties": false,
+                "description": "An annotation on one span of a trace."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "session"
+                  },
+                  "session_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
+                    "description": "Unique session identifier: URL-safe characters, at least one, at most 128, not only dots. The same rule the SDK enforces on the baggage header."
+                  }
+                },
+                "required": [
+                  "kind",
+                  "session_id"
+                ],
+                "additionalProperties": false,
+                "description": "An annotation on one session."
+              }
+            ],
+            "description": "What the note is attached to. Fixed at creation."
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "The note, plain text, at most 2000 characters."
+          }
+        },
+        "required": [
+          "target",
+          "text"
+        ],
+        "additionalProperties": false,
+        "description": "Input for create_annotation."
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "annotation": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "readOnly": true,
+                "description": "Server-assigned identifier.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "created_at": {
+                "readOnly": true,
+                "description": "When the resource was created.",
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "updated_at": {
+                "readOnly": true,
+                "description": "When the resource was last changed.",
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "etag": {
+                "readOnly": true,
+                "description": "Entity tag of this version; also served as the `ETag` response header.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "target": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "trace"
+                      },
+                      "trace_id": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[a-f0-9]{32}$",
+                        "examples": [
+                          "0af7651916cd43dd8448eb211c80319c"
+                        ],
+                        "description": "Unique trace identifier (32 lowercase hex characters)"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "trace_id"
+                    ],
+                    "additionalProperties": false,
+                    "description": "An annotation on one whole trace."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "span"
+                      },
+                      "trace_id": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[a-f0-9]{32}$",
+                        "examples": [
+                          "0af7651916cd43dd8448eb211c80319c"
+                        ],
+                        "description": "Unique trace identifier (32 lowercase hex characters)"
+                      },
+                      "span_id": {
+                        "type": "string",
+                        "minLength": 16,
+                        "maxLength": 16,
+                        "pattern": "^[a-f0-9]{16}$",
+                        "examples": [
+                          "b7ad6b7169203331"
+                        ],
+                        "description": "Unique span identifier (16 lowercase hex characters)"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "trace_id",
+                      "span_id"
+                    ],
+                    "additionalProperties": false,
+                    "description": "An annotation on one span of a trace."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "session"
+                      },
+                      "session_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128,
+                        "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
+                        "description": "Unique session identifier: URL-safe characters, at least one, at most 128, not only dots. The same rule the SDK enforces on the baggage header."
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "session_id"
+                    ],
+                    "additionalProperties": false,
+                    "description": "An annotation on one session."
+                  }
+                ],
+                "description": "What the note is attached to. Fixed at creation."
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000,
+                "description": "The note, plain text, at most 2000 characters."
+              }
+            },
+            "required": [
+              "id",
+              "created_at",
+              "updated_at",
+              "etag",
+              "target",
+              "text"
+            ],
+            "additionalProperties": false,
+            "description": "A user note attached to a trace, span or session."
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_argument",
+                  "not_found",
+                  "no_project_access",
+                  "collector_unreachable",
+                  "collector_timeout",
+                  "cancelled",
+                  "collector_unauthorized",
+                  "collector_rate_limited",
+                  "collector_rejected",
+                  "collector_error",
+                  "contract_mismatch",
+                  "insufficient_scope",
+                  "conflict",
+                  "precondition_failed",
+                  "precondition_required",
+                  "internal"
+                ],
+                "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description of this failure."
+              },
+              "retryable": {
+                "type": "boolean",
+                "description": "Whether the same call can succeed when repeated unchanged."
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Structured output for create_annotation and update_annotation."
+      }
+    },
+    {
+      "name": "create_saved_query",
+      "title": "Create Saved Query",
+      "description": "Save a named filter for traces, logs or metrics in the user's qyl project when the user wants to ask the same question again later. Names are unique per project. Only the filter is stored, never results; run_saved_query evaluates it against the telemetry of that moment.",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read",
+              "qyl:write"
+            ]
+          }
+        ]
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Unique within the project; a duplicate is refused with 409."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "filter": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "signal": {
+                    "type": "string",
+                    "const": "traces"
+                  },
+                  "lookback_minutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 43200,
+                    "description": "Window ending at the time of the run, in minutes. Omitted, the run's own `start_time`/`end_time` or the last 60 minutes apply."
+                  },
+                  "service_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "errors_only": {
+                    "type": "boolean",
+                    "description": "Keep only traces with at least one error span."
+                  }
+                },
+                "required": [
+                  "signal"
+                ],
+                "additionalProperties": false,
+                "description": "A saved filter over traces."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "signal": {
+                    "type": "string",
+                    "const": "logs"
+                  },
+                  "lookback_minutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 43200,
+                    "description": "Window ending at the time of the run, in minutes. Omitted, the run's own `start_time`/`end_time` or the last 60 minutes apply."
+                  },
+                  "service_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "severity_min": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "const": 0
+                      },
+                      {
+                        "type": "number",
+                        "const": 1
+                      },
+                      {
+                        "type": "number",
+                        "const": 2
+                      },
+                      {
+                        "type": "number",
+                        "const": 3
+                      },
+                      {
+                        "type": "number",
+                        "const": 4
+                      },
+                      {
+                        "type": "number",
+                        "const": 5
+                      },
+                      {
+                        "type": "number",
+                        "const": 6
+                      },
+                      {
+                        "type": "number",
+                        "const": 7
+                      },
+                      {
+                        "type": "number",
+                        "const": 8
+                      },
+                      {
+                        "type": "number",
+                        "const": 9
+                      },
+                      {
+                        "type": "number",
+                        "const": 10
+                      },
+                      {
+                        "type": "number",
+                        "const": 11
+                      },
+                      {
+                        "type": "number",
+                        "const": 12
+                      },
+                      {
+                        "type": "number",
+                        "const": 13
+                      },
+                      {
+                        "type": "number",
+                        "const": 14
+                      },
+                      {
+                        "type": "number",
+                        "const": 15
+                      },
+                      {
+                        "type": "number",
+                        "const": 16
+                      },
+                      {
+                        "type": "number",
+                        "const": 17
+                      },
+                      {
+                        "type": "number",
+                        "const": 18
+                      },
+                      {
+                        "type": "number",
+                        "const": 19
+                      },
+                      {
+                        "type": "number",
+                        "const": 20
+                      },
+                      {
+                        "type": "number",
+                        "const": 21
+                      },
+                      {
+                        "type": "number",
+                        "const": 22
+                      },
+                      {
+                        "type": "number",
+                        "const": 23
+                      },
+                      {
+                        "type": "number",
+                        "const": 24
+                      }
+                    ],
+                    "description": "Log severity number following OTel specification (1-24)"
+                  },
+                  "session_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
+                    "description": "Unique session identifier: URL-safe characters, at least one, at most 128, not only dots. The same rule the SDK enforces on the baggage header."
+                  },
+                  "trace_id": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 32,
+                    "pattern": "^[a-f0-9]{32}$",
+                    "examples": [
+                      "0af7651916cd43dd8448eb211c80319c"
+                    ],
+                    "description": "Unique trace identifier (32 lowercase hex characters)"
+                  },
+                  "query": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024,
+                    "description": "Substring searched in the log body."
+                  }
+                },
+                "required": [
+                  "signal"
+                ],
+                "additionalProperties": false,
+                "description": "A saved filter over log records."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "signal": {
+                    "type": "string",
+                    "const": "metrics"
+                  },
+                  "lookback_minutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 43200,
+                    "description": "Window ending at the time of the run, in minutes. Omitted, the run's own `start_time`/`end_time` or the last 60 minutes apply."
+                  },
+                  "metric_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "aggregation": {
+                    "default": "avg",
+                    "type": "string",
+                    "enum": [
+                      "avg",
+                      "min",
+                      "max",
+                      "sum",
+                      "count",
+                      "last",
+                      "p50",
+                      "p90",
+                      "p95",
+                      "p99"
+                    ],
+                    "description": "Server-side reducer applied to the points falling in one time bucket."
+                  },
+                  "step_ms": {
+                    "default": 60000,
+                    "description": "Bucket width in integer milliseconds.",
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 86400000,
+                    "multipleOf": 1
+                  },
+                  "group_by": {
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Attribute keys to split the result by."
+                  },
+                  "matchers": {
+                    "maxItems": 32,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256,
+                          "description": "Attribute key, e.g. `http.route`."
+                        },
+                        "op": {
+                          "type": "string",
+                          "enum": [
+                            "eq",
+                            "prefix"
+                          ],
+                          "description": "How a structured attribute matcher compares an attribute value."
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 1024
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "op",
+                        "value"
+                      ],
+                      "additionalProperties": false,
+                      "description": "One structured attribute matcher. Tool inputs and saved queries carry\nmatchers in this form; the HTTP routes keep their `key=value` string\nparameters, and a client serializes each matcher to one of them."
+                    },
+                    "description": "Attribute matchers a series must all satisfy."
+                  }
+                },
+                "required": [
+                  "signal",
+                  "metric_name"
+                ],
+                "additionalProperties": false,
+                "description": "A saved metric range query."
+              }
+            ],
+            "description": "Exactly one structured filter; `signal` selects which."
+          }
+        },
+        "required": [
+          "name",
+          "filter"
+        ],
+        "additionalProperties": false,
+        "description": "Input for create_saved_query."
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "saved_query": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "readOnly": true,
+                "description": "Server-assigned identifier.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "created_at": {
+                "readOnly": true,
+                "description": "When the resource was created.",
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "updated_at": {
+                "readOnly": true,
+                "description": "When the resource was last changed.",
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "etag": {
+                "readOnly": true,
+                "description": "Entity tag of this version; also served as the `ETag` response header.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Unique within the project; a duplicate is refused with 409."
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "filter": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "signal": {
+                        "type": "string",
+                        "const": "traces"
+                      },
+                      "lookback_minutes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 43200,
+                        "description": "Window ending at the time of the run, in minutes. Omitted, the run's own `start_time`/`end_time` or the last 60 minutes apply."
+                      },
+                      "service_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "errors_only": {
+                        "type": "boolean",
+                        "description": "Keep only traces with at least one error span."
+                      }
+                    },
+                    "required": [
+                      "signal"
+                    ],
+                    "additionalProperties": false,
+                    "description": "A saved filter over traces."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "signal": {
+                        "type": "string",
+                        "const": "logs"
+                      },
+                      "lookback_minutes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 43200,
+                        "description": "Window ending at the time of the run, in minutes. Omitted, the run's own `start_time`/`end_time` or the last 60 minutes apply."
+                      },
+                      "service_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "severity_min": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "const": 0
+                          },
+                          {
+                            "type": "number",
+                            "const": 1
+                          },
+                          {
+                            "type": "number",
+                            "const": 2
+                          },
+                          {
+                            "type": "number",
+                            "const": 3
+                          },
+                          {
+                            "type": "number",
+                            "const": 4
+                          },
+                          {
+                            "type": "number",
+                            "const": 5
+                          },
+                          {
+                            "type": "number",
+                            "const": 6
+                          },
+                          {
+                            "type": "number",
+                            "const": 7
+                          },
+                          {
+                            "type": "number",
+                            "const": 8
+                          },
+                          {
+                            "type": "number",
+                            "const": 9
+                          },
+                          {
+                            "type": "number",
+                            "const": 10
+                          },
+                          {
+                            "type": "number",
+                            "const": 11
+                          },
+                          {
+                            "type": "number",
+                            "const": 12
+                          },
+                          {
+                            "type": "number",
+                            "const": 13
+                          },
+                          {
+                            "type": "number",
+                            "const": 14
+                          },
+                          {
+                            "type": "number",
+                            "const": 15
+                          },
+                          {
+                            "type": "number",
+                            "const": 16
+                          },
+                          {
+                            "type": "number",
+                            "const": 17
+                          },
+                          {
+                            "type": "number",
+                            "const": 18
+                          },
+                          {
+                            "type": "number",
+                            "const": 19
+                          },
+                          {
+                            "type": "number",
+                            "const": 20
+                          },
+                          {
+                            "type": "number",
+                            "const": 21
+                          },
+                          {
+                            "type": "number",
+                            "const": 22
+                          },
+                          {
+                            "type": "number",
+                            "const": 23
+                          },
+                          {
+                            "type": "number",
+                            "const": 24
+                          }
+                        ],
+                        "description": "Log severity number following OTel specification (1-24)"
+                      },
+                      "session_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128,
+                        "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
+                        "description": "Unique session identifier: URL-safe characters, at least one, at most 128, not only dots. The same rule the SDK enforces on the baggage header."
+                      },
+                      "trace_id": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[a-f0-9]{32}$",
+                        "examples": [
+                          "0af7651916cd43dd8448eb211c80319c"
+                        ],
+                        "description": "Unique trace identifier (32 lowercase hex characters)"
+                      },
+                      "query": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1024,
+                        "description": "Substring searched in the log body."
+                      }
+                    },
+                    "required": [
+                      "signal"
+                    ],
+                    "additionalProperties": false,
+                    "description": "A saved filter over log records."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "signal": {
+                        "type": "string",
+                        "const": "metrics"
+                      },
+                      "lookback_minutes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 43200,
+                        "description": "Window ending at the time of the run, in minutes. Omitted, the run's own `start_time`/`end_time` or the last 60 minutes apply."
+                      },
+                      "metric_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "aggregation": {
+                        "default": "avg",
+                        "type": "string",
+                        "enum": [
+                          "avg",
+                          "min",
+                          "max",
+                          "sum",
+                          "count",
+                          "last",
+                          "p50",
+                          "p90",
+                          "p95",
+                          "p99"
+                        ],
+                        "description": "Server-side reducer applied to the points falling in one time bucket."
+                      },
+                      "step_ms": {
+                        "default": 60000,
+                        "description": "Bucket width in integer milliseconds.",
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": 86400000,
+                        "multipleOf": 1
+                      },
+                      "group_by": {
+                        "maxItems": 16,
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Attribute keys to split the result by."
+                      },
+                      "matchers": {
+                        "maxItems": 32,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256,
+                              "description": "Attribute key, e.g. `http.route`."
+                            },
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "eq",
+                                "prefix"
+                              ],
+                              "description": "How a structured attribute matcher compares an attribute value."
+                            },
+                            "value": {
+                              "type": "string",
+                              "maxLength": 1024
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "op",
+                            "value"
+                          ],
+                          "additionalProperties": false,
+                          "description": "One structured attribute matcher. Tool inputs and saved queries carry\nmatchers in this form; the HTTP routes keep their `key=value` string\nparameters, and a client serializes each matcher to one of them."
+                        },
+                        "description": "Attribute matchers a series must all satisfy."
+                      }
+                    },
+                    "required": [
+                      "signal",
+                      "metric_name"
+                    ],
+                    "additionalProperties": false,
+                    "description": "A saved metric range query."
+                  }
+                ],
+                "description": "Exactly one structured filter; `signal` selects which."
+              }
+            },
+            "required": [
+              "id",
+              "created_at",
+              "updated_at",
+              "etag",
+              "name",
+              "filter"
+            ],
+            "additionalProperties": false,
+            "description": "A named filter for traces, logs or metrics, owned by one project."
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_argument",
+                  "not_found",
+                  "no_project_access",
+                  "collector_unreachable",
+                  "collector_timeout",
+                  "cancelled",
+                  "collector_unauthorized",
+                  "collector_rate_limited",
+                  "collector_rejected",
+                  "collector_error",
+                  "contract_mismatch",
+                  "insufficient_scope",
+                  "conflict",
+                  "precondition_failed",
+                  "precondition_required",
+                  "internal"
+                ],
+                "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description of this failure."
+              },
+              "retryable": {
+                "type": "boolean",
+                "description": "Whether the same call can succeed when repeated unchanged."
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Structured output for create_saved_query and update_saved_query."
+      }
+    },
+    {
+      "name": "delete",
+      "title": "Delete Annotation or Saved Query",
+      "description": "Delete one annotation or saved query by id when the user asks to remove it. Pass its current etag; a stale etag is refused instead of deleting a newer version. It deletes only objects users created in qyl, never traces, logs or metrics: retention removes telemetry.",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read",
+              "qyl:delete"
+            ]
+          }
+        ]
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "annotation",
+              "saved_query"
+            ],
+            "description": "The user-created resource kinds the delete tool accepts."
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Opaque, server-assigned identifier of a user-created collector resource."
+          },
+          "etag": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "The resource's current `etag`, sent as If-Match."
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "etag"
+        ],
+        "additionalProperties": false,
+        "description": "Input for the delete tool. Telemetry is never deletable."
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_argument",
+                  "not_found",
+                  "no_project_access",
+                  "collector_unreachable",
+                  "collector_timeout",
+                  "cancelled",
+                  "collector_unauthorized",
+                  "collector_rate_limited",
+                  "collector_rejected",
+                  "collector_error",
+                  "contract_mismatch",
+                  "insufficient_scope",
+                  "conflict",
+                  "precondition_failed",
+                  "precondition_required",
+                  "internal"
+                ],
+                "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description of this failure."
+              },
+              "retryable": {
+                "type": "boolean",
+                "description": "Whether the same call can succeed when repeated unchanged."
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "additionalProperties": false,
+        "description": "Structured output for the delete tool."
+      }
+    },
+    {
       "name": "display_mcp_dashboard",
       "title": "MCP Dashboard",
       "description": "Show an aggregate dashboard of MCP traffic (spans carrying an `mcp.method.name` attribute): request/error timeline, per-server and per-transport breakdowns, and per-tool latency and error rates. Useful when the user wants to inspect MCP usage or tool health over a time window.",
@@ -4078,7 +5213,7 @@
     {
       "name": "get_trace",
       "title": "Get Trace",
-      "description": "Fetch a single qyl trace by trace_id when the user wants span timing, events, status, and attributes. By default returns all spans; errors_only keeps error spans, max_spans caps them after filtering in Collector order, and include_attributes=false omits attribute collections. Trace totals are preserved and the summary reports returned and matching counts. The root span is omitted when excluded by the filter or cap. display_traces provides the visual waterfall.",
+      "description": "Fetch a single qyl trace by trace_id when the user wants span timing, events, status, and attributes. By default returns all spans; errors_only keeps error spans, max_spans caps them after filtering in Collector order, and include_attributes=false omits attribute collections. Trace totals are preserved and the summary reports returned and matching counts. The root span is omitted when excluded by the filter or cap. It also returns the annotations on the trace and its spans, with the id and etag that update_annotation and delete take. display_traces provides the visual waterfall.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -5683,9 +6818,456 @@
       }
     },
     {
+      "name": "list_saved_queries",
+      "title": "List Saved Queries",
+      "description": "List the saved queries in the user's qyl project by name when the user wants to find a stored question to run, change or delete, optionally only those for traces, logs or metrics. Each entry carries its id, etag and filter; pass next_cursor as cursor for the next page.",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read"
+            ]
+          }
+        ]
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "signal": {
+            "type": "string",
+            "enum": [
+              "traces",
+              "logs",
+              "metrics"
+            ],
+            "description": "The telemetry signal a saved query reads."
+          },
+          "limit": {
+            "default": 20,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Opaque pagination cursor. Pass the `next_cursor` of one page to receive the\nnext page of the same query. Its content is not part of the contract and\nmust not be parsed or built by a client."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Input for list_saved_queries."
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "saved_queries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "readOnly": true,
+                  "description": "Server-assigned identifier.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "created_at": {
+                  "readOnly": true,
+                  "description": "When the resource was created.",
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                "updated_at": {
+                  "readOnly": true,
+                  "description": "When the resource was last changed.",
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                "etag": {
+                  "readOnly": true,
+                  "description": "Entity tag of this version; also served as the `ETag` response header.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "description": "Unique within the project; a duplicate is refused with 409."
+                },
+                "description": {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                "filter": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "signal": {
+                          "type": "string",
+                          "const": "traces"
+                        },
+                        "lookback_minutes": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 43200,
+                          "description": "Window ending at the time of the run, in minutes. Omitted, the run's own `start_time`/`end_time` or the last 60 minutes apply."
+                        },
+                        "service_name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "errors_only": {
+                          "type": "boolean",
+                          "description": "Keep only traces with at least one error span."
+                        }
+                      },
+                      "required": [
+                        "signal"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A saved filter over traces."
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "signal": {
+                          "type": "string",
+                          "const": "logs"
+                        },
+                        "lookback_minutes": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 43200,
+                          "description": "Window ending at the time of the run, in minutes. Omitted, the run's own `start_time`/`end_time` or the last 60 minutes apply."
+                        },
+                        "service_name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "severity_min": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "const": 0
+                            },
+                            {
+                              "type": "number",
+                              "const": 1
+                            },
+                            {
+                              "type": "number",
+                              "const": 2
+                            },
+                            {
+                              "type": "number",
+                              "const": 3
+                            },
+                            {
+                              "type": "number",
+                              "const": 4
+                            },
+                            {
+                              "type": "number",
+                              "const": 5
+                            },
+                            {
+                              "type": "number",
+                              "const": 6
+                            },
+                            {
+                              "type": "number",
+                              "const": 7
+                            },
+                            {
+                              "type": "number",
+                              "const": 8
+                            },
+                            {
+                              "type": "number",
+                              "const": 9
+                            },
+                            {
+                              "type": "number",
+                              "const": 10
+                            },
+                            {
+                              "type": "number",
+                              "const": 11
+                            },
+                            {
+                              "type": "number",
+                              "const": 12
+                            },
+                            {
+                              "type": "number",
+                              "const": 13
+                            },
+                            {
+                              "type": "number",
+                              "const": 14
+                            },
+                            {
+                              "type": "number",
+                              "const": 15
+                            },
+                            {
+                              "type": "number",
+                              "const": 16
+                            },
+                            {
+                              "type": "number",
+                              "const": 17
+                            },
+                            {
+                              "type": "number",
+                              "const": 18
+                            },
+                            {
+                              "type": "number",
+                              "const": 19
+                            },
+                            {
+                              "type": "number",
+                              "const": 20
+                            },
+                            {
+                              "type": "number",
+                              "const": 21
+                            },
+                            {
+                              "type": "number",
+                              "const": 22
+                            },
+                            {
+                              "type": "number",
+                              "const": 23
+                            },
+                            {
+                              "type": "number",
+                              "const": 24
+                            }
+                          ],
+                          "description": "Log severity number following OTel specification (1-24)"
+                        },
+                        "session_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128,
+                          "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
+                          "description": "Unique session identifier: URL-safe characters, at least one, at most 128, not only dots. The same rule the SDK enforces on the baggage header."
+                        },
+                        "trace_id": {
+                          "type": "string",
+                          "minLength": 32,
+                          "maxLength": 32,
+                          "pattern": "^[a-f0-9]{32}$",
+                          "examples": [
+                            "0af7651916cd43dd8448eb211c80319c"
+                          ],
+                          "description": "Unique trace identifier (32 lowercase hex characters)"
+                        },
+                        "query": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1024,
+                          "description": "Substring searched in the log body."
+                        }
+                      },
+                      "required": [
+                        "signal"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A saved filter over log records."
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "signal": {
+                          "type": "string",
+                          "const": "metrics"
+                        },
+                        "lookback_minutes": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 43200,
+                          "description": "Window ending at the time of the run, in minutes. Omitted, the run's own `start_time`/`end_time` or the last 60 minutes apply."
+                        },
+                        "metric_name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "aggregation": {
+                          "default": "avg",
+                          "type": "string",
+                          "enum": [
+                            "avg",
+                            "min",
+                            "max",
+                            "sum",
+                            "count",
+                            "last",
+                            "p50",
+                            "p90",
+                            "p95",
+                            "p99"
+                          ],
+                          "description": "Server-side reducer applied to the points falling in one time bucket."
+                        },
+                        "step_ms": {
+                          "default": 60000,
+                          "description": "Bucket width in integer milliseconds.",
+                          "type": "number",
+                          "minimum": 1,
+                          "maximum": 86400000,
+                          "multipleOf": 1
+                        },
+                        "group_by": {
+                          "maxItems": 16,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Attribute keys to split the result by."
+                        },
+                        "matchers": {
+                          "maxItems": 32,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256,
+                                "description": "Attribute key, e.g. `http.route`."
+                              },
+                              "op": {
+                                "type": "string",
+                                "enum": [
+                                  "eq",
+                                  "prefix"
+                                ],
+                                "description": "How a structured attribute matcher compares an attribute value."
+                              },
+                              "value": {
+                                "type": "string",
+                                "maxLength": 1024
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "op",
+                              "value"
+                            ],
+                            "additionalProperties": false,
+                            "description": "One structured attribute matcher. Tool inputs and saved queries carry\nmatchers in this form; the HTTP routes keep their `key=value` string\nparameters, and a client serializes each matcher to one of them."
+                          },
+                          "description": "Attribute matchers a series must all satisfy."
+                        }
+                      },
+                      "required": [
+                        "signal",
+                        "metric_name"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A saved metric range query."
+                    }
+                  ],
+                  "description": "Exactly one structured filter; `signal` selects which."
+                }
+              },
+              "required": [
+                "id",
+                "created_at",
+                "updated_at",
+                "etag",
+                "name",
+                "filter"
+              ],
+              "additionalProperties": false,
+              "description": "A named filter for traces, logs or metrics, owned by one project."
+            }
+          },
+          "has_more": {
+            "type": "boolean",
+            "description": "Whether more items exist beyond this page. False only when the result is complete."
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "Pass as `cursor` to the same tool with the same filters for the next page."
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_argument",
+                  "not_found",
+                  "no_project_access",
+                  "collector_unreachable",
+                  "collector_timeout",
+                  "cancelled",
+                  "collector_unauthorized",
+                  "collector_rate_limited",
+                  "collector_rejected",
+                  "collector_error",
+                  "contract_mismatch",
+                  "insufficient_scope",
+                  "conflict",
+                  "precondition_failed",
+                  "precondition_required",
+                  "internal"
+                ],
+                "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description of this failure."
+              },
+              "retryable": {
+                "type": "boolean",
+                "description": "Whether the same call can succeed when repeated unchanged."
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
+          }
+        },
+        "required": [
+          "saved_queries",
+          "has_more"
+        ],
+        "additionalProperties": false,
+        "description": "Structured output for list_saved_queries."
+      }
+    },
+    {
       "name": "list_sessions",
       "title": "List Sessions",
-      "description": "List qyl sessions when the user wants to find active or failing sessions, with trace/span/error counts, state, and GenAI token usage where present. Filters: active_only and a start_time/end_time window (RFC 3339) on the session start. Pages: when has_more is true, pass next_cursor as cursor with the same filters for the next page. display_traces accepts a session_id to show that session's traces in the explorer.",
+      "description": "List qyl sessions when the user wants to find active or failing sessions, with trace/span/error counts, state, and GenAI token usage where present. Filters: active_only and a start_time/end_time window (RFC 3339) on the session start. Pages: when has_more is true, pass next_cursor as cursor with the same filters for the next page. It also returns the annotations on the listed sessions. display_traces accepts a session_id to show that session's traces in the explorer.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -7600,6 +9182,1841 @@
       }
     },
     {
+      "name": "run_saved_query",
+      "title": "Run Saved Query",
+      "description": "Run one saved query against the current telemetry when the user wants the stored question's answer now: trace summaries, log records or a metric range result, depending on its signal. It only reads. start_time and end_time replace the saved look-back window, and next_cursor pages trace and log results.",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read"
+            ]
+          }
+        ]
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Opaque, server-assigned identifier of a user-created collector resource."
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "Overrides the saved look-back window together with `end_time`."
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "limit": {
+            "default": 100,
+            "description": "Page size for trace and log runs.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "cursor": {
+            "type": "string",
+            "description": "`next_cursor` of a previous run of the same saved query."
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "description": "Input for run_saved_query."
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/__schema0"
+          },
+          "mode": {
+            "$ref": "#/$defs/__schema198"
+          },
+          "error": {
+            "$ref": "#/$defs/__schema199"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Structured output for run_saved_query.",
+        "$defs": {
+          "__schema0": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/__schema1"
+              },
+              {
+                "$ref": "#/$defs/__schema136"
+              },
+              {
+                "$ref": "#/$defs/__schema179"
+              }
+            ],
+            "description": "The result of running a saved query; `signal` matches the query's filter."
+          },
+          "__schema1": {
+            "type": "object",
+            "properties": {
+              "signal": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "items": {
+                "$ref": "#/$defs/__schema3"
+              },
+              "next_cursor": {
+                "$ref": "#/$defs/__schema133"
+              },
+              "has_more": {
+                "$ref": "#/$defs/__schema135"
+              }
+            },
+            "required": [
+              "signal",
+              "items",
+              "has_more"
+            ],
+            "additionalProperties": false,
+            "description": "One page of trace summaries produced by a saved trace query, like list_traces; get_trace reads one full span tree."
+          },
+          "__schema2": {
+            "type": "string",
+            "const": "traces"
+          },
+          "__schema3": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "trace_id": {
+                  "$ref": "#/$defs/__schema4"
+                },
+                "root_span": {
+                  "$ref": "#/$defs/__schema6"
+                },
+                "span_count": {
+                  "$ref": "#/$defs/__schema125"
+                },
+                "duration_ns": {
+                  "$ref": "#/$defs/__schema126"
+                },
+                "start_time": {
+                  "$ref": "#/$defs/__schema127"
+                },
+                "end_time": {
+                  "$ref": "#/$defs/__schema128"
+                },
+                "services": {
+                  "$ref": "#/$defs/__schema129"
+                },
+                "has_error": {
+                  "$ref": "#/$defs/__schema131"
+                }
+              },
+              "required": [
+                "trace_id",
+                "span_count",
+                "duration_ns",
+                "start_time",
+                "end_time",
+                "services",
+                "has_error"
+              ],
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema132"
+              },
+              "description": "Trace summary without the full span collection"
+            }
+          },
+          "__schema4": {
+            "description": "Trace identifier",
+            "$ref": "#/$defs/__schema5"
+          },
+          "__schema5": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 32,
+            "pattern": "^[a-f0-9]{32}$",
+            "examples": [
+              "0af7651916cd43dd8448eb211c80319c"
+            ],
+            "description": "Unique trace identifier (32 lowercase hex characters)"
+          },
+          "__schema6": {
+            "type": "object",
+            "properties": {
+              "span_id": {
+                "$ref": "#/$defs/__schema7"
+              },
+              "trace_id": {
+                "$ref": "#/$defs/__schema9"
+              },
+              "parent_span_id": {
+                "$ref": "#/$defs/__schema10"
+              },
+              "trace_state": {
+                "$ref": "#/$defs/__schema11"
+              },
+              "name": {
+                "$ref": "#/$defs/__schema13"
+              },
+              "kind": {
+                "$ref": "#/$defs/__schema14"
+              },
+              "start_time_unix_nano": {
+                "$ref": "#/$defs/__schema21"
+              },
+              "end_time_unix_nano": {
+                "$ref": "#/$defs/__schema23"
+              },
+              "attributes": {
+                "$ref": "#/$defs/__schema24"
+              },
+              "dropped_attributes_count": {
+                "$ref": "#/$defs/__schema46"
+              },
+              "events": {
+                "$ref": "#/$defs/__schema48"
+              },
+              "dropped_events_count": {
+                "$ref": "#/$defs/__schema54"
+              },
+              "links": {
+                "$ref": "#/$defs/__schema55"
+              },
+              "dropped_links_count": {
+                "$ref": "#/$defs/__schema63"
+              },
+              "status": {
+                "$ref": "#/$defs/__schema64"
+              },
+              "flags": {
+                "$ref": "#/$defs/__schema70"
+              },
+              "resource": {
+                "$ref": "#/$defs/__schema71"
+              },
+              "instrumentation_scope": {
+                "$ref": "#/$defs/__schema119"
+              }
+            },
+            "required": [
+              "span_id",
+              "trace_id",
+              "name",
+              "kind",
+              "start_time_unix_nano",
+              "end_time_unix_nano",
+              "status",
+              "resource"
+            ],
+            "additionalProperties": false,
+            "description": "Root span of the trace"
+          },
+          "__schema7": {
+            "description": "Unique span identifier (16 hex chars)",
+            "$ref": "#/$defs/__schema8"
+          },
+          "__schema8": {
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 16,
+            "pattern": "^[a-f0-9]{16}$",
+            "examples": [
+              "b7ad6b7169203331"
+            ],
+            "description": "Unique span identifier (16 lowercase hex characters)"
+          },
+          "__schema9": {
+            "description": "Trace identifier (32 hex chars)",
+            "$ref": "#/$defs/__schema5"
+          },
+          "__schema10": {
+            "description": "Parent span identifier (null for root spans)",
+            "$ref": "#/$defs/__schema8"
+          },
+          "__schema11": {
+            "description": "W3C trace state",
+            "$ref": "#/$defs/__schema12"
+          },
+          "__schema12": {
+            "type": "string",
+            "examples": [
+              "rojo=00f067aa0ba902b7,congo=t61rcWkgMzE"
+            ],
+            "description": "W3C Trace Context tracestate header (vendor-specific key-value pairs)"
+          },
+          "__schema13": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Human-readable span name"
+          },
+          "__schema14": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/__schema15"
+              },
+              {
+                "$ref": "#/$defs/__schema16"
+              },
+              {
+                "$ref": "#/$defs/__schema17"
+              },
+              {
+                "$ref": "#/$defs/__schema18"
+              },
+              {
+                "$ref": "#/$defs/__schema19"
+              },
+              {
+                "$ref": "#/$defs/__schema20"
+              }
+            ],
+            "description": "Span kind"
+          },
+          "__schema15": {
+            "type": "number",
+            "const": 0
+          },
+          "__schema16": {
+            "type": "number",
+            "const": 1
+          },
+          "__schema17": {
+            "type": "number",
+            "const": 2
+          },
+          "__schema18": {
+            "type": "number",
+            "const": 3
+          },
+          "__schema19": {
+            "type": "number",
+            "const": 4
+          },
+          "__schema20": {
+            "type": "number",
+            "const": 5
+          },
+          "__schema21": {
+            "description": "Start timestamp in nanoseconds since epoch",
+            "$ref": "#/$defs/__schema22"
+          },
+          "__schema22": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Unsigned Unix timestamp in nanoseconds since epoch, encoded as a decimal string"
+          },
+          "__schema23": {
+            "description": "End timestamp in nanoseconds since epoch",
+            "$ref": "#/$defs/__schema22"
+          },
+          "__schema24": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema25"
+            },
+            "description": "Span attributes"
+          },
+          "__schema25": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "$ref": "#/$defs/__schema26"
+              },
+              "value": {
+                "$ref": "#/$defs/__schema27"
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "additionalProperties": false,
+            "description": "Key-value attribute pair following OTel conventions"
+          },
+          "__schema26": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Attribute key (dot-separated namespace)"
+          },
+          "__schema27": {
+            "description": "Attribute value",
+            "$ref": "#/$defs/__schema32"
+          },
+          "__schema28": {
+            "type": "null"
+          },
+          "__schema29": {
+            "type": "string"
+          },
+          "__schema30": {
+            "type": "boolean"
+          },
+          "__schema31": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema32"
+            }
+          },
+          "__schema32": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/__schema28"
+              },
+              {
+                "$ref": "#/$defs/__schema29"
+              },
+              {
+                "$ref": "#/$defs/__schema30"
+              },
+              {
+                "$ref": "#/$defs/__schema31"
+              },
+              {
+                "$ref": "#/$defs/__schema33"
+              }
+            ],
+            "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute. Primitive variants are bare JSON values; object variants carry a `type` tag."
+          },
+          "__schema33": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/__schema34"
+              },
+              {
+                "$ref": "#/$defs/__schema35"
+              }
+            ],
+            "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+                "int": "#/components/schemas/Common.AttributeIntValue",
+                "double": "#/components/schemas/Common.AttributeDoubleValue",
+                "bytes": "#/components/schemas/Common.AttributeBytesValue",
+                "kvlist": "#/components/schemas/Common.AttributeKeyValueListValue"
+              }
+            },
+            "description": "Object-shaped AttributeValue variants. The variant name is the wire `type` tag."
+          },
+          "__schema34": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "__schema35": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "$ref": "#/$defs/__schema36"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/__schema37"
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged OTLP signed 64-bit integer attribute."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "$ref": "#/$defs/__schema38"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/__schema39"
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged OTLP double attribute."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "$ref": "#/$defs/__schema42"
+                  },
+                  "base64": {
+                    "$ref": "#/$defs/__schema43"
+                  }
+                },
+                "required": [
+                  "type",
+                  "base64"
+                ],
+                "additionalProperties": false,
+                "description": "Base64 bytes projected by qyl without colliding with an ordinary string attribute."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "$ref": "#/$defs/__schema44"
+                  },
+                  "values": {
+                    "$ref": "#/$defs/__schema45"
+                  }
+                },
+                "required": [
+                  "type",
+                  "values"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged recursive OTLP key-value-list, distinct from other object-shaped attribute variants."
+              }
+            ]
+          },
+          "__schema36": {
+            "type": "string",
+            "const": "int"
+          },
+          "__schema37": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(0|-?[1-9][0-9]*)$",
+            "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
+          },
+          "__schema38": {
+            "type": "string",
+            "const": "double"
+          },
+          "__schema39": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/__schema40"
+              },
+              {
+                "$ref": "#/$defs/__schema41"
+              }
+            ],
+            "description": "An OTLP attribute double encoded as a JSON number when finite or a canonical named string when non-finite."
+          },
+          "__schema40": {
+            "type": "number"
+          },
+          "__schema41": {
+            "type": "string",
+            "enum": [
+              "NaN",
+              "Infinity",
+              "-Infinity"
+            ]
+          },
+          "__schema42": {
+            "type": "string",
+            "const": "bytes"
+          },
+          "__schema43": {
+            "type": "string",
+            "contentEncoding": "base64"
+          },
+          "__schema44": {
+            "type": "string",
+            "const": "kvlist"
+          },
+          "__schema45": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": {
+              "$ref": "#/$defs/__schema32"
+            }
+          },
+          "__schema46": {
+            "description": "Dropped attributes count",
+            "$ref": "#/$defs/__schema47"
+          },
+          "__schema47": {
+            "type": "number",
+            "minimum": 0,
+            "multipleOf": 1,
+            "description": "Generic non-negative counter"
+          },
+          "__schema48": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema49"
+            },
+            "description": "Span events (logs attached to span)"
+          },
+          "__schema49": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/__schema50"
+              },
+              "time_unix_nano": {
+                "$ref": "#/$defs/__schema51"
+              },
+              "attributes": {
+                "$ref": "#/$defs/__schema52"
+              },
+              "dropped_attributes_count": {
+                "$ref": "#/$defs/__schema53"
+              }
+            },
+            "required": [
+              "name",
+              "time_unix_nano"
+            ],
+            "additionalProperties": false,
+            "description": "Event occurring during a span's lifetime"
+          },
+          "__schema50": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Event name"
+          },
+          "__schema51": {
+            "description": "Event timestamp in nanoseconds since epoch",
+            "$ref": "#/$defs/__schema22"
+          },
+          "__schema52": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema25"
+            },
+            "description": "Event attributes"
+          },
+          "__schema53": {
+            "description": "Dropped attributes count",
+            "$ref": "#/$defs/__schema47"
+          },
+          "__schema54": {
+            "description": "Dropped events count",
+            "$ref": "#/$defs/__schema47"
+          },
+          "__schema55": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema56"
+            },
+            "description": "Links to other spans"
+          },
+          "__schema56": {
+            "type": "object",
+            "properties": {
+              "trace_id": {
+                "$ref": "#/$defs/__schema57"
+              },
+              "span_id": {
+                "$ref": "#/$defs/__schema58"
+              },
+              "trace_state": {
+                "$ref": "#/$defs/__schema59"
+              },
+              "attributes": {
+                "$ref": "#/$defs/__schema60"
+              },
+              "dropped_attributes_count": {
+                "$ref": "#/$defs/__schema61"
+              },
+              "flags": {
+                "$ref": "#/$defs/__schema62"
+              }
+            },
+            "required": [
+              "trace_id",
+              "span_id"
+            ],
+            "additionalProperties": false,
+            "description": "Link to another span (e.g., batch processing)"
+          },
+          "__schema57": {
+            "description": "Linked trace ID",
+            "$ref": "#/$defs/__schema5"
+          },
+          "__schema58": {
+            "description": "Linked span ID",
+            "$ref": "#/$defs/__schema8"
+          },
+          "__schema59": {
+            "description": "Trace state of the linked span",
+            "$ref": "#/$defs/__schema12"
+          },
+          "__schema60": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema25"
+            },
+            "description": "Link attributes"
+          },
+          "__schema61": {
+            "description": "Dropped attributes count",
+            "$ref": "#/$defs/__schema47"
+          },
+          "__schema62": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Link flags"
+          },
+          "__schema63": {
+            "description": "Dropped links count",
+            "$ref": "#/$defs/__schema47"
+          },
+          "__schema64": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/__schema65"
+              },
+              "message": {
+                "$ref": "#/$defs/__schema69"
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "additionalProperties": false,
+            "description": "Span status"
+          },
+          "__schema65": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/__schema66"
+              },
+              {
+                "$ref": "#/$defs/__schema67"
+              },
+              {
+                "$ref": "#/$defs/__schema68"
+              }
+            ],
+            "description": "Status code"
+          },
+          "__schema66": {
+            "type": "number",
+            "const": 0
+          },
+          "__schema67": {
+            "type": "number",
+            "const": 1
+          },
+          "__schema68": {
+            "type": "number",
+            "const": 2
+          },
+          "__schema69": {
+            "type": "string",
+            "description": "Status message (only for ERROR status)"
+          },
+          "__schema70": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Span flags"
+          },
+          "__schema71": {
+            "description": "Resource describing the entity that produced this span",
+            "$ref": "#/$defs/__schema118"
+          },
+          "__schema72": {
+            "type": "string",
+            "description": "Service name (required)"
+          },
+          "__schema73": {
+            "type": "string",
+            "description": "Service namespace for grouping"
+          },
+          "__schema74": {
+            "type": "string",
+            "description": "Service instance ID (unique per instance)"
+          },
+          "__schema75": {
+            "description": "Service version",
+            "$ref": "#/$defs/__schema76"
+          },
+          "__schema76": {
+            "type": "string",
+            "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
+            "examples": [
+              "2.1.0"
+            ],
+            "description": "Semantic version string (e.g., 1.2.3)"
+          },
+          "__schema77": {
+            "type": "string",
+            "description": "Telemetry SDK name"
+          },
+          "__schema78": {
+            "type": "string",
+            "enum": [
+              "cpp",
+              "dotnet",
+              "erlang",
+              "go",
+              "java",
+              "nodejs",
+              "php",
+              "python",
+              "ruby",
+              "rust",
+              "swift",
+              "webjs"
+            ],
+            "description": "Telemetry SDK language"
+          },
+          "__schema79": {
+            "description": "Telemetry SDK version",
+            "$ref": "#/$defs/__schema76"
+          },
+          "__schema80": {
+            "description": "Telemetry distribution version",
+            "$ref": "#/$defs/__schema76"
+          },
+          "__schema81": {
+            "type": "string",
+            "description": "Deployment environment (e.g., production, staging)"
+          },
+          "__schema82": {
+            "type": "string",
+            "enum": [
+              "alibaba_cloud",
+              "aws",
+              "azure",
+              "gcp",
+              "heroku",
+              "ibm_cloud",
+              "tencent_cloud"
+            ],
+            "description": "Cloud provider"
+          },
+          "__schema83": {
+            "type": "string",
+            "description": "Cloud region"
+          },
+          "__schema84": {
+            "type": "string",
+            "description": "Cloud availability zone"
+          },
+          "__schema85": {
+            "type": "string",
+            "description": "Cloud account ID"
+          },
+          "__schema86": {
+            "type": "string",
+            "description": "Cloud platform (e.g., aws_ecs, gcp_cloud_run)"
+          },
+          "__schema87": {
+            "type": "string",
+            "description": "Host name"
+          },
+          "__schema88": {
+            "type": "string",
+            "description": "Host ID"
+          },
+          "__schema89": {
+            "type": "string",
+            "description": "Host type (e.g., n1-standard-1)"
+          },
+          "__schema90": {
+            "type": "string",
+            "enum": [
+              "amd64",
+              "arm32",
+              "arm64",
+              "ia64",
+              "ppc32",
+              "ppc64",
+              "s390x",
+              "x86"
+            ],
+            "description": "Host architecture (e.g., amd64, arm64)"
+          },
+          "__schema91": {
+            "type": "string",
+            "enum": [
+              "windows",
+              "linux",
+              "darwin",
+              "freebsd",
+              "netbsd",
+              "openbsd",
+              "dragonflybsd",
+              "hpux",
+              "aix",
+              "solaris",
+              "z_os"
+            ],
+            "description": "Operating system type"
+          },
+          "__schema92": {
+            "type": "string",
+            "description": "Operating system description"
+          },
+          "__schema93": {
+            "type": "string",
+            "description": "Operating system version"
+          },
+          "__schema94": {
+            "type": "number",
+            "multipleOf": 1,
+            "description": "Process ID"
+          },
+          "__schema95": {
+            "type": "string",
+            "description": "Process executable name"
+          },
+          "__schema96": {
+            "type": "string",
+            "description": "Process command line"
+          },
+          "__schema97": {
+            "type": "string",
+            "description": "Process runtime name"
+          },
+          "__schema98": {
+            "type": "string",
+            "description": "Process runtime version"
+          },
+          "__schema99": {
+            "type": "string",
+            "description": "Container ID"
+          },
+          "__schema100": {
+            "type": "string",
+            "description": "Container name"
+          },
+          "__schema101": {
+            "type": "string",
+            "description": "Container image name"
+          },
+          "__schema102": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema103"
+            },
+            "description": "Container image tags"
+          },
+          "__schema103": {
+            "type": "string"
+          },
+          "__schema104": {
+            "type": "string",
+            "description": "Kubernetes cluster name"
+          },
+          "__schema105": {
+            "type": "string",
+            "description": "Kubernetes namespace"
+          },
+          "__schema106": {
+            "type": "string",
+            "description": "Kubernetes pod name"
+          },
+          "__schema107": {
+            "type": "string",
+            "description": "Kubernetes pod UID"
+          },
+          "__schema108": {
+            "type": "string",
+            "description": "Kubernetes deployment name"
+          },
+          "__schema109": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema25"
+            },
+            "description": "Additional resource attributes"
+          },
+          "__schema110": {
+            "description": "Dropped attributes count",
+            "$ref": "#/$defs/__schema47"
+          },
+          "__schema111": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema112"
+            },
+            "description": "Entities participating in this Resource, keyed by attributes on the Resource."
+          },
+          "__schema112": {
+            "type": "object",
+            "properties": {
+              "schema_url": {
+                "$ref": "#/$defs/__schema113"
+              },
+              "type": {
+                "$ref": "#/$defs/__schema114"
+              },
+              "id_keys": {
+                "$ref": "#/$defs/__schema115"
+              },
+              "description_keys": {
+                "$ref": "#/$defs/__schema117"
+              }
+            },
+            "required": [
+              "type",
+              "id_keys"
+            ],
+            "additionalProperties": false,
+            "description": "A reference to an OpenTelemetry entity described by attributes on the containing Resource."
+          },
+          "__schema113": {
+            "type": "string",
+            "description": "Schema URL applying to the entity and its referenced Resource attributes, when known."
+          },
+          "__schema114": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Stable non-empty entity type, such as service or host."
+          },
+          "__schema115": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema116"
+            },
+            "description": "Non-empty set of Resource attribute keys that identify the entity."
+          },
+          "__schema116": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A non-empty Resource attribute key referenced by an OpenTelemetry entity."
+          },
+          "__schema117": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema116"
+            },
+            "description": "Resource attribute keys that describe but do not identify the entity."
+          },
+          "__schema118": {
+            "type": "object",
+            "properties": {
+              "service_name": {
+                "$ref": "#/$defs/__schema72"
+              },
+              "service_namespace": {
+                "$ref": "#/$defs/__schema73"
+              },
+              "service_instance_id": {
+                "$ref": "#/$defs/__schema74"
+              },
+              "service_version": {
+                "$ref": "#/$defs/__schema75"
+              },
+              "telemetry_sdk_name": {
+                "$ref": "#/$defs/__schema77"
+              },
+              "telemetry_sdk_language": {
+                "$ref": "#/$defs/__schema78"
+              },
+              "telemetry_sdk_version": {
+                "$ref": "#/$defs/__schema79"
+              },
+              "telemetry_distro_version": {
+                "$ref": "#/$defs/__schema80"
+              },
+              "deployment_environment": {
+                "$ref": "#/$defs/__schema81"
+              },
+              "cloud_provider": {
+                "$ref": "#/$defs/__schema82"
+              },
+              "cloud_region": {
+                "$ref": "#/$defs/__schema83"
+              },
+              "cloud_availability_zone": {
+                "$ref": "#/$defs/__schema84"
+              },
+              "cloud_account_id": {
+                "$ref": "#/$defs/__schema85"
+              },
+              "cloud_platform": {
+                "$ref": "#/$defs/__schema86"
+              },
+              "host_name": {
+                "$ref": "#/$defs/__schema87"
+              },
+              "host_id": {
+                "$ref": "#/$defs/__schema88"
+              },
+              "host_type": {
+                "$ref": "#/$defs/__schema89"
+              },
+              "host_arch": {
+                "$ref": "#/$defs/__schema90"
+              },
+              "os_type": {
+                "$ref": "#/$defs/__schema91"
+              },
+              "os_description": {
+                "$ref": "#/$defs/__schema92"
+              },
+              "os_version": {
+                "$ref": "#/$defs/__schema93"
+              },
+              "process_pid": {
+                "$ref": "#/$defs/__schema94"
+              },
+              "process_executable_name": {
+                "$ref": "#/$defs/__schema95"
+              },
+              "process_command_line": {
+                "$ref": "#/$defs/__schema96"
+              },
+              "process_runtime_name": {
+                "$ref": "#/$defs/__schema97"
+              },
+              "process_runtime_version": {
+                "$ref": "#/$defs/__schema98"
+              },
+              "container_id": {
+                "$ref": "#/$defs/__schema99"
+              },
+              "container_name": {
+                "$ref": "#/$defs/__schema100"
+              },
+              "container_image_name": {
+                "$ref": "#/$defs/__schema101"
+              },
+              "container_image_tags": {
+                "$ref": "#/$defs/__schema102"
+              },
+              "k8s_cluster_name": {
+                "$ref": "#/$defs/__schema104"
+              },
+              "k8s_namespace_name": {
+                "$ref": "#/$defs/__schema105"
+              },
+              "k8s_pod_name": {
+                "$ref": "#/$defs/__schema106"
+              },
+              "k8s_pod_uid": {
+                "$ref": "#/$defs/__schema107"
+              },
+              "k8s_deployment_name": {
+                "$ref": "#/$defs/__schema108"
+              },
+              "attributes": {
+                "$ref": "#/$defs/__schema109"
+              },
+              "dropped_attributes_count": {
+                "$ref": "#/$defs/__schema110"
+              },
+              "entity_refs": {
+                "$ref": "#/$defs/__schema111"
+              }
+            },
+            "required": [
+              "service_name"
+            ],
+            "additionalProperties": false,
+            "description": "Resource describes the entity producing telemetry"
+          },
+          "__schema119": {
+            "description": "Instrumentation scope",
+            "$ref": "#/$defs/__schema124"
+          },
+          "__schema120": {
+            "type": "string",
+            "description": "Name of the instrumentation scope (library name)"
+          },
+          "__schema121": {
+            "description": "Version of the instrumentation scope",
+            "$ref": "#/$defs/__schema76"
+          },
+          "__schema122": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema25"
+            },
+            "description": "Additional attributes for the scope"
+          },
+          "__schema123": {
+            "description": "Dropped attributes count",
+            "$ref": "#/$defs/__schema47"
+          },
+          "__schema124": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/__schema120"
+              },
+              "version": {
+                "$ref": "#/$defs/__schema121"
+              },
+              "attributes": {
+                "$ref": "#/$defs/__schema122"
+              },
+              "dropped_attributes_count": {
+                "$ref": "#/$defs/__schema123"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false,
+            "description": "Instrumentation scope identifying the library/component emitting telemetry"
+          },
+          "__schema125": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Total span count"
+          },
+          "__schema126": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Trace duration in nanoseconds"
+          },
+          "__schema127": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "Trace start time"
+          },
+          "__schema128": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "Trace end time"
+          },
+          "__schema129": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema130"
+            },
+            "description": "Services involved in this trace"
+          },
+          "__schema130": {
+            "type": "string"
+          },
+          "__schema131": {
+            "type": "boolean",
+            "description": "Whether trace contains errors"
+          },
+          "__schema132": {},
+          "__schema133": {
+            "$ref": "#/$defs/__schema134"
+          },
+          "__schema134": {
+            "type": "string",
+            "description": "Opaque pagination cursor. Pass the `next_cursor` of one page to receive the\nnext page of the same query. Its content is not part of the contract and\nmust not be parsed or built by a client."
+          },
+          "__schema135": {
+            "type": "boolean"
+          },
+          "__schema136": {
+            "type": "object",
+            "properties": {
+              "signal": {
+                "$ref": "#/$defs/__schema137"
+              },
+              "items": {
+                "$ref": "#/$defs/__schema138"
+              },
+              "next_cursor": {
+                "$ref": "#/$defs/__schema177"
+              },
+              "has_more": {
+                "$ref": "#/$defs/__schema178"
+              }
+            },
+            "required": [
+              "signal",
+              "items",
+              "has_more"
+            ],
+            "additionalProperties": false,
+            "description": "One page of log records produced by a saved log query."
+          },
+          "__schema137": {
+            "type": "string",
+            "const": "logs"
+          },
+          "__schema138": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "time_unix_nano": {
+                  "$ref": "#/$defs/__schema139"
+                },
+                "observed_time_unix_nano": {
+                  "$ref": "#/$defs/__schema140"
+                },
+                "severity_number": {
+                  "$ref": "#/$defs/__schema141"
+                },
+                "severity_text": {
+                  "$ref": "#/$defs/__schema167"
+                },
+                "body": {
+                  "$ref": "#/$defs/__schema168"
+                },
+                "attributes": {
+                  "$ref": "#/$defs/__schema169"
+                },
+                "dropped_attributes_count": {
+                  "$ref": "#/$defs/__schema170"
+                },
+                "flags": {
+                  "$ref": "#/$defs/__schema171"
+                },
+                "trace_id": {
+                  "$ref": "#/$defs/__schema172"
+                },
+                "span_id": {
+                  "$ref": "#/$defs/__schema173"
+                },
+                "event_name": {
+                  "$ref": "#/$defs/__schema174"
+                },
+                "resource": {
+                  "$ref": "#/$defs/__schema175"
+                },
+                "instrumentation_scope": {
+                  "$ref": "#/$defs/__schema176"
+                }
+              },
+              "required": [
+                "time_unix_nano",
+                "observed_time_unix_nano",
+                "severity_number",
+                "body",
+                "resource"
+              ],
+              "additionalProperties": false,
+              "description": "OpenTelemetry Log Record"
+            }
+          },
+          "__schema139": {
+            "description": "Timestamp when the event occurred (nanoseconds since epoch)",
+            "$ref": "#/$defs/__schema22"
+          },
+          "__schema140": {
+            "description": "Timestamp when the log was observed/collected (nanoseconds since epoch)",
+            "$ref": "#/$defs/__schema22"
+          },
+          "__schema141": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/__schema142"
+              },
+              {
+                "$ref": "#/$defs/__schema143"
+              },
+              {
+                "$ref": "#/$defs/__schema144"
+              },
+              {
+                "$ref": "#/$defs/__schema145"
+              },
+              {
+                "$ref": "#/$defs/__schema146"
+              },
+              {
+                "$ref": "#/$defs/__schema147"
+              },
+              {
+                "$ref": "#/$defs/__schema148"
+              },
+              {
+                "$ref": "#/$defs/__schema149"
+              },
+              {
+                "$ref": "#/$defs/__schema150"
+              },
+              {
+                "$ref": "#/$defs/__schema151"
+              },
+              {
+                "$ref": "#/$defs/__schema152"
+              },
+              {
+                "$ref": "#/$defs/__schema153"
+              },
+              {
+                "$ref": "#/$defs/__schema154"
+              },
+              {
+                "$ref": "#/$defs/__schema155"
+              },
+              {
+                "$ref": "#/$defs/__schema156"
+              },
+              {
+                "$ref": "#/$defs/__schema157"
+              },
+              {
+                "$ref": "#/$defs/__schema158"
+              },
+              {
+                "$ref": "#/$defs/__schema159"
+              },
+              {
+                "$ref": "#/$defs/__schema160"
+              },
+              {
+                "$ref": "#/$defs/__schema161"
+              },
+              {
+                "$ref": "#/$defs/__schema162"
+              },
+              {
+                "$ref": "#/$defs/__schema163"
+              },
+              {
+                "$ref": "#/$defs/__schema164"
+              },
+              {
+                "$ref": "#/$defs/__schema165"
+              },
+              {
+                "$ref": "#/$defs/__schema166"
+              }
+            ],
+            "description": "Severity number (1-24)"
+          },
+          "__schema142": {
+            "type": "number",
+            "const": 0
+          },
+          "__schema143": {
+            "type": "number",
+            "const": 1
+          },
+          "__schema144": {
+            "type": "number",
+            "const": 2
+          },
+          "__schema145": {
+            "type": "number",
+            "const": 3
+          },
+          "__schema146": {
+            "type": "number",
+            "const": 4
+          },
+          "__schema147": {
+            "type": "number",
+            "const": 5
+          },
+          "__schema148": {
+            "type": "number",
+            "const": 6
+          },
+          "__schema149": {
+            "type": "number",
+            "const": 7
+          },
+          "__schema150": {
+            "type": "number",
+            "const": 8
+          },
+          "__schema151": {
+            "type": "number",
+            "const": 9
+          },
+          "__schema152": {
+            "type": "number",
+            "const": 10
+          },
+          "__schema153": {
+            "type": "number",
+            "const": 11
+          },
+          "__schema154": {
+            "type": "number",
+            "const": 12
+          },
+          "__schema155": {
+            "type": "number",
+            "const": 13
+          },
+          "__schema156": {
+            "type": "number",
+            "const": 14
+          },
+          "__schema157": {
+            "type": "number",
+            "const": 15
+          },
+          "__schema158": {
+            "type": "number",
+            "const": 16
+          },
+          "__schema159": {
+            "type": "number",
+            "const": 17
+          },
+          "__schema160": {
+            "type": "number",
+            "const": 18
+          },
+          "__schema161": {
+            "type": "number",
+            "const": 19
+          },
+          "__schema162": {
+            "type": "number",
+            "const": 20
+          },
+          "__schema163": {
+            "type": "number",
+            "const": 21
+          },
+          "__schema164": {
+            "type": "number",
+            "const": 22
+          },
+          "__schema165": {
+            "type": "number",
+            "const": 23
+          },
+          "__schema166": {
+            "type": "number",
+            "const": 24
+          },
+          "__schema167": {
+            "type": "string",
+            "enum": [
+              "TRACE",
+              "DEBUG",
+              "INFO",
+              "WARN",
+              "ERROR",
+              "FATAL"
+            ],
+            "description": "Severity text (DEBUG, INFO, WARN, ERROR, etc.)"
+          },
+          "__schema168": {
+            "description": "Log body: the OTLP AnyValue, projected exactly like an attribute value",
+            "$ref": "#/$defs/__schema32"
+          },
+          "__schema169": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema25"
+            },
+            "description": "Log attributes"
+          },
+          "__schema170": {
+            "description": "Dropped attributes count",
+            "$ref": "#/$defs/__schema47"
+          },
+          "__schema171": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Flags (trace flags)"
+          },
+          "__schema172": {
+            "description": "Associated trace ID",
+            "$ref": "#/$defs/__schema5"
+          },
+          "__schema173": {
+            "description": "Associated span ID",
+            "$ref": "#/$defs/__schema8"
+          },
+          "__schema174": {
+            "type": "string",
+            "description": "Optional event category whose presence identifies this log record as an event; records with the same name are expected to share one body and attribute schema."
+          },
+          "__schema175": {
+            "description": "Resource describing the entity that produced this log",
+            "$ref": "#/$defs/__schema118"
+          },
+          "__schema176": {
+            "description": "Instrumentation scope",
+            "$ref": "#/$defs/__schema124"
+          },
+          "__schema177": {
+            "$ref": "#/$defs/__schema134"
+          },
+          "__schema178": {
+            "type": "boolean"
+          },
+          "__schema179": {
+            "type": "object",
+            "properties": {
+              "signal": {
+                "$ref": "#/$defs/__schema180"
+              },
+              "result": {
+                "$ref": "#/$defs/__schema181"
+              }
+            },
+            "required": [
+              "signal",
+              "result"
+            ],
+            "additionalProperties": false,
+            "description": "The range-query result produced by a saved metric query."
+          },
+          "__schema180": {
+            "type": "string",
+            "const": "metrics"
+          },
+          "__schema181": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/__schema182"
+              },
+              "kind": {
+                "$ref": "#/$defs/__schema183"
+              },
+              "unit": {
+                "$ref": "#/$defs/__schema184"
+              },
+              "aggregation": {
+                "$ref": "#/$defs/__schema185"
+              },
+              "step_ms": {
+                "$ref": "#/$defs/__schema186"
+              },
+              "start_time": {
+                "$ref": "#/$defs/__schema187"
+              },
+              "end_time": {
+                "$ref": "#/$defs/__schema188"
+              },
+              "series": {
+                "$ref": "#/$defs/__schema189"
+              },
+              "truncated": {
+                "$ref": "#/$defs/__schema197"
+              }
+            },
+            "required": [
+              "name",
+              "kind",
+              "aggregation",
+              "step_ms",
+              "start_time",
+              "end_time",
+              "series",
+              "truncated"
+            ],
+            "additionalProperties": false,
+            "description": "The answer to a metric range query: what was asked, and the streams it produced."
+          },
+          "__schema182": {
+            "type": "string",
+            "description": "Instrument name the query ran against."
+          },
+          "__schema183": {
+            "type": "string",
+            "enum": [
+              "gauge",
+              "sum",
+              "histogram",
+              "exponential_histogram"
+            ],
+            "description": "Shape of a stored metric stream."
+          },
+          "__schema184": {
+            "type": "string"
+          },
+          "__schema185": {
+            "type": "string",
+            "enum": [
+              "avg",
+              "min",
+              "max",
+              "sum",
+              "count",
+              "last",
+              "p50",
+              "p90",
+              "p95",
+              "p99"
+            ],
+            "description": "Server-side reducer applied to the points falling in one time bucket."
+          },
+          "__schema186": {
+            "type": "number",
+            "multipleOf": 1,
+            "description": "Bucket width actually used, which may be widened from the requested step."
+          },
+          "__schema187": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "__schema188": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "__schema189": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "attributes": {
+                  "$ref": "#/$defs/__schema190"
+                },
+                "buckets": {
+                  "$ref": "#/$defs/__schema191"
+                }
+              },
+              "required": [
+                "attributes",
+                "buckets"
+              ],
+              "additionalProperties": false,
+              "description": "One result stream of a metric range query. With no `group_by` the whole\nresult is a single stream whose `attributes` are empty; with `group_by` there\nis one stream per distinct combination of the requested attribute values."
+            }
+          },
+          "__schema190": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema25"
+            },
+            "description": "The grouping key that produced this stream."
+          },
+          "__schema191": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "bucket_start": {
+                  "$ref": "#/$defs/__schema192"
+                },
+                "value": {
+                  "$ref": "#/$defs/__schema193"
+                },
+                "point_count": {
+                  "$ref": "#/$defs/__schema196"
+                }
+              },
+              "required": [
+                "bucket_start",
+                "value",
+                "point_count"
+              ],
+              "additionalProperties": false,
+              "description": "One aggregated time bucket of a metric range query."
+            }
+          },
+          "__schema192": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "Inclusive start of the bucket, aligned to the query's step from the query's start."
+          },
+          "__schema193": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/__schema194"
+              },
+              {
+                "$ref": "#/$defs/__schema195"
+              }
+            ],
+            "description": "The aggregation applied to the points in this bucket. Null when the bucket\nholds no value: either no point landed in it, or every point that did was\nan OTLP `NO_RECORDED_VALUE` marker."
+          },
+          "__schema194": {
+            "type": "number"
+          },
+          "__schema195": {
+            "type": "null"
+          },
+          "__schema196": {
+            "type": "number",
+            "multipleOf": 1,
+            "description": "Number of stored points folded into this bucket."
+          },
+          "__schema197": {
+            "type": "boolean",
+            "description": "Whether streams were dropped because the result exceeded the series limit."
+          },
+          "__schema198": {
+            "type": "string",
+            "enum": [
+              "live",
+              "demo"
+            ],
+            "description": "Whether a qyl MCP tool read live collector data or the explicit demo dataset."
+          },
+          "__schema199": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/__schema200"
+              },
+              "message": {
+                "$ref": "#/$defs/__schema201"
+              },
+              "retryable": {
+                "$ref": "#/$defs/__schema202"
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
+          },
+          "__schema200": {
+            "type": "string",
+            "enum": [
+              "invalid_argument",
+              "not_found",
+              "no_project_access",
+              "collector_unreachable",
+              "collector_timeout",
+              "cancelled",
+              "collector_unauthorized",
+              "collector_rate_limited",
+              "collector_rejected",
+              "collector_error",
+              "contract_mismatch",
+              "insufficient_scope",
+              "conflict",
+              "precondition_failed",
+              "precondition_required",
+              "internal"
+            ],
+            "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+          },
+          "__schema201": {
+            "type": "string",
+            "description": "Human-readable description of this failure."
+          },
+          "__schema202": {
+            "type": "boolean",
+            "description": "Whether the same call can succeed when repeated unchanged."
+          }
+        }
+      }
+    },
+    {
       "name": "search_logs",
       "title": "Search Logs",
       "description": "Search qyl log records when the user wants error details or logs correlated with a trace or a session. Filters include trace_id, session_id, service_name, minimum severity (OTel numbers: 9 INFO, 13 WARN, 17 ERROR), a body substring query, and a start_time/end_time window (RFC 3339). Pages: when has_more is true, pass next_cursor as cursor with the same filters for the next page.",
@@ -8442,6 +11859,967 @@
             "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute. Primitive variants are bare JSON values; object variants carry a `type` tag."
           }
         }
+      }
+    },
+    {
+      "name": "update_annotation",
+      "title": "Update Annotation",
+      "description": "Replace the text of one annotation when the user wants to correct or extend a note. Pass its id and current etag from get_trace, list_sessions or create_annotation; a stale etag is refused instead of overwriting a newer version. What the note is attached to stays fixed.",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read",
+              "qyl:write"
+            ]
+          }
+        ]
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Opaque, server-assigned identifier of a user-created collector resource."
+          },
+          "etag": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "The annotation's current `etag`, sent as If-Match."
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "The new note, plain text, at most 2000 characters."
+          }
+        },
+        "required": [
+          "id",
+          "etag",
+          "text"
+        ],
+        "additionalProperties": false,
+        "description": "Input for update_annotation."
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "annotation": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "readOnly": true,
+                "description": "Server-assigned identifier.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "created_at": {
+                "readOnly": true,
+                "description": "When the resource was created.",
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "updated_at": {
+                "readOnly": true,
+                "description": "When the resource was last changed.",
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "etag": {
+                "readOnly": true,
+                "description": "Entity tag of this version; also served as the `ETag` response header.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "target": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "trace"
+                      },
+                      "trace_id": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[a-f0-9]{32}$",
+                        "examples": [
+                          "0af7651916cd43dd8448eb211c80319c"
+                        ],
+                        "description": "Unique trace identifier (32 lowercase hex characters)"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "trace_id"
+                    ],
+                    "additionalProperties": false,
+                    "description": "An annotation on one whole trace."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "span"
+                      },
+                      "trace_id": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[a-f0-9]{32}$",
+                        "examples": [
+                          "0af7651916cd43dd8448eb211c80319c"
+                        ],
+                        "description": "Unique trace identifier (32 lowercase hex characters)"
+                      },
+                      "span_id": {
+                        "type": "string",
+                        "minLength": 16,
+                        "maxLength": 16,
+                        "pattern": "^[a-f0-9]{16}$",
+                        "examples": [
+                          "b7ad6b7169203331"
+                        ],
+                        "description": "Unique span identifier (16 lowercase hex characters)"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "trace_id",
+                      "span_id"
+                    ],
+                    "additionalProperties": false,
+                    "description": "An annotation on one span of a trace."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "session"
+                      },
+                      "session_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128,
+                        "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
+                        "description": "Unique session identifier: URL-safe characters, at least one, at most 128, not only dots. The same rule the SDK enforces on the baggage header."
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "session_id"
+                    ],
+                    "additionalProperties": false,
+                    "description": "An annotation on one session."
+                  }
+                ],
+                "description": "What the note is attached to. Fixed at creation."
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000,
+                "description": "The note, plain text, at most 2000 characters."
+              }
+            },
+            "required": [
+              "id",
+              "created_at",
+              "updated_at",
+              "etag",
+              "target",
+              "text"
+            ],
+            "additionalProperties": false,
+            "description": "A user note attached to a trace, span or session."
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_argument",
+                  "not_found",
+                  "no_project_access",
+                  "collector_unreachable",
+                  "collector_timeout",
+                  "cancelled",
+                  "collector_unauthorized",
+                  "collector_rate_limited",
+                  "collector_rejected",
+                  "collector_error",
+                  "contract_mismatch",
+                  "insufficient_scope",
+                  "conflict",
+                  "precondition_failed",
+                  "precondition_required",
+                  "internal"
+                ],
+                "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description of this failure."
+              },
+              "retryable": {
+                "type": "boolean",
+                "description": "Whether the same call can succeed when repeated unchanged."
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Structured output for create_annotation and update_annotation."
+      }
+    },
+    {
+      "name": "update_saved_query",
+      "title": "Update Saved Query",
+      "description": "Rename a saved query or change its description or filter when the user wants to adjust a stored question. Pass its id and current etag from list_saved_queries or create_saved_query; omitted fields keep their value, and a stale etag is refused instead of overwriting a newer version.",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "qyl:read",
+              "qyl:write"
+            ]
+          }
+        ]
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Opaque, server-assigned identifier of a user-created collector resource."
+          },
+          "etag": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "The saved query's current `etag`, sent as If-Match."
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "New name, unique within the project; a duplicate is refused with 409."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "filter": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "signal": {
+                    "type": "string",
+                    "const": "traces"
+                  },
+                  "lookback_minutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 43200,
+                    "description": "Window ending at the time of the run, in minutes. Omitted, the run's own `start_time`/`end_time` or the last 60 minutes apply."
+                  },
+                  "service_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "errors_only": {
+                    "type": "boolean",
+                    "description": "Keep only traces with at least one error span."
+                  }
+                },
+                "required": [
+                  "signal"
+                ],
+                "additionalProperties": false,
+                "description": "A saved filter over traces."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "signal": {
+                    "type": "string",
+                    "const": "logs"
+                  },
+                  "lookback_minutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 43200,
+                    "description": "Window ending at the time of the run, in minutes. Omitted, the run's own `start_time`/`end_time` or the last 60 minutes apply."
+                  },
+                  "service_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "severity_min": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "const": 0
+                      },
+                      {
+                        "type": "number",
+                        "const": 1
+                      },
+                      {
+                        "type": "number",
+                        "const": 2
+                      },
+                      {
+                        "type": "number",
+                        "const": 3
+                      },
+                      {
+                        "type": "number",
+                        "const": 4
+                      },
+                      {
+                        "type": "number",
+                        "const": 5
+                      },
+                      {
+                        "type": "number",
+                        "const": 6
+                      },
+                      {
+                        "type": "number",
+                        "const": 7
+                      },
+                      {
+                        "type": "number",
+                        "const": 8
+                      },
+                      {
+                        "type": "number",
+                        "const": 9
+                      },
+                      {
+                        "type": "number",
+                        "const": 10
+                      },
+                      {
+                        "type": "number",
+                        "const": 11
+                      },
+                      {
+                        "type": "number",
+                        "const": 12
+                      },
+                      {
+                        "type": "number",
+                        "const": 13
+                      },
+                      {
+                        "type": "number",
+                        "const": 14
+                      },
+                      {
+                        "type": "number",
+                        "const": 15
+                      },
+                      {
+                        "type": "number",
+                        "const": 16
+                      },
+                      {
+                        "type": "number",
+                        "const": 17
+                      },
+                      {
+                        "type": "number",
+                        "const": 18
+                      },
+                      {
+                        "type": "number",
+                        "const": 19
+                      },
+                      {
+                        "type": "number",
+                        "const": 20
+                      },
+                      {
+                        "type": "number",
+                        "const": 21
+                      },
+                      {
+                        "type": "number",
+                        "const": 22
+                      },
+                      {
+                        "type": "number",
+                        "const": 23
+                      },
+                      {
+                        "type": "number",
+                        "const": 24
+                      }
+                    ],
+                    "description": "Log severity number following OTel specification (1-24)"
+                  },
+                  "session_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
+                    "description": "Unique session identifier: URL-safe characters, at least one, at most 128, not only dots. The same rule the SDK enforces on the baggage header."
+                  },
+                  "trace_id": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 32,
+                    "pattern": "^[a-f0-9]{32}$",
+                    "examples": [
+                      "0af7651916cd43dd8448eb211c80319c"
+                    ],
+                    "description": "Unique trace identifier (32 lowercase hex characters)"
+                  },
+                  "query": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024,
+                    "description": "Substring searched in the log body."
+                  }
+                },
+                "required": [
+                  "signal"
+                ],
+                "additionalProperties": false,
+                "description": "A saved filter over log records."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "signal": {
+                    "type": "string",
+                    "const": "metrics"
+                  },
+                  "lookback_minutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 43200,
+                    "description": "Window ending at the time of the run, in minutes. Omitted, the run's own `start_time`/`end_time` or the last 60 minutes apply."
+                  },
+                  "metric_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "aggregation": {
+                    "default": "avg",
+                    "type": "string",
+                    "enum": [
+                      "avg",
+                      "min",
+                      "max",
+                      "sum",
+                      "count",
+                      "last",
+                      "p50",
+                      "p90",
+                      "p95",
+                      "p99"
+                    ],
+                    "description": "Server-side reducer applied to the points falling in one time bucket."
+                  },
+                  "step_ms": {
+                    "default": 60000,
+                    "description": "Bucket width in integer milliseconds.",
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 86400000,
+                    "multipleOf": 1
+                  },
+                  "group_by": {
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Attribute keys to split the result by."
+                  },
+                  "matchers": {
+                    "maxItems": 32,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256,
+                          "description": "Attribute key, e.g. `http.route`."
+                        },
+                        "op": {
+                          "type": "string",
+                          "enum": [
+                            "eq",
+                            "prefix"
+                          ],
+                          "description": "How a structured attribute matcher compares an attribute value."
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 1024
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "op",
+                        "value"
+                      ],
+                      "additionalProperties": false,
+                      "description": "One structured attribute matcher. Tool inputs and saved queries carry\nmatchers in this form; the HTTP routes keep their `key=value` string\nparameters, and a client serializes each matcher to one of them."
+                    },
+                    "description": "Attribute matchers a series must all satisfy."
+                  }
+                },
+                "required": [
+                  "signal",
+                  "metric_name"
+                ],
+                "additionalProperties": false,
+                "description": "A saved metric range query."
+              }
+            ],
+            "description": "Exactly one structured filter; `signal` selects which."
+          }
+        },
+        "required": [
+          "id",
+          "etag"
+        ],
+        "additionalProperties": false,
+        "description": "Input for update_saved_query."
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "saved_query": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "readOnly": true,
+                "description": "Server-assigned identifier.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "created_at": {
+                "readOnly": true,
+                "description": "When the resource was created.",
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "updated_at": {
+                "readOnly": true,
+                "description": "When the resource was last changed.",
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "etag": {
+                "readOnly": true,
+                "description": "Entity tag of this version; also served as the `ETag` response header.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Unique within the project; a duplicate is refused with 409."
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "filter": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "signal": {
+                        "type": "string",
+                        "const": "traces"
+                      },
+                      "lookback_minutes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 43200,
+                        "description": "Window ending at the time of the run, in minutes. Omitted, the run's own `start_time`/`end_time` or the last 60 minutes apply."
+                      },
+                      "service_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "errors_only": {
+                        "type": "boolean",
+                        "description": "Keep only traces with at least one error span."
+                      }
+                    },
+                    "required": [
+                      "signal"
+                    ],
+                    "additionalProperties": false,
+                    "description": "A saved filter over traces."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "signal": {
+                        "type": "string",
+                        "const": "logs"
+                      },
+                      "lookback_minutes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 43200,
+                        "description": "Window ending at the time of the run, in minutes. Omitted, the run's own `start_time`/`end_time` or the last 60 minutes apply."
+                      },
+                      "service_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "severity_min": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "const": 0
+                          },
+                          {
+                            "type": "number",
+                            "const": 1
+                          },
+                          {
+                            "type": "number",
+                            "const": 2
+                          },
+                          {
+                            "type": "number",
+                            "const": 3
+                          },
+                          {
+                            "type": "number",
+                            "const": 4
+                          },
+                          {
+                            "type": "number",
+                            "const": 5
+                          },
+                          {
+                            "type": "number",
+                            "const": 6
+                          },
+                          {
+                            "type": "number",
+                            "const": 7
+                          },
+                          {
+                            "type": "number",
+                            "const": 8
+                          },
+                          {
+                            "type": "number",
+                            "const": 9
+                          },
+                          {
+                            "type": "number",
+                            "const": 10
+                          },
+                          {
+                            "type": "number",
+                            "const": 11
+                          },
+                          {
+                            "type": "number",
+                            "const": 12
+                          },
+                          {
+                            "type": "number",
+                            "const": 13
+                          },
+                          {
+                            "type": "number",
+                            "const": 14
+                          },
+                          {
+                            "type": "number",
+                            "const": 15
+                          },
+                          {
+                            "type": "number",
+                            "const": 16
+                          },
+                          {
+                            "type": "number",
+                            "const": 17
+                          },
+                          {
+                            "type": "number",
+                            "const": 18
+                          },
+                          {
+                            "type": "number",
+                            "const": 19
+                          },
+                          {
+                            "type": "number",
+                            "const": 20
+                          },
+                          {
+                            "type": "number",
+                            "const": 21
+                          },
+                          {
+                            "type": "number",
+                            "const": 22
+                          },
+                          {
+                            "type": "number",
+                            "const": 23
+                          },
+                          {
+                            "type": "number",
+                            "const": 24
+                          }
+                        ],
+                        "description": "Log severity number following OTel specification (1-24)"
+                      },
+                      "session_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128,
+                        "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
+                        "description": "Unique session identifier: URL-safe characters, at least one, at most 128, not only dots. The same rule the SDK enforces on the baggage header."
+                      },
+                      "trace_id": {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 32,
+                        "pattern": "^[a-f0-9]{32}$",
+                        "examples": [
+                          "0af7651916cd43dd8448eb211c80319c"
+                        ],
+                        "description": "Unique trace identifier (32 lowercase hex characters)"
+                      },
+                      "query": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1024,
+                        "description": "Substring searched in the log body."
+                      }
+                    },
+                    "required": [
+                      "signal"
+                    ],
+                    "additionalProperties": false,
+                    "description": "A saved filter over log records."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "signal": {
+                        "type": "string",
+                        "const": "metrics"
+                      },
+                      "lookback_minutes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 43200,
+                        "description": "Window ending at the time of the run, in minutes. Omitted, the run's own `start_time`/`end_time` or the last 60 minutes apply."
+                      },
+                      "metric_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "aggregation": {
+                        "default": "avg",
+                        "type": "string",
+                        "enum": [
+                          "avg",
+                          "min",
+                          "max",
+                          "sum",
+                          "count",
+                          "last",
+                          "p50",
+                          "p90",
+                          "p95",
+                          "p99"
+                        ],
+                        "description": "Server-side reducer applied to the points falling in one time bucket."
+                      },
+                      "step_ms": {
+                        "default": 60000,
+                        "description": "Bucket width in integer milliseconds.",
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": 86400000,
+                        "multipleOf": 1
+                      },
+                      "group_by": {
+                        "maxItems": 16,
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Attribute keys to split the result by."
+                      },
+                      "matchers": {
+                        "maxItems": 32,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256,
+                              "description": "Attribute key, e.g. `http.route`."
+                            },
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "eq",
+                                "prefix"
+                              ],
+                              "description": "How a structured attribute matcher compares an attribute value."
+                            },
+                            "value": {
+                              "type": "string",
+                              "maxLength": 1024
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "op",
+                            "value"
+                          ],
+                          "additionalProperties": false,
+                          "description": "One structured attribute matcher. Tool inputs and saved queries carry\nmatchers in this form; the HTTP routes keep their `key=value` string\nparameters, and a client serializes each matcher to one of them."
+                        },
+                        "description": "Attribute matchers a series must all satisfy."
+                      }
+                    },
+                    "required": [
+                      "signal",
+                      "metric_name"
+                    ],
+                    "additionalProperties": false,
+                    "description": "A saved metric range query."
+                  }
+                ],
+                "description": "Exactly one structured filter; `signal` selects which."
+              }
+            },
+            "required": [
+              "id",
+              "created_at",
+              "updated_at",
+              "etag",
+              "name",
+              "filter"
+            ],
+            "additionalProperties": false,
+            "description": "A named filter for traces, logs or metrics, owned by one project."
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_argument",
+                  "not_found",
+                  "no_project_access",
+                  "collector_unreachable",
+                  "collector_timeout",
+                  "cancelled",
+                  "collector_unauthorized",
+                  "collector_rate_limited",
+                  "collector_rejected",
+                  "collector_error",
+                  "contract_mismatch",
+                  "insufficient_scope",
+                  "conflict",
+                  "precondition_failed",
+                  "precondition_required",
+                  "internal"
+                ],
+                "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description of this failure."
+              },
+              "retryable": {
+                "type": "boolean",
+                "description": "Whether the same call can succeed when repeated unchanged."
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Structured output for create_saved_query and update_saved_query."
       }
     }
   ],
