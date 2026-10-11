@@ -28,11 +28,11 @@
     "node": "24.x"
   },
   "devDependencies": {
-    "@types/node": "26.6.4",
-    "oxlint": "1.86.0",
-    "oxlint-tsgolint": "7.0.2003",
+    "@types/node": "26.6.5",
+    "oxlint": "1.87.0",
+    "oxlint-tsgolint": "7.0.2004",
     "typescript": "7.0.2",
-    "vite": "8.3.3"
+    "vite": "8.3.4"
   },
   "optionalDependencies": {
     "@typescript/typescript-darwin-arm64": "7.0.2",
