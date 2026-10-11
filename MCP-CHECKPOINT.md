@@ -63,6 +63,18 @@ implementation into this branch. The remaining point-10 review/merge work
 and authenticated Claude/ChatGPT rendering evidence remain pending under the
 existing requirements. Other point-10 work is unchanged.
 
+Toolchain, contract and releases checked **2026-10-11**:
+[PR #126](https://github.com/ANcpLua/qyl.mcp/pull/126) pins Node 24 next to
+Bun 1.4.3 in `mise.toml`, and CI no longer uses `setup-node`. The contract moved
+in lockstep to 11.4.0 (TypeSpec 1.17, revision `sha256:3605ae27d2edf632`):
+Collector [qyl PR #653](https://github.com/ANcpLua/qyl/pull/653) merged as
+`6a0cde7`, consumer [PR #131](https://github.com/ANcpLua/qyl.mcp/pull/131) as
+`89be0fd`. The release workflow published `qyl-mcp-server` 7.2.0 and 7.2.1 with
+provenance after clean `npx` consumers passed in both eras. The first 11.4.0
+deploy refused to start until the Collector served the new revision.
+[Dated evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md) records the commands, output and the deploy order this
+requires.
+
 The [release contract map](release/contract.md) and [owner handoff](release/README.md)
 connect all revised points and Done-when criteria to the ledger and dated
 commands/output. [Point-14 evidence](docs/evidence/2026-10-08-followup-14.md) records the new CI audit;
@@ -74,7 +86,7 @@ with explicit owner fields. Final completion still requires checking the merged
 
 | State | Dated evidence |
 | --- | --- |
-| Split SDK 2.3.1, contract package 11.3.0, server source version 7.2.0. | [Option-A pins and manifest evidence](docs/evidence/2026-10-08-point-8-options.md); [earlier package inventory](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory). |
+| Split SDK 2.3.1, contract package 11.4.0 (revision `sha256:3605ae27d2edf632`), server source and npm version 7.2.1. | [11.4.0 lockstep and release evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md); [Option-A pins and manifest evidence](docs/evidence/2026-10-08-point-8-options.md); [earlier package inventory](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory). |
 | 11 read-only tools; ten model-facing and app-only `fetch_telemetry`; trace/CI descriptions now include point-8 options. | [Option-A manifest comparison](docs/evidence/2026-10-08-point-8-options.md); earlier inventory retained in step 7. |
 | Incoming native records exclude arguments, `_meta` and result bodies. | [Strict schema source](docs/evidence/2026-10-08-step7.md#native-records) and [regression evidence](MCP-V2-INTEROP-TODO.md#step-1--rules-and-native-call-records). |
 | Build, 337 tests, transport, SDK, lint and project-isolation checks passed locally. | [Step-4 transcript](docs/evidence/2026-10-08-step4.md). The initial OTLP failure and successful fresh-main Collector rerun are both retained. |
@@ -97,11 +109,15 @@ be read from GitHub rather than inferred from these earlier runs.
 metadata; `npm view qyl-mcp-server version` returned 7.1.1 on 2026-10-08.
 [Exact output](docs/evidence/2026-10-08-step4.md#endpoint).
 These results do not prove the deployed commit, a fresh npm consumer, a real
-client connection or production Events behavior.
+client connection or production Events behavior. On 2026-10-11 the registry
+returned `7.2.1`, and the release workflow's clean `npx` consumer smoke passed in
+both eras ([release evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases)). That is CI evidence, not the
+owner's pinned-Inspector consumer observation.
 
 The active deployment ID and commit were observed read-only in
 [point-6 evidence](docs/evidence/2026-10-08-followup-06.md); recheck that dated
-snapshot before reviewer access. All five client connections, production Events
+snapshot before reviewer access. The [2026-10-11 snapshot](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#production-deploy-order)
+records deployment `2c916c88` for `f495bf3`. All five client connections, production Events
 lifecycle and modern request header proof, reviewer account, demo recording, publisher
 identity, targeting, public pages, attestations, submission and publication
 remain in the [owner-action index](MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending)

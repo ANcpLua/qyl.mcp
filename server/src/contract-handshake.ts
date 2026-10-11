@@ -6,7 +6,10 @@
  * generated artifacts it was built from and refuses to run on a mismatch. It is
  * the SelfExportGuard pattern applied to the contract axis: lockstep deploys are
  * the honest cost of one contract, and for a solo-operated Railway pair that
- * cost is near zero.
+ * cost is near zero — in order. The hosted service mounts a volume, so Railway
+ * stops the old container before the new one passes this gate: when a bump
+ * changes the revision, the collector's deployment must serve it first
+ * (2026-10-11: merging both sides together cost a 20-minute 502).
  *
  * What the gate proves is skew, and skew needs evidence: a revision the
  * collector actually advertised. An unreachable collector proves nothing, so it

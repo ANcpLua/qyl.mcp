@@ -1,6 +1,6 @@
 # Release preparation handoff
 
-Dated 2026-10-08. Read the [release contract, its acceptance evidence and the
+Dated 2026-10-08; the contract, release and deployment rows were updated 2026-10-11. Read the [release contract, its acceptance evidence and the
 requirements map](contract.md), the controlling
 [objective](../goal-objective.md), [ledger](../MCP-V2-INTEROP-TODO.md) and
 [command/output evidence](../docs/evidence/2026-10-08-followup-13.md) together.
@@ -73,9 +73,9 @@ actual output for each completed observation.
 | Demo and review cases | Follow the [recording walkthrough](../submission/README.md#recording-walkthrough-for-the-owner); run and record the five positive and three negative manifest cases, then supply a reviewer-accessible playback URL. |
 | Five actual clients | Inspector DCR is currently blocked by the owner-reported Auth0 `too_many_entities` response. The supplied WIP assigns tenant review and a fixed Inspector client to Advisor 1; retry with that public client ID when supplied. [Reported blocker and WIP](../docs/evidence/2026-10-08-followup-15.md#owner-reported-inspector-connection-blocker). Run ChatGPT, Codex, claude.ai, Claude Code and MCP Inspector against the hosted service with the isolated account, following the [exact client procedures](../MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending). Inspector 2.9.0 modern evidence must include the captured `MCP-Protocol-Version: 2026-07-28` header and actual tool results. Local fixture discovery is not that proof. |
 | Production Events lifecycle | Follow the same ledger's `events/list`, subscribe, signed matching delivery, nonmatching filter, persistence, renewal, unsubscribe and revocation steps. Record bounded delivery/no-delivery windows without keys. |
-| Deployment before reviewer access | Re-observe the active Railway deployment ID and source commit and compare with intended main. [Point 6](../docs/evidence/2026-10-08-followup-06.md) is a dated snapshot, not a guarantee about the next deployment. |
+| Deployment before reviewer access | Re-observe the active Railway deployment ID and source commit and compare with intended main. [Point 6](../docs/evidence/2026-10-08-followup-06.md) is a dated snapshot, not a guarantee about the next deployment; the [2026-10-11 snapshot](../docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#production-deploy-order) records deployment `2c916c88` for `f495bf3`. |
 | Challenge token | Copy the portal token into `OPENAI_APPS_CHALLENGE` on the intended deployment, check the plaintext route and complete portal verification; [point 7](../docs/evidence/2026-10-08-followup-07.md) observed 404 before this action. |
-| Inspector evidence after Collector deployment | [qyl PR #642](https://github.com/ANcpLua/qyl/pull/642) merged the 11.3.0 pin. [Option-A evidence](../docs/evidence/2026-10-08-point-8-options.md) records the successful Railway deployment and the local consumer's subsequent production Collector handshake. The owner supplies the separate authenticated Inspector evidence. |
+| Inspector evidence after Collector deployment | [qyl PR #653](https://github.com/ANcpLua/qyl/pull/653) merged the 11.4.0 pin. The [11.4.0 evidence](../docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#production-deploy-order) records Collector deployment `15e4efe7` serving revision `sha256:3605ae27d2edf632` and the hosted server's completed handshake; [Option-A evidence](../docs/evidence/2026-10-08-point-8-options.md) covers the earlier 11.3.0 pin. The owner supplies the separate authenticated Inspector evidence. |
 | Attestations and publication | Review the seven connector acknowledgement fields and all other applicable portal attestations, validate the three separate records, then decide and perform submission/publication. [Scope exclusions](../docs/evidence/2026-10-08-followup-11.md) still apply. |
 
 No portal action, publisher verification, public-page publication, credential

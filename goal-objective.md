@@ -58,6 +58,11 @@ date, and the actual output. Do not copy any of these claims into README,
 checkpoint, matrix, listing or review text. A successful private connection is
 not a completed public submission.
 
+Re-established on 2026-10-11 with fresh evidence: the release workflow published
+`qyl-mcp-server` 7.2.0 and 7.2.1 with provenance after clean `npx` consumer
+checks in both eras ([evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases)). The 7.1.1 claim and the
+owner's pinned-Inspector consumer observation remain open.
+
 ## Owner decisions
 
 - Read-only is not a requirement. Neither the Anthropic connector checklist,

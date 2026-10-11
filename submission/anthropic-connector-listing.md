@@ -50,10 +50,10 @@ Sign-in uses OAuth with the qyl:read scope, and the qyl server decides which Col
 | Reads or writes data | Reads only. Every tool is annotated `readOnlyHint: true`. An optional MCP Events subscription stores only its own subscription state and changes no telemetry. |
 
 The description follows the committed tool manifest and the shared
-investigation skill. The new trace-projection and configurable CI-prefix
-options are deliberately absent: their Collector-lockstep/runtime work
-remains open as recorded in
-[the refreshed point-8 blocker](../docs/evidence/2026-10-08-followup-15.md#release-blocker-refreshed-after-owner-release).
+investigation skill. It stays at the tool level and does not list the
+trace-projection and CI-prefix options. Those shipped in `qyl-mcp-server` 7.2.0
+after the Collector lockstep ([point-8 evidence](../docs/evidence/2026-10-08-point-8-options.md);
+[release evidence](../docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases)).
 
 ## MCP App screenshots — owner field
 

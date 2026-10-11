@@ -326,5 +326,5 @@ them. Review cases and the demo are drafts until run in an owner client.
 The source pins `@ancplua/qyl-api-schema` 11.4.0, official split MCP
 SDK packages 2.3.1 and Zod 4.6.5. SDK major version and wire revision are
 independent. Server HTTP/stdio use SDK factories and negotiation defaults;
-Workbench uses automatic negotiation. [Contract 11.3.0 evidence](docs/evidence/2026-10-08-point-8-options.md) and
+Workbench uses automatic negotiation. [Contract 11.4.0 evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md) and
 [package/serving evidence](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory).
