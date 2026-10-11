@@ -213,10 +213,20 @@ Order:
 
 | ID | Finding | Decision |
 |---|---|---|
-| SEC-1 | qyl-api-schema's `release` environment had no branch or tag rule, and its manual publish took any version from any ref | **Fix**, done: the environment allows only `main` and `v*` tags. A main-ancestry guard is in progress |
-| SEC-2 | SemanticConventions' (and AutoInstrumentation's) `nuget` environment had no tag rule, so a `v*` tag on any branch could publish | **Fix**, done: both environments allow only `main` and `v*` tags. A main-ancestry guard is in progress |
+| SEC-1 | qyl-api-schema's `release` environment had no branch or tag rule, and its manual publish took any version from any ref | **Fix**, done: the environment allows only `main` and `v*` tags; the main-ancestry guard is qyl-api-schema #50 (`6b81ebd`) |
+| SEC-2 | SemanticConventions' (and AutoInstrumentation's) `nuget` environment had no tag rule, so a `v*` tag on any branch could publish | **Fix**, done: both environments allow only `main` and `v*` tags; the main-ancestry guards are SemanticConventions #65 (`30e7d85`) and AutoInstrumentation #66 (open, merges on green) |
 | SEC-3 | Absolute local paths in dated qyl.mcp evidence docs and `release/contract.md` | **Keep**: verbatim records. The username is public through the GitHub account and commit author, and git history keeps the old text anyway |
 | SEC-4 | qyl.at floated `node = "24"` in jobs that hold `CLOUDFLARE_API_TOKEN` | **Fix**: same as AT-17 (qyl.at #36) |
+| SEC-5 | grpc-dotnet decompressed a gzip or deflate OTLP/gRPC message into an unbounded buffer before the API-key interceptor ran, so an unauthenticated gzip bomb could exhaust the Collector's memory. Port 4317 has no TCP proxy in production, so it was not internet-reachable | **Fix**: qyl #670 adds `BoundedDecompressionProvider` through `PostConfigure`, answering `ResourceExhausted` above `MaxReceiveMessageSize`; red-then-green with six tests. Merges on green |
+
+## Found after the sweep, 2026-10-11
+
+Findings made while fixing, with the same vocabulary. Upstream OpenTelemetry rows (SEM, SPEC, OTLP, COL) live in [2026-10-11-upstream-otel.md](2026-10-11-upstream-otel.md).
+
+| ID | Finding | Decision |
+|---|---|---|
+| QYL-U1 | The Collector drops `jsonrpc.request.id` and `jsonrpc.protocol.version`, which qyl.mcp emits on its own spans, logs and metrics: `jsonrpc.` is not an allowed prefix in `eng/config/collector-semantic-policy.json`, and the deprecated `rpc.jsonrpc.request_id` is renamed into the same dropped key before the check. The drop is reproduced | **Fix**: allow `jsonrpc.` in the Collector policy; it is upstream vocabulary. In the qyl OTLP 1.11.1 PR (branch `feat/otlp-upstream-1.11.1`, with OTLP-1, OTLP-2 HTTP and OTLP-3), in progress |
+| QYL-F1 | `tests/Qyl.Cli.Tests/RunnerApiTests.cs:158` (`Runner_is_loopback_only_has_no_wildcard_cors_and_rejects_an_untrusted_host`) fails intermittently on linux-arm64 (run 38145289046 on #667, once on #632, #664's first run) with its own diagnostic "Cross-site POST to port 33567 answered 200; Server: Microsoft-NetCore/2.0; body empty": an `HttpListener` closed the response without a status. Either a runner path that ends a response before writing 403, or a port reused between parallel test runners | **Investigate**, then Fix: reproduce under parallel load with a listener-instance header, fix the runner path or the test's port allocation (branch `fix/runner-api-tests-port-race`, in progress). Not "just a flake" until the listener is named |
 
 ## Status, 2026-10-11 16:00 Europe/Vienna
 
@@ -232,5 +242,32 @@ Order:
 | AutoInstrumentation | AI-S1 to S11, D1, T1, A3; the Hosting options documented | #58 (`1e51d6a`) |
 | all six | SC-10 | qyl #662, qyl.mcp #139, qyl.at #34, qyl-api-schema #46, SemanticConventions #63, AutoInstrumentation #59 |
 
-Still open after this sweep: QYL-C3 (#664); every **Contract 11.6.0**, **Contract 12.0.0**, **Major** and **Fix with writes** row (drafts in progress); AT-19 (**Owner**).
+Still open after this sweep at 16:00: QYL-C3 (#664); every **Contract 11.6.0**, **Contract 12.0.0**, **Major** and **Fix with writes** row (drafts in progress); AT-19 (**Owner**).
+
+## Status, 2026-10-11 17:15 Europe/Vienna
+
+Closed since 16:00:
+
+| Row | PR (merge) |
+|---|---|
+| QYL-C3 | qyl #664 (`4452058`) |
+| SCH-1 | qyl-api-schema #47 (`0649692`); the fixed `files` list ships with 11.6.0 |
+| SEC-1, SEC-2 | environment policy, plus the main-ancestry guards qyl-api-schema #50 (`6b81ebd`), SemanticConventions #65 (`30e7d85`), AutoInstrumentation #66 (open, merges on green) |
+| MCP-A8 follow-up | 7.3.1 (#143, `26e3944`): transient non-contract answers keep their retryable status code |
+| Upstream OpenTelemetry decisions | qyl.mcp #147 (`314a4b3`), corrected by #149 (`bba50e6`) |
+
+In progress:
+
+| Thread | State |
+|---|---|
+| **Contract 11.6.0** | qyl-api-schema #49 merged (`4f2143c`); `@ancplua/qyl-api-schema` 11.6.0-rc.1 on npm (`next`) and `Qyl.Api.Contracts` 11.6.0-rc.1 on NuGet, revision `sha256:d926c3c6ab829cbf`. qyl.mcp read side: draft #148 (`feat/contract-11.6.0-read-side`): MCP-A2, A3, A4, A5, A6, A7, C3 cursor, SPEC-1; version 7.4.0. Collector: branch `feat/collector-contract-11.6.0` (`bb2f5173`, PR pending), pins the rc and implements QYL-A3, A4, A5. Write tools stack on #148. Merge order: Collector PR → Railway SUCCESS → `api.qyl.at` serves the revision → #148 → the final 11.6.0 as a pin-only bump |
+| **Contract 12.0.0** | qyl-api-schema draft #51, revision `sha256:b29439eba28e752b`; qyl.at must serve `https://qyl.at/problems/<name>` (SCH-20) before release |
+| AI-A1, AI-A2 (**Major** 24.0.0) | AutoInstrumentation #63: `QylTelemetryOptions` (not `QylOptions`, which collides with qyl's own type), `QylHostApplicationBuilderExtensions`, `EnableSessionTagInheritance`; then v24.0.0 and the qyl re-pin |
+| QYL-A9 (**Major** Qyl.Api.Sdk 10.0.0) | qyl draft #666, after 9.1.0 |
+| qyl 9.1.0 | tag `v9.1.0` on `705a0321`; publish run 38145741348 in its final job; qyl.at's display and the README row follow the index |
+| SEC-5 | qyl #670, merges on green |
+| QYL-U1, OTLP-1, OTLP-2 (HTTP), OTLP-3 | qyl branch `feat/otlp-upstream-1.11.1`, PR pending |
+| QYL-F1 | qyl branch `fix/runner-api-tests-port-race`, PR pending |
+
+Still open: every **Contract 11.6.0**, **Contract 12.0.0**, **Major** and **Fix with writes** row above (drafts in progress); AT-19 (**Owner**).
 
