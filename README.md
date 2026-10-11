@@ -9,7 +9,7 @@ outputs in the [source evidence](docs/evidence/2026-10-08-step7.md), and the
 toolchain, contract and release records of **2026-10-11** in the
 [release evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md).
 Local test results, CI results, public HTTP observations and pending owner
-checks are distinct in the [evidence ledger](MCP-V2-INTEROP-TODO.md).
+checks are distinct in the evidence ledger.
 
 | Component | Source role | Evidence |
 | --- | --- | --- |
@@ -60,7 +60,7 @@ Inspector configuration (repeat with `"legacy"` for the legacy check):
 
 ChatGPT, Codex, claude.ai, Claude Code and Inspector connections remain
 **owner checks**, with exact procedures in the
-[ledger](MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending).
+ledger.
 The production modern-era check uses Inspector **2.9.0**, OAuth,
 `protocolEra: "modern"`, `tools/list`, and a captured
 `MCP-Protocol-Version: 2026-07-28` request header. A legacy-only connection
@@ -101,7 +101,7 @@ metric matchers and the `fetch_telemetry` union);
 The [generated manifest](server/tool-manifest.snapshot.json) is the tool
 contract. It has 18 tools: 13 read tools annotated `readOnlyHint: true` and the
 five [write tools](#write-tools); `fetch_telemetry` is app-only through
-`_meta.ui.visibility: ["app"]`. The [tool matrix](QYL-MCP-MATRIX.md) maps each
+`_meta.ui.visibility: ["app"]`. The tool matrix maps each
 tool to the user's question and its limits, with dated manifest evidence.
 
 Start with sessions and traces, drill into one trace and its error logs,
@@ -114,7 +114,7 @@ are retained; the summary states how many matching spans were returned.
 detail. `ci_log` accepts telemetry from any CI following its emitter convention;
 `service_prefix` selects services in both run lists and phase breakdowns and
 defaults to `qyl-ci`. The [shared skill](submission/qyl/skills/qyl-investigate/SKILL.md)
-contains the full workflow. [Description evidence](MCP-V2-INTEROP-TODO.md#step-3--agent-skill).
+contains the full workflow. Description evidence.
 
 ### Write tools
 
@@ -164,7 +164,7 @@ is bounded and excludes OAuth tokens and copied telemetry.
 
 These are implementation/local-test results. Production subscription,
 matching/non-matching delivery, persistence, renewal, unsubscribe and
-revocation remain separate [owner checks](MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending).
+revocation remain separate owner checks.
 
 ## The workbench
 
@@ -196,7 +196,7 @@ records at `~/.qyl/mcp-native-executions.json`; `QYL_MCP_NATIVE_STATE_PATH`
 overrides the path. Hosted HTTP with `MCP_PUBLIC_URL` disables that local store.
 Known version-1/2 data is projected into the minimized schema; unreadable
 archives require operator review. [Native-record source](docs/evidence/2026-10-08-step7.md#native-records)
-and [regression results](MCP-V2-INTEROP-TODO.md#step-1--rules-and-native-call-records), 2026-10-08.
+and regression results, 2026-10-08.
 
 OTLP exports include operation timing/status and trace correlation. Native
 incoming calls do not supply argument/result bodies to that telemetry.
@@ -374,7 +374,7 @@ The [2026-10-08 transcript](docs/evidence/2026-10-08-step4.md) records actual
 results, including the initial OTLP failure against the adjacent Collector
 feature branch and the successful rerun against a fresh Collector `main`.
 Use `QYL_COLLECTOR_PROJECT` to select the intended fixture. Static `check_v2`
-historically returned 31 error-severity findings; the [per-rule assessments](MCP-V2-INTEROP-TODO.md#static-findings--assessed-2026-10-08)
+historically returned 31 error-severity findings; the per-rule assessments
 explain the installed paths without suppressing diagnostics. Both-era runtime
 evidence is recorded separately. The revised point-3 run on 2026-10-08 reports
 zero errors with an unchanged checker after explicit `zod/v4` imports and a
