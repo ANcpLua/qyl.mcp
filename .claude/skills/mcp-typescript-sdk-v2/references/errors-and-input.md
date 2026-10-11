@@ -50,20 +50,30 @@ handler runs again with the responses. Works for `tools/call`, `prompts/get`, `r
 import { inputRequired, acceptedContent, inputResponse } from '@modelcontextprotocol/server';
 
 async ({ env }, ctx): Promise<CallToolResult | InputRequiredResult> => {
-  const confirmed = acceptedContent(ctx.mcpReq.inputResponses, 'confirm', confirmationSchema);
-  if (confirmed?.confirm !== true) {
+  const response = inputResponse(ctx.mcpReq.inputResponses, 'confirm');
+  if (response.kind === 'missing') {
     return inputRequired({
       inputRequests: {
         confirm: inputRequired.elicit({ message: `Deploy to ${env}?`, requestedSchema: confirmationSchema })
       }
     });
   }
+  const confirmed = acceptedContent(ctx.mcpReq.inputResponses, 'confirm', confirmationSchema);
+  if (confirmed?.confirm !== true) {
+    return { content: [{ type: 'text', text: 'Deployment cancelled; no changes made.' }] };
+  }
+  // Perform the authorized deployment here; return success only after it succeeds.
+  await deploy(env);
   return { content: [{ type: 'text', text: `Deployed to ${env}` }] };
 }
 ```
 
 Rules:
 
+- **Ask once**: ask only for a `missing` response. Decline, cancellation, accepted
+  `false`, or invalid confirmation ends the call without a write; none reopens the
+  same prompt. The deployment above is illustrative third-party application code,
+  not a capability of the qyl telemetry tools.
 - **Write-once handlers**: one handler runs on every round — read each answer first, request only
   the keys still missing. `inputRequests` is a map; one round carries every outstanding request.
   `inputResponses` holds only the latest round; nothing else survives between rounds.
