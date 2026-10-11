@@ -37,7 +37,8 @@ import {
   parseCollectorPage,
   resolveMode,
 } from "./collector.js";
-import { IF_MATCH_HEADER } from "./contract-headers.js";
+import { createHash } from "node:crypto";
+import { IDEMPOTENCY_KEY_HEADER, IF_MATCH_HEADER } from "./contract-headers.js";
 import { contractSchema } from "./contract-validation.js";
 import { describeToolError, type ToolScope } from "./request-scope.js";
 import { shortId } from "./summaries.js";
@@ -91,6 +92,33 @@ function ifMatch(etag: string): Readonly<Record<string, string>> {
   return { [IF_MATCH_HEADER]: etag };
 }
 
+/** JSON with object keys in one order at every depth, so equal bodies hash equal. */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, item: unknown) =>
+    item !== null && typeof item === "object" && !Array.isArray(item)
+      ? Object.fromEntries(
+        Object.entries(item as Record<string, unknown>).sort(([left], [right]) =>
+          left < right ? -1 : left > right ? 1 : 0),
+      )
+      : item);
+}
+
+/**
+ * The retry key of a creating POST. A create's result can be lost after the
+ * Collector committed it (a timeout, a dropped connection), and the failure is
+ * reported retryable; the same intended create must then repeat the same key,
+ * so the Collector returns the first object instead of making a second one.
+ * The key is derived from the canonical body and the resolved project, never
+ * chosen by the model: an identical note on the same target within the
+ * Collector's 24-hour window is the same note.
+ */
+function idempotencyKey(body: unknown, options: CollectorRequestOptions): Readonly<Record<string, string>> {
+  const digest = createHash("sha256")
+    .update(`${options.access?.project ?? ""}\0${canonicalJson(body)}`)
+    .digest("hex");
+  return { [IDEMPOTENCY_KEY_HEADER]: digest };
+}
+
 function resourcePath(base: string, id: string, suffix = ""): string {
   return `${base}/${encodeURIComponent(id)}${suffix}`;
 }
@@ -134,12 +162,16 @@ export async function createAnnotation(
   await requireLiveCollector("create_annotation");
   // The create's 404 is its target: nothing by that id is recorded in this
   // project, so there is nothing to attach the note to.
+  const create = { target: input.target, text: input.text };
   const body = await refusals(
     {
       403: "the Collector refused the change: the server's Collector key needs the write role",
       404: `${describeTarget(input.target)} is not recorded in this project`,
     },
-    () => collectorPost(ANNOTATIONS_PATH, { target: input.target, text: input.text }, options),
+    () => collectorPost(ANNOTATIONS_PATH, create, {
+      ...options,
+      headers: { ...options.headers, ...idempotencyKey(create, options) },
+    }),
   );
   return redactTelemetry(parseCollectorBody(body, `POST ${ANNOTATIONS_PATH}`, AnnotationCreatedSchema));
 }
@@ -160,20 +192,20 @@ export async function createSavedQuery(
   options: CollectorRequestOptions,
 ): Promise<SavedQuery> {
   await requireLiveCollector("create_saved_query");
+  const create = {
+    name: input.name,
+    ...(input.description === undefined ? {} : { description: input.description }),
+    filter: input.filter,
+  };
   const body = await refusals(
     {
       403: "the Collector refused the change: the server's Collector key needs the write role",
       409: `a saved query named "${input.name}" already exists in this project`,
     },
-    () => collectorPost(
-      SAVED_QUERIES_PATH,
-      {
-        name: input.name,
-        ...(input.description === undefined ? {} : { description: input.description }),
-        filter: input.filter,
-      },
-      options,
-    ),
+    () => collectorPost(SAVED_QUERIES_PATH, create, {
+      ...options,
+      headers: { ...options.headers, ...idempotencyKey(create, options) },
+    }),
   );
   return redactTelemetry(parseCollectorBody(body, `POST ${SAVED_QUERIES_PATH}`, SavedQueryCreatedSchema));
 }
@@ -356,18 +388,32 @@ export async function readSessionAnnotations(
     return { annotations: [], text: "" };
   }
   try {
+    // One session's failed page costs that session's notes, not every session's.
     const pages: Array<{ annotations: Annotation[]; hasMore: boolean }> = [];
+    let failed = 0;
+    let firstFailure: unknown;
     for (let start = 0; start < sessionIds.length; start += SESSION_READ_CONCURRENCY) {
-      pages.push(...await Promise.all(sessionIds
+      const settled = await Promise.allSettled(sessionIds
         .slice(start, start + SESSION_READ_CONCURRENCY)
-        .map((sessionId) => readAnnotationPage({ session_id: sessionId }, scope.collector))));
+        .map((sessionId) => readAnnotationPage({ session_id: sessionId }, scope.collector)));
+      for (const outcome of settled) {
+        if (outcome.status === "fulfilled") pages.push(outcome.value);
+        else {
+          failed += 1;
+          firstFailure ??= outcome.reason;
+        }
+      }
     }
+    if (pages.length === 0) throw firstFailure;
     const annotations = pages
       .flatMap((page) => page.annotations)
       .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at));
     await scope.step(`Read ${annotations.length} annotation(s) for ${sessionIds.length} session(s)`);
     const safe = redactTelemetry(annotations);
-    return { annotations: safe, text: summarizeAnnotations(safe, pages.some((page) => page.hasMore)) };
+    const partial = failed === 0
+      ? ""
+      : `\nAnnotations of ${failed} session(s) could not be read: ${describeToolError(firstFailure).message}`;
+    return { annotations: safe, text: summarizeAnnotations(safe, pages.some((page) => page.hasMore)) + partial };
   } catch (error) {
     await scope.step("Annotations unavailable");
     return unavailable(error);

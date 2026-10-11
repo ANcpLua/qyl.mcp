@@ -49,3 +49,12 @@ export const IF_MATCH_HEADER = requiredHeaderName(
   qylOpenApi.components.parameters["Common.IfMatchHeader"],
   "published Qyl If-Match precondition parameter",
 );
+
+/**
+ * Header carrying the retry key of a creating POST (`Common.IdempotencyKeyHeader`
+ * parameter): a repeat with the same key and body returns the first result.
+ */
+export const IDEMPOTENCY_KEY_HEADER = requiredHeaderName(
+  qylOpenApi.components.parameters["Common.IdempotencyKeyHeader"],
+  "published Qyl Idempotency-Key parameter",
+);

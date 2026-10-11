@@ -32,8 +32,9 @@ connectors, never through qyl tools.
 Checked in the repository on 8 October 2026.
 
 - `main` uses the split TypeScript SDK v2 packages; `bun run verify:sdk` in
-  CI rejects SDK v1 packages. `server/tool-manifest.snapshot.json` lists 11
-  tools, all `readOnlyHint: true`. `fetch_telemetry` is app-only through
+  CI rejects SDK v1 packages. `server/tool-manifest.snapshot.json` lists 18
+  tools: the 13 read tools `readOnlyHint: true`, the five write tools behind
+  `qyl:write` and `qyl:delete`. `fetch_telemetry` is app-only through
   `_meta.ui.visibility: ["app"]`. A `trace.error` Events implementation exists
   in `server/src/events.ts`; account and project scoping in
   `server/src/collector-access.ts`. Native tool-call records in
@@ -195,8 +196,8 @@ Never set owner checks or bypass configured gates; resolve review findings.
     `goal-objective.md`, `MCP-V2-INTEROP-TODO.md` and `docs/evidence/`.
 14. Turn the audit snippet in `docs/evidence/2026-10-08-step7.md` into a CI
     script in the `verify` job. Check required `submission/qyl` files, both
-    root manifests against `submission/schemas`, README word count, all eleven
-    descriptions (user need, no model instruction), native record schema without
+    root manifests against `submission/schemas`, README word count, every tool
+    description (user need, no model instruction), native record schema without
     `arguments`/`_meta`, ledger without "not recorded" rows, and local links.
     `server/docs/completion.md` is not the source. Keep `check_v2` outside CI
     because its skill is external to this repository.

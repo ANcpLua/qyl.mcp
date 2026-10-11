@@ -15,7 +15,7 @@ import {
 } from "@modelcontextprotocol/server";
 import type { Annotation, SavedQuery } from "@ancplua/qyl-api-schema/types";
 import { createResourceAuthorization } from "./authorization.js";
-import { API_KEY_HEADER, IF_MATCH_HEADER, PROJECT_HEADER } from "./contract-headers.js";
+import { API_KEY_HEADER, IDEMPOTENCY_KEY_HEADER, IF_MATCH_HEADER, PROJECT_HEADER } from "./contract-headers.js";
 import { getDemo } from "./demo.js";
 import {
   QYL_MCP_DELETE_SCOPE,
@@ -115,6 +115,7 @@ interface CollectorCall {
   project: string | null;
   apiKey: string | null;
   ifMatch: string | null;
+  idempotencyKey: string | null;
   body: unknown;
 }
 
@@ -135,6 +136,7 @@ function mockCollector(context: TestContext, route: Route): CollectorCall[] {
       project: request.headers.get(PROJECT_HEADER),
       apiKey: request.headers.get(API_KEY_HEADER),
       ifMatch: request.headers.get(IF_MATCH_HEADER),
+      idempotencyKey: request.headers.get(IDEMPOTENCY_KEY_HEADER),
       body: text === "" ? undefined : JSON.parse(text),
     };
     calls.push(call);
@@ -347,12 +349,14 @@ test("writes reach only the verified subject's project, with its key and the eta
   assert.equal(created.isError, undefined, JSON.stringify(created));
   assert.deepEqual(structured<{ annotation: Annotation }>(created).annotation.target, target);
   assert.match(JSON.stringify(created.content), /Created annotation ann-1 on span/u);
-  assert.deepEqual(calls.at(-1), {
+  const firstCreate = calls.at(-1);
+  assert.ok(firstCreate);
+  assert.match(firstCreate.idempotencyKey ?? "", /^[a-f0-9]{64}$/u, "a create carries a derived Idempotency-Key");
+  assert.deepEqual(firstCreate, {
     method: "POST", path: "/api/v1/annotations", search: new URLSearchParams(),
-    project: "owner", apiKey: "owner-write-key", ifMatch: null,
+    project: "owner", apiKey: "owner-write-key", ifMatch: null, idempotencyKey: firstCreate.idempotencyKey,
     body: { target, text: "The checkout retry loop starts here." },
   });
-
   // No argument can name a project: the published input is sealed.
   const smuggled = await reviewer.callTool({
     name: "create_annotation",
@@ -398,6 +402,13 @@ test("writes reach only the verified subject's project, with its key and the eta
     ],
   );
   assert.doesNotMatch(JSON.stringify([created, updated, deleted, stale]), /owner-write-key|review-write-key/u);
+
+  // The same intended create repeats the same key, so a retry after a lost
+  // answer returns the first object; a different note is a different key.
+  await owner.callTool({ name: "create_annotation", arguments: { target, text: "The checkout retry loop starts here." } });
+  assert.equal(calls.at(-1)?.idempotencyKey, firstCreate.idempotencyKey);
+  await owner.callTool({ name: "create_annotation", arguments: { target, text: "A different note." } });
+  assert.notEqual(calls.at(-1)?.idempotencyKey, firstCreate.idempotencyKey);
 });
 
 test("saved queries: create, conflict, update, list with paging, run and delete", async (context) => {
