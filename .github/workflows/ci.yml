@@ -61,12 +61,13 @@ jobs:
       - name: Start the live collector fixture build
         run: |
           # Every descriptor is redirected, so the step does not wait on the background job.
+          # nice keeps the foreground bun tests at their usual pace; the build takes what is idle.
           {
             status=0
-            dotnet restore qyl/services/qyl.collector/qyl.collector.csproj \
+            nice -n 10 dotnet restore qyl/services/qyl.collector/qyl.collector.csproj \
               --configfile qyl/nuget.config \
               -p:TreatWarningsAsErrors=false &&
-            dotnet build qyl/services/qyl.collector/qyl.collector.csproj \
+            nice -n 10 dotnet build qyl/services/qyl.collector/qyl.collector.csproj \
               --configuration Release \
               --no-restore \
               -p:QylEmbedDashboard=false || status=$?
