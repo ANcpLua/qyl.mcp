@@ -205,9 +205,13 @@ the resource audience and viewer origin. For Claude, viewer metadata uses
 the first 32 hex characters of SHA-256 over the full public `/mcp` URL plus
 `.claudemcpcontent.com`; ChatGPT receives the HTTPS origin in `ui.domain`
 and its `openai/widgetDomain` alias. Unknown hosts omit both fields.
-The SDK's per-request client name selects this presentation metadata, with
-`Claude-User` or `openai-mcp` as hints for stateless legacy HTTP. Local viewers
-omit the domain. Keep Collector credentials on the server. With project mapping
+The SDK's per-request client name and the `User-Agent` are both checked for
+Claude or ChatGPT, including `Claude-User`, `openai-mcp/1.0.0` and `ChatGPT-User`.
+A recognized client name takes precedence if the hints disagree; an unknown
+name does not mask a recognized User-Agent. These identifiers and ChatGPT's
+origin mapping are compatibility assumptions tested with synthetic clients;
+real client identifiers and successful ChatGPT rendering still need observation.
+Local viewers omit the domain. Keep Collector credentials on the server. With project mapping
 enabled, only the verified subject selects the project; tool arguments and
 metadata do not select credentials.
 

@@ -9,6 +9,14 @@ export function hostedUiDomain(publicMcpUrl: string): (context: ServerContext) =
   // Hash the exact configured connector URL, including its path and trailing slash.
   const claudeDomain = `${createHash("sha256").update(publicMcpUrl).digest("hex").slice(0, 32)}.claudemcpcontent.com`;
 
+  const domainForHint = (hint: string): string | undefined => {
+    if (/^(?:claude(?:ai)?(?:[-\s_./]|$)|anthropic\/claude(?:ai)?(?:[-\s_./]|$))/iu.test(hint)) {
+      return claudeDomain;
+    }
+    if (/^(?:chatgpt|openai-mcp)(?:[-\s_./]|$)/iu.test(hint)) return origin;
+    return undefined;
+  };
+
   return (context) => {
     const envelope = context.mcpReq.envelope;
     const clientInfo = envelope && CLIENT_INFO_META_KEY in envelope
@@ -18,13 +26,10 @@ export function hostedUiDomain(publicMcpUrl: string): (context: ServerContext) =
       && "name" in clientInfo && typeof clientInfo.name === "string"
       ? clientInfo.name
       : undefined;
-    // Stateless legacy HTTP has no retained initialize.clientInfo. Its
-    // per-request User-Agent is a fallback only when SDK clientInfo is absent.
-    const clientHint = clientName ?? context.http?.req?.headers.get("user-agent") ?? "";
-    if (/^(?:claude(?:ai)?(?:[-\s_./]|$)|anthropic\/claude(?:ai)?(?:[-\s_./]|$))/iu.test(clientHint)) {
-      return claudeDomain;
-    }
-    if (/^(?:chatgpt|openai-mcp)(?:[-\s_./]|$)/iu.test(clientHint)) return origin;
-    return undefined;
+    // Check both hints, but a recognized SDK name wins if they disagree.
+    // Unknown names and stateless legacy HTTP can still use the User-Agent.
+    const nameDomain = domainForHint(clientName ?? "");
+    const userAgentDomain = domainForHint(context.http?.req?.headers.get("user-agent") ?? "");
+    return nameDomain ?? userAgentDomain;
   };
 }

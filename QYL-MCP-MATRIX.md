@@ -50,14 +50,17 @@ eras and schema portability; see [dated command/output](docs/evidence/2026-10-08
 That result does not establish a production client connection. Workbench's
 source uses automatic negotiation; Events is a separate opt-in lifecycle.
 
-| Resource | Tool | Source evidence, 2026-10-08 |
+| Resource | Tool | Source, 2026-10-11 |
 | --- | --- | --- |
-| `ui://qyl-explorer/mcp-app-v5.html` | `display_traces` | [Client-specific domains and versioned resources](docs/evidence/2026-10-08-point-10-ui-domain.md) |
-| `ui://qyl-explorer/mcp-dashboard-v3.html` | `display_mcp_dashboard` | [Client-specific domains and versioned resources](docs/evidence/2026-10-08-point-10-ui-domain.md) |
+| `ui://qyl-explorer/mcp-app-v6.html` | `display_traces` | [Viewer constants](server/src/config.ts), [registration](server/src/server.ts) |
+| `ui://qyl-explorer/mcp-dashboard-v4.html` | `display_mcp_dashboard` | [Viewer constants](server/src/config.ts), [registration](server/src/server.ts) |
 
-The hosted resource metadata selects Claude's connector-URL hash domain or
-the configured HTTPS origin plus `openai/widgetDomain` alias for ChatGPT;
-unknown hosts omit both domain fields. External connection/resource
-CSP allowlists remain empty. Client-dependent resource responses use a zero
-TTL and private cache scope; the shared HTML cache remains independent of
-the caller. Local viewers omit the domain.
+[Per-request domain selection](server/src/ui-domain.ts) checks both client name
+and User-Agent: Claude receives the exact connector-URL hash domain, ChatGPT
+receives the configured HTTPS origin plus `openai/widgetDomain`, and unknown
+hosts omit both fields. Recognized client names take precedence over conflicting
+User-Agents; unknown names can use the UA. These mappings remain provisional
+pending real-client observations. External connection/resource CSP allowlists remain
+empty. Hosted resource responses use a zero TTL and private cache scope;
+the shared HTML cache remains independent of the caller. Local viewers omit
+the domain. [Regression tests](server/src/ui-domain.test.ts) cover both viewers.
