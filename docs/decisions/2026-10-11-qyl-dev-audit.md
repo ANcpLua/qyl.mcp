@@ -327,3 +327,23 @@ In progress:
 | **Contract 12.0.0** consumers | qyl #673 (Collector and runner, `QylVersion` 11.0.0), after `v10.0.0`. Then Railway, and `api.qyl.at` serving `sha256:b29439eba28e752b`. Then qyl.mcp #153 (7.6.0) |
 
 Still open: every **Contract 11.7.0** row (alert rules, SCH-22); the remaining **Contract 12.0.0** rows until #673 and #153 merge; AT-19 (**Owner**). From here, session "17 05 giga waifu" writes this file.
+
+## Status, 2026-10-11 22:00 Europe/Vienna
+
+Closed since 18:00:
+
+| Row | PR (merge), release |
+|---|---|
+| qyl 10.0.0 (QYL-A9, the AutoInstrumentation 24.0.0 re-pin, QYL-F1, OTLP-1/2/3, QYL-U1) | tag `v10.0.0` on `0ad16bba` (#671 + #666 + #672); published, all eight packages indexed, release 16:12 UTC |
+| AutoInstrumentation 24.0.0 display | qyl.at #44 (`7e03d7f7`) |
+| **Contract 12.0.0**, Collector and runner (SCH-6, SCH-10, SCH-11, SCH-14, SCH-16, SCH-20, consumer side) | qyl #673 (`2a142048`): every problem carries its `type` URI and `code`, one `PageLimit` on every list route, spans page by default; `VerifyCollectorEndpointLimitsMatchOpenApi` resolves the shared `PageLimit`. `QylVersion` 11.0.0; tag `v11.0.0`, published, indexed, release 16:44 UTC. Railway SUCCESS; `api.qyl.at` serves `sha256:b29439eba28e752b` since 16:26 UTC |
+| **Contract 12.0.0**, qyl.mcp | qyl.mcp #153 (`847fb244`): 12.0.0 pins, problems with type URI and code, `codeForProblem`, logs paged at 1000; released as `qyl-mcp-server` 7.6.0 (npm `latest`), Railway SUCCESS 16:29 UTC |
+| Collector base image (found after the sweep: Renovate #658 moved `runtime-deps` to 11.0 under `net10.0` projects) | qyl #674 (`b629b45b`): `runtime-deps:10.0@sha256:12dd273c…`, and a Renovate rule disabling that major with the reason |
+| Release branches (owner rule, 2026-10-11) | `release/*` admitted by the publish environments of qyl, AutoInstrumentation, SemanticConventions, qyl-api-schema and qyl.mcp; the three ancestry guards accept `main` or `release/*` ancestry; AGENTS.md § Release ripple names the rule in all six repos: qyl #675 (`ba211872`), qyl.mcp #155 (`09743367`), qyl.at #45 (`781b6a25`), qyl-api-schema #52 (`b71a9780`), SemanticConventions #67 (`01142199`), AutoInstrumentation #67 (`3d6f48cc`) |
+| Display wave | qyl.at #46 (`1daff448`): qyl and Qyl.Api.Sdk 11.0.0, Qyl.Api.Contracts and `@ancplua/qyl-api-schema` 12.0.0, qyl-mcp-server 7.6.0 |
+
+Decided by the owner, handed to Codex: the plain-string form of `QYL_OTLP_PROJECT_KEYS` (implicit `ingest` + `read`) is a transition shim and goes. One typed format with no defaults (`{"key","roles"}`, validated at startup, the Collector refuses to start on a missing or unknown role), roles as a closed `[Flags]` set named from the contract, the Auth0 reviewer and test user permissions managed as tenant code with a management client recorded in Vitals. `QYL_OTLP_PROJECT_KEYS` and `MCP_EVENTS_AUTH0_CLIENT_ID` / `_SECRET` are registered in Vitals.
+
+In progress: the runner's own telemetry. The owner decided the `qyl` CLI and runner process gets `AddQyl()` (qyl 11.1.0): the collector already runs the AutoInstrumentation runtime through `UseQyl()`, and its interceptor generator has no call site to intercept; the runner process had no telemetry at all. It exports only to the dedicated diagnostics collector on `:5200`, never to the product collector; the G11 edge rule in `eng/build/BuildDependencyEdges.cs` now allows `Qyl.Telemetry.Hosting` for the CLI; the packaging smoke reads the runner's spans back from `:5200` and checks `:5100` has none. PR pending.
+
+Still open: every **Contract 11.7.0** row (alert rules, SCH-22); AT-19 (**Owner**); AutoInstrumentation Renovate #49 and #50 (release age); Codex's items (SemanticConventions TypeScript package, the qyl.mcp generated bindings, the qyl.at registry docs, the key-roles migration).
