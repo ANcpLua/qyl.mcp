@@ -58,9 +58,18 @@ source uses automatic negotiation; Events is a separate opt-in lifecycle.
 [Per-request domain selection](server/src/ui-domain.ts) checks both client name
 and User-Agent: Claude receives the exact connector-URL hash domain, ChatGPT
 receives the configured HTTPS origin plus `openai/widgetDomain`, and unknown
-hosts omit both fields. Recognized client names take precedence over conflicting
-User-Agents; unknown names can use the UA. These mappings remain provisional
-pending real-client observations. External connection/resource CSP allowlists remain
-empty. Hosted resource responses use a zero TTL and private cache scope;
-the shared HTML cache remains independent of the caller. Local viewers omit
-the domain. [Regression tests](server/src/ui-domain.test.ts) cover both viewers.
+hosts omit both fields. Both hints are evaluated: a recognized client name
+wins a conflict; a missing or unrecognized name can use a recognized UA.
+When neither hint is recognized, omitting the optional domain lets a supporting
+host use its default sandbox without disabling the viewer or rejecting the
+MCP client. Local viewers also omit the domain.
+
+[Verified requirements](docs/evidence/2026-10-08-point-10-ui-domain.md#clarification-and-current-behavior-2026-10-11)
+support Claude's hash format when supplied and OpenAI's origin format and UI
+submission requirement. Using the MCP server's origin for ChatGPT is qyl's
+configuration choice. The client hints remain compatibility heuristics;
+actual identifiers and authenticated rendering still need observation.
+External connection/resource CSP allowlists remain empty. Hosted resource
+responses use a zero TTL and private cache scope; the shared HTML cache remains
+independent of the caller. [Regression tests](server/src/ui-domain.test.ts)
+cover both viewers.

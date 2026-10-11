@@ -21,8 +21,8 @@ guide was retrieved and the field checks of the first draft.
 | Name | qyl |
 | One-liner | Investigate the traces, logs, metrics, sessions and CI runs in your qyl Collector with read-only tools, a Trace Explorer and an MCP Dashboard. |
 | Categories | Developer tools — one proposed category; OWNER FIELD: confirm the matching option offered by the portal. |
-| Documentation URL | https://github.com/ANcpLua/qyl.mcp#readme |
-| Privacy URL | OWNER FIELD: approve and publish the [privacy draft](public-pages-draft.md), then supply and verify its actual HTTPS URL. |
+| Documentation URL | https://qyl.at/docs/mcp/ |
+| Privacy URL | https://qyl.at/privacy/ (published; the hosted-service section covers this connector). |
 | Support contact | anfh22@outlook.com — owner-supplied preparation value; OWNER FIELD: confirm monitoring and the final public support route before publication. |
 | Icon | [qyl icon](qyl/assets/qyl-icon.png) |
 | Slug | qyl — spelling confirmed in the owner-supplied WIP; OWNER FIELD: confirm portal availability before publication. The slug is permanent once published. |
@@ -50,10 +50,10 @@ Sign-in uses OAuth with the qyl:read scope, and the qyl server decides which Col
 | Reads or writes data | Reads only. Every tool is annotated `readOnlyHint: true`. An optional MCP Events subscription stores only its own subscription state and changes no telemetry. |
 
 The description follows the committed tool manifest and the shared
-investigation skill. The new trace-projection and configurable CI-prefix
-options are deliberately absent: their Collector-lockstep/runtime work
-remains open as recorded in
-[the refreshed point-8 blocker](../docs/evidence/2026-10-08-followup-15.md#release-blocker-refreshed-after-owner-release).
+investigation skill. It stays at the tool level and does not list the
+trace-projection and CI-prefix options. Those shipped in `qyl-mcp-server` 7.2.0
+after the Collector lockstep ([point-8 evidence](../docs/evidence/2026-10-08-point-8-options.md);
+[release evidence](../docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases)).
 
 ## MCP App screenshots — owner field
 

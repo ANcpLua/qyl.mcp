@@ -300,6 +300,7 @@ connector guidance. After the edit, the same temporary-environment
 | Unauthenticated MCP | `curl --silent --show-error --include https://mcp.qyl.at/mcp` | `HTTP/2 401`; `www-authenticate: Bearer scope="qyl:read", resource_metadata="https://mcp.qyl.at/.well-known/oauth-protected-resource/mcp"`; `{"error":"unauthorized"}`. |
 | Resource metadata | `curl --silent --show-error --include https://mcp.qyl.at/.well-known/oauth-protected-resource/mcp` | `HTTP/2 200`; `{"resource":"https://mcp.qyl.at/mcp","authorization_servers":["https://qyl-eu.eu.auth0.com/"],"scopes_supported":["qyl:read"]}`. |
 | npm latest | `npm view qyl-mcp-server version` | `7.1.1`. This is a registry observation, not evidence of publishing or a consumer test. |
+| npm latest, 2026-10-11 | `npm view qyl-mcp-server dist-tags --json` | `"latest": "7.2.1"`, then `"latest": "7.2.2"` after #133, each published with provenance by the release workflow after its clean `npx` consumer smoke ([evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases)). |
 
 ## Owner-only observations still pending
 
@@ -326,7 +327,7 @@ redacted actual output. Never record tokens, cookies or callback signing keys.
 | Automatic renewal | Observe the owner's client across its renewal time; retain before/after expiration and subscription/renewal responses, then a matching delivery. |
 | Unsubscribe stops delivery | Unsubscribe in the owner client, retain its response, emit a fresh matching test error and record the bounded no-delivery window. |
 | Revocation stops delivery | On a separate test subscription, revoke the isolated account's access, emit a fresh matching test error, and retain revocation timing plus the bounded no-delivery window. Restore access only by owner decision. |
-| npm fresh consumer | In a fresh temporary project, install the exact observed `qyl-mcp-server@7.1.1`, run the pinned Inspector 2.9.0 with modern and legacy configurations against its stdio command in explicit demo mode, and record discovery plus a read result in both eras. The registry version alone is not this proof. |
+| npm fresh consumer | In a fresh temporary project, install the exact observed latest version (`qyl-mcp-server@7.2.2` on 2026-10-11), run the pinned Inspector 2.9.0 with modern and legacy configurations against its stdio command in explicit demo mode, and record discovery plus a read result in both eras. Neither the registry version nor the release workflow's CI consumer smoke is this proof. |
 | Public directory statuses | For each of OPENAI_PLUGIN, ANTHROPIC_CONNECTOR and ANTHROPIC_PLUGIN, the owner reads the corresponding portal and records date, record identifier and actual draft/submitted/approved/published state. No portal state is established here. |
 
 ## Directory records
@@ -687,3 +688,42 @@ evidence remains owner-supplied.
 | Dependency and import gates | 2026-10-08: lint exited 0; `verify:sdk` passed five tests and the seven-manifest boundary; `verify:pins` printed `verify:pins: contract pins agree (@ancplua/qyl-api-schema 11.3.0 == Qyl.Api.Contracts 11.3.0, via /Users/alexandernachtmann/RiderProjects/qyl)`. Contract, package pins and lockfile are unchanged. |
 | Local transport | 2026-10-08: `QYL_MCP_TELEMETRY=0 bun run smoke` exited 0, including SDK discovery of eleven tools, schema-aware calls, validation errors, host/origin guards and workbench reconnect. Exact output excerpt is in the linked evidence. |
 | Documentation audit | 2026-10-08: `PATH="/private/tmp/qyl-option-a/venv/bin:$PATH" bun run verify:completion` exited 0: eight tests, all repository checks and 253 local documentation/evidence links passed. |
+
+## Point 10 continuation — client-specific viewer domains, 2026-10-08
+
+[Dated commands, sources and actual output](docs/evidence/2026-10-08-point-10-ui-domain.md)
+record the domain correction for both viewers. Local SDK tests do not claim
+a completed authenticated Claude or ChatGPT rendering check.
+The [2026-10-11 clarification](docs/evidence/2026-10-08-point-10-ui-domain.md#clarification-and-current-behavior-2026-10-11)
+records the verified domain requirements and current name/UA precedence.
+Unknown means neither hint is recognized; qyl then omits both domain fields
+and leaves the supporting host's default sandbox in place. This does not
+itself disable the viewer or reject the client. Current local viewers are
+Trace Explorer v6 and MCP Dashboard v4, with the shared PR #130 fixes recorded
+in the [checkpoint](MCP-CHECKPOINT.md). The 2026-10-08 results below remain
+historical evidence.
+
+| Check | Dated command and actual output |
+| --- | --- |
+| Point-9 merge prerequisite | 2026-10-08: `gh pr view 120` reports `MERGED` at `2026-10-08T09:26:44Z`, merge `ee4c5a0ba24f450165cb62183cd1396919e0d41b`; all four gates passed on `9371b65e4a3475bdd67ca7c38dc5391deefa19b0`. Point 10 branches from that merged `origin/main`. |
+| Exact connector hash | 2026-10-08: the linked Node SHA-256 command prints `d2d8a324b34d6bf33467665cbb3dc80c.claudemcpcontent.com` for `https://mcp.qyl.at/mcp`; changing the path or trailing slash changes the hash. Following the owner's PR review, only ChatGPT receives `https://mcp.qyl.at` plus its `openai/widgetDomain` alias; unknown and local hosts omit both domain fields. |
+| Both hosts and wire eras | 2026-10-08: after the owner-review changes, `QYL_MCP_TELEMETRY=0 bun run test` passed 357 tests (179 server, 142 workbench, 32 dashboard, 4 site), including six new tests for both viewers, modern per-request identity, legacy client hints, unknown or missing identity, the ChatGPT alias, interleaving and exact URL spelling. |
+| Versioned resources and snapshot | 2026-10-08: `bun run --cwd server snapshot:tools` exited 0. The linked comparison prints `Snapshot: only 6 versioned viewer URI/name values changed` and `All 11 tool schemas, descriptions and annotations unchanged`. That run used Trace Explorer v5 and MCP Dashboard v3. |
+| Cache trade-off | 2026-10-08: the linked `statSync` command reports Trace Explorer `454194 bytes` and MCP Dashboard `443193 bytes` uncompressed. Dynamic hosted reads use `ttlMs: 0, cacheScope: private` instead of the former 24-hour public hint because metadata varies without a cache variation key. Each render refetches roughly 450 KB; the in-memory HTML cache only saves disk reads. The owner accepted this trade-off in PR #121. |
+| Transport and dependency gates | 2026-10-08: `QYL_MCP_TELEMETRY=0 bun run smoke`, lint and `verify:sdk` exited 0. The actual pin output is `verify:pins: contract pins agree (@ancplua/qyl-api-schema 11.3.0 == Qyl.Api.Contracts 11.3.0, via /Users/alexandernachtmann/RiderProjects/qyl)`. |
+| Documentation audit | 2026-10-08: `PATH="/private/tmp/qyl-option-a/venv/bin:$PATH" bun run verify:completion` exited 0: eight tests, all checks and 255 local documentation/evidence links passed. |
+
+## Toolchain, contract 11.4.0 and release 7.2.1, 2026-10-11
+
+[Dated commands and actual output](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md) record the toolchain pin, the
+lockstep to 11.4.0, both npm releases and the production deploy order.
+
+| Check | Dated command and actual output |
+| --- | --- |
+| Toolchain | 2026-10-11: PR #126 merged as `adbd2c2`; `mise.toml` on main lists `"bun" = "1.4.3"` and `"node" = "24"`; `.nvmrc` and `setup-node` are gone. Node's release index prints `node 24 latest: v24.21.0 bundled npm 11.19.0`, so `publish.yml` no longer upgrades npm. |
+| Contract 11.4.0 | 2026-10-11: ANcpLua/qyl-api-schema#42 merged as `5699b83`; `bun run compile` printed `emit-contract-revision: sha256:3605ae27d2edf632`; `npm view @ancplua/qyl-api-schema@11.4.0` returns `gitHead` `5699b83510ba6ea61732b0bad13f15afb4e7dc02` with SLSA provenance. |
+| Lockstep | 2026-10-11: before qyl PR #653 merged, `verify` on PR #131 printed `cross-repo contract skew: this repo pins @ancplua/qyl-api-schema 11.4.0, ANcpLua/qyl pins Qyl.Api.Contracts 11.3.1`; after merge `6a0cde7` the rerun passed `verify` including the snapshot test. PR #131 merged as `89be0fd`. |
+| Releases | 2026-10-11: publish runs `38105485890` and `38110188801` printed `+ qyl-mcp-server@7.2.0` and `+ qyl-mcp-server@7.2.1` and `npx consumers passed`; `npm view qyl-mcp-server dist-tags --json` returns `"latest": "7.2.1"`. |
+| Point 10 manifest fields | 2026-10-11: `curl` returned 200 for `https://qyl.at/docs/mcp/`, `/privacy/`, `/support/` and `/terms/`. Both manifests now carry those URLs, OpenAI `developerName` `ancplua` and `capabilities` `["Read"]`, and `./` icon paths; `publication.countries` stays omitted. `claude plugin validate ./submission/qyl` printed `✔ Validation passed`; `plugin.json` and `mcp.json` PASS their bundled schemas; `python3 submission/build-openai-package.py` printed `sha256 84945a46440c94b20dd2f30bb88741652d3a793424abfb974f42bdaa99583882` for six source-identical files. |
+| Release 7.2.2 | 2026-10-11: #133 merged as `0f9fe4b`; publish run `38112247909` printed `+ qyl-mcp-server@7.2.2` and `npx consumers passed on attempt 4`; `npm view qyl-mcp-server@7.2.2` returns `gitHead` `0f9fe4bbf0787699cad5f8a53564625aa9ec8c7f` with SLSA provenance; Railway deployment `ffe24407` reached `SUCCESS` at 04:40:47Z. |
+| Deploy order | 2026-10-11: qyl-mcp deployment `79b6a48b` logged `contract-revision handshake failed: collector contract revision sha256:382526f13652d18b does not match this server's sha256:3605ae27d2edf632` at 03:27:07Z; after Collector deployment `15e4efe7` reached `SUCCESS` at 03:33:05Z, redeploy `01350460` brought `/healthz` back to `{"status":"ok"}` at 03:47:19Z. |

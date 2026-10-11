@@ -83,8 +83,8 @@ credential, not an incoming MCP login.
 
 The release workflow publishes `qyl-mcp-server` with provenance and smokes
 clean `npx` consumers in both protocol eras before a release counts; on
-2026-10-11 it published `7.2.0` and `7.2.1` that way. The source declares `7.2.2`.
-[7.2.1 publish run](https://github.com/ANcpLua/qyl.mcp/actions/runs/38110188801).
+2026-10-11 it published `7.2.0`, `7.2.1` and `7.2.2` that way. The source declares `7.2.2`.
+[Release and consumer evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases).
 
 ### Tools and viewers
 
@@ -201,18 +201,27 @@ records Railway's running commit and main-branch trigger on 2026-10-08.
 
 For a hosted bind, configure `MCP_PUBLIC_URL`, `MCP_BIND_HOST`, allowed hosts
 and origins, and the intended Collector URL/credential. The public URL sets
-the resource audience and viewer origin. For Claude, viewer metadata uses
-the first 32 hex characters of SHA-256 over the full public `/mcp` URL plus
-`.claudemcpcontent.com`; ChatGPT receives the HTTPS origin in `ui.domain`
-and its `openai/widgetDomain` alias. Unknown hosts omit both fields.
-The SDK's per-request client name and the `User-Agent` are both checked for
-Claude or ChatGPT, including `Claude-User`, `openai-mcp/1.0.0` and `ChatGPT-User`.
-A recognized client name takes precedence if the hints disagree; an unknown
-name does not mask a recognized User-Agent. These identifiers and ChatGPT's
-origin mapping are compatibility assumptions tested with synthetic clients;
-real client identifiers and successful ChatGPT rendering still need observation.
-Local viewers omit the domain. Keep Collector credentials on the server. With project mapping
-enabled, only the verified subject selects the project; tool arguments and
+the resource audience and canonical `/mcp` connector URL. For Claude, qyl sets
+`ui.domain` to the first 32 hex characters of SHA-256 over that exact connector
+URL plus `.claudemcpcontent.com`. Claude requires this format when the optional
+field is supplied. ChatGPT receives qyl's configured HTTPS origin in `ui.domain`
+and its `openai/widgetDomain` alias. OpenAI documents an origin-valued field
+and requires a dedicated, unique origin for UI plugin submission; choosing
+the MCP server's origin is qyl's configuration choice.
+
+The SDK's per-request client name and `User-Agent` are both checked. A recognized
+Claude or ChatGPT name wins conflicting hints. A missing or unrecognized name
+can use a recognized UA, including `Claude-User`, `openai-mcp/1.0.0` or
+`ChatGPT-User`. If neither hint is recognized, qyl omits both domain fields.
+A host that supports MCP Apps can then use its default sandbox; omission alone
+does not disable the viewer or reject the MCP client. Local viewers also omit
+the domain. [Verified requirements and detection policy](docs/evidence/2026-10-08-point-10-ui-domain.md#clarification-and-current-behavior-2026-10-11)
+separate documented formats from client hints. The hints and their precedence
+are qyl's compatibility policy; actual client identifiers and authenticated
+rendering on this deployment still need observation.
+
+Keep Collector credentials on the server. With project mapping enabled, only
+the verified subject selects the project; client hints, tool arguments and
 metadata do not select credentials.
 
 The default Auth0 mode accepts only the qyl production Auth0 issuer
@@ -330,5 +339,5 @@ them. Review cases and the demo are drafts until run in an owner client.
 The source pins `@ancplua/qyl-api-schema` 11.4.0, official split MCP
 SDK packages 2.3.1 and Zod 4.6.5. SDK major version and wire revision are
 independent. Server HTTP/stdio use SDK factories and negotiation defaults;
-Workbench uses automatic negotiation. [Contract 11.3.0 evidence](docs/evidence/2026-10-08-point-8-options.md) and
+Workbench uses automatic negotiation. [Contract 11.4.0 evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md) and
 [package/serving evidence](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory).

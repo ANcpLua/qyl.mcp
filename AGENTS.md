@@ -105,6 +105,10 @@ rely on. Everything else is judgment.
   what your diff touches; CI runs the combined gates.
 - Don't weaken a gate or regenerate an expected result just to get green. If a
   gate is wrong, fix the gate and say so in the PR.
+- A contract bump that changes the revision deploys in order: merge the
+  Collector side, wait for its Railway deployment to reach `SUCCESS`, then merge
+  here. The hosted server refuses a mismatched Collector and Railway stops the
+  old container first, so the reverse order takes mcp.qyl.at down.
 - For auth, outbound callbacks or storage changes, read
   [docs/threat-model.md](docs/threat-model.md).
 

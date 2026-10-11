@@ -32,6 +32,82 @@ validation, and passing local tests. [PR #120](https://github.com/ANcpLua/qyl.mc
 merged on 2026-10-08 at `09:26:44Z`, merge `ee4c5a0`, after all four gates
 passed on `9371b65`. The owner's authenticated Inspector proof remains separate.
 
+Point 10 selects each viewer's domain for the connected UI host: Claude's
+exact connector-URL hash, the configured HTTPS origin plus compatibility
+alias for ChatGPT, or neither domain field for unknown hosts.
+[Dated source and local verification](docs/evidence/2026-10-08-point-10-ui-domain.md)
+cover both viewers and both wire eras.
+
+Point-10 progress checked **2026-10-11**: [PR #121](https://github.com/ANcpLua/qyl.mcp/pull/121)
+merged as `9a84bfe`. The following work is implemented in follow-up
+[PR #130](https://github.com/ANcpLua/qyl.mcp/pull/130), fixes `9ffb4f4` and `ef7727a`,
+merged as `71df28b` and shipped in 7.2.2:
+
+- [x] Select the viewer domain per caller using both `clientInfo.name` and
+  `User-Agent`, including when the client name is unknown: Claude gets the
+  SHA-256 hash of the exact connector URL including `/mcp`, ChatGPT gets the
+  public origin, and unknown clients get no domain.
+- [x] Cover Claude by name, Claude by UA with an unknown name, both ChatGPT
+  UA variants with an unknown name, and an unknown client in regression tests.
+- [x] Prefer a recognized client name when the UA disagrees, with regression
+  tests for both Claude and ChatGPT conflicts; still evaluate both hints.
+- [x] Version the changed viewers as Trace Explorer v6 and MCP Dashboard v4,
+  including the resource manifest and fixtures.
+- [x] Preserve the point-9 checkpoint recording PR #120 merged as `ee4c5a0`
+  with all four gates green.
+
+Verification on 2026-10-11: `QYL_MCP_TELEMETRY=0 bun run test` passed 364 tests
+on PR #130 commit `ef7727a`; lint, SDK checks, completion audit and transport
+smoke passed. On this branch with server 7.2.1 and contract 11.4.0, the server,
+workbench, dashboard and site suites passed 186/142/32/4 tests. An initial
+workbench timeout assertion failed under concurrent load and passed both
+alone and in the full workbench rerun. Lint, SDK checks and transport smoke
+passed after building the dashboard required by workbench smoke.
+
+`gh pr view 121 --json state,mergeCommit` returned `MERGED` and
+`9a84bfea9c4484f03c83a4153ed853237636703b`. The 2026-10-11 follow-up
+`gh pr view 130 --repo ANcpLua/qyl.mcp --json state,headRefOid,mergeCommit,mergedAt,autoMergeRequest,mergeStateStatus,url`
+returned `MERGED`, head `69b98a5c9ebbc5730934d46f823bbd7a4f2b4f95`,
+merge `71df28b40275513c595988a6a2b78a1bd3cd39cd`, at `2026-10-11T04:35:59Z`.
+The viewer runtime, tests, versions and manifest match that reviewed PR head.
+[CI run 38110929009](https://github.com/ANcpLua/qyl.mcp/actions/runs/38110929009)
+passed lint and verify on that head. Codex completed its review, reacted with
+thumbs-up, and left no unresolved findings. The old auto-merge wait is complete.
+`gh api repos/ANcpLua/qyl.mcp/rulesets/24693919` now reports
+`enforcement: disabled` for `owner-review-gate`. While it stays disabled, its
+four check names are not a stamping task; once the owner activates it,
+`owner-review/content` and `owner-review/evidence` are required on every PR's
+reviewed head. This review made no gate changes.
+
+Documentation clarified **2026-10-11** against the
+[verified references](docs/evidence/2026-10-08-point-10-ui-domain.md#clarification-and-current-behavior-2026-10-11):
+Claude's optional domain must use the exact connector hash when supplied.
+OpenAI documents an origin-valued domain and a dedicated, unique origin for
+UI submission. Using the MCP server's origin for ChatGPT is qyl's configuration
+choice. Unknown names can use a recognized UA; only when neither hint is
+recognized are both domain fields omitted, allowing the host's default sandbox.
+Omission alone does not disable the viewer or reject the client.
+
+The fixes and the corrected documentation are committed on
+`codex/point-10-client-ui-domain`, which also merges `main` through #135; the
+receiving agents continue **on this branch, targeting #136**. The implemented
+items above are complete and must not become duplicate tasks. Observed client
+identifiers and authenticated Claude/ChatGPT rendering still need separate
+owner evidence; synthetic tests establish policy, not production compatibility.
+Release 7.2.2 (#133) shipped the #130 fix; #134 and #135 corrected the SDK skill.
+
+Toolchain, contract and releases checked **2026-10-11**:
+[PR #126](https://github.com/ANcpLua/qyl.mcp/pull/126) pins Node 24 next to
+Bun 1.4.3 in `mise.toml`, and CI no longer uses `setup-node`. The contract moved
+in lockstep to 11.4.0 (TypeSpec 1.17, revision `sha256:3605ae27d2edf632`):
+Collector [qyl PR #653](https://github.com/ANcpLua/qyl/pull/653) merged as
+`6a0cde7`, consumer [PR #131](https://github.com/ANcpLua/qyl.mcp/pull/131) as
+`89be0fd`. The release workflow published `qyl-mcp-server` 7.2.0, 7.2.1 and 7.2.2 with
+provenance after clean `npx` consumers passed in both eras. The first 11.4.0
+deploy refused to start until the Collector served the new revision.
+[Dated evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md) records the commands, output and the deploy order this
+requires.
+
 The [release contract map](release/contract.md) and [owner handoff](release/README.md)
 connect all revised points and Done-when criteria to the ledger and dated
 commands/output. [Point-14 evidence](docs/evidence/2026-10-08-followup-14.md) records the new CI audit;
@@ -43,7 +119,7 @@ with explicit owner fields. Final completion still requires checking the merged
 
 | State | Dated evidence |
 | --- | --- |
-| Split SDK 2.3.1, contract package 11.3.0, server source version 7.2.0. | [Option-A pins and manifest evidence](docs/evidence/2026-10-08-point-8-options.md); [earlier package inventory](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory). |
+| Split SDK 2.3.1, contract package 11.4.0 (revision `sha256:3605ae27d2edf632`), server source and npm version 7.2.2. | [11.4.0 lockstep and release evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md); [Option-A pins and manifest evidence](docs/evidence/2026-10-08-point-8-options.md); [earlier package inventory](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory). |
 | 11 read-only tools; ten model-facing and app-only `fetch_telemetry`; trace/CI descriptions now include point-8 options. | [Option-A manifest comparison](docs/evidence/2026-10-08-point-8-options.md); earlier inventory retained in step 7. |
 | Incoming native records exclude arguments, `_meta` and result bodies. | [Strict schema source](docs/evidence/2026-10-08-step7.md#native-records) and [regression evidence](MCP-V2-INTEROP-TODO.md#step-1--rules-and-native-call-records). |
 | Build, 337 tests, transport, SDK, lint and project-isolation checks passed locally. | [Step-4 transcript](docs/evidence/2026-10-08-step4.md). The initial OTLP failure and successful fresh-main Collector rerun are both retained. |
@@ -66,11 +142,15 @@ be read from GitHub rather than inferred from these earlier runs.
 metadata; `npm view qyl-mcp-server version` returned 7.1.1 on 2026-10-08.
 [Exact output](docs/evidence/2026-10-08-step4.md#endpoint).
 These results do not prove the deployed commit, a fresh npm consumer, a real
-client connection or production Events behavior.
+client connection or production Events behavior. On 2026-10-11 the registry
+returned `7.2.1`, then `7.2.2` after #133, and the release workflow's clean `npx` consumer smoke passed in
+both eras ([release evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases)). That is CI evidence, not the
+owner's pinned-Inspector consumer observation.
 
 The active deployment ID and commit were observed read-only in
 [point-6 evidence](docs/evidence/2026-10-08-followup-06.md); recheck that dated
-snapshot before reviewer access. All five client connections, production Events
+snapshot before reviewer access. The [2026-10-11 snapshot](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#production-deploy-order)
+records deployment `2c916c88` for `f495bf3` and the later `ffe24407` for `0f9fe4b` (7.2.2). All five client connections, production Events
 lifecycle and modern request header proof, reviewer account, demo recording, publisher
 identity, targeting, public pages, attestations, submission and publication
 remain in the [owner-action index](MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending)

@@ -66,7 +66,7 @@ if (mcpVersion !== qylPin) {
   throw new Error(
     `cross-repo contract skew: this repo pins @ancplua/qyl-api-schema ${mcpPin}, ` +
       `ANcpLua/qyl pins Qyl.Api.Contracts ${qylPin} — smoke:otlp would fail its startup handshake. ` +
-      "Land the lockstep bump on the lagging side first.",
+      "Land the lockstep bump on the lagging side first; when the revision changes, merge here only after the collector deployment serves it.",
   );
 }
 
