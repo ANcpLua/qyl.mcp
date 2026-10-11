@@ -1,5 +1,7 @@
 # qyl.mcp
 
+Release, re-pin and agent hand-offs: follow [`SKILL.md`](SKILL.md) at this repo root (canonical clone `/Users/alexandernachtmann/RiderProjects/qyl.mcp/SKILL.md`); the one command is `./release.sh`. Published versions: `/Users/alexandernachtmann/Downloads/qyl-codex-claude/qyl-published-versions.yaml`.
+
 qyl is observability built for AI agents. The MCP server lets a model measure,
 correlate and diagnose a running system through compact, intent-driven tools
 instead of raw log dumps. We want it to become the Swiss army knife of
@@ -40,7 +42,7 @@ rely on. Everything else is judgment.
 ### Events behave
 
 - Events are opt-in, scoped to the authenticated owner and Collector project,
-  and re-authorized before delivery.
+  and re-aut horized before delivery.
 - Callback verification and signing, expiration, rotation, cancellation and
   unsubscribe keep working. Confirmed revocation stops delivery. An
   authorization outage pauses delivery without letting another subscriber
