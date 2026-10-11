@@ -200,18 +200,19 @@ test("problem details and malformed successful payloads stay distinct", async ()
   const originalFetch = globalThis.fetch;
   try {
     globalThis.fetch = () => Promise.resolve(jsonResponse({
-      type: "about:blank",
+      type: "https://qyl.at/problems/service-unavailable",
+      code: "service_unavailable",
       title: "Service Unavailable",
       status: 503,
       detail: "The workbench dependency is unavailable.",
       reason: "dependency_failure",
-    }, { status: 503, headers: { "X-Request-Id": "request-7" } }));
+    }, { status: 503 }));
     await assert.rejects(
       () => new WorkbenchApi().listWorkspaces(),
       (error: unknown) => {
         assert.ok(error instanceof WorkbenchApiError);
         assert.equal(error.status, 503);
-        assert.equal(describeApiError(error), "HTTP 503 · The workbench dependency is unavailable. · request request-7");
+        assert.equal(describeApiError(error), "HTTP 503 · The workbench dependency is unavailable.");
         return true;
       },
     );

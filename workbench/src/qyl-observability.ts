@@ -22,7 +22,10 @@ const LOG_DEFINITION = "OTel.Logs.LogRecord";
 const TRACE_ID_PATTERN = /^[0-9a-f]{32}$/iu;
 const SPAN_ID_PATTERN = /^[0-9a-f]{16}$/iu;
 const DEFAULT_READ_TIMEOUT_MS = 5_000;
-const LOG_PAGE_SIZE = 10_000;
+// Contract 12.0.0 caps every page at 1000 rows; the earlier single 10 000-row read becomes up to
+// ten pages followed through next_cursor, so the evidence bound stays where it was.
+const LOG_PAGE_SIZE = 1_000;
+const LOG_MAX_PAGES = 10;
 const MAX_REASON_LENGTH = 1_000;
 
 type SignalName = "traces" | "logs";
@@ -189,16 +192,25 @@ export class QylObservabilityProvider {
         let successfulReads = 0;
         for (const traceId of traceIds) {
             try {
-                const body = await this.getJson(
-                    "/api/v1/logs",
-                    { trace_id: traceId, limit: LOG_PAGE_SIZE },
-                    "logs",
-                );
-                const page = this.parsePage(body, parser, LogsListResponseSchema, "logs");
-                successfulReads += 1;
-                items.push(...page.items);
-                if (page.hasMore) {
-                    failures.push("Qyl logs exceeded the contract's bounded non-paginated read.");
+                let cursor: string | undefined;
+                let pages = 0;
+                do {
+                    const body = await this.getJson(
+                        "/api/v1/logs",
+                        { trace_id: traceId, limit: LOG_PAGE_SIZE, cursor },
+                        "logs",
+                    );
+                    const page = this.parsePage(body, parser, LogsListResponseSchema, "logs");
+                    successfulReads += 1;
+                    items.push(...page.items);
+                    pages += 1;
+                    cursor = page.hasMore ? page.nextCursor : undefined;
+                    if (page.hasMore && cursor === undefined) {
+                        failures.push("Qyl logs page reports more rows without a next_cursor.");
+                    }
+                } while (cursor !== undefined && pages < LOG_MAX_PAGES);
+                if (cursor !== undefined) {
+                    failures.push(`Qyl logs exceeded the bounded read of ${LOG_PAGE_SIZE * LOG_MAX_PAGES} rows.`);
                 }
             } catch (error) {
                 failures.push(this.failureReason(error, "Qyl log evidence is unavailable."));

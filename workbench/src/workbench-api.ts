@@ -579,7 +579,7 @@ export class WorkbenchApi {
         app.get(`${base}/:server_id/protocol`, this.route(async (request, response) => {
             const server = await this.scopedServer(request);
             const entries = this.connections.getJournal(server.id)?.snapshot() ?? [];
-            const page = paginate(entries.map((entry) => protocolEvent(server.id, entry)), request, 200);
+            const page = paginate(entries.map((entry) => protocolEvent(server.id, entry)), request, 100);
             response.json({ events: page.items, ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }) });
         }));
         app.get(`${base}/:server_id/protocol/stream`, this.route(async (request, response) => {

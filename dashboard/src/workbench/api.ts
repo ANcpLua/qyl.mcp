@@ -16,8 +16,7 @@ export class WorkbenchApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly problem?: QylContracts.ApiError,
-    readonly requestId?: string,
+    readonly problem?: QylContracts.ProblemDetails,
   ) {
     super(message);
     this.name = "WorkbenchApiError";
@@ -83,9 +82,9 @@ async function parsePublished<T>(
   throw new Error(`${context} violated the published Qyl contract${details ? ` · ${details}` : ""}.`);
 }
 
-async function parseApiProblem(value: unknown): Promise<QylContracts.ApiError | undefined> {
+async function parseApiProblem(value: unknown): Promise<QylContracts.ProblemDetails | undefined> {
   const contracts = await loadContractValidation();
-  const result = contracts.publishedContractSchema<QylContracts.ApiError>("Common.Errors.ApiError").safeParse(value);
+  const result = contracts.publishedContractSchema<QylContracts.ProblemDetails>("Common.Errors.ProblemDetails").safeParse(value);
   return result.success ? result.data : undefined;
 }
 
@@ -176,12 +175,7 @@ export class WorkbenchApi {
     if (!response.ok) {
       const problem = await parseApiProblem(payload);
       const message = problem?.detail ?? problem?.title ?? `Runner request failed with HTTP ${response.status}.`;
-      throw new WorkbenchApiError(
-        message,
-        response.status,
-        problem,
-        response.headers.get("X-Request-Id") ?? undefined,
-      );
+      throw new WorkbenchApiError(message, response.status, problem);
     }
     return payload;
   }
@@ -589,8 +583,7 @@ export class WorkbenchApi {
 
 export function describeApiError(error: unknown): string {
   if (error instanceof WorkbenchApiError) {
-    const request = error.requestId ? ` · request ${error.requestId}` : "";
-    return `${error.status === 0 ? "Connection" : `HTTP ${error.status}`} · ${error.message}${request}`;
+    return `${error.status === 0 ? "Connection" : `HTTP ${error.status}`} · ${error.message}`;
   }
   return error instanceof Error ? error.message : String(error);
 }

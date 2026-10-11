@@ -89,8 +89,9 @@ credential, not an incoming MCP login.
 The release workflow publishes `qyl-mcp-server` with provenance and smokes
 clean `npx` consumers in both protocol eras before a release counts; on
 2026-10-11 it published `7.2.0`, `7.2.1`, `7.2.2` and `7.2.3` that way. The
-source declares `7.5.0` (write tools for annotations and saved queries behind
-`qyl:write` and `qyl:delete`, on top of 7.4.0's paging, filters, structured
+source declares `7.6.0` (Contract 12.0.0: RFC 9457 problems with a type URI and
+a stable `code`, one page limit of 1 to 1000; on top of 7.5.0's write tools
+behind `qyl:write` and `qyl:delete` and 7.4.0's paging, filters, structured
 metric matchers and the `fetch_telemetry` union);
 `npm view qyl-mcp-server dist-tags` names the published `latest`.
 [Release and consumer evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases).

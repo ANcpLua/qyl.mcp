@@ -123,7 +123,7 @@ for (const revision of ["2026-07-28", "2025-11-25"] as const) {
       await new Promise((resolve) => setTimeout(resolve, project === "owner" ? 5 : 1));
       if (pathname === "/api/v1/traces") return Response.json({ items: [selected], has_more: false });
       if (pathname === `/api/v1/traces/${selected.trace_id}`) return Response.json(selected);
-      return Response.json({ type: "about:blank", title: "Not Found", status: 404 }, {
+      return Response.json({ type: "https://qyl.at/problems/not-found", code: "not_found", title: "Not Found", status: 404 }, {
         status: 404, headers: { "content-type": "application/problem+json" },
       });
     });

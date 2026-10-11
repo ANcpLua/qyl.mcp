@@ -36,7 +36,8 @@ test("collector Problem Details cannot inject remote detail into tool-facing err
   const listener = createServer((_request, response) => {
     response.writeHead(503, { "content-type": "application/problem+json" });
     response.end(JSON.stringify({
-      type: "about:blank",
+      type: "https://qyl.at/problems/service-unavailable",
+      code: "service_unavailable",
       title: "Unavailable",
       status: 503,
       detail: "Authorization: Bearer remote-secret",
