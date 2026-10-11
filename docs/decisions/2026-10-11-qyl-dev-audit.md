@@ -214,10 +214,10 @@ Order:
 | ID | Finding | Decision |
 |---|---|---|
 | SEC-1 | qyl-api-schema's `release` environment had no branch or tag rule, and its manual publish took any version from any ref | **Fix**, done: the environment allows only `main` and `v*` tags; the main-ancestry guard is qyl-api-schema #50 (`6b81ebd`) |
-| SEC-2 | SemanticConventions' (and AutoInstrumentation's) `nuget` environment had no tag rule, so a `v*` tag on any branch could publish | **Fix**, done: both environments allow only `main` and `v*` tags; the main-ancestry guards are SemanticConventions #65 (`30e7d85`) and AutoInstrumentation #66 (open, merges on green) |
+| SEC-2 | SemanticConventions' (and AutoInstrumentation's) `nuget` environment had no tag rule, so a `v*` tag on any branch could publish | **Fix**, done: both environments allow only `main` and `v*` tags; the main-ancestry guards are SemanticConventions #65 (`30e7d85`) and AutoInstrumentation #66 (`e34a233`) |
 | SEC-3 | Absolute local paths in dated qyl.mcp evidence docs and `release/contract.md` | **Keep**: verbatim records. The username is public through the GitHub account and commit author, and git history keeps the old text anyway |
 | SEC-4 | qyl.at floated `node = "24"` in jobs that hold `CLOUDFLARE_API_TOKEN` | **Fix**: same as AT-17 (qyl.at #36) |
-| SEC-5 | grpc-dotnet decompressed a gzip or deflate OTLP/gRPC message into an unbounded buffer before the API-key interceptor ran, so an unauthenticated gzip bomb could exhaust the Collector's memory. Port 4317 has no TCP proxy in production, so it was not internet-reachable | **Fix**: qyl #670 adds `BoundedDecompressionProvider` through `PostConfigure`, answering `ResourceExhausted` above `MaxReceiveMessageSize`; red-then-green with six tests. Merges on green |
+| SEC-5 | grpc-dotnet decompressed a gzip or deflate OTLP/gRPC message into an unbounded buffer before the API-key interceptor ran, so an unauthenticated gzip bomb could exhaust the Collector's memory. Port 4317 has no TCP proxy in production, so it was not internet-reachable | **Fix**: qyl #670 adds `BoundedDecompressionProvider` through `PostConfigure`, answering `ResourceExhausted` above `MaxReceiveMessageSize`; red-then-green with six tests. Merged as `7e29bfb1`, released in qyl 9.2.0 |
 
 ## Found after the sweep, 2026-10-11
 
@@ -225,8 +225,8 @@ Findings made while fixing, with the same vocabulary. Upstream OpenTelemetry row
 
 | ID | Finding | Decision |
 |---|---|---|
-| QYL-U1 | The Collector drops `jsonrpc.request.id` and `jsonrpc.protocol.version`, which qyl.mcp emits on its own spans, logs and metrics: `jsonrpc.` is not an allowed prefix in `eng/config/collector-semantic-policy.json`, and the deprecated `rpc.jsonrpc.request_id` is renamed into the same dropped key before the check. The drop is reproduced | **Fix**: allow `jsonrpc.` in the Collector policy; it is upstream vocabulary. In the qyl OTLP 1.11.1 PR (branch `feat/otlp-upstream-1.11.1`, with OTLP-1, OTLP-2 HTTP and OTLP-3), in progress |
-| QYL-F1 | `tests/Qyl.Cli.Tests/RunnerApiTests.cs:158` (`Runner_is_loopback_only_has_no_wildcard_cors_and_rejects_an_untrusted_host`) fails intermittently on linux-arm64 (run 38145289046 on #667, once on #632, #664's first run) with its own diagnostic "Cross-site POST to port 33567 answered 200; Server: Microsoft-NetCore/2.0; body empty": an `HttpListener` closed the response without a status. Either a runner path that ends a response before writing 403, or a port reused between parallel test runners | **Investigate**, then Fix: reproduce under parallel load with a listener-instance header, fix the runner path or the test's port allocation (branch `fix/runner-api-tests-port-race`, in progress). Not "just a flake" until the listener is named |
+| QYL-U1 | The Collector drops `jsonrpc.request.id` and `jsonrpc.protocol.version`, which qyl.mcp emits on its own spans, logs and metrics: `jsonrpc.` is not an allowed prefix in `eng/config/collector-semantic-policy.json`, and the deprecated `rpc.jsonrpc.request_id` is renamed into the same dropped key before the check. The drop is reproduced | **Fix**: allow `jsonrpc.` in the Collector policy; it is upstream vocabulary. In qyl #672 (`feat/otlp-upstream-1.11.1`, with OTLP-1, OTLP-2 HTTP and OTLP-3), for qyl 10.0.0 |
+| QYL-F1 | `tests/Qyl.Cli.Tests/RunnerApiTests.cs:158` (`Runner_is_loopback_only_has_no_wildcard_cors_and_rejects_an_untrusted_host`) fails intermittently on linux-arm64 (run 38145289046 on #667, once on #632, #664's first run) with its own diagnostic "Cross-site POST to port 33567 answered 200; Server: Microsoft-NetCore/2.0; body empty": an `HttpListener` closed the response without a status. Either a runner path that ends a response before writing 403, or a port reused between parallel test runners | **Fix**, investigated: neither candidate. The probe `GET` with `Host: attacker.example` matches no prefix, so the managed `HttpListener` answers it with its own `404`, re-arms the keep-alive connection and then closes it, which writes the fresh context's unused response as a bare `200 OK` (a dotnet/runtime defect). The test's client pooled that connection, and the cross-site POST read the stray `200`. Reproduced on macOS arm64 (5 in 300). The probe now sends `Connection: close`. Found on the way: a resource action pending at shutdown was also answered `200`, because `HttpListener.Stop()` writes unsent responses as `200`. Shutdown now answers `503` `runner.shutting_down`, then stops the listener. qyl #671, for qyl 10.0.0 |
 
 ## Status, 2026-10-11 16:00 Europe/Vienna
 
@@ -271,3 +271,27 @@ In progress:
 
 Still open: every **Contract 11.6.0**, **Contract 12.0.0**, **Major** and **Fix with writes** row above (drafts in progress); AT-19 (**Owner**).
 
+
+## Status, 2026-10-11 17:30 Europe/Vienna
+
+Closed since 17:15:
+
+| Row | PR (merge), release |
+|---|---|
+| SCH-9, SCH-18, SCH-21 and SCH-23 (annotations, saved queries), SCH-25, SCH-26 | qyl-api-schema #49 (`4f2143c`); Contract 11.6.0, revision `sha256:d926c3c6ab829cbf`, on npm `latest` and NuGet. SCH-22 (alert rules) stays **Contract 11.7.0** |
+| QYL-A1, A2 (key roles), A3 (`next_cursor`), A4, A5 | qyl #669 (`0be93a1f`); deployed, `api.qyl.at` serves the 11.6.0 revision since 15:05 UTC; tag `v9.2.0` on `0be93a1f`, NuGet publish in progress |
+| MCP-C2, C3 (`cursor`), A1 (`cursor`), A2, A3, A4, A5, A6, A7; SPEC-1 | qyl.mcp #148 (`e57a66f`), merged right after the Collector flip; `qyl-mcp-server` 7.4.0 on npm `latest`; `mcp.qyl.at` healthy |
+| SEC-5 | qyl #670 (`7e29bfb1`), in qyl 9.2.0 |
+| SEC-2 | AutoInstrumentation #66 (`e34a233`): every publish workflow in the six repos refuses commits not on `main` |
+
+In progress:
+
+| Thread | State |
+|---|---|
+| QYL-F1 | qyl #671, ready, CI running. It also opens qyl 10.0.0 (`QylVersion`), the first package-affecting change after `v9.2.0` |
+| OTLP-1, OTLP-2 (HTTP), OTLP-3, QYL-U1 | qyl #672: the 413, protos v1.11.1 and `jsonrpc.*` are done; OTLP-1 (U+FFFD on all three ingestion paths) is being finished on the branch. For qyl 10.0.0 |
+| MCP-C1, MCP-S7 and the write tools | qyl.mcp #150, rebased onto `main` as the 7.5.0 minor. It merges once the Auth0 API has `qyl:write` and `qyl:delete`. AT-2 and AT-4 follow as a qyl.at PR with a new legal effective date |
+| QYL-A9 (**Major** Qyl.Api.Sdk 10.0.0), AI-A1, AI-A2 (**Major** 24.0.0) | qyl #666, then the re-pin to AutoInstrumentation 24.0.0 (tag `v24.0.0` on `db93054`, publish in progress); qyl 10.0.0 ships #671, #672 and #666 together |
+| **Contract 12.0.0** | qyl-api-schema draft #51; qyl.at serves `https://qyl.at/problems/<name>` (SCH-20) first |
+
+Still open: OTLP-1, QYL-F1, QYL-U1, MCP-C1, MCP-S7, AT-2, AT-4, QYL-A9, AI-A1, AI-A2, every **Contract 11.7.0** and **Contract 12.0.0** row, AT-19 (**Owner**).
