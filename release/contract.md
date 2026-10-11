@@ -155,7 +155,7 @@ Keep legacy-only fixtures and dependencies isolated from the production runtime.
 
 For every result, retain the exact command, working directory, runtime/tool versions, selected and observed era, exit code, assertions executed, redacted output/transcript, timestamp, and tested artifact identity. Skipped, empty, unavailable, or stale required tests do not count as GREEN.
 
-Do not alter pins, weaken assertions, add exclusions, or relabel requirements to force a pass. Report proposed validator fixes separately. Prefer checks executed by CI independently of the implementation agent's narrative.
+Do not alter pins, weaken assertions, add exclusions, or relabel requirements to force a pass. Report proposed validator fixes separately. Prefer checks executed by the repo gate (`mise run check`) independently of the implementation agent's narrative.
 
 ## 8. Preserve each platform's package and client conventions
 

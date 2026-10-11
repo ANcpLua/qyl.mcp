@@ -35,12 +35,10 @@ That archive is Git-ignored. Rebuild and revalidate after any packaged-source
 change; do not apply this hash to future manifest edits. The remaining owner
 fields are mapped in the [submission handoff](../submission/README.md#owner-fields-still-required).
 
-For a newly authorized PR, follow AGENTS.md: a clean Codex
-review and the checks currently required by GitHub. Historical four-gate
-results do not impose owner stamps after that ruleset is disabled. Resolve
-review findings and never set owner checks or bypass configured gates.
-PRs #121, #130 and #136 are merged; the checkpoint records
-that result, and new work branches from `main`.
+Work lands on `main` directly (AGENTS.md, SKILL.md): no pull request, review or
+GitHub check gates it, and the four-gate results and owner stamps of 2026-10-08 are
+history. PRs #121, #130 and #136 were merged before that change; the checkpoint
+records that result.
 The original sequence
 is not a new request to repeat completed work.
 

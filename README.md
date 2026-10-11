@@ -86,9 +86,9 @@ defaults to loopback port 3001. `QYL_API_KEY` is an outgoing Collector
 credential, not an incoming MCP login.
 [Configuration and serving source, 2026-10-08](docs/evidence/2026-10-08-step7.md#configuration-and-serving).
 
-The release workflow publishes `qyl-mcp-server` with provenance and smokes
-clean `npx` consumers in both protocol eras before a release counts; on
-2026-10-11 it published `7.2.0`, `7.2.1`, `7.2.2` and `7.2.3` that way. The
+`./release.sh <version>` publishes `qyl-mcp-server` from the developer's machine
+(see `SKILL.md`). The retired release workflow, with provenance and clean `npx`
+consumer smokes in both protocol eras, on 2026-10-11 published `7.2.0`, `7.2.1`, `7.2.2` and `7.2.3` that way. The
 source declares `7.6.0` (Contract 12.0.0: RFC 9457 problems with a type URI and
 a stable `code`, one page limit of 1 to 1000; on top of 7.5.0's write tools
 behind `qyl:write` and `qyl:delete` and 7.4.0's paging, filters, structured
@@ -381,7 +381,7 @@ zero errors with an unchanged checker after explicit `zod/v4` imports and a
 justified Events JSON-Schema marker; see [command and output](docs/evidence/2026-10-08-followup-03.md#static-checker-before-and-after).
 
 Remote connections, production Events, deployed commit and a fresh npm
-consumer remain owner observations. Local tests or CI cannot substitute for
+consumer remain owner observations. Local tests cannot substitute for
 them. Review cases and the demo are drafts until run in an owner client.
 
 ## Contracts

@@ -14,7 +14,7 @@ The public endpoint's unauthenticated challenge and metadata were observed at
 [step 4](../docs/evidence/2026-10-08-step4.md#endpoint).
 **Deployed commit: owner compares the active Railway deployment with
 `git rev-parse origin/main` and records date, deployment ID and both commits.**
-No release PR or version response substitutes for this observation.
+No release commit or version response substitutes for this observation.
 
 The Auth0 source validates audience, issuer, expiry and `qyl:read` and gates
 hosted requests; since 2026-10-11 the write tools also require `qyl:write`
