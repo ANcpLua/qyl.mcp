@@ -31,7 +31,7 @@ The inspected server/workbench manifests use these five split packages:
 | `@modelcontextprotocol/server` | `McpServer`, `createMcpHandler`, `ProtocolError` + subclasses, `inputRequired`, OAuth server helpers (`requireBearerAuth`, `oauthMetadataResponse`) | the qyl MCP server |
 | `@modelcontextprotocol/server/stdio` | `serveStdio`, `StdioServerTransport` (Node-only subpath) | stdio entry with SDK serving defaults |
 | `@modelcontextprotocol/client` | `Client`, `StreamableHTTPClientTransport`, `versionNegotiation` | dynamic foreign-server connections |
-| `@modelcontextprotocol/core` | **Zod schema constants and protocol constants only**, no classes or functions (`CallToolResultSchema`, `OAuthMetadataSchema`, `LATEST_PROTOCOL_VERSION`, …) | validating raw wire JSON (native-execution, oauth) |
+| `@modelcontextprotocol/core` | **Zod schema constants only**, no classes or functions (`CallToolResultSchema`, `OAuthMetadataSchema`, …) | validating raw wire JSON (native-execution, oauth) |
 | `@modelcontextprotocol/node` / `express` | Node/Express adapters over `createMcpHandler` | HTTP hosting |
 
 Rules that follow from the split:
@@ -43,6 +43,9 @@ Rules that follow from the split:
   `core`. Without a Zod dependency, `server` and `client` export `specTypeSchemas` (Standard Schema
   validators keyed by spec type, `specTypeSchemas.CallToolResult['~standard'].validate(x)`) and the
   boolean guard `isSpecType`.
+- Protocol constants (`LATEST_PROTOCOL_VERSION`, `SUPPORTED_PROTOCOL_VERSIONS`, the `*_META_KEY`
+  names) come from `server`/`client`. `core` keeps them on its `./internal` subpath, which is the
+  SDK packages' own surface — don't import it.
 - `server-legacy` and `codemod` are migration-only packages — never add them to qyl.mcp.
 
 ## The three contract rules (upheld by the SDK docs)
@@ -92,7 +95,7 @@ Full era matrix, serving patterns, sessions, notifications: `references/serving-
 | `input_required` / MRTR, `requestState`, elicitation, legacy shim | `references/errors-and-input.md` |
 | HTTP serving, stdio, sessions, resumability, notifications, `ServerEventBus`, scaling | `references/serving-and-eras.md` |
 | Era negotiation, `versionNegotiation`, probe semantics, client transports | `references/serving-and-eras.md` |
-| Raw wire validation | Zod: `*Schema` from `@modelcontextprotocol/core` (schemas and constants only); no Zod: `specTypeSchemas` / `isSpecType` from `server` or `client` |
+| Raw wire validation | Zod: `*Schema` from `@modelcontextprotocol/core` (schemas only); no Zod: `specTypeSchemas` / `isSpecType` from `server` or `client` |
 
 ## Sharp edges (each one verified, not guessed)
 
