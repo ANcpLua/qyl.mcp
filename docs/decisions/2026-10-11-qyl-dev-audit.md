@@ -164,7 +164,7 @@ Order:
 | AT-16 | "does not require Node.js", then `npx` | **Fix**: "the optional stdio MCP server needs Node.js" |
 | AT-17 | The README says Node 24, while `engines` is `>=22.12.0` | **Fix**: pin mise to 24.21.0 (QYL-T3); keep `engines` |
 | AT-18 | Retention is stated as 28 and 30 days | **Fix**, done (#35): 30 days is the collector's default `QYL_RETENTION_DAYS`, and 28 days is the Chrome UX Report field aggregate. No "scoreboard" exists |
-| AT-19 | "public directory submission is still in preparation" | **Owner** |
+| AT-19 | "public directory submission is still in preparation" | **Owner**, confirmed 2026-10-11: not submitted to either directory, so the sentence stays. The first Anthropic and OpenAI upload waits for the 32-tool set planned in `~/Downloads/qyl-mcp-32-tools-both-platforms.md`: 18 tools exist, 14 are missing (`triage`, `list_failures`, `get_failure_context`, `compare_groups`, `compare_traces`, `verify_fix`, `aggregate_telemetry`, `discover_attributes`, `get_agent_run`, `list_releases`, `get_service_map`, `check_telemetry_health`, `get_mcp_stats`, `update_failure_status`) and 10 existing ones need the planned upgrades |
 | AT-20 | The Wrangler `compatibility_date` is 2026-07-23 | **Keep** |
 | AT-21 | The redundant `smoke` script | **Fix**: delete it |
 
@@ -347,3 +347,5 @@ Decided by the owner, handed to Codex: the plain-string form of `QYL_OTLP_PROJEC
 Closed: the runner's own telemetry. The owner decided the `qyl` CLI and runner process gets `AddQyl()`: the collector already ran the AutoInstrumentation runtime through `UseQyl()`, and its interceptor generator has no call site to intercept; the runner process had no telemetry at all. qyl #676 (`c92bcbc7`) exports it only to the dedicated diagnostics collector on `:5200`, never to the product collector; the G11 edge rule in `eng/build/BuildDependencyEdges.cs` allows `Qyl.Telemetry.Hosting` for the CLI; the packaging smoke reads the runner's spans back from `:5200` and checks `:5100` has none. Released as qyl **11.1.0** (tag on `c92bcbc7`, published, eight packages indexed, release 17:32 UTC); qyl.at displays it. AutoInstrumentation stays at 24.0.0: nothing it ships changed, and it pins no contract.
 
 Still open: every **Contract 11.7.0** row (alert rules, SCH-22); AT-19 (**Owner**); AutoInstrumentation Renovate #49 and #50 (release age); Codex's items (SemanticConventions TypeScript package, the qyl.mcp generated bindings, the qyl.at registry docs, the key-roles migration).
+
+AT-19 closed as confirmed by the owner (see its row): the connector is not submitted to the Anthropic or OpenAI directory, and the qyl.mcp owner-review gate stays until it is. The 32-tool plan is the prerequisite.
