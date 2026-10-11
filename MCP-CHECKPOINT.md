@@ -1,6 +1,8 @@
 # qyl.mcp checkpoint
 
-Checked **2026-10-08**. The [objective](goal-objective.md) defines completion;
+Each section names the date of what it records: the 2026-10-08 observations
+stay dated 2026-10-08, and the 2026-10-11 merges, releases and evidence are
+dated 2026-10-11. The [objective](goal-objective.md) defines completion;
 [AGENTS.md](AGENTS.md) defines repository rules. The
 [evidence ledger](MCP-V2-INTEROP-TODO.md) distinguishes source, local tests,
 CI, public HTTP observations and pending owner actions.
@@ -37,6 +39,8 @@ exact connector-URL hash, the configured HTTPS origin plus compatibility
 alias for ChatGPT, or neither domain field for unknown hosts.
 [Dated source and local verification](docs/evidence/2026-10-08-point-10-ui-domain.md)
 cover both viewers and both wire eras.
+
+## Point 10, toolchain, contract and releases, 2026-10-11
 
 Point-10 progress checked **2026-10-11**: [PR #121](https://github.com/ANcpLua/qyl.mcp/pull/121)
 merged as `9a84bfe`. The following work is implemented in follow-up
@@ -88,9 +92,9 @@ choice. Unknown names can use a recognized UA; only when neither hint is
 recognized are both domain fields omitted, allowing the host's default sandbox.
 Omission alone does not disable the viewer or reject the client.
 
-The fixes and the corrected documentation are committed on
-`codex/point-10-client-ui-domain`, which also merges `main` through #135; the
-receiving agents continue **on this branch, targeting #136**. The implemented
+The corrected documentation merged through
+[PR #136](https://github.com/ANcpLua/qyl.mcp/pull/136) as `de9c8dc` at
+`2026-10-11T08:12:19Z`; new work branches from `main`. The implemented
 items above are complete and must not become duplicate tasks. Observed client
 identifiers and authenticated Claude/ChatGPT rendering still need separate
 owner evidence; synthetic tests establish policy, not production compatibility.
@@ -102,8 +106,10 @@ Bun 1.4.3 in `mise.toml`, and CI no longer uses `setup-node`. The contract moved
 in lockstep to 11.4.0 (TypeSpec 1.17, revision `sha256:3605ae27d2edf632`):
 Collector [qyl PR #653](https://github.com/ANcpLua/qyl/pull/653) merged as
 `6a0cde7`, consumer [PR #131](https://github.com/ANcpLua/qyl.mcp/pull/131) as
-`89be0fd`. The release workflow published `qyl-mcp-server` 7.2.0, 7.2.1 and 7.2.2 with
-provenance after clean `npx` consumers passed in both eras. The first 11.4.0
+`89be0fd`. The release workflow published `qyl-mcp-server` 7.2.0, 7.2.1, 7.2.2 and 7.2.3 with
+provenance after clean `npx` consumers passed in both eras; 7.2.3
+([PR #137](https://github.com/ANcpLua/qyl.mcp/pull/137), merged as `db1c728`)
+moved the contract package to 11.5.0 with the revision unchanged. The first 11.4.0
 deploy refused to start until the Collector served the new revision.
 [Dated evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md) records the commands, output and the deploy order this
 requires.
@@ -115,19 +121,19 @@ commands/output. [Point-14 evidence](docs/evidence/2026-10-08-followup-14.md) re
 with explicit owner fields. Final completion still requires checking the merged
 `origin/main` and its CI, not inferring a merge from these local records.
 
-## Repository and local evidence
+## Repository and local evidence, 2026-10-08 and 2026-10-11
 
 | State | Dated evidence |
 | --- | --- |
-| Split SDK 2.3.1, contract package 11.5.0 (revision `sha256:3605ae27d2edf632`, unchanged since 11.4.0), server source and npm version 7.2.3. | [11.4.0 lockstep and release evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md); [Option-A pins and manifest evidence](docs/evidence/2026-10-08-point-8-options.md); [earlier package inventory](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory). |
-| 11 read-only tools; ten model-facing and app-only `fetch_telemetry`; trace/CI descriptions now include point-8 options. | [Option-A manifest comparison](docs/evidence/2026-10-08-point-8-options.md); earlier inventory retained in step 7. |
-| Incoming native records exclude arguments, `_meta` and result bodies. | [Strict schema source](docs/evidence/2026-10-08-step7.md#native-records) and [regression evidence](MCP-V2-INTEROP-TODO.md#step-1--rules-and-native-call-records). |
-| Build, 337 tests, transport, SDK, lint and project-isolation checks passed locally. | [Step-4 transcript](docs/evidence/2026-10-08-step4.md). The initial OTLP failure and successful fresh-main Collector rerun are both retained. |
-| Inspector 2.9.0 passed modern/legacy discovery and schema portability. | [Black-box command/output](docs/evidence/2026-10-08-step4.md#both-era). |
-| Historical drift scan produced 31 findings; revised point 3 now reports zero errors with an unchanged checker. | [Point-3 command/output](docs/evidence/2026-10-08-followup-03.md#static-checker-before-and-after); [historical raw output](docs/evidence/2026-10-08-step4.md#static-drift-findings) and [assessed rules](MCP-V2-INTEROP-TODO.md#static-findings--assessed-2026-10-08). |
-| Shared skill and Anthropic files exist; both OpenAI manifests schema-valid; package build reproducible. | [Step-5 commands/output](docs/evidence/2026-10-08-step5.md). Generated ZIP is local and Git-ignored, not a submitted artifact. |
+| 2026-10-11: Split SDK 2.3.1, contract package 11.5.0 (revision `sha256:3605ae27d2edf632`, unchanged since 11.4.0), server source and npm version 7.2.3. | [11.4.0 lockstep and release evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md); [Option-A pins and manifest evidence](docs/evidence/2026-10-08-point-8-options.md); [earlier package inventory](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory). |
+| 2026-10-08: 11 read-only tools; ten model-facing and app-only `fetch_telemetry`; trace/CI descriptions now include point-8 options. | [Option-A manifest comparison](docs/evidence/2026-10-08-point-8-options.md); earlier inventory retained in step 7. |
+| 2026-10-08: Incoming native records exclude arguments, `_meta` and result bodies. | [Strict schema source](docs/evidence/2026-10-08-step7.md#native-records) and [regression evidence](MCP-V2-INTEROP-TODO.md#step-1--rules-and-native-call-records). |
+| 2026-10-08: Build, 337 tests, transport, SDK, lint and project-isolation checks passed locally. | [Step-4 transcript](docs/evidence/2026-10-08-step4.md). The initial OTLP failure and successful fresh-main Collector rerun are both retained. |
+| 2026-10-08: Inspector 2.9.0 passed modern/legacy discovery and schema portability. | [Black-box command/output](docs/evidence/2026-10-08-step4.md#both-era). |
+| 2026-10-08: Historical drift scan produced 31 findings; revised point 3 now reports zero errors with an unchanged checker. | [Point-3 command/output](docs/evidence/2026-10-08-followup-03.md#static-checker-before-and-after); [historical raw output](docs/evidence/2026-10-08-step4.md#static-drift-findings) and [assessed rules](MCP-V2-INTEROP-TODO.md#static-findings--assessed-2026-10-08). |
+| 2026-10-08: Shared skill and Anthropic files exist; both OpenAI manifests schema-valid; package build reproducible. | [Step-5 commands/output](docs/evidence/2026-10-08-step5.md). Generated ZIP is local and Git-ignored, not a submitted artifact. |
 
-## Merge and CI evidence
+## Merge and CI evidence, as of 2026-10-08
 
 Steps 2–6 merged sequentially as PRs #93–#97. Each has `lint`, `verify`,
 `owner-review/content` and `owner-review/evidence` recorded as SUCCESS at its
@@ -136,14 +142,14 @@ dates and `gh` outputs are in [step-7 merge evidence](docs/evidence/2026-10-08-s
 This revision reconciles the step-7 documents; its own PR and CI status must
 be read from GitHub rather than inferred from these earlier runs.
 
-## Public observations and remaining owner work
+## Public observations and remaining owner work, 2026-10-08 and 2026-10-11
 
 `curl` observed the public MCP 401 challenge and correct resource/issuer/scope
 metadata; `npm view qyl-mcp-server version` returned 7.1.1 on 2026-10-08.
 [Exact output](docs/evidence/2026-10-08-step4.md#endpoint).
 These results do not prove the deployed commit, a fresh npm consumer, a real
 client connection or production Events behavior. On 2026-10-11 the registry
-returned `7.2.1`, then `7.2.2` after #133, and the release workflow's clean `npx` consumer smoke passed in
+returned `7.2.1`, then `7.2.2` after #133 and `7.2.3` after #137, and the release workflow's clean `npx` consumer smoke passed in
 both eras ([release evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases)). That is CI evidence, not the
 owner's pinned-Inspector consumer observation.
 

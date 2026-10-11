@@ -194,6 +194,9 @@ test("filtered tools preserve upstream errors instead of manufacturing empty or 
   ]) {
     const result = await connection.client.callTool(call);
     assert.equal(result.isError, true);
-    assert.equal(result.structuredContent, undefined);
+    // The failure travels as `structuredContent.error`; no empty or demo data is manufactured.
+    const structured = result.structuredContent as { error?: { code: string } } | undefined;
+    assert.deepEqual(Object.keys(structured ?? {}), ["error"], call.name);
+    assert.equal(typeof structured?.error?.code, "string", call.name);
   }
 });

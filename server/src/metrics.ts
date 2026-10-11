@@ -119,10 +119,15 @@ function demoSeriesId(stream: DemoMetricStream): string {
   return hash.toString(16).padStart(8, "0");
 }
 
+/**
+ * `hasMore` is the page's own flag: the collector's `has_more` live, and
+ * "more matched than `limit`" in demo mode. The tools pass it through so a
+ * truncated catalog never reads as a complete one.
+ */
 export async function listMetrics(
   args: ListMetricsArgs,
   options: CollectorRequestOptions = {},
-): Promise<{ metrics: MetricDescriptor[]; mode: Mode }> {
+): Promise<{ metrics: MetricDescriptor[]; hasMore: boolean; mode: Mode }> {
   const mode = await resolveMode();
   const limit = args.limit ?? 200;
 
@@ -134,12 +139,13 @@ export async function listMetrics(
       if (bucket) bucket.push(stream);
       else byName.set(stream.name, [stream]);
     }
-    const metrics = [...byName.entries()]
-      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    const sorted = [...byName.entries()]
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+    const metrics = sorted
       .slice(0, limit)
       .map(([name, streams]): MetricDescriptor => {
         const [first] = streams;
-        if (first === undefined) throw new CollectorError(`demo metric ${name} has no streams`);
+        if (first === undefined) throw new CollectorError(`demo metric ${name} has no streams`, false, undefined, "internal");
         const lastSeen = Math.max(
           ...streams.map((stream) => stream.points.at(-1)?.atMs ?? 0),
         );
@@ -154,7 +160,7 @@ export async function listMetrics(
           last_seen: new Date(lastSeen).toISOString(),
         };
       });
-    return redactTelemetry({ metrics, mode });
+    return redactTelemetry({ metrics, hasMore: sorted.length > limit, mode });
   }
 
   const body = await collectorGet(
@@ -162,21 +168,19 @@ export async function listMetrics(
     { name_prefix: args.name_prefix, limit },
     options,
   );
-  return redactTelemetry({
-    metrics: parseCollectorPage(
-      body,
-      METRICS_PATH,
-      MetricsListResponseSchema,
-      parseCollectorMetricDescriptor,
-    ).items,
-    mode,
-  });
+  const page = parseCollectorPage(
+    body,
+    METRICS_PATH,
+    MetricsListResponseSchema,
+    parseCollectorMetricDescriptor,
+  );
+  return redactTelemetry({ metrics: page.items, hasMore: page.hasMore, mode });
 }
 
 export async function listMetricSeries(
   args: MetricSeriesArgs,
   options: CollectorRequestOptions = {},
-): Promise<{ series: MetricSeries[]; mode: Mode }> {
+): Promise<{ series: MetricSeries[]; hasMore: boolean; mode: Mode }> {
   const mode = await resolveMode();
   const limit = args.limit ?? 200;
   const exact = parseMatchers(args.attr, "attr");
@@ -188,7 +192,7 @@ export async function listMetricSeries(
         stream.name === args.metric_name && matchesStream(stream, exact, prefixes),
     );
     if (streams.length === 0 && !getDemoMetrics().some((s) => s.name === args.metric_name)) {
-      throw new CollectorError(`metric not found: ${args.metric_name}`);
+      throw new CollectorError(`metric not found: ${args.metric_name}`, false, undefined, "not_found");
     }
     const series = streams.slice(0, limit).map((stream): MetricSeries => ({
       series_id: demoSeriesId(stream),
@@ -200,7 +204,7 @@ export async function listMetricSeries(
       first_seen: new Date(stream.points[0]?.atMs ?? 0).toISOString(),
       last_seen: new Date(stream.points.at(-1)?.atMs ?? 0).toISOString(),
     }));
-    return redactTelemetry({ series, mode });
+    return redactTelemetry({ series, hasMore: streams.length > limit, mode });
   }
 
   const path = `${METRICS_PATH}/${encodeURIComponent(args.metric_name)}/series`;
@@ -210,18 +214,16 @@ export async function listMetricSeries(
       { attr: args.attr, attr_prefix: args.attr_prefix, limit },
       options,
     );
-    return redactTelemetry({
-      series: parseCollectorPage(
-        body,
-        path,
-        MetricSeriesListResponseSchema,
-        parseCollectorMetricSeries,
-      ).items,
-      mode,
-    });
+    const page = parseCollectorPage(
+      body,
+      path,
+      MetricSeriesListResponseSchema,
+      parseCollectorMetricSeries,
+    );
+    return redactTelemetry({ series: page.items, hasMore: page.hasMore, mode });
   } catch (error) {
     if (error instanceof CollectorError && error.status === 404) {
-      throw new CollectorError(`metric not found: ${args.metric_name}`);
+      throw new CollectorError(`metric not found: ${args.metric_name}`, false, undefined, "not_found");
     }
     throw error;
   }
@@ -289,7 +291,7 @@ export async function queryMetric(
       (stream) => stream.name === args.metric_name && matchesStream(stream, exact, prefixes),
     );
     if (!getDemoMetrics().some((stream) => stream.name === args.metric_name)) {
-      throw new CollectorError(`metric not found: ${args.metric_name}`);
+      throw new CollectorError(`metric not found: ${args.metric_name}`, false, undefined, "not_found");
     }
     const startMs = Date.parse(args.start_time);
     const endMs = Date.parse(args.end_time);
@@ -361,7 +363,7 @@ export async function queryMetric(
     return redactTelemetry({ result: parseCollectorMetricQueryResult(body, path), mode });
   } catch (error) {
     if (error instanceof CollectorError && error.status === 404) {
-      throw new CollectorError(`metric not found: ${args.metric_name}`);
+      throw new CollectorError(`metric not found: ${args.metric_name}`, false, undefined, "not_found");
     }
     throw error;
   }

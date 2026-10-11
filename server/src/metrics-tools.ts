@@ -46,8 +46,8 @@ const QUERY_PATH = "/api/v1/metrics/{metric_name}/query";
 
 /**
  * The list operations page, and their pages are the tool's output. `has_more`
- * travels with the items so a reader can tell a complete catalog from a first
- * page; the cursor does not, because these tools take no cursor.
+ * is the page's own flag, so a reader can tell a complete catalog from a first
+ * page; the cursor does not travel yet, because these tools take no cursor.
  */
 export function registerMetricsTools(server: McpServer): void {
   server.registerTool(
@@ -66,11 +66,11 @@ export function registerMetricsTools(server: McpServer): void {
     },
     (args: ListMetricsArgs, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, 1, async (scope) => {
-        const { metrics, mode } = await listMetrics(args, scope.collector);
+        const { metrics, hasMore, mode } = await listMetrics(args, scope.collector);
         await scope.step(`Fetched ${metrics.length} metric instrument(s)`);
         return telemetryToolResult(summarizeMetricCatalog(metrics, mode), {
           items: metrics,
-          has_more: false,
+          has_more: hasMore,
         });
       }),
   );
@@ -91,11 +91,11 @@ export function registerMetricsTools(server: McpServer): void {
     },
     (args: MetricSeriesArgs, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, 1, async (scope) => {
-        const { series, mode } = await listMetricSeries(args, scope.collector);
+        const { series, hasMore, mode } = await listMetricSeries(args, scope.collector);
         await scope.step(`Fetched ${series.length} series of ${args.metric_name}`);
         return telemetryToolResult(summarizeMetricSeries(series, mode), {
           items: series,
-          has_more: false,
+          has_more: hasMore,
         });
       }),
   );

@@ -3,8 +3,11 @@
 qyl provides MCP tools for investigating traces, logs, metrics and sessions in
 a qyl Collector. It measures and correlates; the agent reasons and acts.
 
-This README describes the source inspected on **2026-10-08**, with commands
-and actual outputs in the [source evidence](docs/evidence/2026-10-08-step7.md).
+Each section below names the date of the evidence it cites: the source and
+public observations inspected on **2026-10-08**, with commands and actual
+outputs in the [source evidence](docs/evidence/2026-10-08-step7.md), and the
+toolchain, contract and release records of **2026-10-11** in the
+[release evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md).
 Local test results, CI results, public HTTP observations and pending owner
 checks are distinct in the [evidence ledger](MCP-V2-INTEROP-TODO.md).
 
@@ -79,11 +82,13 @@ For live data, omit `QYL_DEMO` and configure `QYL_COLLECTOR_URL` and, when
 needed, `QYL_API_KEY`. For local HTTP, run `bun server/dist/main.js`; the source
 defaults to loopback port 3001. `QYL_API_KEY` is an outgoing Collector
 credential, not an incoming MCP login.
-[Configuration and serving source](docs/evidence/2026-10-08-step7.md#configuration-and-serving).
+[Configuration and serving source, 2026-10-08](docs/evidence/2026-10-08-step7.md#configuration-and-serving).
 
 The release workflow publishes `qyl-mcp-server` with provenance and smokes
 clean `npx` consumers in both protocol eras before a release counts; on
-2026-10-11 it published `7.2.0`, `7.2.1` and `7.2.2` that way. The source declares `7.2.3`.
+2026-10-11 it published `7.2.0`, `7.2.1`, `7.2.2` and `7.2.3` that way, and
+`7.2.3` ([PR #137](https://github.com/ANcpLua/qyl.mcp/pull/137), contract
+package 11.5.0) is the npm `latest`.
 [Release and consumer evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases).
 
 ### Tools and viewers
@@ -109,7 +114,8 @@ The two viewers declare versioned resource URIs, a configured hosted origin
 and empty external connection/resource CSP allowlists. Local tests cover
 restoring the original query when refresh input is empty.
 [Viewer source](docs/evidence/2026-10-08-step7.md#viewers) and
-[local test output](docs/evidence/2026-10-08-step4.md#test).
+[local test output](docs/evidence/2026-10-08-step4.md#test), both 2026-10-08;
+the viewer versions moved to v6/v4 with release 7.2.2 on 2026-10-11.
 
 ### MCP Events
 
@@ -120,7 +126,7 @@ signs deliveries, checks ongoing authorization, expires subscriptions and
 cancels delivery on unsubscribe or confirmed revocation. Subscription state
 is bounded and excludes OAuth tokens and copied telemetry.
 [Events source](docs/evidence/2026-10-08-step7.md#events) and
-[local isolation tests](docs/evidence/2026-10-08-step4.md#projects).
+[local isolation tests](docs/evidence/2026-10-08-step4.md#projects), 2026-10-08.
 
 These are implementation/local-test results. Production subscription,
 matching/non-matching delivery, persistence, renewal, unsubscribe and
@@ -139,7 +145,7 @@ protocol automatically, inspect schemas, invoke tools and retain execution
 evidence. It uses a loopback browser session and checks host/origin access.
 Tool annotations guide confirmation; they do not grant permission.
 [Workbench source](docs/evidence/2026-10-08-step7.md#workbench) and
-[local tests](docs/evidence/2026-10-08-step4.md#test).
+[local tests](docs/evidence/2026-10-08-step4.md#test), 2026-10-08.
 
 Review an external stdio command before launching it: it executes locally.
 Use environment-variable references for credentials instead of embedding
@@ -156,13 +162,13 @@ records at `~/.qyl/mcp-native-executions.json`; `QYL_MCP_NATIVE_STATE_PATH`
 overrides the path. Hosted HTTP with `MCP_PUBLIC_URL` disables that local store.
 Known version-1/2 data is projected into the minimized schema; unreadable
 archives require operator review. [Native-record source](docs/evidence/2026-10-08-step7.md#native-records)
-and [regression results](MCP-V2-INTEROP-TODO.md#step-1--rules-and-native-call-records).
+and [regression results](MCP-V2-INTEROP-TODO.md#step-1--rules-and-native-call-records), 2026-10-08.
 
 OTLP exports include operation timing/status and trace correlation. Native
 incoming calls do not supply argument/result bodies to that telemetry.
 Workbench has a separate optional content-capture setting. Local OTLP tests
 check redaction and matching trace/span IDs; they do not establish a production
-retention policy. [OTLP evidence](docs/evidence/2026-10-08-step4.md#fresh-main-collector-otlp-rerun).
+retention policy. [OTLP evidence, 2026-10-08](docs/evidence/2026-10-08-step4.md#fresh-main-collector-otlp-rerun).
 
 ## Configuration
 
@@ -176,7 +182,7 @@ and [Workbench](docs/evidence/2026-10-08-step7.md#workbench).
 | `QYL_API_KEY` | Outgoing Collector credential. |
 | `MCP_ALLOWED_HOSTS` | Comma-separated additional request hostnames, added to the public URL hostname for hosted HTTP. |
 | `MCP_ALLOWED_ORIGIN_HOSTS` | Comma-separated additional browser-origin hostnames, added to the public URL hostname for hosted HTTP. |
-| `QYL_PROJECT` | Server-configured Collector project scope. |
+| `QYL_PROJECT` | Server-configured Collector project scope; its default is stated in the [server README](server/README.md#configuration). |
 | `MCP_COLLECTOR_PROJECTS` | Operator-controlled verified-subject-to-project mapping. |
 | `QYL_MCP_TELEMETRY=0` | Disable MCP self-telemetry. |
 | `QYL_MCP_CAPTURE_CONTENT=1` | Optional Workbench capture; does not add incoming-call payloads to native records. |
@@ -283,7 +289,7 @@ MCP_AUTH_EXTENSIONS=enterprise-managed-authorization@1.0.0,oauth-client-credenti
 
 These are the installed integration definitions, not proof of a provider grant.
 Unknown versions and conflicting provider requirements are rejected. They do
-not issue tokens or replace the core verifier. [Source](docs/evidence/2026-10-08-step7.md#deployment-and-authentication).
+not issue tokens or replace the core verifier. [Source, 2026-10-08](docs/evidence/2026-10-08-step7.md#deployment-and-authentication).
 
 ### Cloudflare Access Managed OAuth
 
@@ -293,7 +299,7 @@ The origin checks `Cf-Access-Jwt-Assertion`: issuer, application audience, expir
 with RS256 signature validation. Configure and verify the Access application
 before selecting this mode. It does not establish that the public endpoint
 uses Access, and Auth0-backed Events cannot be enabled in this mode.
-[Source and local tests](docs/evidence/2026-10-08-step7.md#deployment-and-authentication).
+[Source and local tests, 2026-10-08](docs/evidence/2026-10-08-step7.md#deployment-and-authentication).
 
 ### Directory preparation
 
@@ -336,8 +342,8 @@ them. Review cases and the demo are drafts until run in an owner client.
 
 ## Contracts
 
-The source pins `@ancplua/qyl-api-schema` 11.5.0, official split MCP
+As of 2026-10-11, the source pins `@ancplua/qyl-api-schema` 11.5.0, official split MCP
 SDK packages 2.3.1 and Zod 4.6.5. SDK major version and wire revision are
 independent. Server HTTP/stdio use SDK factories and negotiation defaults;
-Workbench uses automatic negotiation. [Contract 11.4.0 evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md) and
-[package/serving evidence](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory).
+Workbench uses automatic negotiation. [Contract 11.4.0 and 11.5.0 evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md) and
+[package/serving evidence, 2026-10-08](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory).

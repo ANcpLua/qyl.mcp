@@ -29,21 +29,78 @@ import {
 } from "./contract-validation.js";
 import type { Mode } from "./wire.js";
 
-/** Error with a message already suitable for showing to the model/user. */
+/**
+ * The stable failure codes a tool result carries in `structuredContent.error`.
+ * A model branches on the code, never on the message text, which stays free to
+ * describe the specific failure.
+ */
+export type ToolErrorCode =
+  | "invalid_argument"
+  | "not_found"
+  | "no_project_access"
+  | "collector_unreachable"
+  | "collector_timeout"
+  | "cancelled"
+  | "collector_unauthorized"
+  | "collector_rate_limited"
+  | "collector_rejected"
+  | "collector_error"
+  | "contract_mismatch"
+  | "internal";
+
+/** Whether the same call can succeed when repeated unchanged. */
+export function isRetryableToolError(code: ToolErrorCode): boolean {
+  return (
+    code === "collector_unreachable" ||
+    code === "collector_timeout" ||
+    code === "collector_rate_limited" ||
+    code === "collector_error"
+  );
+}
+
+function codeForStatus(status: number): ToolErrorCode {
+  if (status === 404) return "not_found";
+  if (status === 401 || status === 403) return "collector_unauthorized";
+  if (status === 429) return "collector_rate_limited";
+  if (status >= 500) return "collector_error";
+  return "collector_rejected";
+}
+
+/**
+ * Error with a message already suitable for showing to the model/user, and a
+ * stable `code`. Without an explicit code, a response status decides it, a
+ * connection failure is `collector_unreachable`, and anything else is the
+ * caller's `invalid_argument`.
+ */
 export class CollectorError extends Error {
+  readonly code: ToolErrorCode;
+
   constructor(
     message: string,
     readonly connectionError = false,
     readonly status?: number,
+    code?: ToolErrorCode,
   ) {
     super(message);
     this.name = "CollectorError";
+    this.code =
+      code ??
+      (status !== undefined
+        ? codeForStatus(status)
+        : connectionError
+          ? "collector_unreachable"
+          : "invalid_argument");
   }
 }
 
 function asRecord(value: unknown, context: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new CollectorError(`collector contract mismatch for ${context}: expected an object`);
+    throw new CollectorError(
+      `collector contract mismatch for ${context}: expected an object`,
+      false,
+      undefined,
+      "contract_mismatch",
+    );
   }
   return value as Record<string, unknown>;
 }
@@ -51,6 +108,9 @@ function asRecord(value: unknown, context: string): Record<string, unknown> {
 function contractMismatch(context: string, error: z.ZodError): CollectorError {
   return new CollectorError(
     `collector contract mismatch for ${context}: ${z.prettifyError(error)}`,
+    false,
+    undefined,
+    "contract_mismatch",
   );
 }
 
@@ -277,10 +337,20 @@ async function collectorRequest(
     });
   } catch {
     if (options.signal?.aborted) {
-      throw new CollectorError(`collector request cancelled for ${pathname}`, true);
+      throw new CollectorError(
+        `collector request cancelled for ${pathname}`,
+        true,
+        undefined,
+        "cancelled",
+      );
     }
     if (timeout.aborted) {
-      throw new CollectorError(`collector timed out for ${pathname}`, true);
+      throw new CollectorError(
+        `collector timed out for ${pathname}`,
+        true,
+        undefined,
+        "collector_timeout",
+      );
     }
     throw new CollectorError(
       `collector unreachable at ${collectorUrl()} — start it with ` +
@@ -297,6 +367,7 @@ async function collectorRequest(
       `collector returned invalid JSON (${response.status} ${response.statusText}) for ${pathname}`,
       false,
       response.status,
+      "contract_mismatch",
     );
   }
 
@@ -307,6 +378,7 @@ async function collectorRequest(
         `collector contract mismatch for ${pathname}: expected application/problem+json, got ${mediaType ?? "no content type"}`,
         false,
         response.status,
+        "contract_mismatch",
       );
     }
     const problem = parseProblemDetails(responseBody);
@@ -315,6 +387,7 @@ async function collectorRequest(
         `collector contract mismatch for ${pathname}: invalid Problem Details body`,
         false,
         response.status,
+        "contract_mismatch",
       );
     }
     throw new CollectorError(

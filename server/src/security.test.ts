@@ -16,12 +16,18 @@ test("collector URL rejects embedded credentials and query secrets", () => {
 });
 
 test("tool errors expose only controlled collector failures", () => {
-  assert.deepEqual(toolError(new CollectorError("collector unavailable")), {
+  assert.deepEqual(toolError(new CollectorError("collector unavailable", true)), {
     content: [{ type: "text", text: "collector unavailable" }],
+    structuredContent: {
+      error: { code: "collector_unreachable", message: "collector unavailable", retryable: true },
+    },
     isError: true,
   });
   assert.deepEqual(toolError(new Error("Authorization: Bearer should-never-escape")), {
     content: [{ type: "text", text: "Telemetry request failed." }],
+    structuredContent: {
+      error: { code: "internal", message: "Telemetry request failed.", retryable: false },
+    },
     isError: true,
   });
 });

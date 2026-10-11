@@ -6,6 +6,8 @@ the [step-7 inventory](docs/evidence/2026-10-08-step7.md#package-and-tool-invent
 This maps existing tools to user needs; it does not claim a particular client,
 repository or production service currently emits telemetry.
 
+## Tool inventory, as of 2026-10-08
+
 All 11 tools have `readOnlyHint: true` and `destructiveHint: false` in the
 inspected manifest. Ten are model-facing; `fetch_telemetry` is app-only.
 The manifest's contract revision is `sha256:3605ae27d2edf632`.
@@ -43,7 +45,7 @@ No repository has an exclusive claim on the emitter convention or MCP span
 attributes. Third-party mutations such as GitHub PRs or deployments are outside
 qyl tools; see the first-party boundary in [AGENTS.md](AGENTS.md).
 
-## Protocol and viewers
+## Protocol and viewers, 2026-10-08 and 2026-10-11
 
 The local pinned Inspector 2.9.0 check passed `tools/list` for modern and legacy
 eras and schema portability; see [dated command/output](docs/evidence/2026-10-08-step4.md#both-era).
