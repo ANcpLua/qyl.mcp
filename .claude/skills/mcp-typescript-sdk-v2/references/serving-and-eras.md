@@ -86,13 +86,14 @@ client.getProtocolEra(); // 'modern' | 'legacy'; undefined before connect, never
 
 - Default (no `versionNegotiation`) = the 2025 `initialize` handshake byte-for-byte, **no probe**.
 - `mode: 'auto'` probes `server/discover`, falls back to `initialize` on 2025-only servers.
-- `mode: { pin: '2026-07-28' }` never falls back — rejects with `SdkError(ERA_NEGOTIATION_FAILED)`.
+- `mode: { pin: '2026-07-28' }` never falls back — rejects with an `SdkError` whose code is
+  `SdkErrorCode.EraNegotiationFailed` (`"ERA_NEGOTIATION_FAILED"`).
 - Skip the probe with a cached verdict: `ConnectOptions.prior` (`{ kind: 'modern', discover }` or
   `{ kind: 'legacy' }`). Freshness is the host's job — a stale legacy verdict succeeds silently
   against an upgraded server.
 - Probe semantics: on stdio, silence = legacy (fallback); on HTTP, silence = outage
-  (`SdkError(RequestTimeout)`). 401/403 are auth evidence, never era evidence. 5xx rejects with
-  `SdkHttpError(EraNegotiationFailed)`. On `StdioClientTransport` exactly, the probe runs on a
+  (`SdkErrorCode.RequestTimeout`). 401/403 are auth evidence, never era evidence. 5xx rejects with
+  an `SdkHttpError` (`SdkErrorCode.EraNegotiationFailed`). On `StdioClientTransport` exactly, the probe runs on a
   short-lived **sibling process** (some servers exit on pre-`initialize` requests); custom
   stdio-shaped transports probe in place.
 - `supportedProtocolVersions` shapes the probe; a list with no pre-2026 entry removes the

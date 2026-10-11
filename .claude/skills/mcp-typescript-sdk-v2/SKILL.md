@@ -4,7 +4,7 @@ description: Authoritative reference for the MCP TypeScript SDK v2 (@modelcontex
 license: MIT
 metadata:
   author: Alex + Claude
-  version: "1.1.0"
+  version: "1.1.1"
   verified-against: |
     qyl.mcp source and local tests, 2026-10-08: core/server/client 2.3.1,
     express 2.0.2, node 2.1.1. Package/source commands and actual output:
@@ -13,6 +13,9 @@ metadata:
     RegisteredTool handle, ServerNotifier, versionNegotiation modes, inputRequired builders,
     and the per-tool scopeChallenge (ScopeChallenge, requireScopes, the 403 it produces in both
     eras, InsufficientScopeError on the client).
+    Re-checked 2026-10-11 against the published 2.3.1 tarballs: URL elicitation is 2025-era only
+    (-32042 refused on 2026-07-28), -32020 HeaderMismatch, the full ToolAnnotations set, client
+    step-up modes, createRequestStateCodec key length.
     Generic SDK reference material must be checked against installed types before use.
 
 ---
@@ -107,7 +110,8 @@ Full era matrix, serving patterns, sessions, notifications: `references/serving-
 - Schema-rejected tool arguments come back as an `isError: true` result — the handler never runs.
 - A thrown `ProtocolError` **inside a tool handler** still becomes `isError: true` — it does not
   escape as a JSON-RPC error. The only tool-handler exception that propagates is
-  `UrlElicitationRequiredError` (`-32042`).
+  `UrlElicitationRequiredError` (`-32042`), and only on 2025-era connections; on 2026-07-28 the SDK
+  refuses it loudly and steers to `inputRequired.elicitUrl(...)`.
 - `ResourceNotFoundError` answers a `resources/read` miss with `-32602` (the SDK never emits
   `-32002`; that code is receive-tolerated only).
 - `ctx.mcpReq.inputResponses` is **attacker-controlled**; validate through

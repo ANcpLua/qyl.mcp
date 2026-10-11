@@ -12,7 +12,9 @@ code handles it. **The handler kind decides which channel exists:**
 | resource / prompt / completion | protocol error only | throw `ProtocolError(code, message, data?)` or a typed subclass |
 
 - A `ProtocolError` thrown **inside a tool handler** still becomes `isError: true`. The single
-  exception: `UrlElicitationRequiredError` propagates as `-32042` so the host can open the URL.
+  exception, **on 2025-era connections only**: `UrlElicitationRequiredError` propagates as `-32042`
+  so the host can open the URL. On a 2026-07-28 connection the SDK refuses that throw loudly (the
+  `-32042` never reaches the wire) and steers to `inputRequired.elicitUrl(...)`.
 - A non-`ProtocolError` thrown from a resource/prompt/completion callback surfaces as `-32603`
   Internal Error carrying the raw exception text — which loses the code and structured `data`
   and publishes whatever the exception happened to say. Never let that happen: throw typed.
@@ -23,7 +25,7 @@ code handles it. **The handler kind decides which channel exists:**
 | Class | Code | Data |
 | --- | --- | --- |
 | `ResourceNotFoundError(uri)` | `-32602` | `{ uri }` — the code the spec mandates for a read miss; the SDK never emits `-32002` |
-| `UrlElicitationRequiredError(elicitations)` | `-32042` | the elicitations; only error a tool handler can propagate |
+| `UrlElicitationRequiredError(elicitations)` | `-32042` | the elicitations; 2025 era only — the only error a tool handler can propagate there. On 2026-07-28 it is refused; use `inputRequired.elicitUrl` |
 | `UnsupportedProtocolVersionError({supported, requested})` | `-32022` | lets the peer pick and retry |
 | `MissingRequiredClientCapabilityError({requiredCapabilities})` | `-32021` | names what the client must declare |
 
@@ -34,8 +36,11 @@ brand-aware static guard that narrows in TypeScript.
 
 `ParseError -32700`, `InvalidRequest -32600`, `MethodNotFound -32601`, `InvalidParams -32602`
 (also the read-miss code), `InternalError -32603`, `ResourceNotFound -32002` (receive-tolerated
-only), `MissingRequiredClientCapability -32021`, `UnsupportedProtocolVersion -32022`,
-`UrlElicitationRequired -32042`. The last three are new in `2026-07-28`.
+only), `MissingRequiredClientCapability -32021` and `UnsupportedProtocolVersion -32022` (both new in
+`2026-07-28`), `UrlElicitationRequired -32042` (from `2025-11-25`; never sent on the `2026-07-28`
+wire). The SDK's HTTP inbound checks also answer `-32020` HeaderMismatch (`MCP-Protocol-Version`,
+`Mcp-Method`, `Mcp-Name` or `Mcp-Param-*` disagreeing with the body); it is not a
+`ProtocolErrorCode` member.
 
 v1 names `McpError` / `ErrorCode` do not exist in v2.
 
@@ -111,8 +116,10 @@ Rules:
   view (`missing`/`elicit`/`sampling`/`roots`) when a refusal must be told apart from first entry.
 - **`requestState`** is the only cross-round memory, echoed byte-for-byte by the client —
   **attacker-controlled bearer proof**. Protect with `createRequestStateCodec({ key, ttlSeconds })`
-  (HMAC-SHA256 `{ mint, verify }`; pass `verify` as `ServerOptions.requestState.verify`). Signed,
-  not encrypted — no secrets in the payload. Mint only what earlier rounds already proved.
+  (HMAC-SHA256 `{ mint, verify }`; pass `verify` as `ServerOptions.requestState.verify`). The key
+  must be at least 32 bytes (`RangeError` otherwise) and shared by every instance that may receive
+  the echo; `ttlSeconds` defaults to 600. Signed, not encrypted — no secrets in the payload. Mint
+  only what earlier rounds already proved.
 - **Legacy shim** (on by default): on pre-2026 connections the SDK fulfils an `input_required`
   return by pushing real `elicitation/create`/`sampling/createMessage`/`roots/list` requests over
   the session and re-entering the handler. `ServerOptions.inputRequired.legacyShim: false` fails
@@ -123,6 +130,12 @@ Rules:
 ## Elicitation modes
 
 Form (in-band, `requestedSchema`) and URL (out-of-band: OAuth, payments, secrets — the
-interaction happens outside the MCP client). When a tool can't proceed without a URL visit and
-can't elicit, throw `UrlElicitationRequiredError` — the host opens the URL, then the caller
-retries. Servers may send `notifications/elicitation/complete` when the out-of-band step is done.
+interaction happens outside the MCP client).
+
+- **2026-07-28:** URL mode is an embedded request: return
+  `inputRequired({ inputRequests: { key: inputRequired.elicitUrl({...}) } })`. There is no
+  `elicitationId`; the client completes the out-of-band step and retries the call. The spec
+  removed `notifications/elicitation/complete` and `elicitationId`.
+- **2025 era only:** a tool that can't proceed without a URL visit may throw
+  `UrlElicitationRequiredError` (`-32042`); the host opens the URL and the caller retries, and the
+  server may send `notifications/elicitation/complete` when the step is done.

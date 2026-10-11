@@ -48,9 +48,12 @@ results differs by era.
 
 ### Title and annotations
 
-`title` is the display name. `annotations` (`readOnlyHint`, `destructiveHint`, `idempotentHint`)
-are client-side hints — they never change how the SDK executes the tool; hosts use them for
-auto-approve / confirm decisions. qyl.mcp imports `ToolAnnotations` from the server package.
+`title` is the display name. `annotations` (`title`, `readOnlyHint`, `destructiveHint`,
+`idempotentHint`, `openWorldHint`) are client-side hints — they never change how the SDK executes
+the tool; hosts use them for auto-approve / confirm decisions. qyl.mcp sets `readOnlyHint`,
+`destructiveHint` and `openWorldHint` explicitly on every tool (OpenAI's review requires all three
+booleans; Anthropic's requires the title and the read-only or destructive hint). qyl.mcp imports
+`ToolAnnotations` from the server package.
 
 ### Per-tool scope challenges
 
@@ -65,8 +68,11 @@ the well-known URL derived from `authInfo.resource`. `requireScopes(...)` is the
 handler and returns nothing without `authInfo`, so stdio and unauthenticated serving never
 challenge. A transport without `setScopeChallengeResolver`, such as `InMemoryTransport`,
 runs no challenge, so keep an in-handler check as well. On the client, the Streamable HTTP
-transport answers the `403` with step-up re-authorization, or throws `InsufficientScopeError`
-when it has no OAuth provider. qyl.mcp's write tools use this (`server/src/tool-scopes.ts`).
+transport answers the `403` with step-up re-authorization (default `'reauthorize'`: union of the
+requested and challenged scopes, bounded by `maxStepUpRetries`), or throws
+`InsufficientScopeError` when configured with `'throw'` or when it has no OAuth provider. Hosts
+are other clients: Claude Code and Codex don't reliably step up yet, so qyl.mcp also lists every
+scope in its protected-resource metadata. qyl.mcp's write tools use this (`server/src/tool-scopes.ts`).
 
 ### Registration handles
 
