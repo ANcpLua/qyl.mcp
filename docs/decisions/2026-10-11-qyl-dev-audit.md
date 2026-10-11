@@ -64,7 +64,7 @@ Order:
 | MCP-S10 | Present-tense headings over 2026-10-08 data | **Fix**: label them "as of 2026-10-08" |
 | MCP-C1 | The rules welcome write tools, but the code, site, skill and listings promise read-only | **Fix with writes** |
 | MCP-C2 | Requirements A1-A3 are still missing (trace filters, log time range, six parameter descriptions) | **Contract 11.6.0** |
-| MCP-C3 | The MCP never uses `/traces/{id}/spans` or the trace `cursor` | **Fix** for span paging (existing endpoint); **Contract 11.6.0** for the `cursor` input |
+| MCP-C3 | The MCP never uses `/traces/{id}/spans` or the trace `cursor` | **Keep** for span paging (`/traces/{id}` already returns every span); the `cursor` input lands in **Contract 11.6.0** |
 | MCP-C4 | The `QYL_PROJECT` default is stated in only one README | **Fix**: state it once, in `server/README.md`, and link to it |
 | MCP-A1 | `server/src/metrics-tools.ts:73,98` hardcode `has_more: false`, so a truncated catalog reads as complete | **Fix** now (server bug); the `cursor` input lands in **Contract 11.6.0** |
 | MCP-A2 | `list_traces`, `list_sessions` and `search_logs` drop `hasMore` | **Contract 11.6.0**: `has_more` and `next_cursor` in the output models |
@@ -94,10 +94,10 @@ Order:
 | QYL-C2 | Fallout's Versionize `Release` and `Changelog` targets contradict the documented tag-based release | **Fix**: delete the Versionize targets, `VersionizeVersion` and `IVersionize` |
 | QYL-C3 | `ci.yml` and `nuget-publish.yml` run raw `dotnet` where Fallout targets exist | **Fix**: route the backend lane and the pack through Fallout targets |
 | QYL-C4 | `ci.yml:64`: README- and docs-only PRs skip every lane, including the README render gate | **Fix** (H): `README.md` and `docs/configuration.md` run the backend lane |
-| QYL-C5 | The SDK writes a 64-hex revision, while the Collector advertises 16 hex | **Investigate**, then use one length everywhere and record it in the registry row |
+| QYL-C5 | The SDK writes a 64-hex revision, while the Collector advertises 16 hex | **Keep**: the 16-hex form is deliberate (`emit-contract-revision.mjs:84`, contract pattern); the SDK hashes a different file in full |
 | QYL-C6 | The package README omits `QylOpenApiVersion` | **Fix** |
 | QYL-C7 | The README undercounts what `Ci` runs | **Fix**: point at `./eng/build.sh --help` |
-| QYL-C8 | `ANcpLua.Roslyn.Utilities` 2.2.47 vs 2.2.46 | **Investigate**: separate `.Sources` package or drift |
+| QYL-C8 | `ANcpLua.Roslyn.Utilities` 2.2.47 vs 2.2.46 | **Fix**, done: it was drift; `ANcpLuaRoslynUtilitiesVersion` is 2.2.47 (#661) |
 | QYL-A1 | The Collector API has no write surface | **Contract 11.6.0**, see Write tools |
 | QYL-A2 | One unscoped key type guards ingest and reads | **Contract 11.6.0**: key roles; renaming `QYL_OTLP_PROJECT_KEYS` is **Major** |
 | QYL-A3 | Logs and metrics guess `HasMore = count >= limit` | **Fix** now: `limit+1`; a `next_cursor` lands in **Contract 11.6.0** |
@@ -122,13 +122,13 @@ Order:
 | SCH-3 | CONTRIBUTING omits the runtime outputs | **Fix** |
 | SCH-4 | The README overview lists only traces, logs and metrics | **Fix**: list every surface |
 | SCH-5 | The README omits the `./runtime` and `./otel` exports | **Fix** |
-| SCH-6 | The OpenAPI `info.version` is always `0.0.0` | **Investigate**: if the revision digest excludes `info`, stamp the tag at pack time (Fix); otherwise **Contract 12.0.0** |
+| SCH-6 | The OpenAPI `info.version` is always `0.0.0` | **Contract 12.0.0**: investigated; `emit-contract-revision.mjs` hashes `info`, so stamping `info.version` changes the revision |
 | SCH-7 | Two overlapping gates (`ci.yml`, `fallout.yml`) | **Keep**, plus one sentence in CONTRIBUTING |
 | SCH-8 | The 2026-10-08 evidence cites TypeSpec 1.16 | **Keep**: dated |
 | SCH-9 | Five list operations return `CursorPage` without a `cursor` parameter | **Contract 11.6.0** |
 | SCH-10 | `@nextLink` on an opaque cursor; `prevCursor` is never served | **Contract 12.0.0**: `@continuationToken`; delete `prevCursor` |
 | SCH-11 | Unused pagination, stream and error templates | **Contract 12.0.0**: delete them |
-| SCH-12 | The runner API has no `@useAuth` and returns a bare array | **Investigate**: if it is loopback-only, document that; otherwise add auth in 11.6.0 |
+| SCH-12 | The runner API has no `@useAuth` and returns a bare array | **Keep**: qyl's runner API binds loopback and rejects non-loopback callers (`QylRunnerApi.cs:43`); one `@doc` sentence records it (#47) |
 | SCH-13 | `x-otlp-api-key` names the query credential | **Keep** on the wire; roles per QYL-A2 |
 | SCH-14 | `ProblemDetails` carries headers inside the body model | **Contract 12.0.0** |
 | SCH-15 | Mixed operation-id styles for health | **Keep** |
@@ -185,7 +185,7 @@ Order:
 | SC-12 | The live-check recipe takes the latest GitHub release | **Fix**: the latest tag |
 | SC-13 | QYL0006 is Warning in `AnalyzerReleases.Shipped.md` and Info in code and docs | **Fix**: a "Changed Rules" entry in Unshipped |
 | SC-14 | QYL0403 shares the QYL0012 analyzer class | **Keep**, and document the ID gaps |
-| SC-15 | The rule docs call the consumer assembly `OpenTelemetry.SemanticConventions` | **Investigate**: upstream namespace on purpose, or fix in the DocsGenerator |
+| SC-15 | The rule docs call the consumer assembly `OpenTelemetry.SemanticConventions` | **Keep**: the `OpenTelemetry.SemanticConventions` category is deliberate and matches the upstream namespace the analyzers target |
 | SC-16 | The JQ prelude is copied into every template | **Keep** |
 | SC-17 | `jdx/mise-action` runs twice in `ci.yml` | **Fix**: delete the second |
 | SC-18 | Weaver is pinned in three places | **Keep**: Renovate keeps them equal |
@@ -203,8 +203,34 @@ Order:
 | AI-S11 | `Qyl.Telemetry.Hosting.csproj:5-8` says Qyl.Sdk stays until unlisted, and cites a missing architecture doc | **Fix**: "retired; deprecated on nuget.org, alternate Qyl.Telemetry.Hosting" |
 | AI-A1 | The public `QylSdkOptions` and `QylSdkHostApplicationBuilderExtensions` keep the retired name | **Major** (24.0.0): `QylOptions` and `QylHostApplicationBuilderExtensions` |
 | AI-A2 | `EnableSessionPropagation` names a span tag, not propagation | **Major** (24.0.0) rename; document the options in the Hosting README now (Fix) |
-| AI-A3 | Four members are in `PublicAPI.Unshipped.txt` after 23.0.0 | **Investigate** the 23.0.0 package; if they shipped, move them to Shipped (Fix) |
+| AI-A3 | Four members are in `PublicAPI.Unshipped.txt` after 23.0.0 | **Fix**, done: the four members shipped in 23.1.0 and moved to `PublicAPI.Shipped.txt` (#58) |
 | AI-D1 | Pins are copied into five places that drift | **Fix**: a structured `verified` field resolved from `Directory.Packages.props`; `verify-contract-invariants.py` fails on a mismatch |
 | AI-T1 | No gate checks doc pins | **Fix**: part of AI-D1 |
 | AI-T2 | Thirty per-demo verifiers | **Keep** |
 | AI-C1 | The SDK 10.0.401 pins agree | **Keep** |
+
+## Security review, 2026-10-11
+
+| ID | Finding | Decision |
+|---|---|---|
+| SEC-1 | qyl-api-schema's `release` environment had no branch or tag rule, and its manual publish took any version from any ref | **Fix**, done: the environment allows only `main` and `v*` tags. A main-ancestry guard is in progress |
+| SEC-2 | SemanticConventions' (and AutoInstrumentation's) `nuget` environment had no tag rule, so a `v*` tag on any branch could publish | **Fix**, done: both environments allow only `main` and `v*` tags. A main-ancestry guard is in progress |
+| SEC-3 | Absolute local paths in dated qyl.mcp evidence docs and `release/contract.md` | **Keep**: verbatim records. The username is public through the GitHub account and commit author, and git history keeps the old text anyway |
+| SEC-4 | qyl.at floated `node = "24"` in jobs that hold `CLOUDFLARE_API_TOKEN` | **Fix**: same as AT-17 (qyl.at #36) |
+
+## Status, 2026-10-11 16:00 Europe/Vienna
+
+| Repo | Rows closed | PR (merge) |
+|---|---|---|
+| qyl | QYL-S1, S2, S3, S4, S6, S7, S8, C1, C2, C4, C6, C7, C8, A3, A7, A8, A10, T1, T2, T3; also the CLI's unused OpenTelemetry references and the re-pin to Hosting 23.1.0 / SemanticConventions 9.8.0 | #661 (`0a39e46`); 9.1.0 changelog #663 (`b90a83a4`) |
+| qyl | QYL-C3 | #664, in progress |
+| qyl.mcp | MCP-S1, S2, S3, S4, S5, S6, S10, C4, A1, A8; workbench's test-only OpenTelemetry references moved to devDependencies | #140 |
+| qyl-api-schema | SCH-1, 2, 3, 4, 5, 7, 12, 17 (and the SCH-6 result) | #47 |
+| qyl.at | AT-8 to AT-14, AT-16, AT-18, AT-21 | #35 |
+| qyl.at | AT-17 / SEC-4 | #36 |
+| SemanticConventions | SC-1 to SC-9, SC-12, SC-13, SC-17 | #62 (`31a1bef`) |
+| AutoInstrumentation | AI-S1 to S11, D1, T1, A3; the Hosting options documented | #58 (`1e51d6a`) |
+| all six | SC-10 | qyl #662, qyl.mcp #139, qyl.at #34, qyl-api-schema #46, SemanticConventions #63, AutoInstrumentation #59 |
+
+Still open after this sweep: QYL-C3 (#664); every **Contract 11.6.0**, **Contract 12.0.0**, **Major** and **Fix with writes** row (drafts in progress); AT-19 (**Owner**).
+
