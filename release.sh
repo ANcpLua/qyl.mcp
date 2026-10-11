@@ -54,13 +54,13 @@ say "version"
 if (( dry )); then
   echo "dry run: publishing $(node -p "require('./server/package.json').version") with --dry-run, version untouched"
 else
-  (cd server && npm version "$version" --no-git-tag-version >/dev/null)
   node --input-type=module - "$version" <<'NODE'
 import { readFileSync, writeFileSync } from "node:fs";
-for (const name of ["workbench", "dashboard"]) {
+for (const name of ["server", "workbench", "dashboard"]) {
   const path = `${name}/package.json`;
   const metadata = JSON.parse(readFileSync(path, "utf8"));
-  metadata.dependencies["qyl-mcp-server"] = process.argv[2];
+  if (name === "server") metadata.version = process.argv[2];
+  else metadata.dependencies["qyl-mcp-server"] = process.argv[2];
   writeFileSync(path, JSON.stringify(metadata, null, 2) + "\n");
 }
 NODE
