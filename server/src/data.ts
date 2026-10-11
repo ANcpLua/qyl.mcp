@@ -59,7 +59,7 @@ export async function fetchTrace(
   const mode = await resolveMode();
   if (mode === "demo") {
     const trace = getDemo().traces.find((t) => t.trace_id === traceId);
-    if (!trace) throw new CollectorError(`trace not found: ${traceId}`);
+    if (!trace) throw new CollectorError(`trace not found: ${traceId}`, false, undefined, "not_found");
     return redactTelemetry({ trace, mode });
   }
   try {
@@ -70,7 +70,7 @@ export async function fetchTrace(
     return redactTelemetry({ trace, mode });
   } catch (err) {
     if (err instanceof CollectorError && err.status === 404) {
-      throw new CollectorError(`trace not found: ${traceId}`);
+      throw new CollectorError(`trace not found: ${traceId}`, false, undefined, "not_found");
     }
     throw err;
   }
@@ -84,7 +84,7 @@ export async function fetchSessionTraces(
   const mode = await resolveMode();
   if (mode === "demo") {
     const traces = getDemo().sessionTraces[sessionId];
-    if (!traces) throw new CollectorError(`session not found: ${sessionId}`);
+    if (!traces) throw new CollectorError(`session not found: ${sessionId}`, false, undefined, "not_found");
     return redactTelemetry({ traces: traces.slice(0, limit), mode });
   }
   try {
@@ -104,7 +104,7 @@ export async function fetchSessionTraces(
     });
   } catch (err) {
     if (err instanceof CollectorError && err.status === 404) {
-      throw new CollectorError(`session not found: ${sessionId}`);
+      throw new CollectorError(`session not found: ${sessionId}`, false, undefined, "not_found");
     }
     throw err;
   }

@@ -1,8 +1,8 @@
 # qyl-mcp-server
 
 MCP tools over a live [qyl](https://github.com/ANcpLua/qyl) collector — traces,
-logs, sessions, CI runs, and a graph view of agent runs you can watch while they
-execute.
+logs, metrics, sessions and CI runs, plus the Trace Explorer and MCP Dashboard
+viewers for hosts that render MCP Apps.
 
 ```bash
 npx qyl-mcp-server --stdio    # stdio MCP server
@@ -117,7 +117,7 @@ multi-tenant audit log.
 | --- | --- |
 | `QYL_COLLECTOR_URL` | Collector read API base; default `http://127.0.0.1:5100`. Also the OTLP base when set. |
 | `QYL_API_KEY` | Collector read and OTLP credential. Outgoing only. |
-| `QYL_PROJECT` | Server-owned collector project scope; defaults to `default`. Never accepted as tool input. |
+| `QYL_PROJECT` | Server-owned collector project scope. Unset, the server sends no project-scope header, so the Collector's default project applies; the Events subscription source key records that as `default`. Never accepted as tool input. This is the only place that states the default; other documents link here. |
 | `MCP_COLLECTOR_PROJECTS` | Optional secret JSON mapping validated Auth0 subjects to project-bound Collector keys; see account isolation below. |
 | `QYL_OTLP_ENDPOINT` | Optional OTLP base for self-telemetry. |
 | `QYL_DEMO=1` | Explicit, visibly labelled demo telemetry. A collector failure never silently substitutes demo data. |

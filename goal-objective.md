@@ -10,17 +10,12 @@ Repository: `/Users/alexandernachtmann/RiderProjects/qyl.mcp`
 Remote: <https://github.com/ANcpLua/qyl.mcp>
 Production endpoint: `https://mcp.qyl.at/mcp`
 
-## Current continuation, 2026-10-11
+## Starting state, 2026-10-11
 
-Continue on `codex/point-10-client-ui-domain`, targeting PR #136. The branch
-commits the #130 fixes, the corrected point-10 documentation and the 2026-10-11
-toolchain, contract and release records, and merges `main` through #135; that
-is the starting state. Preserve unrelated changes. PR #121 and follow-up PR #130 are merged; the
+Work starts from `main`. PRs #121, #130, #131 and #133 to #138 are merged; the
 [checkpoint](MCP-CHECKPOINT.md) records their commits, completed checks and
-separate owner observations still outstanding. The dated sequences below
-preserve the original requirements without reopening completed tasks.
-Release 7.2.2 (#133) and the SDK-skill corrections (#134, #135) are merged
-and are not part of #136.
+the owner observations still outstanding. The dated sequences below preserve
+the original requirements without reopening completed tasks.
 
 ## Outcome
 
@@ -71,8 +66,11 @@ checkpoint, matrix, listing or review text. A successful private connection is
 not a completed public submission.
 
 Re-established on 2026-10-11 with fresh evidence: the release workflow published
-`qyl-mcp-server` 7.2.0, 7.2.1 and 7.2.2 with provenance after clean `npx` consumer
-checks in both eras ([evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases)). The old 7.1.1 claim remains unsupported
+`qyl-mcp-server` 7.2.0, 7.2.1, 7.2.2 and 7.2.3 with provenance after clean `npx` consumer
+checks in both eras ([evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases)).
+7.2.3 ([PR #137](https://github.com/ANcpLua/qyl.mcp/pull/137), merged as `db1c728`)
+moved the contract package to 11.5.0, a toolchain-only qyl-api-schema release
+that keeps revision `sha256:3605ae27d2edf632`. The old 7.1.1 claim remains unsupported
 historical context, not a task to publish or re-test that obsolete release.
 The owner's pinned-Inspector consumer observation remains separate.
 
@@ -276,10 +274,9 @@ distinguishes documented host formats and submission requirements from qyl's
 choice of origin and detection heuristics. Real-client rendering remains a
 separate owner observation.
 Both-host tests and dated evidence are recorded in the checkpoint. The
-original viewer fixes were delivered through #121 and the corrections in
-#130. Continue the remaining authorized work on this branch for #136 without
-treating those fixes as still unaddressed. Client hints only select
-presentation metadata.
+original viewer fixes were delivered through #121, the corrections in #130
+and the corrected documentation in #136; do not treat those fixes as still
+unaddressed. Client hints only select presentation metadata.
 
 - Official split SDK v2 packages only. SDK version and wire revision are
   independent; v2's built-in 2025-era support is required compatibility.

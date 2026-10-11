@@ -290,7 +290,7 @@ connector guidance. After the edit, the same temporary-environment
 `quick_validate.py` command above returned `Skill is valid!`;
 `git diff --check` returned no output (exit 0).
 
-## Step 4 — production HTTP and package observations
+## Step 4 — production HTTP and package observations, 2026-10-08 and 2026-10-11
 
 2026-10-08, exact response headers/bodies and command start times are in the
 [step-4 transcript](docs/evidence/2026-10-08-step4.md#endpoint).
@@ -300,7 +300,7 @@ connector guidance. After the edit, the same temporary-environment
 | Unauthenticated MCP | `curl --silent --show-error --include https://mcp.qyl.at/mcp` | `HTTP/2 401`; `www-authenticate: Bearer scope="qyl:read", resource_metadata="https://mcp.qyl.at/.well-known/oauth-protected-resource/mcp"`; `{"error":"unauthorized"}`. |
 | Resource metadata | `curl --silent --show-error --include https://mcp.qyl.at/.well-known/oauth-protected-resource/mcp` | `HTTP/2 200`; `{"resource":"https://mcp.qyl.at/mcp","authorization_servers":["https://qyl-eu.eu.auth0.com/"],"scopes_supported":["qyl:read"]}`. |
 | npm latest | `npm view qyl-mcp-server version` | `7.1.1`. This is a registry observation, not evidence of publishing or a consumer test. |
-| npm latest, 2026-10-11 | `npm view qyl-mcp-server dist-tags --json` | `"latest": "7.2.1"`, then `"latest": "7.2.2"` after #133, each published with provenance by the release workflow after its clean `npx` consumer smoke ([evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases)). |
+| npm latest, 2026-10-11 | `npm view qyl-mcp-server dist-tags --json` | `"latest": "7.2.1"`, then `"latest": "7.2.2"` after #133 and `"latest": "7.2.3"` after #137, each published with provenance by the release workflow after its clean `npx` consumer smoke ([evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases)). |
 
 ## Owner-only observations still pending
 
@@ -327,10 +327,10 @@ redacted actual output. Never record tokens, cookies or callback signing keys.
 | Automatic renewal | Observe the owner's client across its renewal time; retain before/after expiration and subscription/renewal responses, then a matching delivery. |
 | Unsubscribe stops delivery | Unsubscribe in the owner client, retain its response, emit a fresh matching test error and record the bounded no-delivery window. |
 | Revocation stops delivery | On a separate test subscription, revoke the isolated account's access, emit a fresh matching test error, and retain revocation timing plus the bounded no-delivery window. Restore access only by owner decision. |
-| npm fresh consumer | In a fresh temporary project, install the exact observed latest version (`qyl-mcp-server@7.2.2` on 2026-10-11), run the pinned Inspector 2.9.0 with modern and legacy configurations against its stdio command in explicit demo mode, and record discovery plus a read result in both eras. Neither the registry version nor the release workflow's CI consumer smoke is this proof. |
+| npm fresh consumer | In a fresh temporary project, install the exact observed latest version (`qyl-mcp-server@7.2.3` on 2026-10-11), run the pinned Inspector 2.9.0 with modern and legacy configurations against its stdio command in explicit demo mode, and record discovery plus a read result in both eras. Neither the registry version nor the release workflow's CI consumer smoke is this proof. |
 | Public directory statuses | For each of OPENAI_PLUGIN, ANTHROPIC_CONNECTOR and ANTHROPIC_PLUGIN, the owner reads the corresponding portal and records date, record identifier and actual draft/submitted/approved/published state. No portal state is established here. |
 
-## Directory records
+## Directory records, as of 2026-10-08
 
 Historical step-4 repository-side inventory, rechecked 2026-10-08. `git show ff930a8:submission/README.md` reports OPENAI_PLUGIN as `local draft` and both
 Anthropic records as `not created`; these are preparation states recorded in
@@ -381,7 +381,7 @@ to perform them in this task.
 | Attestations and submission | All three records | Review legal attestations, approve final fields, and explicitly submit each separate portal record; retain the date, record ID and portal response. |
 | Publication | All three records | After approval, make a separate publication decision; for the Anthropic bundle ensure required repository visibility and GitHub App access, then publish and record the observed listing URL. |
 
-## Auth0 discovery decision
+## Auth0 discovery decision, 2026-10-08
 
 Source/metadata evidence, 2026-10-08: the commands in
 [step-7 authentication evidence](docs/evidence/2026-10-08-step7.md#deployment-and-authentication)
@@ -713,10 +713,11 @@ historical evidence.
 | Transport and dependency gates | 2026-10-08: `QYL_MCP_TELEMETRY=0 bun run smoke`, lint and `verify:sdk` exited 0. The actual pin output is `verify:pins: contract pins agree (@ancplua/qyl-api-schema 11.3.0 == Qyl.Api.Contracts 11.3.0, via /Users/alexandernachtmann/RiderProjects/qyl)`. |
 | Documentation audit | 2026-10-08: `PATH="/private/tmp/qyl-option-a/venv/bin:$PATH" bun run verify:completion` exited 0: eight tests, all checks and 255 local documentation/evidence links passed. |
 
-## Toolchain, contract 11.4.0 and release 7.2.1, 2026-10-11
+## Toolchain, contracts 11.4.0 and 11.5.0, releases 7.2.0 to 7.2.3, 2026-10-11
 
 [Dated commands and actual output](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md) record the toolchain pin, the
-lockstep to 11.4.0, both npm releases and the production deploy order.
+lockstep to 11.4.0, the npm releases 7.2.0 to 7.2.3, the toolchain-only contract
+package 11.5.0 and the production deploy order.
 
 | Check | Dated command and actual output |
 | --- | --- |
@@ -726,4 +727,5 @@ lockstep to 11.4.0, both npm releases and the production deploy order.
 | Releases | 2026-10-11: publish runs `38105485890` and `38110188801` printed `+ qyl-mcp-server@7.2.0` and `+ qyl-mcp-server@7.2.1` and `npx consumers passed`; `npm view qyl-mcp-server dist-tags --json` returns `"latest": "7.2.1"`. |
 | Point 10 manifest fields | 2026-10-11: `curl` returned 200 for `https://qyl.at/docs/mcp/`, `/privacy/`, `/support/` and `/terms/`. Both manifests now carry those URLs, OpenAI `developerName` `ancplua` and `capabilities` `["Read"]`, and `./` icon paths; `publication.countries` stays omitted. `claude plugin validate ./submission/qyl` printed `✔ Validation passed`; `plugin.json` and `mcp.json` PASS their bundled schemas; `python3 submission/build-openai-package.py` printed `sha256 84945a46440c94b20dd2f30bb88741652d3a793424abfb974f42bdaa99583882` for six source-identical files. |
 | Release 7.2.2 | 2026-10-11: #133 merged as `0f9fe4b`; publish run `38112247909` printed `+ qyl-mcp-server@7.2.2` and `npx consumers passed on attempt 4`; `npm view qyl-mcp-server@7.2.2` returns `gitHead` `0f9fe4bbf0787699cad5f8a53564625aa9ec8c7f` with SLSA provenance; Railway deployment `ffe24407` reached `SUCCESS` at 04:40:47Z. |
+| Release 7.2.3, contract 11.5.0 | 2026-10-11: #137 merged as `db1c728` at 09:20:10Z; publish run `38128021456` concluded `success` and printed `+ qyl-mcp-server@7.2.3` and `npx consumers passed on attempt 7`; `npm view qyl-mcp-server@7.2.3` returns `gitHead` `db1c728f572e399ef618a83a711785fa2ce2a01f` with SLSA provenance; `npm view qyl-mcp-server dist-tags --json` returns `"latest": "7.2.3"`; `npm view @ancplua/qyl-api-schema dist-tags --json` returns `"latest": "11.5.0"`; the contract revision stays `sha256:3605ae27d2edf632`, so no Collector redeploy was needed. |
 | Deploy order | 2026-10-11: qyl-mcp deployment `79b6a48b` logged `contract-revision handshake failed: collector contract revision sha256:382526f13652d18b does not match this server's sha256:3605ae27d2edf632` at 03:27:07Z; after Collector deployment `15e4efe7` reached `SUCCESS` at 03:33:05Z, redeploy `01350460` brought `/healthz` back to `{"status":"ok"}` at 03:47:19Z. |

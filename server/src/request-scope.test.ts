@@ -118,6 +118,40 @@ test("every one-round-trip tool reports the round trip and the final step", asyn
   });
 });
 
+test("a failed tool call carries a stable code and retryability in structuredContent", async () => {
+  await withEnv({ QYL_DEMO: "1" }, async () => {
+    const connection = await demoConnection();
+    try {
+      const notFound = await connection.client.callTool({
+        name: "get_trace",
+        arguments: { trace_id: "abcdef0123456789abcdef0123456789" },
+      });
+      assert.equal(notFound.isError, true);
+      const notFoundError = (notFound.structuredContent as { error: Record<string, unknown> }).error;
+      assert.equal(notFoundError.code, "not_found");
+      assert.equal(notFoundError.retryable, false);
+      assert.match(String(notFoundError.message), /^trace not found: /u);
+      assert.equal(notFound.content[0]?.type === "text" ? notFound.content[0].text : "", notFoundError.message);
+
+      const invalid = await connection.client.callTool({
+        name: "get_metric_series",
+        arguments: { metric_name: "http.server.request.duration", attr: ["novalue"] },
+      });
+      assert.equal(invalid.isError, true);
+      assert.deepEqual(
+        (invalid.structuredContent as { error: Record<string, unknown> }).error,
+        {
+          code: "invalid_argument",
+          message: `attr entries are written 'key=value'; received "novalue"`,
+          retryable: false,
+        },
+      );
+    } finally {
+      await connection.close();
+    }
+  });
+});
+
 test("a client that did not ask for progress receives no progress notification", async () => {
   await withEnv({ QYL_DEMO: "1" }, async () => {
     const connection = await demoConnection();

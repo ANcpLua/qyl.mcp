@@ -104,6 +104,24 @@ test("the demo catalog answers the published list body", async () => {
   });
 });
 
+test("has_more reports a truncated catalog or series list, never a guess", async () => {
+  await inDemoMode(async () => {
+    const whole = await listMetrics({});
+    assert.equal(whole.hasMore, false, "every demo instrument fits the default limit");
+
+    const firstPage = await listMetrics({ limit: 2 });
+    assert.equal(firstPage.metrics.length, 2);
+    assert.equal(firstPage.hasMore, true, "a third instrument exists beyond the page");
+
+    const allSeries = await listMetricSeries({ metric_name: HISTOGRAM });
+    assert.equal(allSeries.hasMore, false);
+
+    const oneSeries = await listMetricSeries({ metric_name: HISTOGRAM, limit: 1 });
+    assert.equal(oneSeries.series.length, 1);
+    assert.equal(oneSeries.hasMore, true, "three more streams exist under the histogram");
+  });
+});
+
 test("series discovery filters by exact and prefix attribute matchers", async () => {
   await inDemoMode(async () => {
     const { series } = await listMetricSeries({ metric_name: HISTOGRAM });

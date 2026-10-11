@@ -18,7 +18,12 @@
  *     built, so a handler declares only the steps it reports.
  */
 import type { CallToolResult, ServerContext } from "@modelcontextprotocol/server";
-import { CollectorError, type CollectorRequestOptions } from "./collector.js";
+import {
+  CollectorError,
+  type CollectorRequestOptions,
+  type ToolErrorCode,
+  isRetryableToolError,
+} from "./collector.js";
 import { CollectorAccessError, collectorAccessForSubject } from "./collector-access.js";
 import { redactTelemetryText } from "./telemetry-redaction.js";
 
@@ -30,13 +35,41 @@ export interface ToolScope {
   step(message: string): Promise<void>;
 }
 
-/** Uniform failure result: clear text + isError, never a thrown exception. */
+/** The structured half of a failed call: `structuredContent.error`. */
+export interface ToolErrorDetail {
+  /** Stable across releases; the model branches on this, not on the text. */
+  code: ToolErrorCode;
+  message: string;
+  /** Whether repeating the same call unchanged can succeed. */
+  retryable: boolean;
+}
+
+/**
+ * Anything that is not a known failure stays "Telemetry request failed." with
+ * the code `internal`: an unexpected exception's message is not for the model.
+ */
+export function describeToolError(err: unknown): ToolErrorDetail {
+  if (err instanceof CollectorError) {
+    return { code: err.code, message: err.message, retryable: isRetryableToolError(err.code) };
+  }
+  if (err instanceof CollectorAccessError) {
+    return { code: "no_project_access", message: err.message, retryable: false };
+  }
+  return { code: "internal", message: "Telemetry request failed.", retryable: false };
+}
+
+/**
+ * Uniform failure result: clear text + isError, never a thrown exception. The
+ * same message travels as `structuredContent.error` with its stable code, so a
+ * client can branch on the code and show the text. `isError` results are
+ * exempt from the tool's `outputSchema`, so the error shape is not in it.
+ */
 export function toolError(err: unknown): CallToolResult {
-  const message = err instanceof CollectorError || err instanceof CollectorAccessError
-    ? err.message
-    : "Telemetry request failed.";
+  const detail = describeToolError(err);
+  const message = redactTelemetryText(detail.message);
   return {
-    content: [{ type: "text", text: redactTelemetryText(message) }],
+    content: [{ type: "text", text: message }],
+    structuredContent: { error: { code: detail.code, message, retryable: detail.retryable } },
     isError: true,
   };
 }

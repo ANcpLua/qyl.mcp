@@ -59,9 +59,8 @@ For a newly authorized PR, follow [AGENTS.md](../AGENTS.md): a clean Codex
 review and the checks currently required by GitHub. Historical four-gate
 results do not impose owner stamps after that ruleset is disabled. Resolve
 review findings and never set owner checks or bypass configured gates.
-PRs #121 and #130 are merged; [the checkpoint](../MCP-CHECKPOINT.md) records
-that result. Continue on **`codex/point-10-client-ui-domain`, targeting #136**;
-the branch commits the fixes and documentation and merges `main` through #135.
+PRs #121, #130 and #136 are merged; [the checkpoint](../MCP-CHECKPOINT.md) records
+that result, and new work branches from `main`.
 The [original sequence](../goal-objective.md#work-in-order)
 is not a new request to repeat completed work.
 
