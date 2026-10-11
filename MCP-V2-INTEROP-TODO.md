@@ -14,7 +14,7 @@ This table describes source, not a deployed or portal-observed state.
 | --- | --- |
 | SDK v2 split packages, no SDK-v1 dependency | Package-inventory command outputs core/server 2.3.1; `bun run verify:sdk` outputs `MCP SDK boundary passed for 7 manifests/lockfiles (SDK v2; exact pins).` |
 | HTTP factory and stdio factory | Serving-source commands output `createHostedHandler` using a server factory and `serveStdio(serverFactory, ...)`; package tests cover both eras. |
-| 11 tools, all read-only | Package/tool inventory outputs all 11 names and `readOnlyHint: true`, `destructiveHint: false`. |
+| 18 tools: 13 read, 5 write | Package/tool inventory outputs all 18 names; the 13 read tools carry `readOnlyHint: true`, `destructiveHint: false`; the five write tools (`create_annotation`, `update_annotation`, `create_saved_query`, `update_saved_query`, `delete`) carry `readOnlyHint: false` and need `qyl:write` or `qyl:delete`. |
 | App-only fetch | Same inventory outputs `fetch_telemetry` visibility `["app"]`. |
 | Trace-error Events | Events-source command outputs `TRACE_ERROR_EVENT_NAME = "trace.error"` and subscription/list handlers; local test evidence is separate below. |
 | Account/project scoping | Configuration-source command outputs verified-subject lookup in `collectorAccessForSubject`; arguments and metadata are not selectors. |
@@ -115,7 +115,7 @@ are not purged by this change.
 ok native tool execution evidence is automatic and terminal
 ok native records contain only operation metadata
 ok stock client negotiated the legacy era
-ok legacy catalog has all 11 tools
+ok legacy catalog has all 18 tools
 ok legacy read tool returns real demo metrics
 ok in-process tools/call recording is native and automatic
 ```
@@ -138,8 +138,8 @@ CI evidence, 2026-10-08 UTC, for code commit
 ```text
 ok OTel operation logs carry the matching trace and span identifiers
 ok real OTLP traces, logs and metrics stored under two separate project credentials
-ok 2026-07-28: all 11 tools and viewer paths isolate concurrent accounts; foreign trace IDs and unassigned accounts denied
-ok 2025-11-25: all 11 tools and viewer paths isolate concurrent accounts; foreign trace IDs and unassigned accounts denied
+ok 2026-07-28: all 18 tools and viewer paths isolate concurrent accounts; foreign trace IDs and unassigned accounts denied
+ok 2025-11-25: all 18 tools and viewer paths isolate concurrent accounts; foreign trace IDs and unassigned accounts denied
 ok Events: same trace ID stays project-scoped; signatures, unsubscribe and assignment revocation pass
 all real-Collector project-isolation checks passed (local test identities; hosted reviewer login still required)
 ```
@@ -327,7 +327,7 @@ redacted actual output. Never record tokens, cookies or callback signing keys.
 | Automatic renewal | Observe the owner's client across its renewal time; retain before/after expiration and subscription/renewal responses, then a matching delivery. |
 | Unsubscribe stops delivery | Unsubscribe in the owner client, retain its response, emit a fresh matching test error and record the bounded no-delivery window. |
 | Revocation stops delivery | On a separate test subscription, revoke the isolated account's access, emit a fresh matching test error, and retain revocation timing plus the bounded no-delivery window. Restore access only by owner decision. |
-| npm fresh consumer | In a fresh temporary project, install the exact observed latest version (`qyl-mcp-server@7.2.3` on 2026-10-11), run the pinned Inspector 2.9.0 with modern and legacy configurations against its stdio command in explicit demo mode, and record discovery plus a read result in both eras. Neither the registry version nor the release workflow's CI consumer smoke is this proof. |
+| npm fresh consumer | In a fresh temporary project, install the exact observed latest version (`qyl-mcp-server@7.6.0` on 2026-10-11), run the pinned Inspector 2.9.0 with modern and legacy configurations against its stdio command in explicit demo mode, and record discovery plus a read result in both eras. Neither the registry version nor the release workflow's CI consumer smoke is this proof. |
 | Public directory statuses | For each of OPENAI_PLUGIN, ANTHROPIC_CONNECTOR and ANTHROPIC_PLUGIN, the owner reads the corresponding portal and records date, record identifier and actual draft/submitted/approved/published state. No portal state is established here. |
 
 ## Directory records, as of 2026-10-08
@@ -671,7 +671,7 @@ local checks, the merged Collector prerequisite and pending external evidence.
 | Options and regression coverage | 2026-10-08: full `bun run test` with telemetry disabled passed 167 server + 142 workbench + 32 dashboard + 4 site tests. Six new SDK-level option tests and generated input-bound checks passed; after the final lint fix, 21 focused tests passed. Exact names and commands are in the linked evidence. |
 | Reviewed manifest | 2026-10-08: comparison prints `Changed tool fields: ci_log.description, ci_log.inputSchema, get_trace.description, get_trace.inputSchema`; all 11 output schemas, annotations, metadata and resources are unchanged. New revision: `sha256:382526f13652d18b`. |
 | Production Collector handshake | 2026-10-08: Railway deployment `a8f98435-c8a8-4e2d-b3a4-d9c6f9dd3145` for merge `15924345bd804c358b1ab22d059b27d815bc8874` reached `SUCCESS`, with an active `RUNNING` instance. After that observation, the local 11.3.0 HTTP startup gate returned `Production Collector handshake: PASS` at `2026-10-08T08:18:26.200Z`, matching live `sha256:382526f13652d18b`. The linked evidence retains the initial timeout and exact successful command/output. Deployed MCP and authenticated Inspector proof remain separate; the owner supplies Inspector evidence. |
-| Local integration gates | 2026-10-08: `smoke`, `smoke:otlp` and `smoke:projects` exited 0 against the local Collector. OTLP parsing, combined log filters, all 11 tools across both wire eras, signatures, unsubscribe and assignment revocation passed. `verify:completion` passed its 8 tests, all checks and 251 local links. Exact output is in the linked Option-A evidence. |
+| Local integration gates | 2026-10-08: `smoke`, `smoke:otlp` and `smoke:projects` exited 0 against the local Collector. OTLP parsing, combined log filters, all 18 tools across both wire eras, signatures, unsubscribe and assignment revocation passed. `verify:completion` passed its 8 tests, all checks and 251 local links. Exact output is in the linked Option-A evidence. |
 | Review regression | 2026-10-08: after the summary fix, 22 focused tests and all 168 canonical server tests passed; lint and the unchanged pin check passed. Text and structured results both omit a known root excluded by the filter or cap, including empty results. The follow-up snapshot changes only `get_trace.description`; generated output fields remain those published in 11.3.0. |
 
 ## Point 9 continuation — schema portability, 2026-10-08

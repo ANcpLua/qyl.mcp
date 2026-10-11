@@ -121,8 +121,9 @@ The owner's pinned-Inspector consumer observation remains separate.
 > that support MCP Events, qyl notifies the model about new trace errors.
 >
 > qyl measures and correlates; the agent reasons and acts. Every telemetry
-> tool is read-only, so the model can investigate without side effects and
-> hand the fix to the agent that owns the code.
+> read tool is read-only, so the model can investigate without side effects and
+> hand the fix to the agent that owns the code; the five write tools change
+> only the annotations and saved queries a user creates in qyl, never telemetry.
 
 Do not promise remediation, fixing or continuous monitoring until a tool
 actually does it.

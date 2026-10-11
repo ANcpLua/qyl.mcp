@@ -11,7 +11,10 @@ repository or production service currently emits telemetry.
 The 11 tools of that inventory have `readOnlyHint: true` and
 `destructiveHint: false` in the inspected manifest, and keep them. Ten are
 model-facing; `fetch_telemetry` is app-only. The manifest's contract revision
-was `sha256:3605ae27d2edf632`. The write tools below arrived on 2026-10-11.
+was `sha256:3605ae27d2edf632`. The write tools below arrived on 2026-10-11. Since
+the evening of 2026-10-11 the manifest's revision is `sha256:b29439eba28e752b`
+(Contract 12.0.0): every problem carries a `type` URI and a stable `code`, and
+every list has one page limit of 1 to 1000; no tool, input or hint changed.
 
 | Tool | User need and existing behavior | Limits / routing |
 | --- | --- | --- |
