@@ -235,6 +235,16 @@ test both cases, record dated ledger evidence, and pass the owner-review gate
 in a separate PR. This follows point 8 without renumbering the earlier listing
 work recorded above.
 
+Point 10 of this continuation fixes the owner's Claude viewer-domain failure.
+After point 9 merges, select resource-content `ui.domain` for the connected
+client: Claude receives the first 32 SHA-256 hex characters of the exact
+configured public MCP connector URL, followed by `.claudemcpcontent.com`;
+ChatGPT receives the dedicated HTTPS origin and its `openai/widgetDomain`
+alias; other hosts omit both fields, as refined in the owner's point-10 PR
+review on 2026-10-08. The hash includes the path.
+Test both hosts, record dated evidence, and pass the four review/CI gates in
+a separate PR. Client hints only select presentation metadata.
+
 - Official split SDK v2 packages only. SDK version and wire revision are
   independent; v2's built-in 2025-era support is required compatibility.
   HTTP serves through `createMcpHandler(factory)` and stdio through
