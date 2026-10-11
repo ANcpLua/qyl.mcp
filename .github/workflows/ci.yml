@@ -55,6 +55,24 @@ jobs:
         with:
           global-json-file: qyl/global.json
 
+      # The collector fixture (restore + Release build, ~55 s) needs only the qyl checkout and the
+      # SDK, so it builds in the background while the bun build, tests, audit and smoke run.
+      # "Build live collector fixture" below waits for it and fails with its exit code and log.
+      - name: Start the live collector fixture build
+        run: |
+          # Every descriptor is redirected, so the step does not wait on the background job.
+          {
+            status=0
+            dotnet restore qyl/services/qyl.collector/qyl.collector.csproj \
+              --configfile qyl/nuget.config \
+              -p:TreatWarningsAsErrors=false &&
+            dotnet build qyl/services/qyl.collector/qyl.collector.csproj \
+              --configuration Release \
+              --no-restore \
+              -p:QylEmbedDashboard=false || status=$?
+            echo "$status" > "$RUNNER_TEMP/collector-build.exit"
+          } > "$RUNNER_TEMP/collector-build.log" 2>&1 < /dev/null &
+
       - name: Enforce the SDK v2 dependency boundary
         run: bun run verify:sdk
 
@@ -70,13 +88,13 @@ jobs:
       - run: bun run smoke
       - name: Build live collector fixture
         run: |
-          dotnet restore qyl/services/qyl.collector/qyl.collector.csproj \
-            --configfile qyl/nuget.config \
-            -p:TreatWarningsAsErrors=false
-          dotnet build qyl/services/qyl.collector/qyl.collector.csproj \
-            --configuration Release \
-            --no-restore \
-            -p:QylEmbedDashboard=false
+          while [ ! -s "$RUNNER_TEMP/collector-build.exit" ]; do sleep 1; done
+          cat "$RUNNER_TEMP/collector-build.log"
+          status="$(cat "$RUNNER_TEMP/collector-build.exit")"
+          if [ "$status" != 0 ]; then
+            echo "::error::live collector fixture build failed with exit code $status"
+            exit "$status"
+          fi
           test -x qyl/artifacts/bin/qyl.collector/release/qyl.collector
       - name: Verify live OTLP and MCP contract surface
         run: bun run smoke:otlp
