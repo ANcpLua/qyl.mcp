@@ -83,8 +83,9 @@ credential, not an incoming MCP login.
 
 The release workflow publishes `qyl-mcp-server` with provenance and smokes
 clean `npx` consumers in both protocol eras before a release counts; on
-2026-10-11 it published `7.2.0` that way. The source declares `7.2.1`.
-[7.2.0 publish run](https://github.com/ANcpLua/qyl.mcp/actions/runs/38105485890).
+2026-10-11 it published `7.2.0` and `7.2.1` that way. This local source
+snapshot declares `7.2.1`; it does not track a later release automatically.
+[Release and consumer evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases).
 
 ### Tools and viewers
 
@@ -201,14 +202,27 @@ records Railway's running commit and main-branch trigger on 2026-10-08.
 
 For a hosted bind, configure `MCP_PUBLIC_URL`, `MCP_BIND_HOST`, allowed hosts
 and origins, and the intended Collector URL/credential. The public URL sets
-the resource audience and viewer origin. For Claude, viewer metadata uses
-the first 32 hex characters of SHA-256 over the full public `/mcp` URL plus
-`.claudemcpcontent.com`; ChatGPT receives the HTTPS origin in `ui.domain`
-and its `openai/widgetDomain` alias. Unknown hosts omit both fields.
-The SDK's per-request client name selects this presentation metadata, with
-`Claude-User` or `openai-mcp` as hints for stateless legacy HTTP. Local viewers
-omit the domain. Keep Collector credentials on the server. With project mapping
-enabled, only the verified subject selects the project; tool arguments and
+the resource audience and canonical `/mcp` connector URL. For Claude, qyl sets
+`ui.domain` to the first 32 hex characters of SHA-256 over that exact connector
+URL plus `.claudemcpcontent.com`. Claude requires this format when the optional
+field is supplied. ChatGPT receives qyl's configured HTTPS origin in `ui.domain`
+and its `openai/widgetDomain` alias. OpenAI documents an origin-valued field
+and requires a dedicated, unique origin for UI plugin submission; choosing
+the MCP server's origin is qyl's configuration choice.
+
+The SDK's per-request client name and `User-Agent` are both checked. A recognized
+Claude or ChatGPT name wins conflicting hints. A missing or unrecognized name
+can use a recognized UA, including `Claude-User`, `openai-mcp/1.0.0` or
+`ChatGPT-User`. If neither hint is recognized, qyl omits both domain fields.
+A host that supports MCP Apps can then use its default sandbox; omission alone
+does not disable the viewer or reject the MCP client. Local viewers also omit
+the domain. [Verified requirements and detection policy](docs/evidence/2026-10-08-point-10-ui-domain.md#clarification-and-current-behavior-2026-10-11)
+separate documented formats from client hints. The hints and their precedence
+are qyl's compatibility policy; actual client identifiers and authenticated
+rendering on this deployment still need observation.
+
+Keep Collector credentials on the server. With project mapping enabled, only
+the verified subject selects the project; client hints, tool arguments and
 metadata do not select credentials.
 
 The default Auth0 mode accepts only the qyl production Auth0 issuer

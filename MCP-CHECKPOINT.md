@@ -39,8 +39,9 @@ alias for ChatGPT, or neither domain field for unknown hosts.
 cover both viewers and both wire eras.
 
 Point-10 progress checked **2026-10-11**: [PR #121](https://github.com/ANcpLua/qyl.mcp/pull/121)
-merged as `9a84bfe`. The following work is completed in follow-up
-[PR #130](https://github.com/ANcpLua/qyl.mcp/pull/130), commit `9ffb4f4`:
+merged as `9a84bfe`. The following work is implemented in follow-up
+[PR #130](https://github.com/ANcpLua/qyl.mcp/pull/130), fixes `9ffb4f4` and `ef7727a`,
+and applied to this local branch:
 
 - [x] Select the viewer domain per caller using both `clientInfo.name` and
   `User-Agent`, including when the client name is unknown: Claude gets the
@@ -48,20 +49,53 @@ merged as `9a84bfe`. The following work is completed in follow-up
   public origin, and unknown clients get no domain.
 - [x] Cover Claude by name, Claude by UA with an unknown name, both ChatGPT
   UA variants with an unknown name, and an unknown client in regression tests.
-  `QYL_MCP_TELEMETRY=0 bun run test` on 2026-10-11 passed 362 tests on `9ffb4f4`.
-- [x] Restore the point-9 checkpoint lines recording PR #120 merged as
-  `ee4c5a0` with all four gates green.
+- [x] Prefer a recognized client name when the UA disagrees, with regression
+  tests for both Claude and ChatGPT conflicts; still evaluate both hints.
+- [x] Version the changed viewers as Trace Explorer v6 and MCP Dashboard v4,
+  including the resource manifest and fixtures.
+- [x] Preserve the point-9 checkpoint recording PR #120 merged as `ee4c5a0`
+  with all four gates green.
 
-Verification on 2026-10-11: `gh pr view 121 --json state,mergeCommit` returned
-`MERGED` and `9a84bfea9c4484f03c83a4153ed853237636703b`.
-`gh pr view 130 --json state,headRefOid,statusCheckRollup` returned `OPEN`,
-head `9ffb4f4de48e4db3ace270ec04c0ff4e5e36539c`, and `SUCCESS` for `lint`
-and `verify` ([CI run](https://github.com/ANcpLua/qyl.mcp/actions/runs/38108693234)).
+Verification on 2026-10-11: `QYL_MCP_TELEMETRY=0 bun run test` passed 364 tests
+on PR #130 commit `ef7727a`; lint, SDK checks, completion audit and transport
+smoke passed. On this branch with server 7.2.1 and contract 11.4.0, the server,
+workbench, dashboard and site suites passed 186/142/32/4 tests. An initial
+workbench timeout assertion failed under concurrent load and passed both
+alone and in the full workbench rerun. Lint, SDK checks and transport smoke
+passed after building the dashboard required by workbench smoke.
 
-These checkmarks credit PR #130; this documentation update does not copy its
-implementation into this branch. The remaining point-10 review/merge work
-and authenticated Claude/ChatGPT rendering evidence remain pending under the
-existing requirements. Other point-10 work is unchanged.
+`gh pr view 121 --json state,mergeCommit` returned `MERGED` and
+`9a84bfea9c4484f03c83a4153ed853237636703b`. The 2026-10-11 follow-up
+`gh pr view 130 --repo ANcpLua/qyl.mcp --json state,headRefOid,mergeCommit,mergedAt,autoMergeRequest,mergeStateStatus,url`
+returned `MERGED`, head `69b98a5c9ebbc5730934d46f823bbd7a4f2b4f95`,
+merge `71df28b40275513c595988a6a2b78a1bd3cd39cd`, at `2026-10-11T04:35:59Z`.
+The viewer runtime, tests, versions and manifest match that reviewed PR head.
+[CI run 38110929009](https://github.com/ANcpLua/qyl.mcp/actions/runs/38110929009)
+passed lint and verify on that head. Codex completed its review, reacted with
+thumbs-up, and left no unresolved findings. The old auto-merge wait is complete.
+`gh api repos/ANcpLua/qyl.mcp/rulesets/24693919` now reports
+`enforcement: disabled` for `owner-review-gate`; the check names still listed
+inside that disabled rule are not a new stamping task. This review made no
+gate changes. Use the current configured requirements for any later PR.
+
+Documentation clarified **2026-10-11** against the
+[verified references](docs/evidence/2026-10-08-point-10-ui-domain.md#clarification-and-current-behavior-2026-10-11):
+Claude's optional domain must use the exact connector hash when supplied.
+OpenAI documents an origin-valued domain and a dedicated, unique origin for
+UI submission. Using the MCP server's origin for ChatGPT is qyl's configuration
+choice. Unknown names can use a recognized UA; only when neither hint is
+recognized are both domain fields omitted, allowing the host's default sandbox.
+Omission alone does not disable the viewer or reject the client.
+
+The shared fixes and documentation are uncommitted working-tree changes on
+`codex/point-10-client-ui-domain` at the end of this handoff edit. The owner
+specified that the receiving agents continue **on this branch, targeting
+#134**, from those existing changes. The no-commit/no-push limit applies to
+this editing session, not permanently to that continuation. The implemented
+items above are complete and must not become duplicate tasks. Observed client
+identifiers and authenticated Claude/ChatGPT rendering still need separate
+owner evidence; synthetic tests establish policy, not production compatibility.
+Release 7.2.2 belongs to #133. This edit changed no release version or dependency.
 
 Toolchain, contract and releases checked **2026-10-11**:
 [PR #126](https://github.com/ANcpLua/qyl.mcp/pull/126) pins Node 24 next to

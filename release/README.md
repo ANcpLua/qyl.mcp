@@ -53,17 +53,27 @@ That archive is Git-ignored. Rebuild and revalidate after any packaged-source
 change; do not apply this hash to future manifest edits. Missing URLs,
 publisher name and countries are mapped in the [submission handoff](../submission/README.md#owner-fields-still-required).
 
-Merge each point only after a clean own review and green `lint`, `verify`,
-`owner-review/content`, `owner-review/evidence` on the reviewed head. Read and
-resolve owner comments; never set those owner checks. Begin the next point
-only after merge. These are the owner's process requirements, as recorded in
-[the objective](../goal-objective.md#work-in-order).
+For a newly authorized PR, follow [AGENTS.md](../AGENTS.md): a clean Codex
+review and the checks currently required by GitHub. Historical four-gate
+results do not impose owner stamps after that ruleset is disabled. Resolve
+review findings and never set owner checks or bypass configured gates.
+PRs #121 and #130 are merged; [the checkpoint](../MCP-CHECKPOINT.md) records
+that result. Continue on **`codex/point-10-client-ui-domain`, targeting #134**,
+using the existing fixes and documentation. This handoff-editing session
+leaves those changes uncommitted and unpushed; it does not impose that limit
+permanently on #134. The [original sequence](../goal-objective.md#work-in-order)
+is not a new request to repeat completed work.
 
 ## Owner handoff
 
-These are pending instructions under [goal section E](../goal-objective.md#e-owner-actions-not-agent-actions),
-not claims of work performed. Save date, command/client/version and redacted
-actual output for each completed observation.
+These rows describe evidence needed under [goal section E](../goal-objective.md#e-owner-actions-not-agent-actions),
+not proof that every action remains undone. Reconcile each row with existing
+dated owner evidence before acting; do not recreate accounts, re-publish pages
+or repeat accepted observations just because an older checklist still lists
+them. The 7.2.1 release and 11.4.0 deployment are already recorded in the
+[2026-10-11 evidence](../docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md).
+For a genuine remaining gap, save date, command/client/version and redacted
+actual output. This handoff does not authorize owner actions.
 
 | Owner action | Exact next step and source |
 | --- | --- |
@@ -71,7 +81,7 @@ actual output for each completed observation.
 | Public pages and private contact | Resolve operational facts and contacts in the [public-page draft](../submission/public-pages-draft.md), approve and publish on qyl.at, inspect anonymously, then supply the actual support/privacy/terms URLs. [Point 15](../docs/evidence/2026-10-08-followup-15.md) restores the required sections with explicit owner fields. |
 | Reviewer account | Create a populated isolated Collector project and OAuth reviewer account, usable without the owner's mailbox, phone or private network. Put credentials only in private portal fields; use the [connector access instructions](../submission/anthropic-connector-listing.md). |
 | Demo and review cases | Follow the [recording walkthrough](../submission/README.md#recording-walkthrough-for-the-owner); run and record the five positive and three negative manifest cases, then supply a reviewer-accessible playback URL. |
-| Five actual clients | Inspector DCR is currently blocked by the owner-reported Auth0 `too_many_entities` response. The supplied WIP assigns tenant review and a fixed Inspector client to Advisor 1; retry with that public client ID when supplied. [Reported blocker and WIP](../docs/evidence/2026-10-08-followup-15.md#owner-reported-inspector-connection-blocker). Run ChatGPT, Codex, claude.ai, Claude Code and MCP Inspector against the hosted service with the isolated account, following the [exact client procedures](../MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending). Inspector 2.9.0 modern evidence must include the captured `MCP-Protocol-Version: 2026-07-28` header and actual tool results. Local fixture discovery is not that proof. |
+| Five actual clients | Inspector DCR was reported blocked by Auth0 `too_many_entities` on 2026-10-08. That dated report does not establish a current failure or require another cleanup. Check existing owner evidence and use an already-provided fixed client where applicable. [Reported blocker and WIP](../docs/evidence/2026-10-08-followup-15.md#owner-reported-inspector-connection-blocker). Run ChatGPT, Codex, claude.ai, Claude Code and MCP Inspector against the hosted service with the isolated account, following the [exact client procedures](../MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending). Inspector 2.9.0 modern evidence must include the captured `MCP-Protocol-Version: 2026-07-28` header and actual tool results. Local fixture discovery is not that proof. |
 | Production Events lifecycle | Follow the same ledger's `events/list`, subscribe, signed matching delivery, nonmatching filter, persistence, renewal, unsubscribe and revocation steps. Record bounded delivery/no-delivery windows without keys. |
 | Deployment before reviewer access | Re-observe the active Railway deployment ID and source commit and compare with intended main. [Point 6](../docs/evidence/2026-10-08-followup-06.md) is a dated snapshot, not a guarantee about the next deployment; the [2026-10-11 snapshot](../docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#production-deploy-order) records deployment `2c916c88` for `f495bf3`. |
 | Challenge token | Copy the portal token into `OPENAI_APPS_CHALLENGE` on the intended deployment, check the plaintext route and complete portal verification; [point 7](../docs/evidence/2026-10-08-followup-07.md) observed 404 before this action. |

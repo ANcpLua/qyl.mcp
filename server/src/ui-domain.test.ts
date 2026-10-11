@@ -72,9 +72,10 @@ test("hosted viewers select Claude's hash or ChatGPT's origin per modern request
   const cases = [
     ["claude-ai", undefined, claudeDomain, undefined],
     ["Anthropic/ClaudeAI", undefined, claudeDomain, undefined],
-    // An explicit SDK identity wins over an inconsistent HTTP hint.
     ["ChatGPT", "Claude-User/1.0", "https://mcp.qyl.at", "https://mcp.qyl.at"],
     ["openai-mcp", undefined, "https://mcp.qyl.at", "https://mcp.qyl.at"],
+    ["generic-mcp-client", "Claude-User/1.0", claudeDomain, undefined],
+    ["generic-mcp-client", "openai-mcp/1.0.0", "https://mcp.qyl.at", "https://mcp.qyl.at"],
     ["codex", undefined, undefined, undefined],
   ] as const;
   const clients = await Promise.all(cases.map(async ([name, userAgent, domain, widgetDomain]) => ({
@@ -86,6 +87,21 @@ test("hosted viewers select Claude's hash or ChatGPT's origin per modern request
       expectViewers(client, domain, widgetDomain)));
   }
 });
+
+for (const [label, name, userAgent, domain, widgetDomain] of [
+  ["Claude by name", "Claude", "generic-mcp-client/1.0", claudeDomain, undefined],
+  ["Claude by name despite a conflicting ChatGPT UA", "Claude", "ChatGPT-User/1.0", claudeDomain, undefined],
+  ["ChatGPT by name despite a conflicting Claude UA", "ChatGPT", "Claude-User/1.0", "https://mcp.qyl.at", "https://mcp.qyl.at"],
+  ["Claude by UA with an unknown name", "generic-mcp-client", "Claude-User", claudeDomain, undefined],
+  ["ChatGPT by openai-mcp UA with an unknown name", "generic-mcp-client", "openai-mcp/1.0.0", "https://mcp.qyl.at", "https://mcp.qyl.at"],
+  ["ChatGPT by ChatGPT-User UA with an unknown name", "generic-mcp-client", "ChatGPT-User/1.0", "https://mcp.qyl.at", "https://mcp.qyl.at"],
+  ["unknown client", "generic-mcp-client", "generic-mcp-client/1.0", undefined, undefined],
+] as const) {
+  test(`hosted viewers recognize ${label}`, async (context) => {
+    const client = await connect(context, endpoint(context), name, "modern", userAgent);
+    await expectViewers(client, domain, widgetDomain);
+  });
+}
 
 test("stateless legacy viewer reads use Claude-User without retaining initialize identity", async (context) => {
   const handler = endpoint(context);
@@ -101,7 +117,7 @@ test("stateless legacy viewer reads use Claude-User without retaining initialize
 
 test("unknown hosts omit both ui.domain and openai/widgetDomain", async (context) => {
   const handler = endpoint(context);
-  const modern = await connect(context, handler, "another-ui-host", "modern", "ChatGPT-User/1.0");
+  const modern = await connect(context, handler, "another-ui-host", "modern", "another-ui-host/1.0");
   const legacy = await connect(context, handler, "another-ui-host", "legacy", "another-ui-host/1.0");
   await Promise.all([expectViewers(modern, undefined), expectViewers(legacy, undefined)]);
 });

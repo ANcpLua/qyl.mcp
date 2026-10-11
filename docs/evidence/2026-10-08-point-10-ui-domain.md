@@ -5,6 +5,52 @@ claude.ai, with `ui.domain validation failed` for `https://mcp.qyl.at/mcp`.
 This evidence covers source inspection, local SDK requests and tests. It
 does not claim a fresh authenticated Claude or ChatGPT rendering observation.
 
+## Clarification and current behavior, 2026-10-11
+
+The following official references were checked on 2026-10-11:
+
+- [Claude troubleshooting](https://claude.com/docs/connectors/building/mcp-apps/troubleshooting)
+  makes a stable `ui.domain` optional. When supplied, it must be the first 32
+  SHA-256 hex characters of the exact full connector URL plus
+  `.claudemcpcontent.com`. The path and trailing slash affect the hash.
+- [OpenAI's resource metadata reference](https://developers.openai.com/plugins/reference)
+  specifies an origin-valued `ui.domain`, requires a dedicated origin unique
+  to the plugin for UI submission, and documents `openai/widgetDomain` as its
+  compatibility alias. Those requirements are documented. qyl's use of
+  `https://mcp.qyl.at` is its configuration choice; the reference does not
+  require the UI origin to equal the MCP server's origin.
+- [MCP Apps resource metadata](https://apps.extensions.modelcontextprotocol.io/api/interfaces/app.McpUiResourceMeta.html)
+  declares `domain` optional, with host-specific formats. Omitting it leaves
+  the host's default sandbox origin in place.
+
+The current [resolver](../../server/src/ui-domain.ts) evaluates both the SDK
+client name and the HTTP User-Agent on every request. Its selection policy is:
+
+| Client hints | Domain metadata |
+| --- | --- |
+| Recognized Claude or ChatGPT name | Use that host's domain; the name wins a conflicting UA. |
+| Missing or unrecognized name, recognized UA | Use the host selected by the UA. |
+| Neither hint recognized | Omit both `ui.domain` and `openai/widgetDomain`. |
+
+The earlier fallback only handled an absent name. A generic name could mask a
+recognized UA; PR #130 fixes that and tests both conflicting-hint directions.
+An unknown client still receives the viewer resource with its existing CSP.
+Omission alone does not disable the viewer or reject the MCP client: rendering
+remains available when the host supports MCP Apps and its default sandbox.
+Local viewers without a configured domain also omit both fields.
+
+Names and UAs such as `Claude-User`, `openai-mcp/1.0.0` and `ChatGPT-User` are
+compatibility hints, not authenticated identities or protocol guarantees.
+Their precedence is qyl's policy. Synthetic tests exercise that policy;
+qyl's actual client identifiers and authenticated rendering still need owner
+observation. Client hints only select presentation metadata; authorization
+continues to use validated credentials.
+
+Current resources are Trace Explorer `mcp-app-v6.html` and MCP Dashboard
+`mcp-dashboard-v4.html`. The [checkpoint](../../MCP-CHECKPOINT.md) records the
+PR #130 fixes and later checks. The original v5/v3 versions, commands, output
+and test counts below are retained as 2026-10-08 evidence.
+
 ## Preceding merge
 
 Before branching, `gh pr view 120 --repo ANcpLua/qyl.mcp --json
@@ -26,6 +72,9 @@ After `git fetch origin`, `git switch -c codex/point-10-client-ui-domain
 origin/main` created this point's separate branch.
 
 ## Sources and implementation
+
+This section records the 2026-10-08 implementation. The clarification above
+supersedes its name-fallback behavior and viewer resource versions.
 
 Read on 2026-10-08:
 
@@ -58,17 +107,20 @@ HTTPS origin and supplies a domain resolver. The resolver hashes that exact
 string, never the incoming request URL or headers. Modern reads use the SDK's
 request envelope. Recognized Claude names include `claude-ai`, `Claude` and
 `Anthropic/ClaudeAI`; `ChatGPT` and `openai-mcp` select the HTTPS origin and
-matching `openai/widgetDomain` alias. Absent client info falls back to the
-HTTP User-Agent (`Claude-User`, `openai-mcp`, or `ChatGPT-User`). Unknown or
-absent hints omit both domain fields, as do local resources without a
-configured domain. Existing constant `uiDomain` embedding overrides remain
+matching `openai/widgetDomain` alias. In this earlier implementation, only
+absent client info fell back to the HTTP User-Agent (`Claude-User`, `openai-mcp`,
+or `ChatGPT-User`). A present but unrecognized name therefore omitted both
+domain fields even when the UA identified a supported host. PR #130 corrects
+that behavior as described above. Local resources without a configured domain
+also omitted both fields. Existing constant `uiDomain` embedding overrides remain
 supported, with the compatibility alias added for HTTPS origins.
 
 Each resource read computes its own metadata; the shared cache contains only
 HTML. Hosted dynamic responses use `ttlMs: 0`, `cacheScope: private`, because
 the response varies by client hint. Public catalog caching and constant-domain
-resource caching are unchanged. Trace Explorer moves to `mcp-app-v5.html`,
-MCP Dashboard to `mcp-dashboard-v3.html`, to invalidate old resource metadata.
+resource caching are unchanged. On 2026-10-08, Trace Explorer moved to
+`mcp-app-v5.html` and MCP Dashboard to `mcp-dashboard-v3.html` to invalidate
+older resource metadata. The later PR #130 fixes advance them to v6/v4.
 The empty CSP allowlists, display modes, tool schemas, auth and Collector
 selection are unchanged.
 

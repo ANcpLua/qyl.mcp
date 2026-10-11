@@ -10,6 +10,19 @@ Repository: `/Users/alexandernachtmann/RiderProjects/qyl.mcp`
 Remote: <https://github.com/ANcpLua/qyl.mcp>
 Production endpoint: `https://mcp.qyl.at/mcp`
 
+## Current continuation, 2026-10-11
+
+Continue on `codex/point-10-client-ui-domain`, targeting PR #134. The existing
+working-tree fixes and documentation are the starting state for that work.
+This handoff-editing session leaves them uncommitted and unpushed; that limit
+is not a permanent restriction on the #134 continuation. Preserve unrelated
+changes. PR #121 and follow-up PR #130 are merged; the
+[checkpoint](MCP-CHECKPOINT.md) records their commits, completed checks and
+separate owner observations still outstanding. The dated sequences below
+preserve the original requirements without reopening completed tasks.
+The owner's 7.2.2 release is PR #133. This documentation edit does not
+implement #134; the receiving agents continue here for that PR.
+
 ## Outcome
 
 qyl becomes the Swiss army knife of connectors for AI agents: one MCP server
@@ -60,8 +73,9 @@ not a completed public submission.
 
 Re-established on 2026-10-11 with fresh evidence: the release workflow published
 `qyl-mcp-server` 7.2.0 and 7.2.1 with provenance after clean `npx` consumer
-checks in both eras ([evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases)). The 7.1.1 claim and the
-owner's pinned-Inspector consumer observation remain open.
+checks in both eras ([evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases)). The old 7.1.1 claim remains unsupported
+historical context, not a task to publish or re-test that obsolete release.
+The owner's pinned-Inspector consumer observation remains separate.
 
 ## Owner decisions
 
@@ -117,14 +131,16 @@ actually does it.
 
 ## Work, in order
 
-Revised owner instructions, 2026-10-08. These are requirements, not completion
-claims. The earlier seven preparation steps and their results remain in the
-[dated ledger](MCP-V2-INTEROP-TODO.md). This new sequence starts at point 1.
-Each point is one branch from the owning repository's `origin/main` and one
-PR to `main`. Start the next point only after the preceding PR is merged.
-Merge requires a clean own review and green `lint`, `verify`,
-`owner-review/content`, and `owner-review/evidence` on the reviewed head.
-Never set the owner checks or bypass them; read owner comments and fix them.
+Revised owner instructions recorded on 2026-10-08. These are the original
+requirements, not a fresh queue of tasks. Consult the [checkpoint](MCP-CHECKPOINT.md)
+and [dated ledger](MCP-V2-INTEROP-TODO.md) for completed work and later evidence.
+For a newly authorized point, the recorded sequence uses one branch from the
+owning repository's `origin/main` and one PR to `main`, after the preceding
+point merges. The branch and PR assignment above governs the current
+continuation. Review and merge follow [AGENTS.md](AGENTS.md) and the checks actually
+required by GitHub. The four-check results in historical evidence remain
+valid records; they do not create permanent owner-stamp requirements.
+Never set owner checks or bypass configured gates; resolve review findings.
 
 ### A. Code before submission
 
@@ -222,6 +238,11 @@ and actual output. Owner actions are listed, not executed.
 
 ## Standing constraints
 
+The following continuation was authorized on 2026-10-08. Points 8 and 9 and
+the viewer fixes in PRs #121/#130 have since merged, as recorded in the
+[checkpoint](MCP-CHECKPOINT.md). Preserve their requirements without repeating
+the completed merges, downgrading dependencies or reopening their old gates.
+
 Continuation authorized by the owner on 2026-10-08: complete point 8 via
 Option A. First branch `ANcpLua/qyl` from `origin/main`, move its Collector
 contract pin to 11.3.0, merge the PR after green CI and update the local
@@ -246,9 +267,20 @@ client: Claude receives the first 32 SHA-256 hex characters of the exact
 configured public MCP connector URL, followed by `.claudemcpcontent.com`;
 ChatGPT receives the dedicated HTTPS origin and its `openai/widgetDomain`
 alias; other hosts omit both fields, as refined in the owner's point-10 PR
-review on 2026-10-08. The hash includes the path.
-Test both hosts, record dated evidence, and pass the four review/CI gates in
-a separate PR. Client hints only select presentation metadata.
+review on 2026-10-08. The hash includes the exact path and trailing slash.
+Evaluate both client name and User-Agent: recognized names take precedence;
+missing or unrecognized names can use a recognized UA. If neither hint is
+recognized, omit both domain fields so a supporting host uses its default
+sandbox. Omission alone does not disable the viewer or reject the client.
+The [2026-10-11 clarification](docs/evidence/2026-10-08-point-10-ui-domain.md#clarification-and-current-behavior-2026-10-11)
+distinguishes documented host formats and submission requirements from qyl's
+choice of origin and detection heuristics. Real-client rendering remains a
+separate owner observation.
+Both-host tests and dated evidence are recorded in the checkpoint. The
+original viewer fixes were delivered through #121 and the corrections in
+#130. Continue the remaining authorized work on this branch for #134 without
+treating those fixes as still unaddressed. Client hints only select
+presentation metadata.
 
 - Official split SDK v2 packages only. SDK version and wire revision are
   independent; v2's built-in 2025-era support is required compatibility.
