@@ -44,7 +44,8 @@ for (const key of Object.keys(collectorEnv)) {
 Object.assign(collectorEnv, {
   DOTNET_ENVIRONMENT: "Development", QYL_BIND_ADDRESS: "127.0.0.1", QYL_PORT: String(port),
   QYL_OTLP_PORT: "0", QYL_GRPC_PORT: "0", QYL_OTLP_AUTH_MODE: "ApiKey",
-  QYL_OTLP_PROJECT_KEYS: JSON.stringify(Object.fromEntries(fixtures.map((f) => [f.project, [f.apiKey]]))),
+  QYL_OTLP_PROJECT_KEYS: JSON.stringify(Object.fromEntries(fixtures.map((f) =>
+    [f.project, [{ key: f.apiKey, roles: ["ingest", "read", "write", "delete"] }]]))),
   QYL_DATA_PATH: join(temp, "project-scope.duckdb"),
 });
 const collector = spawn(existsSync(executable) ? executable : "dotnet",
