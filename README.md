@@ -83,7 +83,7 @@ credential, not an incoming MCP login.
 
 The release workflow publishes `qyl-mcp-server` with provenance and smokes
 clean `npx` consumers in both protocol eras before a release counts; on
-2026-10-11 it published `7.2.0`, `7.2.1` and `7.2.2` that way. The source declares `7.2.2`.
+2026-10-11 it published `7.2.0`, `7.2.1` and `7.2.2` that way. The source declares `7.2.3`.
 [Release and consumer evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases).
 
 ### Tools and viewers
@@ -336,7 +336,7 @@ them. Review cases and the demo are drafts until run in an owner client.
 
 ## Contracts
 
-The source pins `@ancplua/qyl-api-schema` 11.4.0, official split MCP
+The source pins `@ancplua/qyl-api-schema` 11.5.0, official split MCP
 SDK packages 2.3.1 and Zod 4.6.5. SDK major version and wire revision are
 independent. Server HTTP/stdio use SDK factories and negotiation defaults;
 Workbench uses automatic negotiation. [Contract 11.4.0 evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md) and

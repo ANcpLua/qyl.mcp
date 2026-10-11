@@ -173,6 +173,13 @@ real ChatGPT demonstration are separate checks before upload.
 
 ## Release notes
 
+### 7.2.3
+
+- Contract package `@ancplua/qyl-api-schema` 11.5.0. The release changes only
+  qyl-api-schema's toolchain: the contract revision stays
+  `sha256:3605ae27d2edf632`, so a Collector built from `Qyl.Api.Contracts`
+  11.4.0 or 11.5.0 passes the startup handshake.
+
 ### 7.2.2
 
 - MCP Apps viewers check both the SDK client name and the `User-Agent` when

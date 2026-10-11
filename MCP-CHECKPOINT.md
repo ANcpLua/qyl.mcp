@@ -119,7 +119,7 @@ with explicit owner fields. Final completion still requires checking the merged
 
 | State | Dated evidence |
 | --- | --- |
-| Split SDK 2.3.1, contract package 11.4.0 (revision `sha256:3605ae27d2edf632`), server source and npm version 7.2.2. | [11.4.0 lockstep and release evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md); [Option-A pins and manifest evidence](docs/evidence/2026-10-08-point-8-options.md); [earlier package inventory](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory). |
+| Split SDK 2.3.1, contract package 11.5.0 (revision `sha256:3605ae27d2edf632`, unchanged since 11.4.0), server source and npm version 7.2.3. | [11.4.0 lockstep and release evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md); [Option-A pins and manifest evidence](docs/evidence/2026-10-08-point-8-options.md); [earlier package inventory](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory). |
 | 11 read-only tools; ten model-facing and app-only `fetch_telemetry`; trace/CI descriptions now include point-8 options. | [Option-A manifest comparison](docs/evidence/2026-10-08-point-8-options.md); earlier inventory retained in step 7. |
 | Incoming native records exclude arguments, `_meta` and result bodies. | [Strict schema source](docs/evidence/2026-10-08-step7.md#native-records) and [regression evidence](MCP-V2-INTEROP-TODO.md#step-1--rules-and-native-call-records). |
 | Build, 337 tests, transport, SDK, lint and project-isolation checks passed locally. | [Step-4 transcript](docs/evidence/2026-10-08-step4.md). The initial OTLP failure and successful fresh-main Collector rerun are both retained. |
