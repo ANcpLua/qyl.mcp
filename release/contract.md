@@ -1,11 +1,10 @@
 # Cross-platform release contract: OpenAI + Anthropic, MCP 2026-07-28
 
 > Reference document for acceptance. Work in this repository is governed by
-> [goal-objective.md](../goal-objective.md) and [AGENTS.md](../AGENTS.md).
+> AGENTS.md.
 > This contract is the rubric the owner's review applies at the end; it is
 > not an instruction to begin new work, and its `release/*.yaml` records are
-> represented here by `goal-objective.md`, `MCP-V2-INTEROP-TODO.md` and
-> `docs/evidence/`. The contract text is followed by the owner review's
+> represented here by `docs/evidence/`. The contract text is followed by the owner review's
 > acceptance evidence and by the requirements-to-evidence map recorded with
 > point 13.
 
@@ -415,12 +414,11 @@ expected to use Client ID Metadata Documents instead.
 ## Requirements and evidence map (recorded with point 13)
 
 Requirements and evidence map, 2026-10-08. The controlling requirements are
-[goal-objective.md](../goal-objective.md#work-in-order), including its
-[Done when](../goal-objective.md#done-when) criteria and owner boundary.
-[AGENTS.md](../AGENTS.md) governs implementation and review. This map is not a
+AGENTS.md and the owner boundary.
+AGENTS.md governs implementation and review. This map is not a
 release, submission, publication or approval claim. Each observed result below
 links to dated commands and actual output; pending items are requirements.
-The [ledger](../MCP-V2-INTEROP-TODO.md) retains historical and superseding rows.
+The ledger retains historical and superseding rows.
 
 ## Work-item mapping
 
@@ -452,7 +450,7 @@ The [ledger](../MCP-V2-INTEROP-TODO.md) retains historical and superseding rows.
 | 4 | Files/fields from points 9, 10, 13, 14 and 15, explicit owner gaps and rebuilt ZIP SHA-256. The [point-15 check](../docs/evidence/2026-10-08-followup-15.md) records the final draft restoration; verify the merged state and CI before declaring completion. |
 | 5 | [Point 8 Option A](../docs/evidence/2026-10-08-point-8-options.md) implements the consumer options after the Collector pin merge. Assess the consumer PR's required gates separately from the recorded local checks. |
 | 6 | All source, test, public-response and historical claims trace to the ledger/evidence; retain the SDK boundary, minimized records, user-need descriptions, shared skill and valid bundles. CI automation cannot establish the truth of arbitrary prose. |
-| 7 | [Owner handoff](README.md#owner-handoff), [client/Events procedures](../MCP-V2-INTEROP-TODO.md#owner-only-observations-still-pending) and [submission fields](../submission/README.md#owner-fields-still-required). Owner work remains pending. |
+| 7 | [Owner handoff](README.md#owner-handoff), client/Events procedures and [submission fields](../submission/README.md#owner-fields-still-required). Owner work remains pending. |
 
 For point 8, [qyl PR #642](https://github.com/ANcpLua/qyl/pull/642) merged
 the Collector and dashboard contract pins to 11.3.0 before this consumer branch
