@@ -83,8 +83,8 @@ credential, not an incoming MCP login.
 
 The release workflow publishes `qyl-mcp-server` with provenance and smokes
 clean `npx` consumers in both protocol eras before a release counts; on
-2026-10-11 it published `7.2.0` that way. The source declares `7.2.1`.
-[7.2.0 publish run](https://github.com/ANcpLua/qyl.mcp/actions/runs/38105485890).
+2026-10-11 it published `7.2.0` and `7.2.1` that way. The source declares `7.2.2`.
+[7.2.1 publish run](https://github.com/ANcpLua/qyl.mcp/actions/runs/38110188801).
 
 ### Tools and viewers
 
