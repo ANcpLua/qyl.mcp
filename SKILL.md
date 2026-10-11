@@ -12,8 +12,11 @@ is `mise run check`; bun is the package manager (workspace lock `bun.lock` at th
   server (`qyl-mcp`, mcp.qyl.at, Railway).
 - Version source: `server/package.json` `version` plus a `### <x.y.z>` entry under
   `## Release notes` in `server/README.md`. Write the README entry and commit it first; the
-  release command bumps the version and `bun.lock` itself and uses the entry as the GitHub
-  release notes.
+  release command bumps the server version, both workspace self-pins, and `bun.lock` itself,
+  and uses the entry as the GitHub release notes. It builds a `git archive` snapshot of that
+  commit, publishes the resulting tarball, and tags that exact commit. Concurrent source
+  or remote changes before publishing fail the release; the tarball and SHA-256 record
+  remain available at the printed artifact path if authentication fails.
 - Release command: `./release.sh <x.y.z> --dry-run`, then `./release.sh <x.y.z>`
   (`bun publish`, push `main`, tag, GitHub release, wait for npm).
 - Key: `vitals keys` entry "qyl-api-schema and qyl.mcp manual publish and release (npm)", file
@@ -33,9 +36,10 @@ is `mise run check`; bun is the package manager (workspace lock `bun.lock` at th
 
 1. `git pull --ff-only origin main`.
 2. `mise install`, then `bun install --frozen-lockfile`.
-3. Compare the pinned `@ancplua/qyl-api-schema` with `npm view @ancplua/qyl-api-schema version`.
-   If a newer version is indexed, re-pin first (section "When a release lands"), then start
-   the actual work. Never build on a pin older than what is indexed.
+3. Compare the pinned `@ancplua/qyl-api-schema` and `@ancplua/qyl-semantic-conventions`
+   with `npm view <package> version` for each package. If a newer version is indexed,
+   re-pin its manifest entries and regenerate `bun.lock` first, then start the actual work.
+   Never build on a pin older than what is indexed.
 
 ## Releasing
 
@@ -84,9 +88,10 @@ Act at once, before continuing your own work, so both agents keep moving:
 ## Order rules that never change
 
 - Contract revision: qyl (Collector) first, then qyl.mcp.
-- Deployment state, from this Mac: `railway deployment list --json` in this clone (linked to
-  project qyl, service `qyl-mcp`, environment `production`) or in the qyl clone (`qyl-collector`);
-  the newest entry must show `status: SUCCESS` and `meta.commitHash` equal to the pushed commit.
+- Deployment state: `railway deployment list --project <project-id> --service qyl-mcp
+  --environment production --json` (use `qyl-collector` for the Collector). Pass the configured
+  project explicitly; these clones need not have a local Railway link. The newest entry must
+  show `status: SUCCESS` and `meta.commitHash` equal to the pushed commit.
   `curl -fsSL https://api.qyl.at/health` shows the Collector's contract revision,
   `https://mcp.qyl.at/healthz` the server's state.
 - qyl.at lists a version only after the index confirms it.

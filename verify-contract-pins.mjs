@@ -71,3 +71,19 @@ if (mcpVersion !== qylPin) {
 }
 
 console.log(`verify:pins: contract pins agree (@ancplua/qyl-api-schema ${mcpPin} == Qyl.Api.Contracts ${qylPin}, via ${qylRepo})`);
+
+const server = JSON.parse(readFileSync(join(here, "server", "package.json"), "utf8"));
+for (const workspace of ["workbench", "dashboard"]) {
+  const metadata = JSON.parse(readFileSync(join(here, workspace, "package.json"), "utf8"));
+  if (metadata.dependencies?.["qyl-mcp-server"] !== server.version) {
+    throw new Error(`${workspace} must pin the local qyl-mcp-server ${server.version}`);
+  }
+  if (metadata.dependencies?.["@ancplua/qyl-api-schema"] !== mcpPin) {
+    throw new Error(`${workspace} must pin @ancplua/qyl-api-schema ${mcpPin}`);
+  }
+}
+const workbench = JSON.parse(readFileSync(join(here, "workbench", "package.json"), "utf8"));
+if (workbench.devDependencies?.["@ancplua/qyl-semantic-conventions"]
+    !== server.dependencies?.["@ancplua/qyl-semantic-conventions"]) {
+  throw new Error("Workbench tests and server must use the same generated conventions package");
+}

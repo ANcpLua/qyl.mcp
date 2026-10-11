@@ -176,6 +176,11 @@ so serving it requires Bun.
 
 ### Account isolation for hosted Auth0
 
+The existing tenant's API scopes, named client grants and mapped-user permissions
+are managed by [the Auth0 configuration and drift checker](https://github.com/ANcpLua/qyl.mcp/tree/main/tools/auth0).
+Run its check before applying changes; it preserves unrelated tenant configuration
+and never creates identities or rotates credentials.
+
 To give a reviewer access to sample data, provision a separate Collector
 project/key through the Collector's `QYL_OTLP_PROJECT_KEYS` configuration and
 assign that key to the reviewer's validated Auth0 subject. Configure the MCP
@@ -210,6 +215,12 @@ and an in-process signed webhook receiver; the hosted reviewer OAuth login and
 real ChatGPT demonstration are separate checks before upload.
 
 ## Release notes
+
+### 7.6.1
+
+- Manage existing Auth0 API permissions, client grants and mapped-user permissions with scoped tenant configuration and a drift check.
+
+- Use the qyl-owned semantic conventions package generated from the same registry as C#. MCP attribute names, values, operation events, duration metrics and seconds remain consistent across both languages. The official OpenTelemetry SDKs and exporters and the shared API contracts remain in use.
 
 ### 7.6.0
 

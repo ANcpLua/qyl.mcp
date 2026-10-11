@@ -1,0 +1,24 @@
+{
+  "tenant": "qyl-eu.eu.auth0.com",
+  "resource": {
+    "identifier": "https://mcp.qyl.at/mcp",
+    "enforce_policies": true,
+    "scopes": [
+      { "value": "qyl:read", "description": "Read qyl telemetry and MCP evidence" },
+      { "value": "qyl:write", "description": "Create and update annotations and saved queries in your qyl project" },
+      { "value": "qyl:delete", "description": "Delete annotations and saved queries in your qyl project" }
+    ]
+  },
+  "user_client_names": [
+    "ChatGPT", "Claude", "Claude Code", "Codex", "qyl MCP Inspector review",
+    "qyl-workspace hosted eval", "qyl.mcp (Test Application)"
+  ],
+  "user_scopes": ["qyl:read", "qyl:write", "qyl:delete"],
+  "user_subjects_environment": "MCP_COLLECTOR_PROJECTS",
+  "third_party_default": { "scope": [], "allow_all_scopes": false },
+  "management_client": {
+    "name": "qyl.mcp Events access check",
+    "app_type": "non_interactive",
+    "scope": ["read:users", "read:clients", "read:client_grants", "read:grants"]
+  }
+}

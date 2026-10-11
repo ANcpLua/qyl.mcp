@@ -101,8 +101,7 @@ export interface McpMetricDescriptor {
     name:
         | typeof METRIC_MCP_CLIENT_OPERATION_DURATION
         | typeof METRIC_MCP_SERVER_OPERATION_DURATION;
-    unit: typeof METRIC_MCP_CLIENT_OPERATION_DURATION_UNIT
-        | typeof METRIC_MCP_SERVER_OPERATION_DURATION_UNIT;
+    unit: typeof METRIC_MCP_CLIENT_OPERATION_DURATION_UNIT;
     value: number;
     attributes: Attributes;
 }

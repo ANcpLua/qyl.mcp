@@ -89,7 +89,7 @@ credential, not an incoming MCP login.
 `./release.sh <version>` publishes `qyl-mcp-server` from the developer's machine
 (see `SKILL.md`). The retired release workflow, with provenance and clean `npx`
 consumer smokes in both protocol eras, on 2026-10-11 published `7.2.0`, `7.2.1`, `7.2.2` and `7.2.3` that way. The
-source declares `7.6.0` (Contract 12.0.0: RFC 9457 problems with a type URI and
+source declares `7.6.1` (shared qyl C#/TypeScript semantic conventions; Contract 12.0.0: RFC 9457 problems with a type URI and
 a stable `code`, one page limit of 1 to 1000; on top of 7.5.0's write tools
 behind `qyl:write` and `qyl:delete` and 7.4.0's paging, filters, structured
 metric matchers and the `fetch_telemetry` union);

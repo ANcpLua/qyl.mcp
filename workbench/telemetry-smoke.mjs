@@ -6,6 +6,7 @@
  * a repository-owned JSON/Zod echo server.
  */
 
+import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
@@ -126,7 +127,7 @@ Object.assign(childEnv, {
   QYL_GRPC_PORT: "0",
   QYL_OTLP_AUTH_MODE: "ApiKey",
   // Keys are bound to projects since ANcpLua/qyl#626.
-  QYL_OTLP_PROJECT_KEYS: JSON.stringify({ [projectScope]: [collectorApiKey] }),
+  QYL_OTLP_PROJECT_KEYS: JSON.stringify({ [projectScope]: [{ key: collectorApiKey, roles: ["ingest", "read"] }] }),
   QYL_DATA_PATH: join(temp, "telemetry-smoke.duckdb"),
 });
 
@@ -178,6 +179,17 @@ try {
     role: "client",
     method: "tools/call",
     serverId: "qyl-otlp-smoke",
+    executionId: "wire-execution",
+    evaluationRunId: "wire-evaluation",
+    testCaseId: "wire-test",
+    protocolVersion: "2026-07-28",
+    jsonRpcProtocolVersion: "2.1",
+    jsonRpcRequestId: 7,
+    networkProtocolVersion: "2",
+    peerAddress: "mcp.example.test",
+    peerPort: 443,
+    rpcResponseStatusCode: "-32602",
+    errorType: "-32602",
     toolName: marker,
     resourceUri: `https://user:${secret}@example.invalid/resource?token=${secret}#${secret}`,
     transport: "http",
@@ -214,36 +226,43 @@ try {
   console.log("ok user content and URI secrets were not exported");
   console.log("ok generated Qyl contract publishes the metrics read surface");
 
-  // The live metrics catalog. Deliberately not "at least one metric is listed":
-  // whether this run's exporter flushed a metric before the query is a race, and
-  // a smoke that fails on timing teaches people to rerun it. What is asserted is
-  // the part that cannot be flaky — a served catalog is shaped like the contract
-  // says, and a catalog this build cannot reach fails as Problem Details rather
-  // than as some other body a client would have to guess at.
-  const metricsResponse = await fetch(`${baseUrl}/api/v1/metrics?limit=10`, {
-    headers: { [apiKeyHeader]: collectorApiKey },
-  });
-  const metricsBody = await metricsResponse.json();
-  if (metricsResponse.ok) {
-    if (!Array.isArray(metricsBody.items) || typeof metricsBody.has_more !== "boolean") {
+  // The SDK has been shut down and flushed. Wait for ingestion, then check the
+  // literal names and units persisted by the real Collector, independently of
+  // the generated constants used by the producer.
+  const metricNames = ["mcp.client.operation.duration", "mcp.server.operation.duration"];
+  const metricsBody = await waitUntil(async () => {
+    const response = await fetch(`${baseUrl}/api/v1/metrics?limit=100`, {
+      headers: { [apiKeyHeader]: collectorApiKey },
+    });
+    if (!response.ok) throw new Error(`metrics catalog returned ${response.status}`);
+    const body = await response.json();
+    if (!Array.isArray(body.items) || typeof body.has_more !== "boolean") {
       throw new Error("metrics catalog is not the published cursor page");
     }
-    for (const descriptor of metricsBody.items) {
-      for (const field of ["name", "kind", "temporality", "monotonic", "series_count", "last_seen"]) {
-        if (!Object.hasOwn(descriptor, field)) {
-          throw new Error(`metrics catalog item is missing the published field ${field}`);
-        }
-      }
+    return metricNames.every((name) => body.items.some((item) => item.name === name))
+      ? body : undefined;
+  }, 15_000, "both exported MCP duration metrics");
+  for (const name of metricNames) {
+    const descriptor = metricsBody.items.find((item) => item.name === name);
+    if (descriptor.unit !== "s" || descriptor.kind !== "histogram") {
+      throw new Error(`incorrect persisted MCP metric: ${JSON.stringify(descriptor)}`);
     }
-    console.log(`ok live metrics catalog is contract-shaped (${metricsBody.items.length} instruments)`);
-  } else if (typeof metricsBody.title === "string" && typeof metricsBody.status === "number") {
-    console.log(`ok live metrics catalog answers Problem Details (${metricsResponse.status})`);
-  } else {
-    throw new Error(
-      `metrics catalog returned ${metricsResponse.status} without a Problem Details body`,
-    );
+    const query = new URLSearchParams({
+      start_time: new Date(endTimeMs - 60_000).toISOString(),
+      end_time: new Date(endTimeMs + 60_000).toISOString(),
+      aggregation: "sum",
+      step_ms: "120000",
+    });
+    const response = await fetch(`${baseUrl}/api/v1/metrics/${name}/query?${query}`, {
+      headers: { [apiKeyHeader]: collectorApiKey },
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    const values = result.series.flatMap((series) => series.buckets)
+      .filter((bucket) => bucket.value !== null).map((bucket) => bucket.value);
+    assert.deepEqual(values, [name === "mcp.client.operation.duration" ? 0.025 : 0.015]);
   }
-
+  console.log("ok both MCP operation duration histograms persist with literal names and seconds");
   if (!existsSync(workbenchMain)) {
     throw new Error(`qyl MCP workbench build not found at ${workbenchMain}; run bun run build`);
   }
@@ -449,6 +468,31 @@ try {
     if (fetched.isError || fetched.structuredContent?.trace?.spans?.length !== 1) {
       throw new Error("live get_trace did not return the persisted span");
     }
+    const wireSpan = fetched.structuredContent.trace.spans[0];
+    const wireAttributes = Object.fromEntries(wireSpan.attributes.map(({ key, value }) => [key, value]));
+    assert.deepEqual(wireAttributes, {
+      // The Collector promotes the resource service name into queried attributes.
+      "service.name": "qyl.mcp",
+      "mcp.method.name": "tools/call",
+      "mcp.protocol.version": "2026-07-28",
+      "jsonrpc.protocol.version": "2.1",
+      "jsonrpc.request.id": "7",
+      "rpc.response.status_code": "-32602",
+      "error.type": "-32602",
+      "gen_ai.operation.name": "execute_tool",
+      "gen_ai.tool.name": marker,
+      "network.transport": "tcp",
+      "network.protocol.name": "http",
+      "network.protocol.version": "2",
+      "server.address": "mcp.example.test",
+      "server.port": { type: "int", value: "443" },
+      "qyl.mcp.server.id": "qyl-otlp-smoke",
+      "qyl.mcp.execution.id": "wire-execution",
+      "qyl.mcp.evaluation_run.id": "wire-evaluation",
+      "qyl.mcp.test_case.id": "wire-test",
+    });
+    assert.equal(BigInt(wireSpan.end_time_unix_nano) - BigInt(wireSpan.start_time_unix_nano), 25_000_000n);
+    console.log("ok persisted span attributes, enum values and duration match the literal wire fixture");
     const missing = await client.callTool({
       name: "get_trace",
       arguments: { trace_id: "0".repeat(32) },

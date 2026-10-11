@@ -15,6 +15,7 @@ run = [
   "bun run build",
   "bun run lint",
   "bun run test",
+  "python3 -m unittest discover -s tools/auth0 -p 'test_*.py'",
   "bun run smoke",
 ]
 
