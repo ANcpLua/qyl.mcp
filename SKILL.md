@@ -44,7 +44,8 @@ is `mise run check`; bun is the package manager (workspace lock `bun.lock` at th
 ## Releasing
 
 1. Commit the `### <x.y.z>` release-notes entry in `server/README.md` on `main`.
-2. `./release.sh <x.y.z> --dry-run`; fix whatever it refuses.
+2. `./release.sh <x.y.z> --dry-run` only when a step is new or unsure; otherwise go straight to
+   the release, the script refuses before it publishes when anything is off.
 3. `./release.sh <x.y.z>`.
 4. Watch indexing: the script polls `npm view qyl-mcp-server@<x.y.z> version`. If it ends with
    "not visible yet", keep polling every 15 s. Until it is indexed, do nothing else about this
