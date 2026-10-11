@@ -7,3 +7,9 @@ export function formatDuration(milliseconds: number | undefined): string {
   const seconds = Math.floor((milliseconds % 60_000) / 1000);
   return `${minutes}m ${seconds}s`;
 }
+
+export function formatTimestamp(value: string | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) ? value : date.toLocaleString();
+}

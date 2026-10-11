@@ -22,6 +22,7 @@ import { hasNativeExecutionTelemetry } from "qyl-mcp-server";
 import {
     JournaledTransport,
     ProtocolJournal,
+    positiveInteger,
     type ActiveProtocolOperation,
     type CompletedProtocolOperation,
     type ProtocolExecutionCorrelation,
@@ -1177,11 +1178,4 @@ function sanitizedCause(error: unknown, redactor: SecretRedactor): Error {
 
 function requireNonEmpty(value: string, name: string): void {
     if (!value.trim()) throw new Error(`${name} must not be empty.`);
-}
-
-function positiveInteger(value: number, name: string): number {
-    if (!Number.isSafeInteger(value) || value <= 0) {
-        throw new Error(`${name} must be a positive integer.`);
-    }
-    return value;
 }

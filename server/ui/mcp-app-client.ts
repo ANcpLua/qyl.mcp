@@ -337,3 +337,52 @@ export function applyHostFonts(fontCss: string): void {
   style.textContent = fontCss;
   document.head.appendChild(style);
 }
+
+export function handleHostContextChanged(ctx: McpUiHostContext, mainEl: HTMLElement): void {
+  if (ctx.theme) {
+    applyDocumentTheme(ctx.theme);
+  }
+  if (ctx.styles?.variables) {
+    applyHostStyleVariables(ctx.styles.variables);
+  }
+  if (ctx.styles?.css?.fonts) {
+    applyHostFonts(ctx.styles.css.fonts);
+  }
+  if (ctx.safeAreaInsets) {
+    mainEl.style.paddingTop = `${ctx.safeAreaInsets.top}px`;
+    mainEl.style.paddingRight = `${ctx.safeAreaInsets.right}px`;
+    mainEl.style.paddingBottom = `${ctx.safeAreaInsets.bottom}px`;
+    mainEl.style.paddingLeft = `${ctx.safeAreaInsets.left}px`;
+  }
+}
+
+export function toolErrorText(result: CallToolResult): string | undefined {
+  const text = result.content
+    ?.map((c) => ("text" in c ? c.text : ""))
+    .filter(Boolean)
+    .join(" ");
+  return text || undefined;
+}
+
+export function sigFig(v: number): string {
+  if (v >= 100) return String(Math.round(v));
+  const s = v >= 10 ? v.toFixed(1) : v.toFixed(2);
+  return s.replace(/\.?0+$/, "");
+}
+
+export function formatCompact(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  if (n < 1000) return String(n);
+  for (const [div, suffix] of [
+    [1e9, "B"],
+    [1e6, "M"],
+    [1e3, "K"],
+  ] as const) {
+    if (n >= div) {
+      const v = n / div;
+      const s = v >= 100 ? Math.round(v).toString() : v.toFixed(1).replace(/\.0$/, "");
+      return `${s}${suffix}`;
+    }
+  }
+  return String(n);
+}

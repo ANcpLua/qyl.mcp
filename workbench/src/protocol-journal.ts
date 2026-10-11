@@ -995,7 +995,7 @@ function resultIsToolError(result: unknown): boolean {
         && (result as Record<string, unknown>).isError === true;
 }
 
-function positiveInteger(value: number, name: string): number {
+export function positiveInteger(value: number, name: string): number {
     if (!Number.isSafeInteger(value) || value <= 0) {
         throw new Error(`${name} must be a positive integer.`);
     }

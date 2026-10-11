@@ -15,6 +15,7 @@ import type {
   WorkbenchWorkspacePreferencesUpdateRequest as WorkspacePreferencesUpdateRequest,
 } from "@ancplua/qyl-api-schema/types";
 import { connectionSafetyReview } from "./connection-safety.js";
+import { formatTimestamp } from "./execution.js";
 import {
   ContentRenderer,
   JsonCodeView,
@@ -131,12 +132,6 @@ function collectionFor(tab: DiscoveryTab, discovery: DiscoverySnapshot | null): 
     case "capabilities":
     case "connection": return null;
   }
-}
-
-function formatTimestamp(value: string | undefined): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.valueOf()) ? value : date.toLocaleString();
 }
 
 function copyText(value: string): Promise<void> {
