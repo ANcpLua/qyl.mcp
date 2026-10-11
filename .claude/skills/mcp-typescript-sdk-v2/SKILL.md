@@ -4,11 +4,13 @@ description: Authoritative reference for the MCP TypeScript SDK v2 (@modelcontex
 license: MIT
 metadata:
   author: Alex + Claude
-  version: "1.0.0"
+  version: "1.1.0"
   verified-against: |
     qyl.mcp source and local tests, 2026-10-08: core/server/client 2.3.1,
     express 2.0.2, node 2.1.1. Package/source commands and actual output:
     docs/evidence/2026-10-08-followup-01.md (SDK skill and landing-page correction).
+    Re-verified 2026-10-11 against the installed 2.3.1 .d.mts/.mjs: exports, error codes,
+    RegisteredTool handle, ServerNotifier, versionNegotiation modes, inputRequired builders.
     Generic SDK reference material must be checked against installed types before use.
 
 ---
@@ -29,7 +31,7 @@ The inspected server/workbench manifests use these five split packages:
 | `@modelcontextprotocol/server` | `McpServer`, `createMcpHandler`, `ProtocolError` + subclasses, `inputRequired`, OAuth server helpers (`requireBearerAuth`, `oauthMetadataResponse`) | the qyl MCP server |
 | `@modelcontextprotocol/server/stdio` | `serveStdio`, `StdioServerTransport` (Node-only subpath) | stdio entry with SDK serving defaults |
 | `@modelcontextprotocol/client` | `Client`, `StreamableHTTPClientTransport`, `versionNegotiation` | dynamic foreign-server connections |
-| `@modelcontextprotocol/core` | **Zod schema constants only** (`CallToolResultSchema`, `OAuthMetadataSchema`, …) | validating raw wire JSON (native-execution, oauth) |
+| `@modelcontextprotocol/core` | **Zod schema constants and protocol constants only**, no classes or functions (`CallToolResultSchema`, `OAuthMetadataSchema`, `LATEST_PROTOCOL_VERSION`, …) | validating raw wire JSON (native-execution, oauth) |
 | `@modelcontextprotocol/node` / `express` | Node/Express adapters over `createMcpHandler` | HTTP hosting |
 
 Rules that follow from the split:
@@ -37,7 +39,10 @@ Rules that follow from the split:
 - **Package roots are runtime-neutral** (no Node builtins). Anything that spawns a process lives
   behind `./stdio` subpaths. Never import `StdioClientTransport` from the root — it doesn't exist there.
 - **Types come from `server`/`client`; Zod schemas come from `core`.** Neither `server` nor `client`
-  exports a Zod schema. If you need `.parse()` on wire JSON, import the `*Schema` constant from `core`.
+  exports a Zod schema constant. For `.parse()` on wire JSON, import the `*Schema` constant from
+  `core`. Without a Zod dependency, `server` and `client` export `specTypeSchemas` (Standard Schema
+  validators keyed by spec type, `specTypeSchemas.CallToolResult['~standard'].validate(x)`) and the
+  boolean guard `isSpecType`.
 - `server-legacy` and `codemod` are migration-only packages — never add them to qyl.mcp.
 
 ## The three contract rules (upheld by the SDK docs)
@@ -87,11 +92,12 @@ Full era matrix, serving patterns, sessions, notifications: `references/serving-
 | `input_required` / MRTR, `requestState`, elicitation, legacy shim | `references/errors-and-input.md` |
 | HTTP serving, stdio, sessions, resumability, notifications, `ServerEventBus`, scaling | `references/serving-and-eras.md` |
 | Era negotiation, `versionNegotiation`, probe semantics, client transports | `references/serving-and-eras.md` |
-| Raw wire validation with Zod | import `*Schema` from `@modelcontextprotocol/core`; that package is schemas-only |
+| Raw wire validation | Zod: `*Schema` from `@modelcontextprotocol/core` (schemas and constants only); no Zod: `specTypeSchemas` / `isSpecType` from `server` or `client` |
 
 ## Sharp edges (each one verified, not guessed)
 
-- **Zod v4 only** in qyl.mcp: `import * as z from "zod/v4"` — matches the SDK's own docs.
+- **Zod v4 only** in qyl.mcp: the server imports `zod/v4`, matching the SDK's own docs; the workbench
+  imports the `zod` root, which is v4 in zod 4.x (the repo pins 4.6.5).
 - The SDK **skips `outputSchema` validation** on any `isError: true` result.
 - Schema-rejected tool arguments come back as an `isError: true` result — the handler never runs.
 - A thrown `ProtocolError` **inside a tool handler** still becomes `isError: true` — it does not
@@ -106,7 +112,7 @@ Full era matrix, serving patterns, sessions, notifications: `references/serving-
   matching `list_changed` automatically — don't also call `sendToolListChanged()`.
 - Behind `createMcpHandler` the `McpServer` instance is per-request: publish change notifications
   through **`handler.notify.*`**, never through the instance.
-- TypeScript ≥6.0 does not auto-include `@types/*`: `"types": ["node"]` must stay in tsconfig
+- TypeScript ≥6.0 (qyl.mcp: 7.0.2) does not auto-include `@types/*`: `"types": ["node"]` must stay in tsconfig
   (the published `.d.mts` references `Buffer`).
 - Do not default a spawn-per-invocation CLI to `versionNegotiation: 'auto'` — on stdio the probe
   spawns a sibling process and can stall the full timeout against silent legacy servers.
