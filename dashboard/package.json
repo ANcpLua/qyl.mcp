@@ -11,10 +11,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ancplua/qyl-api-schema": "11.5.0",
+    "@ancplua/qyl-api-schema": "11.6.0-rc.1",
     "@modelcontextprotocol/core": "2.3.1",
     "@modelcontextprotocol/server": "2.3.1",
-    "qyl-mcp-server": "7.3.1",
+    "qyl-mcp-server": "7.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "zod": "4.6.5"

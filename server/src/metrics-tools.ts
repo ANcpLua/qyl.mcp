@@ -7,20 +7,25 @@
  * single tool with a mode argument would make every call carry the arguments of
  * the other two.
  *
- * Output shapes are the operations' own 200 bodies from contract-validation.ts.
- * Input shapes are derived from the same operations' published parameters (see
- * contract-operations.ts): the metrics API landed in @ancplua/qyl-api-schema
- * 8.0.0 with responses but without `Mcp.Tools.*Metric*` input models, and
- * generating them from the OpenAPI document keeps gate G10a honest instead of
- * exempting three hand-written objects from it.
+ * Input and output shapes are the contract's `Mcp.Tools.*Metric*` models from
+ * contract-validation.ts, like every other tool. The two list tools page: the
+ * page's own `has_more` and `next_cursor` travel with the items, and the same
+ * `cursor` input continues the list.
  */
 
+import type {
+  GetMetricSeriesOutput,
+  ListMetricsOutput,
+  QueryMetricOutput,
+} from "@ancplua/qyl-api-schema/types";
 import type { McpServer, CallToolResult, ServerContext } from "@modelcontextprotocol/server";
-import { operationInputSchema } from "./contract-operations.js";
 import {
-  MetricQueryResultSchema,
-  MetricsListResponseSchema,
-  MetricSeriesListResponseSchema,
+  GetMetricSeriesInputSchema,
+  GetMetricSeriesOutputSchema,
+  ListMetricsInputSchema,
+  ListMetricsOutputSchema,
+  QueryMetricInputSchema,
+  QueryMetricOutputSchema,
   compactOutputSchema,
 } from "./contract-validation.js";
 import {
@@ -32,6 +37,7 @@ import {
   type QueryMetricArgs,
 } from "./metrics.js";
 import {
+  pageNote,
   summarizeMetricCatalog,
   summarizeMetricQuery,
   summarizeMetricSeries,
@@ -40,15 +46,6 @@ import { runTool } from "./request-scope.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, TELEMETRY_TOOL_AUTH_META } from "./tools.js";
 
-const METRICS_PATH = "/api/v1/metrics";
-const SERIES_PATH = "/api/v1/metrics/{metric_name}/series";
-const QUERY_PATH = "/api/v1/metrics/{metric_name}/query";
-
-/**
- * The list operations page, and their pages are the tool's output. `has_more`
- * is the page's own flag, so a reader can tell a complete catalog from a first
- * page; the cursor does not travel yet, because these tools take no cursor.
- */
 export function registerMetricsTools(server: McpServer): void {
   server.registerTool(
     "list_metrics",
@@ -58,20 +55,27 @@ export function registerMetricsTools(server: McpServer): void {
         "List the metric instruments recorded for this project: name, kind " +
         "(gauge/sum/histogram), unit, how many attribute streams exist under each " +
         "name, and when it was last written. Useful when the user wants to discover " +
-        "instrument names before querying a metric by its exact name.",
-      inputSchema: operationInputSchema<ListMetricsArgs>(METRICS_PATH),
-      outputSchema: compactOutputSchema(MetricsListResponseSchema),
+        "instrument names before querying a metric by its exact name. name_prefix " +
+        "narrows the catalog; when has_more is true, pass next_cursor as cursor with " +
+        "the same prefix for the next page.",
+      inputSchema: ListMetricsInputSchema,
+      outputSchema: compactOutputSchema(ListMetricsOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: ListMetricsArgs, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, 1, async (scope) => {
-        const { metrics, hasMore, mode } = await listMetrics(args, scope.collector);
-        await scope.step(`Fetched ${metrics.length} metric instrument(s)`);
-        return telemetryToolResult(summarizeMetricCatalog(metrics, mode), {
-          items: metrics,
-          has_more: hasMore,
-        });
+        const page = await listMetrics(args, scope.collector);
+        await scope.step(`Fetched ${page.items.length} metric instrument(s)`);
+        const output: ListMetricsOutput = {
+          items: page.items,
+          has_more: page.hasMore,
+          ...(page.nextCursor === undefined ? {} : { next_cursor: page.nextCursor }),
+        };
+        return telemetryToolResult(
+          summarizeMetricCatalog(page.items, page.mode) + pageNote(page),
+          output,
+        );
       }),
   );
 
@@ -82,21 +86,28 @@ export function registerMetricsTools(server: McpServer): void {
       description:
         "List the distinct attribute streams recorded under one metric name, with " +
         "each stream's attributes, service, and first/last seen. Useful when the user " +
-        "wants to discover group_by keys or attr filters for query_metric before " +
-        "choosing the groups in a range query.",
-      inputSchema: operationInputSchema<MetricSeriesArgs>(SERIES_PATH),
-      outputSchema: compactOutputSchema(MetricSeriesListResponseSchema),
+        "wants to discover group_by keys or matchers for query_metric before " +
+        "choosing the groups in a range query. matchers narrow the streams: each is " +
+        "{key, op, value} with op eq (exact) or prefix. When has_more is true, pass " +
+        "next_cursor as cursor with the same matchers for the next page.",
+      inputSchema: GetMetricSeriesInputSchema,
+      outputSchema: compactOutputSchema(GetMetricSeriesOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: TELEMETRY_TOOL_AUTH_META,
     },
     (args: MetricSeriesArgs, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, 1, async (scope) => {
-        const { series, hasMore, mode } = await listMetricSeries(args, scope.collector);
-        await scope.step(`Fetched ${series.length} series of ${args.metric_name}`);
-        return telemetryToolResult(summarizeMetricSeries(series, mode), {
-          items: series,
-          has_more: hasMore,
-        });
+        const page = await listMetricSeries(args, scope.collector);
+        await scope.step(`Fetched ${page.items.length} series of ${args.metric_name}`);
+        const output: GetMetricSeriesOutput = {
+          items: page.items,
+          has_more: page.hasMore,
+          ...(page.nextCursor === undefined ? {} : { next_cursor: page.nextCursor }),
+        };
+        return telemetryToolResult(
+          summarizeMetricSeries(page.items, page.mode) + pageNote(page),
+          output,
+        );
       }),
   );
 
@@ -107,13 +118,14 @@ export function registerMetricsTools(server: McpServer): void {
       description:
         "Run a time-bucketed range query when the user wants to compare a metric " +
         "over time or across groups: a window (start_time, " +
-        "end_time), a bucket width (step_ms), a reducer (aggregation: avg, min, max, " +
-        "sum, count, last, p50, p90, p95, p99), optional group_by attribute keys, and " +
-        "optional attr/attr_prefix matchers written 'key=value'. Returns one stream " +
-        "per grouping with its buckets. With step_ms equal to the window duration, " +
-        "each grouping yields one bucket: one number per series.",
-      inputSchema: operationInputSchema<QueryMetricArgs>(QUERY_PATH),
-      outputSchema: compactOutputSchema(MetricQueryResultSchema),
+        "end_time), a bucket width in whole milliseconds (step_ms), a reducer " +
+        "(aggregation: avg, min, max, sum, count, last, p50, p90, p95, p99), optional " +
+        "group_by attribute keys, and optional matchers, each {key, op, value} with op " +
+        "eq (exact) or prefix. Returns one stream per grouping with its buckets. With " +
+        "step_ms equal to the window duration, each grouping yields one bucket: one " +
+        "number per series.",
+      inputSchema: QueryMetricInputSchema,
+      outputSchema: compactOutputSchema(QueryMetricOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: TELEMETRY_TOOL_AUTH_META,
     },
@@ -124,7 +136,8 @@ export function registerMetricsTools(server: McpServer): void {
           `Queried ${args.metric_name}: ${result.series.length} series, ` +
             `${result.series[0]?.buckets.length ?? 0} bucket(s) each`,
         );
-        return telemetryToolResult(summarizeMetricQuery(result, mode), result);
+        const output: QueryMetricOutput = result;
+        return telemetryToolResult(summarizeMetricQuery(result, mode), output);
       }),
   );
 }

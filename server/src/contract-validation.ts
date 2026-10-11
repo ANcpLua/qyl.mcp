@@ -111,6 +111,66 @@ export function compactOutputSchema<T>(schema: z.ZodType<T>): StandardSchemaWith
   return wrapper;
 }
 
+const objectRooted = new WeakMap<object, StandardSchemaWithJSON<never, never>>();
+
+/** `{ type: "object" }` with no properties and nothing forbidden: zod's spelling of "any object". */
+function isOpenObject(value: unknown): boolean {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const schema = value as Record<string, unknown>;
+  const properties = schema.properties;
+  const additional = schema.additionalProperties;
+  return schema.type === "object" &&
+    (properties === undefined || Object.keys(properties as object).length === 0) &&
+    schema.required === undefined &&
+    (additional === undefined || additional === true ||
+      (typeof additional === "object" && additional !== null && Object.keys(additional).length === 0));
+}
+
+/**
+ * Emits a tool's input JSON Schema with `type: "object"` at the root.
+ *
+ * MCP requires `inputSchema.type` to be `"object"`, and hosts validate it. A
+ * discriminated union of object variants is an object, but zod spells it as
+ * `allOf: [<any object>, { oneOf: [...] }]` with no root `type`, so `tools/list`
+ * would publish a shape a strict host rejects. This hoists the union to the
+ * root and states the type; validation is the untouched generated zod schema.
+ */
+export function objectRootInputSchema<T>(schema: z.ZodType<T>): StandardSchemaWithJSON<T, T> {
+  const cachedWrapper = objectRooted.get(schema);
+  if (cachedWrapper !== undefined) return cachedWrapper as StandardSchemaWithJSON<T, T>;
+
+  let emitted: Record<string, unknown> | undefined;
+  const jsonSchema = (): Record<string, unknown> => {
+    if (emitted === undefined) {
+      const json = z.toJSONSchema(schema, { target: JSON_SCHEMA_TARGET, io: "input" });
+      normalizeOutputSpelling(json);
+      if (json.type === undefined) {
+        const parts = Array.isArray(json.allOf) ? (json.allOf as Record<string, unknown>[]) : [];
+        const unions = parts.filter((part) => Array.isArray(part.oneOf) || Array.isArray(part.anyOf));
+        const others = parts.filter((part) => !unions.includes(part) && !isOpenObject(part));
+        if (unions.length === 1 && others.length === 0) {
+          delete json.allOf;
+          Object.assign(json, unions[0]);
+        }
+        json.type = "object";
+      }
+      emitted = json;
+    }
+    return emitted;
+  };
+  const standard = schema["~standard"];
+  const wrapper = {
+    "~standard": {
+      version: 1,
+      vendor: standard.vendor,
+      jsonSchema: { input: jsonSchema, output: jsonSchema },
+      validate: (value: unknown) => standard.validate(value),
+    },
+  } as StandardSchemaWithJSON<T, T>;
+  objectRooted.set(schema, wrapper as unknown as StandardSchemaWithJSON<never, never>);
+  return wrapper;
+}
+
 
 // Qyl telemetry and installable MCP server contracts.
 export const SpanSchema = contractSchema("OTel.Traces.Span");
@@ -154,6 +214,13 @@ export const DisplayMcpDashboardInputSchema =
   contractSchema("Mcp.Tools.DisplayMcpDashboardInput");
 export const DisplayMcpDashboardOutputSchema =
   contractSchema("Mcp.Tools.DisplayMcpDashboardOutput");
+export const ToolErrorSchema = contractSchema("Mcp.Tools.ToolError");
+export const ListMetricsInputSchema = contractSchema("Mcp.Tools.ListMetricsInput");
+export const ListMetricsOutputSchema = contractSchema("Mcp.Tools.ListMetricsOutput");
+export const GetMetricSeriesInputSchema = contractSchema("Mcp.Tools.GetMetricSeriesInput");
+export const GetMetricSeriesOutputSchema = contractSchema("Mcp.Tools.GetMetricSeriesOutput");
+export const QueryMetricInputSchema = contractSchema("Mcp.Tools.QueryMetricInput");
+export const QueryMetricOutputSchema = contractSchema("Mcp.Tools.QueryMetricOutput");
 export const ListTracesInputSchema = contractSchema("Mcp.Tools.ListTracesInput");
 export const ListTracesOutputSchema = contractSchema("Mcp.Tools.ListTracesOutput");
 export const GetTraceInputSchema = contractSchema("Mcp.Tools.GetTraceInput");

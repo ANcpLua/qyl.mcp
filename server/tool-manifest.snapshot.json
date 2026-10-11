@@ -1,5 +1,5 @@
 {
-  "contract_revision": "sha256:3605ae27d2edf632",
+  "contract_revision": "sha256:d926c3c6ab829cbf",
   "tools": [
     {
       "name": "ci_log",
@@ -168,6 +168,48 @@
               "demo"
             ],
             "description": "Whether a qyl MCP tool read live collector data or the explicit demo dataset."
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_argument",
+                  "not_found",
+                  "no_project_access",
+                  "collector_unreachable",
+                  "collector_timeout",
+                  "cancelled",
+                  "collector_unauthorized",
+                  "collector_rate_limited",
+                  "collector_rejected",
+                  "collector_error",
+                  "contract_mismatch",
+                  "insufficient_scope",
+                  "conflict",
+                  "precondition_failed",
+                  "precondition_required",
+                  "internal"
+                ],
+                "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description of this failure."
+              },
+              "retryable": {
+                "type": "boolean",
+                "description": "Whether the same call can succeed when repeated unchanged."
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
           }
         },
         "required": [
@@ -213,7 +255,8 @@
         "properties": {
           "hours": {
             "default": 24,
-            "type": "number",
+            "description": "Window length in whole hours.",
+            "type": "integer",
             "minimum": 1,
             "maximum": 168
           }
@@ -243,7 +286,9 @@
                   },
                   "bucket_ms": {
                     "type": "number",
-                    "minimum": 0
+                    "minimum": 0,
+                    "multipleOf": 1,
+                    "description": "Bucket width in integer milliseconds."
                   }
                 },
                 "required": [
@@ -445,6 +490,48 @@
             ],
             "additionalProperties": false,
             "description": "Aggregate MCP traffic statistics shown by qyl.mcp."
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_argument",
+                  "not_found",
+                  "no_project_access",
+                  "collector_unreachable",
+                  "collector_timeout",
+                  "cancelled",
+                  "collector_unauthorized",
+                  "collector_rate_limited",
+                  "collector_rejected",
+                  "collector_error",
+                  "contract_mismatch",
+                  "insufficient_scope",
+                  "conflict",
+                  "precondition_failed",
+                  "precondition_required",
+                  "internal"
+                ],
+                "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description of this failure."
+              },
+              "retryable": {
+                "type": "boolean",
+                "description": "Whether the same call can succeed when repeated unchanged."
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
           }
         },
         "required": [
@@ -499,17 +586,18 @@
             "examples": [
               "0af7651916cd43dd8448eb211c80319c"
             ],
-            "description": "Unique trace identifier (32 lowercase hex characters)"
+            "description": "Open this trace selected; omit to list recent traces."
           },
           "session_id": {
             "type": "string",
             "minLength": 1,
             "maxLength": 128,
             "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
-            "description": "Unique session identifier: URL-safe characters, at least one, at most 128, not only dots. The same rule the SDK enforces on the baggage header."
+            "description": "List only the traces of this session."
           },
           "limit": {
             "default": 20,
+            "description": "Maximum traces to list.",
             "type": "integer",
             "minimum": 1,
             "maximum": 100
@@ -530,6 +618,9 @@
           },
           "mode": {
             "$ref": "#/$defs/__schema130"
+          },
+          "error": {
+            "$ref": "#/$defs/__schema131"
           }
         },
         "required": [
@@ -1671,6 +1762,57 @@
               "demo"
             ],
             "description": "Whether a qyl MCP tool read live collector data or the explicit demo dataset."
+          },
+          "__schema131": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/__schema132"
+              },
+              "message": {
+                "$ref": "#/$defs/__schema133"
+              },
+              "retryable": {
+                "$ref": "#/$defs/__schema134"
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
+          },
+          "__schema132": {
+            "type": "string",
+            "enum": [
+              "invalid_argument",
+              "not_found",
+              "no_project_access",
+              "collector_unreachable",
+              "collector_timeout",
+              "cancelled",
+              "collector_unauthorized",
+              "collector_rate_limited",
+              "collector_rejected",
+              "collector_error",
+              "contract_mismatch",
+              "insufficient_scope",
+              "conflict",
+              "precondition_failed",
+              "precondition_required",
+              "internal"
+            ],
+            "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+          },
+          "__schema133": {
+            "type": "string",
+            "description": "Human-readable description of this failure."
+          },
+          "__schema134": {
+            "type": "boolean",
+            "description": "Whether the same call can succeed when repeated unchanged."
           }
         }
       }
@@ -1678,7 +1820,7 @@
     {
       "name": "fetch_telemetry",
       "title": "Fetch Telemetry",
-      "description": "Fetch traces, a single trace, or logs for the trace explorer UI when the user refreshes the view or changes its filters.",
+      "description": "Fetch traces, a single trace, logs or MCP stats for the viewers when the user refreshes a view or changes its filters. The input is one of four shapes selected by view; view \"trace\" requires trace_id.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -1703,18 +1845,217 @@
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
-        "properties": {
-          "view": {
-            "type": "string",
-            "enum": [
-              "traces",
-              "trace",
-              "logs",
-              "mcp_stats"
+        "discriminator": {
+          "propertyName": "view",
+          "mapping": {
+            "traces": "#/components/schemas/Mcp.Tools.FetchTelemetryTracesInput",
+            "trace": "#/components/schemas/Mcp.Tools.FetchTelemetryTraceInput",
+            "logs": "#/components/schemas/Mcp.Tools.FetchTelemetryLogsInput",
+            "mcp_stats": "#/components/schemas/Mcp.Tools.FetchTelemetryMcpStatsInput"
+          }
+        },
+        "description": "Input for the app-only fetch_telemetry tool: exactly one view and the members that view takes.",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "view": {
+                "type": "string",
+                "const": "traces"
+              },
+              "trace_id": {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 32,
+                "pattern": "^[a-f0-9]{32}$",
+                "examples": [
+                  "0af7651916cd43dd8448eb211c80319c"
+                ],
+                "description": "Return this one trace as the list, selected."
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200
+              }
+            },
+            "required": [
+              "view"
             ],
-            "description": "Data projection requested by the app-only fetch_telemetry tool."
+            "additionalProperties": false,
+            "description": "fetch_telemetry input for the trace list (view `traces`)."
           },
-          "trace_id": {
+          {
+            "type": "object",
+            "properties": {
+              "view": {
+                "type": "string",
+                "const": "trace"
+              },
+              "trace_id": {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 32,
+                "pattern": "^[a-f0-9]{32}$",
+                "examples": [
+                  "0af7651916cd43dd8448eb211c80319c"
+                ],
+                "description": "Unique trace identifier (32 lowercase hex characters)"
+              }
+            },
+            "required": [
+              "view",
+              "trace_id"
+            ],
+            "additionalProperties": false,
+            "description": "fetch_telemetry input for one trace (view `trace`)."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "view": {
+                "type": "string",
+                "const": "logs"
+              },
+              "trace_id": {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 32,
+                "pattern": "^[a-f0-9]{32}$",
+                "examples": [
+                  "0af7651916cd43dd8448eb211c80319c"
+                ],
+                "description": "Unique trace identifier (32 lowercase hex characters)"
+              },
+              "service_name": {
+                "type": "string"
+              },
+              "severity_min": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 24
+              },
+              "query": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200
+              }
+            },
+            "required": [
+              "view"
+            ],
+            "additionalProperties": false,
+            "description": "fetch_telemetry input for log records (view `logs`)."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "view": {
+                "type": "string",
+                "const": "mcp_stats"
+              },
+              "hours": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 168,
+                "description": "Window length in whole hours."
+              }
+            },
+            "required": [
+              "view"
+            ],
+            "additionalProperties": false,
+            "description": "fetch_telemetry input for MCP traffic statistics (view `mcp_stats`)."
+          }
+        ]
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "traces": {
+            "$ref": "#/$defs/__schema0"
+          },
+          "trace": {
+            "$ref": "#/$defs/__schema132"
+          },
+          "logs": {
+            "$ref": "#/$defs/__schema133"
+          },
+          "stats": {
+            "$ref": "#/$defs/__schema172"
+          },
+          "mode": {
+            "$ref": "#/$defs/__schema183"
+          },
+          "error": {
+            "$ref": "#/$defs/__schema184"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "additionalProperties": false,
+        "description": "Structured output for the app-only fetch_telemetry tool.",
+        "$defs": {
+          "__schema0": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema1"
+            }
+          },
+          "__schema1": {
+            "type": "object",
+            "properties": {
+              "trace_id": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "root_span": {
+                "$ref": "#/$defs/__schema4"
+              },
+              "span_count": {
+                "$ref": "#/$defs/__schema124"
+              },
+              "duration_ns": {
+                "$ref": "#/$defs/__schema125"
+              },
+              "start_time": {
+                "$ref": "#/$defs/__schema126"
+              },
+              "end_time": {
+                "$ref": "#/$defs/__schema127"
+              },
+              "services": {
+                "$ref": "#/$defs/__schema128"
+              },
+              "has_error": {
+                "$ref": "#/$defs/__schema130"
+              },
+              "spans": {
+                "$ref": "#/$defs/__schema131"
+              }
+            },
+            "required": [
+              "trace_id",
+              "span_count",
+              "duration_ns",
+              "start_time",
+              "end_time",
+              "services",
+              "has_error",
+              "spans"
+            ],
+            "additionalProperties": false,
+            "description": "Complete trace containing all related spans"
+          },
+          "__schema2": {
+            "description": "Trace identifier",
+            "$ref": "#/$defs/__schema3"
+          },
+          "__schema3": {
             "type": "string",
             "minLength": 32,
             "maxLength": 32,
@@ -1724,40 +2065,1659 @@
             ],
             "description": "Unique trace identifier (32 lowercase hex characters)"
           },
-          "service_name": {
-            "type": "string"
+          "__schema4": {
+            "description": "Root span of the trace",
+            "$ref": "#/$defs/__schema123"
           },
-          "severity_min": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 24
+          "__schema5": {
+            "description": "Unique span identifier (16 hex chars)",
+            "$ref": "#/$defs/__schema6"
           },
-          "query": {
-            "type": "string"
+          "__schema6": {
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 16,
+            "pattern": "^[a-f0-9]{16}$",
+            "examples": [
+              "b7ad6b7169203331"
+            ],
+            "description": "Unique span identifier (16 lowercase hex characters)"
           },
-          "limit": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 200
+          "__schema7": {
+            "description": "Trace identifier (32 hex chars)",
+            "$ref": "#/$defs/__schema3"
           },
-          "hours": {
+          "__schema8": {
+            "description": "Parent span identifier (null for root spans)",
+            "$ref": "#/$defs/__schema6"
+          },
+          "__schema9": {
+            "description": "W3C trace state",
+            "$ref": "#/$defs/__schema10"
+          },
+          "__schema10": {
+            "type": "string",
+            "examples": [
+              "rojo=00f067aa0ba902b7,congo=t61rcWkgMzE"
+            ],
+            "description": "W3C Trace Context tracestate header (vendor-specific key-value pairs)"
+          },
+          "__schema11": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Human-readable span name"
+          },
+          "__schema12": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/__schema13"
+              },
+              {
+                "$ref": "#/$defs/__schema14"
+              },
+              {
+                "$ref": "#/$defs/__schema15"
+              },
+              {
+                "$ref": "#/$defs/__schema16"
+              },
+              {
+                "$ref": "#/$defs/__schema17"
+              },
+              {
+                "$ref": "#/$defs/__schema18"
+              }
+            ],
+            "description": "Span kind"
+          },
+          "__schema13": {
             "type": "number",
-            "minimum": 1,
-            "maximum": 168
+            "const": 0
+          },
+          "__schema14": {
+            "type": "number",
+            "const": 1
+          },
+          "__schema15": {
+            "type": "number",
+            "const": 2
+          },
+          "__schema16": {
+            "type": "number",
+            "const": 3
+          },
+          "__schema17": {
+            "type": "number",
+            "const": 4
+          },
+          "__schema18": {
+            "type": "number",
+            "const": 5
+          },
+          "__schema19": {
+            "description": "Start timestamp in nanoseconds since epoch",
+            "$ref": "#/$defs/__schema20"
+          },
+          "__schema20": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Unsigned Unix timestamp in nanoseconds since epoch, encoded as a decimal string"
+          },
+          "__schema21": {
+            "description": "End timestamp in nanoseconds since epoch",
+            "$ref": "#/$defs/__schema20"
+          },
+          "__schema22": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema23"
+            },
+            "description": "Span attributes"
+          },
+          "__schema23": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "$ref": "#/$defs/__schema24"
+              },
+              "value": {
+                "$ref": "#/$defs/__schema25"
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "additionalProperties": false,
+            "description": "Key-value attribute pair following OTel conventions"
+          },
+          "__schema24": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Attribute key (dot-separated namespace)"
+          },
+          "__schema25": {
+            "description": "Attribute value",
+            "$ref": "#/$defs/__schema30"
+          },
+          "__schema26": {
+            "type": "null"
+          },
+          "__schema27": {
+            "type": "string"
+          },
+          "__schema28": {
+            "type": "boolean"
+          },
+          "__schema29": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema30"
+            }
+          },
+          "__schema30": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/__schema26"
+              },
+              {
+                "$ref": "#/$defs/__schema27"
+              },
+              {
+                "$ref": "#/$defs/__schema28"
+              },
+              {
+                "$ref": "#/$defs/__schema29"
+              },
+              {
+                "$ref": "#/$defs/__schema31"
+              }
+            ],
+            "description": "Lossless JSON projection of an OpenTelemetry AnyValue attribute. Primitive variants are bare JSON values; object variants carry a `type` tag."
+          },
+          "__schema31": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/__schema32"
+              },
+              {
+                "$ref": "#/$defs/__schema33"
+              }
+            ],
+            "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+                "int": "#/components/schemas/Common.AttributeIntValue",
+                "double": "#/components/schemas/Common.AttributeDoubleValue",
+                "bytes": "#/components/schemas/Common.AttributeBytesValue",
+                "kvlist": "#/components/schemas/Common.AttributeKeyValueListValue"
+              }
+            },
+            "description": "Object-shaped AttributeValue variants. The variant name is the wire `type` tag."
+          },
+          "__schema32": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "__schema33": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "$ref": "#/$defs/__schema34"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/__schema35"
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged OTLP signed 64-bit integer attribute."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "$ref": "#/$defs/__schema36"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/__schema37"
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged OTLP double attribute."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "$ref": "#/$defs/__schema40"
+                  },
+                  "base64": {
+                    "$ref": "#/$defs/__schema41"
+                  }
+                },
+                "required": [
+                  "type",
+                  "base64"
+                ],
+                "additionalProperties": false,
+                "description": "Base64 bytes projected by qyl without colliding with an ordinary string attribute."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "$ref": "#/$defs/__schema42"
+                  },
+                  "values": {
+                    "$ref": "#/$defs/__schema43"
+                  }
+                },
+                "required": [
+                  "type",
+                  "values"
+                ],
+                "additionalProperties": false,
+                "description": "Tagged recursive OTLP key-value-list, distinct from other object-shaped attribute variants."
+              }
+            ]
+          },
+          "__schema34": {
+            "type": "string",
+            "const": "int"
+          },
+          "__schema35": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(0|-?[1-9][0-9]*)$",
+            "description": "An OTLP signed 64-bit attribute integer encoded without JavaScript precision loss."
+          },
+          "__schema36": {
+            "type": "string",
+            "const": "double"
+          },
+          "__schema37": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/__schema38"
+              },
+              {
+                "$ref": "#/$defs/__schema39"
+              }
+            ],
+            "description": "An OTLP attribute double encoded as a JSON number when finite or a canonical named string when non-finite."
+          },
+          "__schema38": {
+            "type": "number"
+          },
+          "__schema39": {
+            "type": "string",
+            "enum": [
+              "NaN",
+              "Infinity",
+              "-Infinity"
+            ]
+          },
+          "__schema40": {
+            "type": "string",
+            "const": "bytes"
+          },
+          "__schema41": {
+            "type": "string",
+            "contentEncoding": "base64"
+          },
+          "__schema42": {
+            "type": "string",
+            "const": "kvlist"
+          },
+          "__schema43": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": {
+              "$ref": "#/$defs/__schema30"
+            }
+          },
+          "__schema44": {
+            "description": "Dropped attributes count",
+            "$ref": "#/$defs/__schema45"
+          },
+          "__schema45": {
+            "type": "number",
+            "minimum": 0,
+            "multipleOf": 1,
+            "description": "Generic non-negative counter"
+          },
+          "__schema46": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema47"
+            },
+            "description": "Span events (logs attached to span)"
+          },
+          "__schema47": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/__schema48"
+              },
+              "time_unix_nano": {
+                "$ref": "#/$defs/__schema49"
+              },
+              "attributes": {
+                "$ref": "#/$defs/__schema50"
+              },
+              "dropped_attributes_count": {
+                "$ref": "#/$defs/__schema51"
+              }
+            },
+            "required": [
+              "name",
+              "time_unix_nano"
+            ],
+            "additionalProperties": false,
+            "description": "Event occurring during a span's lifetime"
+          },
+          "__schema48": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Event name"
+          },
+          "__schema49": {
+            "description": "Event timestamp in nanoseconds since epoch",
+            "$ref": "#/$defs/__schema20"
+          },
+          "__schema50": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema23"
+            },
+            "description": "Event attributes"
+          },
+          "__schema51": {
+            "description": "Dropped attributes count",
+            "$ref": "#/$defs/__schema45"
+          },
+          "__schema52": {
+            "description": "Dropped events count",
+            "$ref": "#/$defs/__schema45"
+          },
+          "__schema53": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema54"
+            },
+            "description": "Links to other spans"
+          },
+          "__schema54": {
+            "type": "object",
+            "properties": {
+              "trace_id": {
+                "$ref": "#/$defs/__schema55"
+              },
+              "span_id": {
+                "$ref": "#/$defs/__schema56"
+              },
+              "trace_state": {
+                "$ref": "#/$defs/__schema57"
+              },
+              "attributes": {
+                "$ref": "#/$defs/__schema58"
+              },
+              "dropped_attributes_count": {
+                "$ref": "#/$defs/__schema59"
+              },
+              "flags": {
+                "$ref": "#/$defs/__schema60"
+              }
+            },
+            "required": [
+              "trace_id",
+              "span_id"
+            ],
+            "additionalProperties": false,
+            "description": "Link to another span (e.g., batch processing)"
+          },
+          "__schema55": {
+            "description": "Linked trace ID",
+            "$ref": "#/$defs/__schema3"
+          },
+          "__schema56": {
+            "description": "Linked span ID",
+            "$ref": "#/$defs/__schema6"
+          },
+          "__schema57": {
+            "description": "Trace state of the linked span",
+            "$ref": "#/$defs/__schema10"
+          },
+          "__schema58": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema23"
+            },
+            "description": "Link attributes"
+          },
+          "__schema59": {
+            "description": "Dropped attributes count",
+            "$ref": "#/$defs/__schema45"
+          },
+          "__schema60": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Link flags"
+          },
+          "__schema61": {
+            "description": "Dropped links count",
+            "$ref": "#/$defs/__schema45"
+          },
+          "__schema62": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/__schema63"
+              },
+              "message": {
+                "$ref": "#/$defs/__schema67"
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "additionalProperties": false,
+            "description": "Span status"
+          },
+          "__schema63": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/__schema64"
+              },
+              {
+                "$ref": "#/$defs/__schema65"
+              },
+              {
+                "$ref": "#/$defs/__schema66"
+              }
+            ],
+            "description": "Status code"
+          },
+          "__schema64": {
+            "type": "number",
+            "const": 0
+          },
+          "__schema65": {
+            "type": "number",
+            "const": 1
+          },
+          "__schema66": {
+            "type": "number",
+            "const": 2
+          },
+          "__schema67": {
+            "type": "string",
+            "description": "Status message (only for ERROR status)"
+          },
+          "__schema68": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Span flags"
+          },
+          "__schema69": {
+            "description": "Resource describing the entity that produced this span",
+            "$ref": "#/$defs/__schema116"
+          },
+          "__schema70": {
+            "type": "string",
+            "description": "Service name (required)"
+          },
+          "__schema71": {
+            "type": "string",
+            "description": "Service namespace for grouping"
+          },
+          "__schema72": {
+            "type": "string",
+            "description": "Service instance ID (unique per instance)"
+          },
+          "__schema73": {
+            "description": "Service version",
+            "$ref": "#/$defs/__schema74"
+          },
+          "__schema74": {
+            "type": "string",
+            "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
+            "examples": [
+              "2.1.0"
+            ],
+            "description": "Semantic version string (e.g., 1.2.3)"
+          },
+          "__schema75": {
+            "type": "string",
+            "description": "Telemetry SDK name"
+          },
+          "__schema76": {
+            "type": "string",
+            "enum": [
+              "cpp",
+              "dotnet",
+              "erlang",
+              "go",
+              "java",
+              "nodejs",
+              "php",
+              "python",
+              "ruby",
+              "rust",
+              "swift",
+              "webjs"
+            ],
+            "description": "Telemetry SDK language"
+          },
+          "__schema77": {
+            "description": "Telemetry SDK version",
+            "$ref": "#/$defs/__schema74"
+          },
+          "__schema78": {
+            "description": "Telemetry distribution version",
+            "$ref": "#/$defs/__schema74"
+          },
+          "__schema79": {
+            "type": "string",
+            "description": "Deployment environment (e.g., production, staging)"
+          },
+          "__schema80": {
+            "type": "string",
+            "enum": [
+              "alibaba_cloud",
+              "aws",
+              "azure",
+              "gcp",
+              "heroku",
+              "ibm_cloud",
+              "tencent_cloud"
+            ],
+            "description": "Cloud provider"
+          },
+          "__schema81": {
+            "type": "string",
+            "description": "Cloud region"
+          },
+          "__schema82": {
+            "type": "string",
+            "description": "Cloud availability zone"
+          },
+          "__schema83": {
+            "type": "string",
+            "description": "Cloud account ID"
+          },
+          "__schema84": {
+            "type": "string",
+            "description": "Cloud platform (e.g., aws_ecs, gcp_cloud_run)"
+          },
+          "__schema85": {
+            "type": "string",
+            "description": "Host name"
+          },
+          "__schema86": {
+            "type": "string",
+            "description": "Host ID"
+          },
+          "__schema87": {
+            "type": "string",
+            "description": "Host type (e.g., n1-standard-1)"
+          },
+          "__schema88": {
+            "type": "string",
+            "enum": [
+              "amd64",
+              "arm32",
+              "arm64",
+              "ia64",
+              "ppc32",
+              "ppc64",
+              "s390x",
+              "x86"
+            ],
+            "description": "Host architecture (e.g., amd64, arm64)"
+          },
+          "__schema89": {
+            "type": "string",
+            "enum": [
+              "windows",
+              "linux",
+              "darwin",
+              "freebsd",
+              "netbsd",
+              "openbsd",
+              "dragonflybsd",
+              "hpux",
+              "aix",
+              "solaris",
+              "z_os"
+            ],
+            "description": "Operating system type"
+          },
+          "__schema90": {
+            "type": "string",
+            "description": "Operating system description"
+          },
+          "__schema91": {
+            "type": "string",
+            "description": "Operating system version"
+          },
+          "__schema92": {
+            "type": "number",
+            "multipleOf": 1,
+            "description": "Process ID"
+          },
+          "__schema93": {
+            "type": "string",
+            "description": "Process executable name"
+          },
+          "__schema94": {
+            "type": "string",
+            "description": "Process command line"
+          },
+          "__schema95": {
+            "type": "string",
+            "description": "Process runtime name"
+          },
+          "__schema96": {
+            "type": "string",
+            "description": "Process runtime version"
+          },
+          "__schema97": {
+            "type": "string",
+            "description": "Container ID"
+          },
+          "__schema98": {
+            "type": "string",
+            "description": "Container name"
+          },
+          "__schema99": {
+            "type": "string",
+            "description": "Container image name"
+          },
+          "__schema100": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema101"
+            },
+            "description": "Container image tags"
+          },
+          "__schema101": {
+            "type": "string"
+          },
+          "__schema102": {
+            "type": "string",
+            "description": "Kubernetes cluster name"
+          },
+          "__schema103": {
+            "type": "string",
+            "description": "Kubernetes namespace"
+          },
+          "__schema104": {
+            "type": "string",
+            "description": "Kubernetes pod name"
+          },
+          "__schema105": {
+            "type": "string",
+            "description": "Kubernetes pod UID"
+          },
+          "__schema106": {
+            "type": "string",
+            "description": "Kubernetes deployment name"
+          },
+          "__schema107": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema23"
+            },
+            "description": "Additional resource attributes"
+          },
+          "__schema108": {
+            "description": "Dropped attributes count",
+            "$ref": "#/$defs/__schema45"
+          },
+          "__schema109": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema110"
+            },
+            "description": "Entities participating in this Resource, keyed by attributes on the Resource."
+          },
+          "__schema110": {
+            "type": "object",
+            "properties": {
+              "schema_url": {
+                "$ref": "#/$defs/__schema111"
+              },
+              "type": {
+                "$ref": "#/$defs/__schema112"
+              },
+              "id_keys": {
+                "$ref": "#/$defs/__schema113"
+              },
+              "description_keys": {
+                "$ref": "#/$defs/__schema115"
+              }
+            },
+            "required": [
+              "type",
+              "id_keys"
+            ],
+            "additionalProperties": false,
+            "description": "A reference to an OpenTelemetry entity described by attributes on the containing Resource."
+          },
+          "__schema111": {
+            "type": "string",
+            "description": "Schema URL applying to the entity and its referenced Resource attributes, when known."
+          },
+          "__schema112": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Stable non-empty entity type, such as service or host."
+          },
+          "__schema113": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema114"
+            },
+            "description": "Non-empty set of Resource attribute keys that identify the entity."
+          },
+          "__schema114": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A non-empty Resource attribute key referenced by an OpenTelemetry entity."
+          },
+          "__schema115": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema114"
+            },
+            "description": "Resource attribute keys that describe but do not identify the entity."
+          },
+          "__schema116": {
+            "type": "object",
+            "properties": {
+              "service_name": {
+                "$ref": "#/$defs/__schema70"
+              },
+              "service_namespace": {
+                "$ref": "#/$defs/__schema71"
+              },
+              "service_instance_id": {
+                "$ref": "#/$defs/__schema72"
+              },
+              "service_version": {
+                "$ref": "#/$defs/__schema73"
+              },
+              "telemetry_sdk_name": {
+                "$ref": "#/$defs/__schema75"
+              },
+              "telemetry_sdk_language": {
+                "$ref": "#/$defs/__schema76"
+              },
+              "telemetry_sdk_version": {
+                "$ref": "#/$defs/__schema77"
+              },
+              "telemetry_distro_version": {
+                "$ref": "#/$defs/__schema78"
+              },
+              "deployment_environment": {
+                "$ref": "#/$defs/__schema79"
+              },
+              "cloud_provider": {
+                "$ref": "#/$defs/__schema80"
+              },
+              "cloud_region": {
+                "$ref": "#/$defs/__schema81"
+              },
+              "cloud_availability_zone": {
+                "$ref": "#/$defs/__schema82"
+              },
+              "cloud_account_id": {
+                "$ref": "#/$defs/__schema83"
+              },
+              "cloud_platform": {
+                "$ref": "#/$defs/__schema84"
+              },
+              "host_name": {
+                "$ref": "#/$defs/__schema85"
+              },
+              "host_id": {
+                "$ref": "#/$defs/__schema86"
+              },
+              "host_type": {
+                "$ref": "#/$defs/__schema87"
+              },
+              "host_arch": {
+                "$ref": "#/$defs/__schema88"
+              },
+              "os_type": {
+                "$ref": "#/$defs/__schema89"
+              },
+              "os_description": {
+                "$ref": "#/$defs/__schema90"
+              },
+              "os_version": {
+                "$ref": "#/$defs/__schema91"
+              },
+              "process_pid": {
+                "$ref": "#/$defs/__schema92"
+              },
+              "process_executable_name": {
+                "$ref": "#/$defs/__schema93"
+              },
+              "process_command_line": {
+                "$ref": "#/$defs/__schema94"
+              },
+              "process_runtime_name": {
+                "$ref": "#/$defs/__schema95"
+              },
+              "process_runtime_version": {
+                "$ref": "#/$defs/__schema96"
+              },
+              "container_id": {
+                "$ref": "#/$defs/__schema97"
+              },
+              "container_name": {
+                "$ref": "#/$defs/__schema98"
+              },
+              "container_image_name": {
+                "$ref": "#/$defs/__schema99"
+              },
+              "container_image_tags": {
+                "$ref": "#/$defs/__schema100"
+              },
+              "k8s_cluster_name": {
+                "$ref": "#/$defs/__schema102"
+              },
+              "k8s_namespace_name": {
+                "$ref": "#/$defs/__schema103"
+              },
+              "k8s_pod_name": {
+                "$ref": "#/$defs/__schema104"
+              },
+              "k8s_pod_uid": {
+                "$ref": "#/$defs/__schema105"
+              },
+              "k8s_deployment_name": {
+                "$ref": "#/$defs/__schema106"
+              },
+              "attributes": {
+                "$ref": "#/$defs/__schema107"
+              },
+              "dropped_attributes_count": {
+                "$ref": "#/$defs/__schema108"
+              },
+              "entity_refs": {
+                "$ref": "#/$defs/__schema109"
+              }
+            },
+            "required": [
+              "service_name"
+            ],
+            "additionalProperties": false,
+            "description": "Resource describes the entity producing telemetry"
+          },
+          "__schema117": {
+            "description": "Instrumentation scope",
+            "$ref": "#/$defs/__schema122"
+          },
+          "__schema118": {
+            "type": "string",
+            "description": "Name of the instrumentation scope (library name)"
+          },
+          "__schema119": {
+            "description": "Version of the instrumentation scope",
+            "$ref": "#/$defs/__schema74"
+          },
+          "__schema120": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema23"
+            },
+            "description": "Additional attributes for the scope"
+          },
+          "__schema121": {
+            "description": "Dropped attributes count",
+            "$ref": "#/$defs/__schema45"
+          },
+          "__schema122": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/__schema118"
+              },
+              "version": {
+                "$ref": "#/$defs/__schema119"
+              },
+              "attributes": {
+                "$ref": "#/$defs/__schema120"
+              },
+              "dropped_attributes_count": {
+                "$ref": "#/$defs/__schema121"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false,
+            "description": "Instrumentation scope identifying the library/component emitting telemetry"
+          },
+          "__schema123": {
+            "type": "object",
+            "properties": {
+              "span_id": {
+                "$ref": "#/$defs/__schema5"
+              },
+              "trace_id": {
+                "$ref": "#/$defs/__schema7"
+              },
+              "parent_span_id": {
+                "$ref": "#/$defs/__schema8"
+              },
+              "trace_state": {
+                "$ref": "#/$defs/__schema9"
+              },
+              "name": {
+                "$ref": "#/$defs/__schema11"
+              },
+              "kind": {
+                "$ref": "#/$defs/__schema12"
+              },
+              "start_time_unix_nano": {
+                "$ref": "#/$defs/__schema19"
+              },
+              "end_time_unix_nano": {
+                "$ref": "#/$defs/__schema21"
+              },
+              "attributes": {
+                "$ref": "#/$defs/__schema22"
+              },
+              "dropped_attributes_count": {
+                "$ref": "#/$defs/__schema44"
+              },
+              "events": {
+                "$ref": "#/$defs/__schema46"
+              },
+              "dropped_events_count": {
+                "$ref": "#/$defs/__schema52"
+              },
+              "links": {
+                "$ref": "#/$defs/__schema53"
+              },
+              "dropped_links_count": {
+                "$ref": "#/$defs/__schema61"
+              },
+              "status": {
+                "$ref": "#/$defs/__schema62"
+              },
+              "flags": {
+                "$ref": "#/$defs/__schema68"
+              },
+              "resource": {
+                "$ref": "#/$defs/__schema69"
+              },
+              "instrumentation_scope": {
+                "$ref": "#/$defs/__schema117"
+              }
+            },
+            "required": [
+              "span_id",
+              "trace_id",
+              "name",
+              "kind",
+              "start_time_unix_nano",
+              "end_time_unix_nano",
+              "status",
+              "resource"
+            ],
+            "additionalProperties": false,
+            "description": "OpenTelemetry Span representing a single operation in a distributed trace"
+          },
+          "__schema124": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Total span count"
+          },
+          "__schema125": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Trace duration in nanoseconds"
+          },
+          "__schema126": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "Trace start time"
+          },
+          "__schema127": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "Trace end time"
+          },
+          "__schema128": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema129"
+            },
+            "description": "Services involved in this trace"
+          },
+          "__schema129": {
+            "type": "string"
+          },
+          "__schema130": {
+            "type": "boolean",
+            "description": "Whether trace contains errors"
+          },
+          "__schema131": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema123"
+            },
+            "description": "All spans in this trace"
+          },
+          "__schema132": {
+            "$ref": "#/$defs/__schema1"
+          },
+          "__schema133": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "time_unix_nano": {
+                  "$ref": "#/$defs/__schema134"
+                },
+                "observed_time_unix_nano": {
+                  "$ref": "#/$defs/__schema135"
+                },
+                "severity_number": {
+                  "$ref": "#/$defs/__schema136"
+                },
+                "severity_text": {
+                  "$ref": "#/$defs/__schema162"
+                },
+                "body": {
+                  "$ref": "#/$defs/__schema163"
+                },
+                "attributes": {
+                  "$ref": "#/$defs/__schema164"
+                },
+                "dropped_attributes_count": {
+                  "$ref": "#/$defs/__schema165"
+                },
+                "flags": {
+                  "$ref": "#/$defs/__schema166"
+                },
+                "trace_id": {
+                  "$ref": "#/$defs/__schema167"
+                },
+                "span_id": {
+                  "$ref": "#/$defs/__schema168"
+                },
+                "event_name": {
+                  "$ref": "#/$defs/__schema169"
+                },
+                "resource": {
+                  "$ref": "#/$defs/__schema170"
+                },
+                "instrumentation_scope": {
+                  "$ref": "#/$defs/__schema171"
+                }
+              },
+              "required": [
+                "time_unix_nano",
+                "observed_time_unix_nano",
+                "severity_number",
+                "body",
+                "resource"
+              ],
+              "additionalProperties": false,
+              "description": "OpenTelemetry Log Record"
+            }
+          },
+          "__schema134": {
+            "description": "Timestamp when the event occurred (nanoseconds since epoch)",
+            "$ref": "#/$defs/__schema20"
+          },
+          "__schema135": {
+            "description": "Timestamp when the log was observed/collected (nanoseconds since epoch)",
+            "$ref": "#/$defs/__schema20"
+          },
+          "__schema136": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/__schema137"
+              },
+              {
+                "$ref": "#/$defs/__schema138"
+              },
+              {
+                "$ref": "#/$defs/__schema139"
+              },
+              {
+                "$ref": "#/$defs/__schema140"
+              },
+              {
+                "$ref": "#/$defs/__schema141"
+              },
+              {
+                "$ref": "#/$defs/__schema142"
+              },
+              {
+                "$ref": "#/$defs/__schema143"
+              },
+              {
+                "$ref": "#/$defs/__schema144"
+              },
+              {
+                "$ref": "#/$defs/__schema145"
+              },
+              {
+                "$ref": "#/$defs/__schema146"
+              },
+              {
+                "$ref": "#/$defs/__schema147"
+              },
+              {
+                "$ref": "#/$defs/__schema148"
+              },
+              {
+                "$ref": "#/$defs/__schema149"
+              },
+              {
+                "$ref": "#/$defs/__schema150"
+              },
+              {
+                "$ref": "#/$defs/__schema151"
+              },
+              {
+                "$ref": "#/$defs/__schema152"
+              },
+              {
+                "$ref": "#/$defs/__schema153"
+              },
+              {
+                "$ref": "#/$defs/__schema154"
+              },
+              {
+                "$ref": "#/$defs/__schema155"
+              },
+              {
+                "$ref": "#/$defs/__schema156"
+              },
+              {
+                "$ref": "#/$defs/__schema157"
+              },
+              {
+                "$ref": "#/$defs/__schema158"
+              },
+              {
+                "$ref": "#/$defs/__schema159"
+              },
+              {
+                "$ref": "#/$defs/__schema160"
+              },
+              {
+                "$ref": "#/$defs/__schema161"
+              }
+            ],
+            "description": "Severity number (1-24)"
+          },
+          "__schema137": {
+            "type": "number",
+            "const": 0
+          },
+          "__schema138": {
+            "type": "number",
+            "const": 1
+          },
+          "__schema139": {
+            "type": "number",
+            "const": 2
+          },
+          "__schema140": {
+            "type": "number",
+            "const": 3
+          },
+          "__schema141": {
+            "type": "number",
+            "const": 4
+          },
+          "__schema142": {
+            "type": "number",
+            "const": 5
+          },
+          "__schema143": {
+            "type": "number",
+            "const": 6
+          },
+          "__schema144": {
+            "type": "number",
+            "const": 7
+          },
+          "__schema145": {
+            "type": "number",
+            "const": 8
+          },
+          "__schema146": {
+            "type": "number",
+            "const": 9
+          },
+          "__schema147": {
+            "type": "number",
+            "const": 10
+          },
+          "__schema148": {
+            "type": "number",
+            "const": 11
+          },
+          "__schema149": {
+            "type": "number",
+            "const": 12
+          },
+          "__schema150": {
+            "type": "number",
+            "const": 13
+          },
+          "__schema151": {
+            "type": "number",
+            "const": 14
+          },
+          "__schema152": {
+            "type": "number",
+            "const": 15
+          },
+          "__schema153": {
+            "type": "number",
+            "const": 16
+          },
+          "__schema154": {
+            "type": "number",
+            "const": 17
+          },
+          "__schema155": {
+            "type": "number",
+            "const": 18
+          },
+          "__schema156": {
+            "type": "number",
+            "const": 19
+          },
+          "__schema157": {
+            "type": "number",
+            "const": 20
+          },
+          "__schema158": {
+            "type": "number",
+            "const": 21
+          },
+          "__schema159": {
+            "type": "number",
+            "const": 22
+          },
+          "__schema160": {
+            "type": "number",
+            "const": 23
+          },
+          "__schema161": {
+            "type": "number",
+            "const": 24
+          },
+          "__schema162": {
+            "type": "string",
+            "enum": [
+              "TRACE",
+              "DEBUG",
+              "INFO",
+              "WARN",
+              "ERROR",
+              "FATAL"
+            ],
+            "description": "Severity text (DEBUG, INFO, WARN, ERROR, etc.)"
+          },
+          "__schema163": {
+            "description": "Log body: the OTLP AnyValue, projected exactly like an attribute value",
+            "$ref": "#/$defs/__schema30"
+          },
+          "__schema164": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema23"
+            },
+            "description": "Log attributes"
+          },
+          "__schema165": {
+            "description": "Dropped attributes count",
+            "$ref": "#/$defs/__schema45"
+          },
+          "__schema166": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Flags (trace flags)"
+          },
+          "__schema167": {
+            "description": "Associated trace ID",
+            "$ref": "#/$defs/__schema3"
+          },
+          "__schema168": {
+            "description": "Associated span ID",
+            "$ref": "#/$defs/__schema6"
+          },
+          "__schema169": {
+            "type": "string",
+            "description": "Optional event category whose presence identifies this log record as an event; records with the same name are expected to share one body and attribute schema."
+          },
+          "__schema170": {
+            "description": "Resource describing the entity that produced this log",
+            "$ref": "#/$defs/__schema116"
+          },
+          "__schema171": {
+            "description": "Instrumentation scope",
+            "$ref": "#/$defs/__schema122"
+          },
+          "__schema172": {
+            "type": "object",
+            "properties": {
+              "window": {
+                "$ref": "#/$defs/__schema173"
+              },
+              "buckets": {
+                "$ref": "#/$defs/__schema174"
+              },
+              "totals": {
+                "$ref": "#/$defs/__schema175"
+              },
+              "by_server": {
+                "$ref": "#/$defs/__schema176"
+              },
+              "by_transport": {
+                "$ref": "#/$defs/__schema178"
+              },
+              "by_method": {
+                "$ref": "#/$defs/__schema179"
+              },
+              "tools": {
+                "$ref": "#/$defs/__schema180"
+              },
+              "span_count_analyzed": {
+                "$ref": "#/$defs/__schema181"
+              },
+              "truncated": {
+                "$ref": "#/$defs/__schema182"
+              },
+              "mode": {
+                "$ref": "#/$defs/__schema183"
+              }
+            },
+            "required": [
+              "window",
+              "buckets",
+              "totals",
+              "by_server",
+              "by_transport",
+              "by_method",
+              "tools",
+              "span_count_analyzed",
+              "truncated",
+              "mode"
+            ],
+            "additionalProperties": false,
+            "description": "Aggregate MCP traffic statistics shown by qyl.mcp."
+          },
+          "__schema173": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "end": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "bucket_ms": {
+                "type": "number",
+                "minimum": 0,
+                "multipleOf": 1,
+                "description": "Bucket width in integer milliseconds."
+              }
+            },
+            "required": [
+              "start",
+              "end",
+              "bucket_ms"
+            ],
+            "additionalProperties": false
+          },
+          "__schema174": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "start": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                "requests": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "errors": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "start",
+                "requests",
+                "errors"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "__schema175": {
+            "type": "object",
+            "properties": {
+              "requests": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "errors": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "error_rate": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "requests",
+              "errors",
+              "error_rate"
+            ],
+            "additionalProperties": false
+          },
+          "__schema176": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema177"
+            }
+          },
+          "__schema177": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "requests": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "name",
+              "requests"
+            ],
+            "additionalProperties": false
+          },
+          "__schema178": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema177"
+            }
+          },
+          "__schema179": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema177"
+            }
+          },
+          "__schema180": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "requests": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "errors": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "error_rate": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "avg_ms": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "p95_ms": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "name",
+                "requests",
+                "errors",
+                "error_rate",
+                "avg_ms",
+                "p95_ms"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "__schema181": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "__schema182": {
+            "type": "boolean"
+          },
+          "__schema183": {
+            "type": "string",
+            "enum": [
+              "live",
+              "demo"
+            ],
+            "description": "Whether a qyl MCP tool read live collector data or the explicit demo dataset."
+          },
+          "__schema184": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/__schema185"
+              },
+              "message": {
+                "$ref": "#/$defs/__schema186"
+              },
+              "retryable": {
+                "$ref": "#/$defs/__schema187"
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
+          },
+          "__schema185": {
+            "type": "string",
+            "enum": [
+              "invalid_argument",
+              "not_found",
+              "no_project_access",
+              "collector_unreachable",
+              "collector_timeout",
+              "cancelled",
+              "collector_unauthorized",
+              "collector_rate_limited",
+              "collector_rejected",
+              "collector_error",
+              "contract_mismatch",
+              "insufficient_scope",
+              "conflict",
+              "precondition_failed",
+              "precondition_required",
+              "internal"
+            ],
+            "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+          },
+          "__schema186": {
+            "type": "string",
+            "description": "Human-readable description of this failure."
+          },
+          "__schema187": {
+            "type": "boolean",
+            "description": "Whether the same call can succeed when repeated unchanged."
           }
-        },
-        "required": [
-          "view"
-        ],
-        "additionalProperties": false,
-        "description": "Input for the app-only fetch_telemetry tool."
-      },
-      "outputSchema": null
+        }
+      }
     },
     {
       "name": "get_metric_series",
       "title": "Get Metric Series",
-      "description": "List the distinct attribute streams recorded under one metric name, with each stream's attributes, service, and first/last seen. Useful when the user wants to discover group_by keys or attr filters for query_metric before choosing the groups in a range query.",
+      "description": "List the distinct attribute streams recorded under one metric name, with each stream's attributes, service, and first/last seen. Useful when the user wants to discover group_by keys or matchers for query_metric before choosing the groups in a range query. matchers narrow the streams: each is {key, op, value} with op eq (exact) or prefix. When has_more is true, pass next_cursor as cursor with the same matchers for the next page.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -1779,33 +3739,60 @@
         "type": "object",
         "properties": {
           "metric_name": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
-          "attr": {
+          "matchers": {
+            "maxItems": 32,
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Attribute key, e.g. `http.route`."
+                },
+                "op": {
+                  "type": "string",
+                  "enum": [
+                    "eq",
+                    "prefix"
+                  ],
+                  "description": "How a structured attribute matcher compares an attribute value."
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 1024
+                }
+              },
+              "required": [
+                "key",
+                "op",
+                "value"
+              ],
+              "additionalProperties": false,
+              "description": "One structured attribute matcher. Tool inputs and saved queries carry\nmatchers in this form; the HTTP routes keep their `key=value` string\nparameters, and a client serializes each matcher to one of them."
             },
-            "description": "Exact attribute match, repeatable, as `key=value`. A series must match\nevery matcher given."
-          },
-          "attr_prefix": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Attribute prefix match, repeatable, as `key=prefix`."
+            "description": "Attribute matchers a series must all satisfy; serialized to `attr` and `attr_prefix`."
           },
           "limit": {
             "default": 200,
             "type": "integer",
             "minimum": 1,
             "maximum": 1000
+          },
+          "cursor": {
+            "type": "string",
+            "description": "`next_cursor` of a previous get_metric_series call with the same filters."
           }
         },
         "required": [
           "metric_name"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Input for get_metric_series."
       },
       "outputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1886,20 +3873,57 @@
               ],
               "additionalProperties": false,
               "description": "One distinct attribute stream recorded under a metric name."
-            },
-            "description": "List of items in this page"
-          },
-          "next_cursor": {
-            "type": "string",
-            "description": "Cursor for the next page (null if no more pages)"
-          },
-          "prev_cursor": {
-            "type": "string",
-            "description": "Cursor for the previous page (null if first page)"
+            }
           },
           "has_more": {
             "type": "boolean",
-            "description": "Whether there are more items available"
+            "description": "Whether more items exist beyond this page. False only when the result is complete."
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "Pass as `cursor` to the same tool with the same filters for the next page."
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_argument",
+                  "not_found",
+                  "no_project_access",
+                  "collector_unreachable",
+                  "collector_timeout",
+                  "cancelled",
+                  "collector_unauthorized",
+                  "collector_rate_limited",
+                  "collector_rejected",
+                  "collector_error",
+                  "contract_mismatch",
+                  "insufficient_scope",
+                  "conflict",
+                  "precondition_failed",
+                  "precondition_required",
+                  "internal"
+                ],
+                "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description of this failure."
+              },
+              "retryable": {
+                "type": "boolean",
+                "description": "Whether the same call can succeed when repeated unchanged."
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
           }
         },
         "required": [
@@ -1907,7 +3931,7 @@
           "has_more"
         ],
         "additionalProperties": false,
-        "description": "Cursor-based paginated response wrapper",
+        "description": "Structured output for get_metric_series.",
         "$defs": {
           "__schema0": {
             "type": "array",
@@ -2117,6 +4141,12 @@
           },
           "mode": {
             "$ref": "#/$defs/__schema129"
+          },
+          "annotations": {
+            "$ref": "#/$defs/__schema130"
+          },
+          "error": {
+            "$ref": "#/$defs/__schema149"
           }
         },
         "required": [
@@ -3252,6 +5282,233 @@
               "demo"
             ],
             "description": "Whether a qyl MCP tool read live collector data or the explicit demo dataset."
+          },
+          "__schema130": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema131"
+            },
+            "description": "Annotations on the trace and its spans, newest first."
+          },
+          "__schema131": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/__schema132"
+              },
+              "created_at": {
+                "$ref": "#/$defs/__schema134"
+              },
+              "updated_at": {
+                "$ref": "#/$defs/__schema136"
+              },
+              "etag": {
+                "$ref": "#/$defs/__schema138"
+              },
+              "target": {
+                "$ref": "#/$defs/__schema140"
+              },
+              "text": {
+                "$ref": "#/$defs/__schema148"
+              }
+            },
+            "required": [
+              "id",
+              "created_at",
+              "updated_at",
+              "etag",
+              "target",
+              "text"
+            ],
+            "additionalProperties": false,
+            "description": "A user note attached to a trace, span or session."
+          },
+          "__schema132": {
+            "readOnly": true,
+            "description": "Server-assigned identifier.",
+            "$ref": "#/$defs/__schema133"
+          },
+          "__schema133": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Opaque, server-assigned identifier of a user-created collector resource."
+          },
+          "__schema134": {
+            "readOnly": true,
+            "description": "When the resource was created.",
+            "$ref": "#/$defs/__schema135"
+          },
+          "__schema135": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "__schema136": {
+            "readOnly": true,
+            "description": "When the resource was last changed.",
+            "$ref": "#/$defs/__schema137"
+          },
+          "__schema137": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "__schema138": {
+            "readOnly": true,
+            "description": "Entity tag of this version; also served as the `ETag` response header.",
+            "$ref": "#/$defs/__schema139"
+          },
+          "__schema139": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Opaque entity tag of one resource version. It changes on every successful\nupdate; send it back in `If-Match` to update or delete that version."
+          },
+          "__schema140": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/__schema141"
+              },
+              {
+                "$ref": "#/$defs/__schema143"
+              },
+              {
+                "$ref": "#/$defs/__schema145"
+              }
+            ],
+            "description": "What the note is attached to. Fixed at creation."
+          },
+          "__schema141": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/__schema142"
+              },
+              "trace_id": {
+                "$ref": "#/$defs/__schema2"
+              }
+            },
+            "required": [
+              "kind",
+              "trace_id"
+            ],
+            "additionalProperties": false,
+            "description": "An annotation on one whole trace."
+          },
+          "__schema142": {
+            "type": "string",
+            "const": "trace"
+          },
+          "__schema143": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/__schema144"
+              },
+              "trace_id": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "span_id": {
+                "$ref": "#/$defs/__schema5"
+              }
+            },
+            "required": [
+              "kind",
+              "trace_id",
+              "span_id"
+            ],
+            "additionalProperties": false,
+            "description": "An annotation on one span of a trace."
+          },
+          "__schema144": {
+            "type": "string",
+            "const": "span"
+          },
+          "__schema145": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/__schema146"
+              },
+              "session_id": {
+                "$ref": "#/$defs/__schema147"
+              }
+            },
+            "required": [
+              "kind",
+              "session_id"
+            ],
+            "additionalProperties": false,
+            "description": "An annotation on one session."
+          },
+          "__schema146": {
+            "type": "string",
+            "const": "session"
+          },
+          "__schema147": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
+            "description": "Unique session identifier: URL-safe characters, at least one, at most 128, not only dots. The same rule the SDK enforces on the baggage header."
+          },
+          "__schema148": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "The note, plain text, at most 2000 characters."
+          },
+          "__schema149": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/__schema150"
+              },
+              "message": {
+                "$ref": "#/$defs/__schema151"
+              },
+              "retryable": {
+                "$ref": "#/$defs/__schema152"
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
+          },
+          "__schema150": {
+            "type": "string",
+            "enum": [
+              "invalid_argument",
+              "not_found",
+              "no_project_access",
+              "collector_unreachable",
+              "collector_timeout",
+              "cancelled",
+              "collector_unauthorized",
+              "collector_rate_limited",
+              "collector_rejected",
+              "collector_error",
+              "contract_mismatch",
+              "insufficient_scope",
+              "conflict",
+              "precondition_failed",
+              "precondition_required",
+              "internal"
+            ],
+            "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+          },
+          "__schema151": {
+            "type": "string",
+            "description": "Human-readable description of this failure."
+          },
+          "__schema152": {
+            "type": "boolean",
+            "description": "Whether the same call can succeed when repeated unchanged."
           }
         }
       }
@@ -3259,7 +5516,7 @@
     {
       "name": "list_metrics",
       "title": "List Metrics",
-      "description": "List the metric instruments recorded for this project: name, kind (gauge/sum/histogram), unit, how many attribute streams exist under each name, and when it was last written. Useful when the user wants to discover instrument names before querying a metric by its exact name.",
+      "description": "List the metric instruments recorded for this project: name, kind (gauge/sum/histogram), unit, how many attribute streams exist under each name, and when it was last written. Useful when the user wants to discover instrument names before querying a metric by its exact name. name_prefix narrows the catalog; when has_more is true, pass next_cursor as cursor with the same prefix for the next page.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -3289,9 +5546,14 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 1000
+          },
+          "cursor": {
+            "type": "string",
+            "description": "`next_cursor` of a previous list_metrics call with the same prefix."
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Input for list_metrics."
       },
       "outputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -3359,20 +5621,57 @@
               ],
               "additionalProperties": false,
               "description": "One metric name recorded for a project, collapsed across all of its series.\nThis is the catalog entry a client reads before it knows which series exist."
-            },
-            "description": "List of items in this page"
-          },
-          "next_cursor": {
-            "type": "string",
-            "description": "Cursor for the next page (null if no more pages)"
-          },
-          "prev_cursor": {
-            "type": "string",
-            "description": "Cursor for the previous page (null if first page)"
+            }
           },
           "has_more": {
             "type": "boolean",
-            "description": "Whether there are more items available"
+            "description": "Whether more items exist beyond this page. False only when the result is complete."
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "Pass as `cursor` to the same tool with the same filters for the next page."
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_argument",
+                  "not_found",
+                  "no_project_access",
+                  "collector_unreachable",
+                  "collector_timeout",
+                  "cancelled",
+                  "collector_unauthorized",
+                  "collector_rate_limited",
+                  "collector_rejected",
+                  "collector_error",
+                  "contract_mismatch",
+                  "insufficient_scope",
+                  "conflict",
+                  "precondition_failed",
+                  "precondition_required",
+                  "internal"
+                ],
+                "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description of this failure."
+              },
+              "retryable": {
+                "type": "boolean",
+                "description": "Whether the same call can succeed when repeated unchanged."
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
           }
         },
         "required": [
@@ -3380,13 +5679,13 @@
           "has_more"
         ],
         "additionalProperties": false,
-        "description": "Cursor-based paginated response wrapper"
+        "description": "Structured output for list_metrics."
       }
     },
     {
       "name": "list_sessions",
       "title": "List Sessions",
-      "description": "List qyl sessions when the user wants to find active or failing sessions, with trace/span/error counts, state, and GenAI token usage where present. display_traces accepts a session_id to show that session's traces in the explorer.",
+      "description": "List qyl sessions when the user wants to find active or failing sessions, with trace/span/error counts, state, and GenAI token usage where present. Filters: active_only and a start_time/end_time window (RFC 3339) on the session start. Pages: when has_more is true, pass next_cursor as cursor with the same filters for the next page. display_traces accepts a session_id to show that session's traces in the explorer.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -3409,12 +5708,30 @@
         "properties": {
           "limit": {
             "default": 20,
+            "description": "Maximum sessions to return in this page.",
             "type": "integer",
             "minimum": 1,
             "maximum": 100
           },
           "active_only": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Return only sessions that are still active; omitted or false includes ended sessions."
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "Start of the window (inclusive), RFC 3339."
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "End of the window (exclusive), RFC 3339."
+          },
+          "cursor": {
+            "type": "string",
+            "description": "`next_cursor` of a previous list_sessions call with the same filters."
           }
         },
         "additionalProperties": false,
@@ -3638,11 +5955,203 @@
               "demo"
             ],
             "description": "Whether a qyl MCP tool read live collector data or the explicit demo dataset."
+          },
+          "has_more": {
+            "type": "boolean",
+            "description": "Whether more items exist beyond this page. False only when the result is complete."
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "Pass as `cursor` to the same tool with the same filters for the next page."
+          },
+          "annotations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "readOnly": true,
+                  "description": "Server-assigned identifier.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "created_at": {
+                  "readOnly": true,
+                  "description": "When the resource was created.",
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                "updated_at": {
+                  "readOnly": true,
+                  "description": "When the resource was last changed.",
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                "etag": {
+                  "readOnly": true,
+                  "description": "Entity tag of this version; also served as the `ETag` response header.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "target": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "trace"
+                        },
+                        "trace_id": {
+                          "type": "string",
+                          "minLength": 32,
+                          "maxLength": 32,
+                          "pattern": "^[a-f0-9]{32}$",
+                          "examples": [
+                            "0af7651916cd43dd8448eb211c80319c"
+                          ],
+                          "description": "Unique trace identifier (32 lowercase hex characters)"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "trace_id"
+                      ],
+                      "additionalProperties": false,
+                      "description": "An annotation on one whole trace."
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "span"
+                        },
+                        "trace_id": {
+                          "type": "string",
+                          "minLength": 32,
+                          "maxLength": 32,
+                          "pattern": "^[a-f0-9]{32}$",
+                          "examples": [
+                            "0af7651916cd43dd8448eb211c80319c"
+                          ],
+                          "description": "Unique trace identifier (32 lowercase hex characters)"
+                        },
+                        "span_id": {
+                          "type": "string",
+                          "minLength": 16,
+                          "maxLength": 16,
+                          "pattern": "^[a-f0-9]{16}$",
+                          "examples": [
+                            "b7ad6b7169203331"
+                          ],
+                          "description": "Unique span identifier (16 lowercase hex characters)"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "trace_id",
+                        "span_id"
+                      ],
+                      "additionalProperties": false,
+                      "description": "An annotation on one span of a trace."
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "session"
+                        },
+                        "session_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128,
+                          "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
+                          "description": "Unique session identifier: URL-safe characters, at least one, at most 128, not only dots. The same rule the SDK enforces on the baggage header."
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "session_id"
+                      ],
+                      "additionalProperties": false,
+                      "description": "An annotation on one session."
+                    }
+                  ],
+                  "description": "What the note is attached to. Fixed at creation."
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000,
+                  "description": "The note, plain text, at most 2000 characters."
+                }
+              },
+              "required": [
+                "id",
+                "created_at",
+                "updated_at",
+                "etag",
+                "target",
+                "text"
+              ],
+              "additionalProperties": false,
+              "description": "A user note attached to a trace, span or session."
+            },
+            "description": "Annotations on the listed sessions, newest first; each names its session in `target`."
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_argument",
+                  "not_found",
+                  "no_project_access",
+                  "collector_unreachable",
+                  "collector_timeout",
+                  "cancelled",
+                  "collector_unauthorized",
+                  "collector_rate_limited",
+                  "collector_rejected",
+                  "collector_error",
+                  "contract_mismatch",
+                  "insufficient_scope",
+                  "conflict",
+                  "precondition_failed",
+                  "precondition_required",
+                  "internal"
+                ],
+                "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description of this failure."
+              },
+              "retryable": {
+                "type": "boolean",
+                "description": "Whether the same call can succeed when repeated unchanged."
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
           }
         },
         "required": [
           "sessions",
-          "mode"
+          "mode",
+          "has_more"
         ],
         "additionalProperties": false,
         "description": "Structured output for list_sessions."
@@ -3651,7 +6160,7 @@
     {
       "name": "list_traces",
       "title": "List Traces",
-      "description": "List recent qyl traces when the user wants a compact overview of activity and failures: root span, services, duration, span count, and error flag. Spans are omitted; get_trace returns the full span tree, while display_traces provides the interactive explorer.",
+      "description": "List recent qyl traces when the user wants a compact overview of activity and failures: root span, services, duration, span count, and error flag. Filters: a start_time/end_time window (RFC 3339), service_name (traces with a span from that service) and errors_only. Pages: when has_more is true, pass next_cursor as cursor with the same filters for the next page. Spans are omitted; get_trace returns the full span tree, while display_traces provides the interactive explorer.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -3674,9 +6183,34 @@
         "properties": {
           "limit": {
             "default": 20,
+            "description": "Maximum traces to return in this page.",
             "type": "integer",
             "minimum": 1,
             "maximum": 100
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "Start of the window (inclusive), RFC 3339."
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "End of the window (exclusive), RFC 3339."
+          },
+          "service_name": {
+            "type": "string",
+            "description": "Keep traces with at least one span from this service."
+          },
+          "errors_only": {
+            "type": "boolean",
+            "description": "Keep only traces with at least one error span."
+          },
+          "cursor": {
+            "type": "string",
+            "description": "`next_cursor` of a previous list_traces call with the same filters."
           }
         },
         "additionalProperties": false,
@@ -4412,11 +6946,62 @@
               "demo"
             ],
             "description": "Whether a qyl MCP tool read live collector data or the explicit demo dataset."
+          },
+          "has_more": {
+            "type": "boolean",
+            "description": "Whether more items exist beyond this page. False only when the result is complete."
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "Pass as `cursor` to the same tool with the same filters for the next page."
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_argument",
+                  "not_found",
+                  "no_project_access",
+                  "collector_unreachable",
+                  "collector_timeout",
+                  "cancelled",
+                  "collector_unauthorized",
+                  "collector_rate_limited",
+                  "collector_rejected",
+                  "collector_error",
+                  "contract_mismatch",
+                  "insufficient_scope",
+                  "conflict",
+                  "precondition_failed",
+                  "precondition_required",
+                  "internal"
+                ],
+                "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description of this failure."
+              },
+              "retryable": {
+                "type": "boolean",
+                "description": "Whether the same call can succeed when repeated unchanged."
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
           }
         },
         "required": [
           "traces",
-          "mode"
+          "mode",
+          "has_more"
         ],
         "additionalProperties": false,
         "description": "Structured output for list_traces.",
@@ -4566,7 +7151,7 @@
     {
       "name": "query_metric",
       "title": "Query Metric",
-      "description": "Run a time-bucketed range query when the user wants to compare a metric over time or across groups: a window (start_time, end_time), a bucket width (step_ms), a reducer (aggregation: avg, min, max, sum, count, last, p50, p90, p95, p99), optional group_by attribute keys, and optional attr/attr_prefix matchers written 'key=value'. Returns one stream per grouping with its buckets. With step_ms equal to the window duration, each grouping yields one bucket: one number per series.",
+      "description": "Run a time-bucketed range query when the user wants to compare a metric over time or across groups: a window (start_time, end_time), a bucket width in whole milliseconds (step_ms), a reducer (aggregation: avg, min, max, sum, count, last, p50, p90, p95, p99), optional group_by attribute keys, and optional matchers, each {key, op, value} with op eq (exact) or prefix. Returns one stream per grouping with its buckets. With step_ms equal to the window duration, each grouping yields one bucket: one number per series.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -4588,7 +7173,8 @@
         "type": "object",
         "properties": {
           "metric_name": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "start_time": {
             "type": "string",
@@ -4602,14 +7188,14 @@
           },
           "step_ms": {
             "default": 60000,
-            "description": "Bucket width in milliseconds. One bucket spanning the range collapses the query to a single value.",
-            "type": "integer",
+            "description": "Bucket width in integer milliseconds.",
+            "type": "number",
             "minimum": 1,
-            "maximum": 86400000
+            "maximum": 86400000,
+            "multipleOf": 1
           },
           "aggregation": {
             "default": "avg",
-            "description": "Server-side reducer applied to the points falling in one time bucket.",
             "type": "string",
             "enum": [
               "avg",
@@ -4622,32 +7208,54 @@
               "p90",
               "p95",
               "p99"
-            ]
+            ],
+            "description": "Server-side reducer applied to the points falling in one time bucket."
           },
           "group_by": {
+            "maxItems": 16,
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Attribute keys to split the result by, repeatable. Omitted, every matching series collapses into one stream."
+            "description": "Attribute keys to split the result by."
           },
-          "attr": {
+          "matchers": {
+            "maxItems": 32,
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Attribute key, e.g. `http.route`."
+                },
+                "op": {
+                  "type": "string",
+                  "enum": [
+                    "eq",
+                    "prefix"
+                  ],
+                  "description": "How a structured attribute matcher compares an attribute value."
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 1024
+                }
+              },
+              "required": [
+                "key",
+                "op",
+                "value"
+              ],
+              "additionalProperties": false,
+              "description": "One structured attribute matcher. Tool inputs and saved queries carry\nmatchers in this form; the HTTP routes keep their `key=value` string\nparameters, and a client serializes each matcher to one of them."
             },
-            "description": "Exact attribute match, repeatable, as `key=value`."
-          },
-          "attr_prefix": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Attribute prefix match, repeatable, as `key=prefix`."
+            "description": "Attribute matchers a series must all satisfy; serialized to `attr` and `attr_prefix`."
           },
           "series_limit": {
             "default": 50,
-            "description": "Maximum result streams. A grouping that exceeds this is truncated, not refused.",
             "type": "integer",
             "minimum": 1,
             "maximum": 500
@@ -4658,7 +7266,8 @@
           "start_time",
           "end_time"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Input for query_metric."
       },
       "outputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -4791,6 +7400,48 @@
           "truncated": {
             "type": "boolean",
             "description": "Whether streams were dropped because the result exceeded the series limit."
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_argument",
+                  "not_found",
+                  "no_project_access",
+                  "collector_unreachable",
+                  "collector_timeout",
+                  "cancelled",
+                  "collector_unauthorized",
+                  "collector_rate_limited",
+                  "collector_rejected",
+                  "collector_error",
+                  "contract_mismatch",
+                  "insufficient_scope",
+                  "conflict",
+                  "precondition_failed",
+                  "precondition_required",
+                  "internal"
+                ],
+                "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description of this failure."
+              },
+              "retryable": {
+                "type": "boolean",
+                "description": "Whether the same call can succeed when repeated unchanged."
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
           }
         },
         "required": [
@@ -4804,7 +7455,7 @@
           "truncated"
         ],
         "additionalProperties": false,
-        "description": "The answer to a metric range query: what was asked, and the streams it produced.",
+        "description": "Structured output for query_metric: the collector's range-query result.",
         "$defs": {
           "__schema0": {
             "type": "array",
@@ -4951,7 +7602,7 @@
     {
       "name": "search_logs",
       "title": "Search Logs",
-      "description": "Search qyl log records when the user wants error details or logs correlated with a trace. Filters include trace_id, service_name, minimum severity (OTel numbers: 9 INFO, 13 WARN, 17 ERROR), and a body substring query.",
+      "description": "Search qyl log records when the user wants error details or logs correlated with a trace or a session. Filters include trace_id, session_id, service_name, minimum severity (OTel numbers: 9 INFO, 13 WARN, 17 ERROR), a body substring query, and a start_time/end_time window (RFC 3339). Pages: when has_more is true, pass next_cursor as cursor with the same filters for the next page.",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -4980,24 +7631,51 @@
             "examples": [
               "0af7651916cd43dd8448eb211c80319c"
             ],
-            "description": "Unique trace identifier (32 lowercase hex characters)"
+            "description": "Return only log records correlated with this trace."
           },
           "service_name": {
-            "type": "string"
+            "type": "string",
+            "description": "Return only log records from this service."
           },
           "severity_min": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 24
+            "maximum": 24,
+            "description": "Minimum OpenTelemetry severity number: 9 info, 13 warn, 17 error."
           },
           "query": {
-            "type": "string"
+            "type": "string",
+            "description": "Substring searched in the log body."
           },
           "limit": {
             "default": 50,
+            "description": "Maximum log records to return in this page.",
             "type": "integer",
             "minimum": 1,
             "maximum": 200
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^(?!\\.+$)[A-Za-z0-9._~-]{1,128}$",
+            "description": "Return only log records of this session."
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "Start of the window (inclusive), RFC 3339."
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "End of the window (exclusive), RFC 3339."
+          },
+          "cursor": {
+            "type": "string",
+            "description": "`next_cursor` of a previous search_logs call with the same filters."
           }
         },
         "additionalProperties": false,
@@ -5564,11 +8242,62 @@
               "demo"
             ],
             "description": "Whether a qyl MCP tool read live collector data or the explicit demo dataset."
+          },
+          "has_more": {
+            "type": "boolean",
+            "description": "Whether more items exist beyond this page. False only when the result is complete."
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "Pass as `cursor` to the same tool with the same filters for the next page."
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_argument",
+                  "not_found",
+                  "no_project_access",
+                  "collector_unreachable",
+                  "collector_timeout",
+                  "cancelled",
+                  "collector_unauthorized",
+                  "collector_rate_limited",
+                  "collector_rejected",
+                  "collector_error",
+                  "contract_mismatch",
+                  "insufficient_scope",
+                  "conflict",
+                  "precondition_failed",
+                  "precondition_required",
+                  "internal"
+                ],
+                "description": "Stable failure code of a qyl MCP tool result. A model branches on the code, never on the message."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description of this failure."
+              },
+              "retryable": {
+                "type": "boolean",
+                "description": "Whether the same call can succeed when repeated unchanged."
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "additionalProperties": false,
+            "description": "Set when the call failed."
           }
         },
         "required": [
           "logs",
-          "mode"
+          "mode",
+          "has_more"
         ],
         "additionalProperties": false,
         "description": "Structured output for search_logs.",

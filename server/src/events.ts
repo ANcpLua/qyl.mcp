@@ -303,7 +303,7 @@ export class EventsRuntime {
     this.recentTraces = options.recentTraces
       ?? (async (principal) => {
         const access = collectorAccessForSubject(principal.subject);
-        return (await fetchTraces(TRACES_PER_POLL, access === undefined ? {} : { access })).traces;
+        return (await fetchTraces({ limit: TRACES_PER_POLL }, access === undefined ? {} : { access })).traces;
       });
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.now = options.now ?? Date.now;

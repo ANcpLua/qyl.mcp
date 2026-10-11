@@ -1,6 +1,12 @@
 /**
  * Telemetry fetching (shared by model tools, display tools, fetch_telemetry —
- * demo mode honors every filter the live endpoints support).
+ * demo mode honors every filter and every cursor the live endpoints support).
+ *
+ * Every list returns the page it was given: the Collector's `has_more` and
+ * opaque `next_cursor` live, and a demo page cut from the dataset with the
+ * same semantics (`paging.ts`). Filters travel to the Collector under their
+ * published query-parameter names; the demo branch applies the same filters
+ * itself, so an answer never claims a filter it did not apply.
  */
 
 import {
@@ -14,7 +20,12 @@ import {
   resolveMode,
 } from "./collector.js";
 import { getDemo, getDemoMcpSpans } from "./demo.js";
-import { formatAttributeValue } from "@ancplua/qyl-api-schema/runtime";
+import {
+  compareUnixNanos,
+  epochMsToUnixNanos,
+  formatAttributeValue,
+} from "@ancplua/qyl-api-schema/runtime";
+import { demoPage, type Page } from "./paging.js";
 import { aggregateMcpStats, pickBucketMs } from "./stats.js";
 import { redactTelemetry } from "./telemetry-redaction.js";
 import {
@@ -32,24 +43,71 @@ import type {
   QylTrace,
 } from "./wire.js";
 
+/** A page plus the mode it came from; `nextCursor` is added after redaction, it is not telemetry. */
+type PagedResult<K extends string, T> = { [key in K]: T[] } & {
+  hasMore: boolean;
+  nextCursor?: string;
+  mode: Mode;
+};
+
+function paged<K extends string, T>(key: K, page: Page<T>, mode: Mode): PagedResult<K, T> {
+  const redacted = redactTelemetry({ [key]: page.items, mode } as { [k in K]: T[] } & { mode: Mode });
+  return {
+    ...redacted,
+    hasMore: page.hasMore,
+    ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }),
+  } as PagedResult<K, T>;
+}
+
+/** The published window: `start_time` inclusive, `end_time` exclusive, both RFC 3339. */
+export interface TimeRange {
+  start_time?: string;
+  end_time?: string;
+}
+
+function withinRange(iso: string, range: TimeRange): boolean {
+  const at = Date.parse(iso);
+  if (range.start_time !== undefined && at < Date.parse(range.start_time)) return false;
+  if (range.end_time !== undefined && at >= Date.parse(range.end_time)) return false;
+  return true;
+}
+
+export interface TraceFilters extends TimeRange {
+  limit: number;
+  service_name?: string;
+  errors_only?: boolean;
+  cursor?: string;
+}
+
 export async function fetchTraces(
-  limit: number,
+  filters: TraceFilters,
   options: CollectorRequestOptions = {},
-): Promise<{ traces: QylTrace[]; mode: Mode }> {
+): Promise<PagedResult<"traces", QylTrace>> {
   const mode = await resolveMode();
   if (mode === "demo") {
-    return redactTelemetry({ traces: getDemo().traces.slice(0, limit), mode });
+    const traces = getDemo().traces.filter((trace) =>
+      withinRange(trace.start_time, filters) &&
+      (filters.service_name === undefined || trace.services.includes(filters.service_name)) &&
+      (!filters.errors_only || trace.has_error));
+    return paged("traces", demoPage(traces, filters.limit, filters.cursor), mode);
   }
-  const body = await collectorGet("/api/v1/traces", { limit }, options);
-  return redactTelemetry({
-    traces: parseCollectorPage(
-      body,
-      "/api/v1/traces",
-      TracesListResponseSchema,
-      parseCollectorTrace,
-    ).items,
+  const body = await collectorGet(
+    "/api/v1/traces",
+    {
+      start_time: filters.start_time,
+      end_time: filters.end_time,
+      service_name: filters.service_name,
+      errors_only: filters.errors_only ? true : undefined,
+      limit: filters.limit,
+      cursor: filters.cursor,
+    },
+    options,
+  );
+  return paged(
+    "traces",
+    parseCollectorPage(body, "/api/v1/traces", TracesListResponseSchema, parseCollectorTrace),
     mode,
-  });
+  );
 }
 
 export async function fetchTrace(
@@ -110,50 +168,68 @@ export async function fetchSessionTraces(
   }
 }
 
+export interface SessionFilters extends TimeRange {
+  limit: number;
+  active_only?: boolean;
+  cursor?: string;
+}
+
 export async function fetchSessions(
-  limit: number,
-  activeOnly?: boolean,
+  filters: SessionFilters,
   options: CollectorRequestOptions = {},
-): Promise<{ sessions: QylSession[]; mode: Mode }> {
+): Promise<PagedResult<"sessions", QylSession>> {
   const mode = await resolveMode();
   if (mode === "demo") {
-    const sessions = (
-      activeOnly ? getDemo().sessions.filter((s) => s.state === "active") : getDemo().sessions
-    ).slice(0, limit);
-    return redactTelemetry({ sessions, mode });
+    const sessions = getDemo().sessions.filter((session) =>
+      (!filters.active_only || session.state === "active") &&
+      withinRange(session.start_time, filters));
+    return paged("sessions", demoPage(sessions, filters.limit, filters.cursor), mode);
   }
   const body = await collectorGet(
     "/api/v1/sessions",
-    { limit, is_active: activeOnly ? true : undefined },
+    {
+      is_active: filters.active_only ? true : undefined,
+      start_time: filters.start_time,
+      end_time: filters.end_time,
+      limit: filters.limit,
+      cursor: filters.cursor,
+    },
     options,
   );
-  return redactTelemetry({
-    sessions: parseCollectorPage(
-      body,
-      "/api/v1/sessions",
-      SessionsListResponseSchema,
-      parseCollectorSession,
-    ).items,
+  return paged(
+    "sessions",
+    parseCollectorPage(body, "/api/v1/sessions", SessionsListResponseSchema, parseCollectorSession),
     mode,
-  });
+  );
 }
 
-interface LogFilters {
+export interface LogFilters extends TimeRange {
   trace_id?: string;
+  session_id?: string;
   service_name?: string;
   severity_min?: number;
   query?: string;
   limit: number;
+  cursor?: string;
 }
 
 export async function fetchLogs(
   filters: LogFilters,
   options: CollectorRequestOptions = {},
-): Promise<{ logs: QylLogRecord[]; mode: Mode }> {
+): Promise<PagedResult<"logs", QylLogRecord>> {
   const mode = await resolveMode();
   if (mode === "demo") {
     let logs = getDemo().logs;
     if (filters.trace_id) logs = logs.filter((l) => l.trace_id === filters.trace_id);
+    if (filters.session_id !== undefined) {
+      // Demo log records carry no session id; the session owns its traces, so
+      // its logs are the logs of those traces. An unknown session is an empty
+      // page, as the Collector answers a log filter that matches nothing.
+      const traceIds = new Set(
+        (getDemo().sessionTraces[filters.session_id] ?? []).map((trace) => trace.trace_id),
+      );
+      logs = logs.filter((l) => l.trace_id !== undefined && traceIds.has(l.trace_id));
+    }
     if (filters.service_name) {
       logs = logs.filter(
         (l) => String(l.resource.service_name) === filters.service_name,
@@ -167,28 +243,36 @@ export async function fetchLogs(
       const needle = filters.query.toLowerCase();
       logs = logs.filter((l) => formatAttributeValue(l.body).toLowerCase().includes(needle));
     }
-    return redactTelemetry({ logs: logs.slice(0, filters.limit), mode });
+    if (filters.start_time !== undefined) {
+      const start = epochMsToUnixNanos(Date.parse(filters.start_time));
+      logs = logs.filter((l) => compareUnixNanos(l.time_unix_nano, start) >= 0);
+    }
+    if (filters.end_time !== undefined) {
+      const end = epochMsToUnixNanos(Date.parse(filters.end_time));
+      logs = logs.filter((l) => compareUnixNanos(l.time_unix_nano, end) < 0);
+    }
+    return paged("logs", demoPage(logs, filters.limit, filters.cursor), mode);
   }
   const body = await collectorGet(
     "/api/v1/logs",
     {
+      session_id: filters.session_id,
       trace_id: filters.trace_id,
       service_name: filters.service_name,
       severity_min: filters.severity_min,
       query: filters.query,
+      start_time: filters.start_time,
+      end_time: filters.end_time,
       limit: filters.limit,
+      cursor: filters.cursor,
     },
     options,
   );
-  return redactTelemetry({
-    logs: parseCollectorPage(
-      body,
-      "/api/v1/logs",
-      LogsListResponseSchema,
-      parseCollectorLog,
-    ).items,
+  return paged(
+    "logs",
+    parseCollectorPage(body, "/api/v1/logs", LogsListResponseSchema, parseCollectorLog),
     mode,
-  });
+  );
 }
 
 /** Shared by display_traces and fetch_telemetry (view "traces"). */
@@ -207,7 +291,8 @@ export async function fetchTracesForDisplay(
   if (args.session_id) {
     return fetchSessionTraces(args.session_id, args.limit, options);
   }
-  return fetchTraces(args.limit, options);
+  const { traces, mode } = await fetchTraces({ limit: args.limit }, options);
+  return { traces, mode };
 }
 
 /** Shared by display_mcp_dashboard and fetch_telemetry (view "mcp_stats"). */

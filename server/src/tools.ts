@@ -27,8 +27,10 @@ import {
   SearchLogsOutputSchema,
   compactOutputSchema,
 } from "./contract-validation.js";
-import { fetchLogs, fetchSessions, fetchTrace, fetchTraces } from "./data.js";
+import { fetchLogs, fetchSessions, fetchTrace, fetchTraces, type TimeRange } from "./data.js";
 import {
+  filterNote,
+  pageNote,
   summarizeLogs,
   summarizeSessions,
   summarizeTrace,
@@ -103,6 +105,14 @@ function projectTrace(trace: QylTrace, args: GetTraceInput): {
   };
 }
 
+/** `from …`, `until …` for a list header; the window is what the caller asked for. */
+function windowNote(range: TimeRange): (string | undefined)[] {
+  return [
+    range.start_time === undefined ? undefined : `from ${range.start_time}`,
+    range.end_time === undefined ? undefined : `until ${range.end_time}`,
+  ];
+}
+
 /** Register the four model-visible read tools against published contract schemas. */
 export function registerTelemetryTools(server: McpServer): void {
   server.registerTool(
@@ -112,6 +122,9 @@ export function registerTelemetryTools(server: McpServer): void {
       description:
         "List recent qyl traces when the user wants a compact overview of activity " +
         "and failures: root span, services, duration, span count, and error flag. " +
+        "Filters: a start_time/end_time window (RFC 3339), service_name (traces with " +
+        "a span from that service) and errors_only. Pages: when has_more is true, " +
+        "pass next_cursor as cursor with the same filters for the next page. " +
         "Spans are omitted; get_trace returns the full span tree, while display_traces " +
         "provides the interactive explorer.",
       inputSchema: ListTracesInputSchema,
@@ -121,13 +134,33 @@ export function registerTelemetryTools(server: McpServer): void {
     },
     (args: ListTracesInput, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, 1, async (scope) => {
-        const { traces, mode } = await fetchTraces(args.limit ?? 20, scope.collector);
-        await scope.step(`Fetched ${traces.length} trace(s)`);
+        const page = await fetchTraces(
+          {
+            limit: args.limit ?? 20,
+            start_time: args.start_time,
+            end_time: args.end_time,
+            service_name: args.service_name,
+            errors_only: args.errors_only,
+            cursor: args.cursor,
+          },
+          scope.collector,
+        );
+        await scope.step(`Fetched ${page.traces.length} trace(s)`);
         const output: ListTracesOutput = {
-          traces: traces.map(({ spans: _spans, ...summary }) => summary),
-          mode,
+          traces: page.traces.map(({ spans: _spans, ...summary }) => summary),
+          mode: page.mode,
+          has_more: page.hasMore,
+          ...(page.nextCursor === undefined ? {} : { next_cursor: page.nextCursor }),
         };
-        return telemetryToolResult(summarizeTraceTable(traces, mode), output);
+        const filters = filterNote([
+          args.errors_only ? "errors only" : undefined,
+          args.service_name === undefined ? undefined : `service ${args.service_name}`,
+          ...windowNote(args),
+        ]);
+        return telemetryToolResult(
+          summarizeTraceTable(page.traces, page.mode, filters) + pageNote(page),
+          output,
+        );
       }),
   );
 
@@ -170,6 +203,9 @@ export function registerTelemetryTools(server: McpServer): void {
       description:
         "List qyl sessions when the user wants to find active or failing sessions, " +
         "with trace/span/error counts, state, and GenAI token usage where present. " +
+        "Filters: active_only and a start_time/end_time window (RFC 3339) on the " +
+        "session start. Pages: when has_more is true, pass next_cursor as cursor with " +
+        "the same filters for the next page. " +
         "display_traces accepts a session_id to show that session's traces in the explorer.",
       inputSchema: ListSessionsInputSchema,
       outputSchema: compactOutputSchema(ListSessionsOutputSchema),
@@ -178,14 +214,28 @@ export function registerTelemetryTools(server: McpServer): void {
     },
     (args: ListSessionsInput, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, 1, async (scope) => {
-        const { sessions, mode } = await fetchSessions(
-          args.limit ?? 20,
-          args.active_only,
+        const page = await fetchSessions(
+          {
+            limit: args.limit ?? 20,
+            active_only: args.active_only,
+            start_time: args.start_time,
+            end_time: args.end_time,
+            cursor: args.cursor,
+          },
           scope.collector,
         );
-        await scope.step(`Fetched ${sessions.length} session(s)`);
-        const output: ListSessionsOutput = { sessions, mode };
-        return telemetryToolResult(summarizeSessions(sessions, mode), output);
+        await scope.step(`Fetched ${page.sessions.length} session(s)`);
+        const output: ListSessionsOutput = {
+          sessions: page.sessions,
+          mode: page.mode,
+          has_more: page.hasMore,
+          ...(page.nextCursor === undefined ? {} : { next_cursor: page.nextCursor }),
+        };
+        const filters = filterNote([args.active_only ? "active only" : undefined, ...windowNote(args)]);
+        return telemetryToolResult(
+          summarizeSessions(page.sessions, page.mode, filters) + pageNote(page),
+          output,
+        );
       }),
   );
 
@@ -195,8 +245,10 @@ export function registerTelemetryTools(server: McpServer): void {
       title: "Search Logs",
       description:
         "Search qyl log records when the user wants error details or logs correlated " +
-        "with a trace. Filters include trace_id, service_name, minimum severity " +
-        "(OTel numbers: 9 INFO, 13 WARN, 17 ERROR), and a body substring query.",
+        "with a trace or a session. Filters include trace_id, session_id, service_name, " +
+        "minimum severity (OTel numbers: 9 INFO, 13 WARN, 17 ERROR), a body substring " +
+        "query, and a start_time/end_time window (RFC 3339). Pages: when has_more is " +
+        "true, pass next_cursor as cursor with the same filters for the next page.",
       inputSchema: SearchLogsInputSchema,
       outputSchema: compactOutputSchema(SearchLogsOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
@@ -204,19 +256,28 @@ export function registerTelemetryTools(server: McpServer): void {
     },
     (args: SearchLogsInput, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, 1, async (scope) => {
-        const { logs, mode } = await fetchLogs(
+        const page = await fetchLogs(
           {
             trace_id: args.trace_id,
+            session_id: args.session_id,
             service_name: args.service_name,
             severity_min: args.severity_min,
             query: args.query,
+            start_time: args.start_time,
+            end_time: args.end_time,
             limit: args.limit ?? 50,
+            cursor: args.cursor,
           },
           scope.collector,
         );
-        await scope.step(`Fetched ${logs.length} log record(s)`);
-        const output: SearchLogsOutput = { logs, mode };
-        return telemetryToolResult(summarizeLogs(logs, mode), output);
+        await scope.step(`Fetched ${page.logs.length} log record(s)`);
+        const output: SearchLogsOutput = {
+          logs: page.logs,
+          mode: page.mode,
+          has_more: page.hasMore,
+          ...(page.nextCursor === undefined ? {} : { next_cursor: page.nextCursor }),
+        };
+        return telemetryToolResult(summarizeLogs(page.logs, page.mode) + pageNote(page), output);
       }),
   );
 }

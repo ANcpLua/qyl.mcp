@@ -26,10 +26,12 @@ import {
   SearchLogsInputSchema,
   SearchLogsOutputSchema,
   SpanSchema,
+  ToolErrorSchema,
   TraceSchema,
   TracesListResponseSchema,
 } from "./contract-validation.js";
 import {
+  CollectorError,
   parseCollectorLog,
   parseCollectorPage,
   parseCollectorSession,
@@ -37,6 +39,7 @@ import {
 } from "./collector.js";
 import { getDemo } from "./demo.js";
 import { fetchMcpStats } from "./data.js";
+import { toolError } from "./request-scope.js";
 
 test("every published Workbench definition has a runtime validator", () => {
   const exportedSchemas = ContractSchemas as Record<string, unknown>;
@@ -59,6 +62,15 @@ test("published telemetry schemas own defaults, bounds, and required tool inputs
 
   assert.deepEqual(ListTracesInputSchema.parse({}), { limit: 20 });
   assert(!ListTracesInputSchema.safeParse({ limit: 1.5 }).success);
+  assert(ListTracesInputSchema.safeParse({
+    start_time: "2026-10-11T00:00:00Z",
+    end_time: "2026-10-11T01:00:00Z",
+    service_name: "checkout-api",
+    errors_only: true,
+    cursor: "opaque",
+  }).success);
+  assert(!ListTracesInputSchema.safeParse({ start_time: "2026-10-11" }).success, "RFC 3339 only");
+  assert(!ListTracesInputSchema.safeParse({ errors_only: "true" }).success);
 
   const traceId = "0".repeat(32);
   assert.deepEqual(GetTraceInputSchema.parse({ trace_id: traceId }), {
@@ -85,16 +97,42 @@ test("published telemetry schemas own defaults, bounds, and required tool inputs
     active_only: true,
   });
   assert(!ListSessionsInputSchema.safeParse({ limit: 101 }).success);
+  assert(ListSessionsInputSchema.safeParse({ start_time: "2026-10-11T00:00:00Z", cursor: "opaque" }).success);
 
   assert.deepEqual(SearchLogsInputSchema.parse({}), { limit: 50 });
   assert(!SearchLogsInputSchema.safeParse({ severity_min: 0 }).success);
   assert(!SearchLogsInputSchema.safeParse({ severity_min: 25 }).success);
   assert(!SearchLogsInputSchema.safeParse({ limit: 201 }).success);
+  assert(SearchLogsInputSchema.safeParse({
+    session_id: "sess-demo-genai-01",
+    start_time: "2026-10-11T00:00:00Z",
+    end_time: "2026-10-11T01:00:00Z",
+    cursor: "opaque",
+  }).success);
 
+  // fetch_telemetry's input is a discriminated union over `view`: the schema,
+  // not the handler, decides that a trace view needs its trace_id.
   assert.deepEqual(FetchTelemetryInputSchema.parse({ view: "traces" }), { view: "traces" });
   assert(!FetchTelemetryInputSchema.safeParse({}).success);
+  assert(!FetchTelemetryInputSchema.safeParse({ view: "trace" }).success);
+  assert(FetchTelemetryInputSchema.safeParse({ view: "trace", trace_id: traceId }).success);
+  assert(!FetchTelemetryInputSchema.safeParse({ view: "traces", hours: 24 }).success);
   assert(!FetchTelemetryInputSchema.safeParse({ view: "logs", severity_min: 25 }).success);
   assert(!FetchTelemetryInputSchema.safeParse({ view: "mcp_stats", hours: 169 }).success);
+  assert(!FetchTelemetryInputSchema.safeParse({ view: "mcp_stats", hours: 1.5 }).success, "whole hours");
+  assert(!DisplayMcpDashboardInputSchema.safeParse({ hours: 1.5 }).success, "whole hours");
+});
+
+test("the server's error codes are the contract's ToolErrorCode enum", () => {
+  for (const error of [
+    new CollectorError("bad input"),
+    new CollectorError("gone", false, 404),
+    new CollectorError("down", true),
+    new Error("Authorization: Bearer should-never-escape"),
+  ]) {
+    const structured = toolError(error).structuredContent as { error: unknown };
+    assert(ToolErrorSchema.safeParse(structured.error).success, String(error));
+  }
 });
 
 test("published output schemas accept the programmatically generated demo dataset", async () => {
@@ -103,10 +141,15 @@ test("published output schemas accept the programmatically generated demo datase
   const summaries = demo.traces.map(({ spans: _spans, ...summary }) => summary);
 
   assert(DisplayTracesOutputSchema.safeParse({ traces: demo.traces, mode: "demo" }).success);
-  assert(ListTracesOutputSchema.safeParse({ traces: summaries, mode: "demo" }).success);
+  assert(ListTracesOutputSchema.safeParse({ traces: summaries, mode: "demo", has_more: false }).success);
+  assert(
+    !ListTracesOutputSchema.safeParse({ traces: summaries, mode: "demo" }).success,
+    "has_more is required: a page must say whether it is the whole result",
+  );
+  assert(ListTracesOutputSchema.safeParse({ traces: summaries, mode: "demo", has_more: true, next_cursor: "c" }).success);
   assert(GetTraceOutputSchema.safeParse({ trace, mode: "demo" }).success);
-  assert(ListSessionsOutputSchema.safeParse({ sessions: demo.sessions, mode: "demo" }).success);
-  assert(SearchLogsOutputSchema.safeParse({ logs: demo.logs, mode: "demo" }).success);
+  assert(ListSessionsOutputSchema.safeParse({ sessions: demo.sessions, mode: "demo", has_more: false }).success);
+  assert(SearchLogsOutputSchema.safeParse({ logs: demo.logs, mode: "demo", has_more: false }).success);
   assert(FetchTelemetryOutputSchema.safeParse({ traces: demo.traces, mode: "demo" }).success);
 
   const previousDemo = process.env.QYL_DEMO;

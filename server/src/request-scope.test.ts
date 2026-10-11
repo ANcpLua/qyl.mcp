@@ -133,19 +133,73 @@ test("a failed tool call carries a stable code and retryability in structuredCon
       assert.match(String(notFoundError.message), /^trace not found: /u);
       assert.equal(notFound.content[0]?.type === "text" ? notFound.content[0].text : "", notFoundError.message);
 
+      // A schema-valid argument the handler still has to refuse: the window is inverted.
       const invalid = await connection.client.callTool({
-        name: "get_metric_series",
-        arguments: { metric_name: "http.server.request.duration", attr: ["novalue"] },
+        name: "query_metric",
+        arguments: {
+          metric_name: "http.server.request.duration",
+          start_time: "2026-10-11T01:00:00Z",
+          end_time: "2026-10-11T00:00:00Z",
+        },
       });
       assert.equal(invalid.isError, true);
       assert.deepEqual(
         (invalid.structuredContent as { error: Record<string, unknown> }).error,
         {
           code: "invalid_argument",
-          message: `attr entries are written 'key=value'; received "novalue"`,
+          message: "end_time must be a valid timestamp after start_time",
           retryable: false,
         },
       );
+    } finally {
+      await connection.close();
+    }
+  });
+});
+
+test("list tools page through the MCP boundary with the cursor they hand out", async () => {
+  await withEnv({ QYL_DEMO: "1" }, async () => {
+    const connection = await demoConnection();
+    try {
+      const first = await connection.client.callTool({ name: "list_traces", arguments: { limit: 1 } });
+      assert.equal(first.isError, undefined);
+      const firstPage = first.structuredContent as {
+        traces: { trace_id: string }[]; has_more: boolean; next_cursor?: string;
+      };
+      assert.equal(firstPage.traces.length, 1);
+      assert.equal(firstPage.has_more, true);
+      assert.equal(typeof firstPage.next_cursor, "string");
+      assert.match(first.content[0]?.type === "text" ? first.content[0].text : "", /More results exist/u);
+
+      const second = await connection.client.callTool({
+        name: "list_traces",
+        arguments: { limit: 1, cursor: firstPage.next_cursor },
+      });
+      assert.equal(second.isError, undefined);
+      const secondPage = second.structuredContent as { traces: { trace_id: string }[] };
+      assert.notEqual(secondPage.traces[0]?.trace_id, firstPage.traces[0]?.trace_id);
+
+      const whole = await connection.client.callTool({ name: "list_traces", arguments: { limit: 100 } });
+      const wholePage = whole.structuredContent as { has_more: boolean; next_cursor?: string };
+      assert.equal(wholePage.has_more, false);
+      assert.equal(wholePage.next_cursor, undefined);
+      assert.doesNotMatch(whole.content[0]?.type === "text" ? whole.content[0].text : "", /More results/u);
+
+      const bogus = await connection.client.callTool({
+        name: "search_logs",
+        arguments: { cursor: "not-a-cursor" },
+      });
+      assert.equal(bogus.isError, true);
+      assert.equal((bogus.structuredContent as { error: { code: string } }).error.code, "invalid_argument");
+
+      const filtered = await connection.client.callTool({
+        name: "list_traces",
+        arguments: { errors_only: true, limit: 100 },
+      });
+      const filteredPage = filtered.structuredContent as { traces: { has_error: boolean }[] };
+      assert.ok(filteredPage.traces.length > 0);
+      assert.ok(filteredPage.traces.every((trace) => trace.has_error), "errors_only is applied in demo");
+      assert.match(filtered.content[0]?.type === "text" ? filtered.content[0].text : "", /\(errors only\)/u);
     } finally {
       await connection.close();
     }

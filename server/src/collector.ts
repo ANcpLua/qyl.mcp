@@ -13,6 +13,7 @@ import type {
   MetricSeries,
   ProblemDetails,
   SessionEntity,
+  ToolErrorCode,
   Trace,
 } from "@ancplua/qyl-api-schema/types";
 import * as z from "zod/v4";
@@ -30,23 +31,12 @@ import {
 import type { Mode } from "./wire.js";
 
 /**
- * The stable failure codes a tool result carries in `structuredContent.error`.
- * A model branches on the code, never on the message text, which stays free to
- * describe the specific failure.
+ * The stable failure codes a tool result carries in `structuredContent.error`:
+ * the contract's `Mcp.Tools.ToolErrorCode`, so the server cannot invent a code
+ * the published `ToolError` model does not know. A model branches on the code,
+ * never on the message text, which stays free to describe the specific failure.
  */
-export type ToolErrorCode =
-  | "invalid_argument"
-  | "not_found"
-  | "no_project_access"
-  | "collector_unreachable"
-  | "collector_timeout"
-  | "cancelled"
-  | "collector_unauthorized"
-  | "collector_rate_limited"
-  | "collector_rejected"
-  | "collector_error"
-  | "contract_mismatch"
-  | "internal";
+export type { ToolErrorCode };
 
 /** Whether the same call can succeed when repeated unchanged. */
 export function isRetryableToolError(code: ToolErrorCode): boolean {
@@ -247,6 +237,8 @@ export function parseCollectorLog(value: unknown, context = "log"): LogRecord {
 interface ParsedCollectorPage<T> {
   items: T[];
   hasMore: boolean;
+  /** The Collector's opaque cursor for the next page; absent on the last page. */
+  nextCursor?: string;
 }
 
 export interface CollectorRequestOptions {
@@ -261,7 +253,10 @@ export interface CollectorRequestOptions {
  * response body. The supplied schema must be an Operations.*.Response.200
  * definition from the generated contract.
  */
-export function parseCollectorPage<T, TPage extends { items: T[]; has_more: boolean }>(
+export function parseCollectorPage<
+  T,
+  TPage extends { items: T[]; has_more: boolean; next_cursor?: string | null },
+>(
   value: unknown,
   context: string,
   pageSchema: z.ZodType<TPage>,
@@ -276,7 +271,10 @@ export function parseCollectorPage<T, TPage extends { items: T[]; has_more: bool
       items: sourceItems.data.map((item, index) =>
         parseItem(item, `${context}.items[${index}]`)),
     });
-    return { items: page.items, hasMore: page.has_more };
+    const nextCursor = typeof page.next_cursor === "string" && page.next_cursor !== ""
+      ? page.next_cursor
+      : undefined;
+    return { items: page.items, hasMore: page.has_more, ...(nextCursor === undefined ? {} : { nextCursor }) };
   } catch (error) {
     if (error instanceof CollectorError) throw error;
     if (error instanceof z.ZodError) throw contractMismatch(context, error);

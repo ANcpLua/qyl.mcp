@@ -1,21 +1,23 @@
 /**
- * The metrics read surface: the tool inputs the contract generates, and the
+ * The metrics read surface: the tool inputs the contract publishes, and the
  * demo path that answers them.
  *
- * Demo mode is the one place the bucketing, the reducers, the grouping, and the
- * matchers are ours rather than the collector's, so it is the one place they can
- * be wrong without a collector to blame. Every assertion below is against the
- * published contract's own schemas.
+ * Demo mode is the one place the bucketing, the reducers, the grouping, the
+ * matchers and the paging are ours rather than the collector's, so it is the one
+ * place they can be wrong without a collector to blame. Every assertion below is
+ * against the published contract's own schemas.
  */
 
 import assert from "node:assert/strict";
 import { formatAttributeValue } from "@ancplua/qyl-api-schema/runtime";
 import test from "node:test";
-import { operationInputSchema } from "./contract-operations.js";
 import {
+  GetMetricSeriesInputSchema,
+  GetMetricSeriesOutputSchema,
+  ListMetricsInputSchema,
+  ListMetricsOutputSchema,
   MetricQueryResultSchema,
-  MetricsListResponseSchema,
-  MetricSeriesListResponseSchema,
+  QueryMetricInputSchema,
 } from "./contract-validation.js";
 import { CollectorError } from "./collector.js";
 import { listMetricSeries, listMetrics, queryMetric } from "./metrics.js";
@@ -34,12 +36,10 @@ async function inDemoMode<T>(body: () => Promise<T>): Promise<T> {
 
 const HISTOGRAM = "http.server.request.duration";
 
-test("tool inputs are generated from the published operation parameters", () => {
-  const query = operationInputSchema("/api/v1/metrics/{metric_name}/query");
-
+test("tool inputs are the published tool models, defaults and bounds included", () => {
   // Bounds, defaults, and the aggregation enum come from the contract, not from
   // anything written here: an unpublished reducer must not reach the collector.
-  const accepted = query.parse({
+  const accepted = QueryMetricInputSchema.parse({
     metric_name: HISTOGRAM,
     start_time: "2026-09-01T00:00:00Z",
     end_time: "2026-09-01T01:00:00Z",
@@ -53,99 +53,137 @@ test("tool inputs are generated from the published operation parameters", () => 
     series_limit: 50,
   });
 
+  const window = {
+    metric_name: HISTOGRAM,
+    start_time: "2026-09-01T00:00:00Z",
+    end_time: "2026-09-01T01:00:00Z",
+  };
   assert.equal(
-    query.safeParse({
-      metric_name: HISTOGRAM,
-      start_time: "2026-09-01T00:00:00Z",
-      end_time: "2026-09-01T01:00:00Z",
-      aggregation: "median",
-    }).success,
+    QueryMetricInputSchema.safeParse({ ...window, aggregation: "median" }).success,
     false,
     "an aggregation the contract does not publish must be refused before the wire",
   );
-
   assert.equal(
-    query.safeParse({ metric_name: HISTOGRAM, start_time: "2026-09-01T00:00:00Z" }).success,
+    QueryMetricInputSchema.safeParse({ metric_name: HISTOGRAM, start_time: window.start_time }).success,
     false,
     "end_time is a required published parameter",
   );
+  assert.equal(
+    QueryMetricInputSchema.safeParse({ ...window, step_ms: 1.5 }).success,
+    false,
+    "step_ms is an integer number of milliseconds",
+  );
+  assert.equal(
+    QueryMetricInputSchema.safeParse({ ...window, attr: ["http.route=/checkout"] }).success,
+    false,
+    "the wire's key=value strings are not a tool input; matchers are structured",
+  );
+  assert.equal(
+    GetMetricSeriesInputSchema.safeParse({
+      metric_name: HISTOGRAM,
+      matchers: [{ key: "http.route", op: "contains", value: "check" }],
+    }).success,
+    false,
+    "only the published matcher operators exist",
+  );
+  assert.deepEqual(ListMetricsInputSchema.parse({}), { limit: 200 });
 
   // The project scope is server-owned; a model must not be able to name it.
   assert.equal(
-    query.safeParse({
-      metric_name: HISTOGRAM,
-      start_time: "2026-09-01T00:00:00Z",
-      end_time: "2026-09-01T01:00:00Z",
-      "X-Qyl-Project": "someone-elses",
-    }).success,
+    QueryMetricInputSchema.safeParse({ ...window, "X-Qyl-Project": "someone-elses" }).success,
     false,
   );
-});
-
-test("an operation the contract does not publish is a startup failure, not an empty tool", () => {
-  assert.throws(() => operationInputSchema("/api/v1/metrics/nope"), /publishes no GET/u);
 });
 
 test("the demo catalog answers the published list body", async () => {
   await inDemoMode(async () => {
-    const { metrics, mode } = await listMetrics({});
-    assert.equal(mode, "demo");
-    const page = MetricsListResponseSchema.parse({ items: metrics, has_more: false });
-    assert.equal(page.items.length, 3);
+    const page = await listMetrics({});
+    assert.equal(page.mode, "demo");
+    const output = ListMetricsOutputSchema.parse({ items: page.items, has_more: page.hasMore });
+    assert.equal(output.items.length, 3);
 
-    const histogram = page.items.find((metric) => metric.name === HISTOGRAM);
+    const histogram = output.items.find((metric) => metric.name === HISTOGRAM);
     assert.ok(histogram);
     assert.equal(histogram.kind, "histogram");
     assert.equal(histogram.unit, "s");
     assert.equal(histogram.series_count, 4, "series_count collapses the streams, not the points");
 
-    const { metrics: filtered } = await listMetrics({ name_prefix: "qyl." });
-    assert.deepEqual(filtered.map((metric) => metric.name), ["qyl.collector.spans.ingested"]);
+    const filtered = await listMetrics({ name_prefix: "qyl." });
+    assert.deepEqual(filtered.items.map((metric) => metric.name), ["qyl.collector.spans.ingested"]);
   });
 });
 
-test("has_more reports a truncated catalog or series list, never a guess", async () => {
+test("the catalog and the series list page with an opaque cursor, never a guess", async () => {
   await inDemoMode(async () => {
     const whole = await listMetrics({});
     assert.equal(whole.hasMore, false, "every demo instrument fits the default limit");
+    assert.equal(whole.nextCursor, undefined, "a complete result hands out no cursor");
 
-    const firstPage = await listMetrics({ limit: 2 });
-    assert.equal(firstPage.metrics.length, 2);
-    assert.equal(firstPage.hasMore, true, "a third instrument exists beyond the page");
+    const first = await listMetrics({ limit: 2 });
+    assert.equal(first.items.length, 2);
+    assert.equal(first.hasMore, true, "a third instrument exists beyond the page");
+    assert.equal(typeof first.nextCursor, "string");
+
+    const second = await listMetrics({ limit: 2, cursor: first.nextCursor });
+    assert.equal(second.items.length, 1);
+    assert.equal(second.hasMore, false);
+    assert.equal(second.nextCursor, undefined);
+    assert.deepEqual(
+      [...first.items, ...second.items].map((metric) => metric.name),
+      whole.items.map((metric) => metric.name),
+      "the pages are the whole catalog, in order, without overlap",
+    );
 
     const allSeries = await listMetricSeries({ metric_name: HISTOGRAM });
     assert.equal(allSeries.hasMore, false);
-
     const oneSeries = await listMetricSeries({ metric_name: HISTOGRAM, limit: 1 });
-    assert.equal(oneSeries.series.length, 1);
+    assert.equal(oneSeries.items.length, 1);
     assert.equal(oneSeries.hasMore, true, "three more streams exist under the histogram");
+    const rest = await listMetricSeries({ metric_name: HISTOGRAM, limit: 10, cursor: oneSeries.nextCursor });
+    assert.equal(rest.items.length, 3);
+    assert.equal(rest.hasMore, false);
+
+    await assert.rejects(
+      () => listMetrics({ cursor: "not-a-cursor" }),
+      (error: unknown) => error instanceof CollectorError && error.code === "invalid_argument",
+      "a cursor that is not ours is the caller's mistake, not a silent first page",
+    );
   });
 });
 
-test("series discovery filters by exact and prefix attribute matchers", async () => {
+test("series discovery filters by structured exact and prefix matchers", async () => {
   await inDemoMode(async () => {
-    const { series } = await listMetricSeries({ metric_name: HISTOGRAM });
-    MetricSeriesListResponseSchema.parse({ items: series, has_more: false });
+    const { items: series, hasMore } = await listMetricSeries({ metric_name: HISTOGRAM });
+    GetMetricSeriesOutputSchema.parse({ items: series, has_more: hasMore });
     assert.equal(series.length, 4);
     assert.equal(new Set(series.map((stream) => stream.series_id)).size, 4);
 
     const exact = await listMetricSeries({
       metric_name: HISTOGRAM,
-      attr: ["http.response.status_code=500"],
+      matchers: [{ key: "http.response.status_code", op: "eq", value: "500" }],
     });
-    assert.equal(exact.series.length, 1);
+    assert.equal(exact.items.length, 1);
 
     const prefixed = await listMetricSeries({
       metric_name: HISTOGRAM,
-      attr_prefix: ["http.route=/check"],
+      matchers: [{ key: "http.route", op: "prefix", value: "/check" }],
     });
-    assert.equal(prefixed.series.length, 2);
+    assert.equal(prefixed.items.length, 2);
 
     const byService = await listMetricSeries({
       metric_name: HISTOGRAM,
-      attr: ["service.name=agent-worker"],
+      matchers: [{ key: "service.name", op: "eq", value: "agent-worker" }],
     });
-    assert.equal(byService.series.length, 1);
+    assert.equal(byService.items.length, 1);
+
+    const both = await listMetricSeries({
+      metric_name: HISTOGRAM,
+      matchers: [
+        { key: "http.route", op: "prefix", value: "/check" },
+        { key: "http.response.status_code", op: "eq", value: "500" },
+      ],
+    });
+    assert.equal(both.items.length, 1, "every matcher must hold");
   });
 });
 
@@ -154,16 +192,7 @@ test("an unknown metric name is reported as not found, not as an empty answer", 
     await assert.rejects(
       () => listMetricSeries({ metric_name: "not.a.metric" }),
       (error: unknown) =>
-        error instanceof CollectorError && /metric not found/u.test(error.message),
-    );
-  });
-});
-
-test("a matcher without '=' fails on the argument rather than silently not filtering", async () => {
-  await inDemoMode(async () => {
-    await assert.rejects(
-      () => listMetricSeries({ metric_name: HISTOGRAM, attr: ["http.route"] }),
-      /attr entries are written 'key=value'/u,
+        error instanceof CollectorError && error.code === "not_found" && /metric not found/u.test(error.message),
     );
   });
 });
@@ -197,6 +226,17 @@ test("a range query buckets, reduces, and groups the way it says it does", async
     assert.deepEqual(
       grouped.result.series.map((stream) => formatAttributeValue(stream.attributes[0]?.value ?? null)).sort((a, b) => a.localeCompare(b)),
       ["/checkout", "/health", "/v1/agent/run"],
+    );
+
+    // A matcher narrows the streams before grouping.
+    const matched = await queryMetric({
+      ...window,
+      group_by: ["http.route"],
+      matchers: [{ key: "http.route", op: "prefix", value: "/check" }],
+    });
+    assert.deepEqual(
+      matched.result.series.map((stream) => formatAttributeValue(stream.attributes[0]?.value ?? null)),
+      ["/checkout"],
     );
 
     // Same window, different reducer: max must dominate avg, which must dominate min.
