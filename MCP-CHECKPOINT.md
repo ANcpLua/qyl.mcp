@@ -74,9 +74,10 @@ The viewer runtime, tests, versions and manifest match that reviewed PR head.
 passed lint and verify on that head. Codex completed its review, reacted with
 thumbs-up, and left no unresolved findings. The old auto-merge wait is complete.
 `gh api repos/ANcpLua/qyl.mcp/rulesets/24693919` now reports
-`enforcement: disabled` for `owner-review-gate`; the check names still listed
-inside that disabled rule are not a new stamping task. This review made no
-gate changes. Use the current configured requirements for any later PR.
+`enforcement: disabled` for `owner-review-gate`. While it stays disabled, its
+four check names are not a stamping task; once the owner activates it,
+`owner-review/content` and `owner-review/evidence` are required on every PR's
+reviewed head. This review made no gate changes.
 
 Documentation clarified **2026-10-11** against the
 [verified references](docs/evidence/2026-10-08-point-10-ui-domain.md#clarification-and-current-behavior-2026-10-11):
