@@ -23,6 +23,9 @@ is `mise run check`; bun is the package manager (workspace lock `bun.lock` at th
   the owner.
 - Upstream pins this repo must keep fresh: `@ancplua/qyl-api-schema` in `server/package.json`,
   `workbench/package.json`, `dashboard/package.json`, and the root `bun.lock`.
+- Telemetry definitions: `@ancplua/qyl-semantic-conventions` in `server/package.json` and
+  `workbench/package.json` (test dependency), plus `bun.lock`. Re-pin from the
+  SemanticConventions release notification and run the same local gate.
 - Consumers to notify after this repo's release is indexed: qyl.at (`src/data/site.ts` lists
   `qyl-mcp-server`).
 
@@ -81,4 +84,9 @@ Act at once, before continuing your own work, so both agents keep moving:
 ## Order rules that never change
 
 - Contract revision: qyl (Collector) first, then qyl.mcp.
+- Deployment state, from this Mac: `railway deployment list --json` in this clone (linked to
+  project qyl, service `qyl-mcp`, environment `production`) or in the qyl clone (`qyl-collector`);
+  the newest entry must show `status: SUCCESS` and `meta.commitHash` equal to the pushed commit.
+  `curl -fsSL https://api.qyl.at/health` shows the Collector's contract revision,
+  `https://mcp.qyl.at/healthz` the server's state.
 - qyl.at lists a version only after the index confirms it.

@@ -37,11 +37,13 @@ import {
     ATTR_SERVICE_INSTANCE_ID,
     ATTR_SERVICE_NAME,
     ATTR_SERVICE_VERSION,
-} from "@opentelemetry/semantic-conventions";
+} from "@ancplua/qyl-semantic-conventions";
 import {
     METRIC_MCP_CLIENT_OPERATION_DURATION,
+    METRIC_MCP_CLIENT_OPERATION_DURATION_UNIT,
     METRIC_MCP_SERVER_OPERATION_DURATION,
-} from "@opentelemetry/semantic-conventions/incubating";
+    METRIC_MCP_SERVER_OPERATION_DURATION_UNIT,
+} from "@ancplua/qyl-semantic-conventions/incubating";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import packageMetadata from "../package.json" with { type: "json" };
@@ -239,12 +241,12 @@ export class McpTelemetry {
             })],
         });
         const meter = this.metricProvider.getMeter(INSTRUMENTATION_SCOPE, Product.version);
-        for (const name of [
-            METRIC_MCP_CLIENT_OPERATION_DURATION,
-            METRIC_MCP_SERVER_OPERATION_DURATION,
-        ]) {
+        for (const [name, unit] of [
+            [METRIC_MCP_CLIENT_OPERATION_DURATION, METRIC_MCP_CLIENT_OPERATION_DURATION_UNIT],
+            [METRIC_MCP_SERVER_OPERATION_DURATION, METRIC_MCP_SERVER_OPERATION_DURATION_UNIT],
+        ] as const) {
             this.histograms.set(name, meter.createHistogram(name, {
-                unit: "s",
+                unit,
                 advice: {
                     explicitBucketBoundaries: [...MCP_DURATION_EXPLICIT_BUCKET_BOUNDARIES],
                 },

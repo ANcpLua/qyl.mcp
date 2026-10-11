@@ -20,9 +20,12 @@ import {
     ATTR_NETWORK_TRANSPORT,
     ATTR_SERVER_ADDRESS,
     ATTR_SERVER_PORT,
+    ATTR_SERVICE_NAME,
+    ATTR_SERVICE_VERSION,
+    ATTR_SERVICE_INSTANCE_ID,
     NETWORK_TRANSPORT_VALUE_PIPE,
     NETWORK_TRANSPORT_VALUE_TCP,
-} from "@opentelemetry/semantic-conventions";
+} from "@ancplua/qyl-semantic-conventions";
 import {
     ATTR_GEN_AI_OPERATION_NAME,
     ATTR_GEN_AI_PROMPT_NAME,
@@ -36,7 +39,7 @@ import {
     GEN_AI_OPERATION_NAME_VALUE_EXECUTE_TOOL,
     METRIC_MCP_CLIENT_OPERATION_DURATION,
     METRIC_MCP_SERVER_OPERATION_DURATION,
-} from "@opentelemetry/semantic-conventions/incubating";
+} from "@ancplua/qyl-semantic-conventions/incubating";
 import {
     EVENT_QYL_MCP_OPERATION,
     describeMcpOperationLog,
@@ -514,3 +517,65 @@ function assertSingle<T>(values: readonly T[]): T {
     assert.equal(values.length, 1);
     return values[0]!;
 }
+
+// Literal wire fixtures protect consumers when generated constant names change.
+test("generated conventions preserve MCP wire vocabulary and duration units", () => {
+    const input = {
+        role: "client" as const,
+        transport: "http" as const,
+        method: "tools/call",
+        toolName: "weather.lookup",
+        protocolVersion: "2026-07-28",
+        jsonRpcProtocolVersion: "2.1",
+        jsonRpcRequestId: 7,
+        rpcResponseStatusCode: "-32602",
+        errorType: "-32602",
+        networkProtocolVersion: "2",
+        peerAddress: "mcp.example.test",
+        peerPort: 443,
+        serverId: "server-1",
+        executionId: "execution-1",
+        evaluationRunId: "evaluation-1",
+        testCaseId: "case-1",
+        startTimeMs: 1000,
+        endTimeMs: 1250,
+    };
+    assert.deepEqual([ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION, ATTR_SERVICE_INSTANCE_ID],
+        ["service.name", "service.version", "service.instance.id"]);
+    assert.equal(NETWORK_TRANSPORT_VALUE_PIPE, "pipe");
+    assert.equal(NETWORK_TRANSPORT_VALUE_TCP, "tcp");
+    const operation = {
+        "mcp.method.name": "tools/call",
+        "mcp.protocol.version": "2026-07-28",
+        "jsonrpc.protocol.version": "2.1",
+        "rpc.response.status_code": "-32602",
+        "error.type": "-32602",
+        "gen_ai.operation.name": "execute_tool",
+        "gen_ai.tool.name": "weather.lookup",
+        "network.transport": "tcp",
+        "network.protocol.name": "http",
+        "network.protocol.version": "2",
+        "server.address": "mcp.example.test",
+        "server.port": 443,
+    };
+    const span = describeMcpOperationSpan(input);
+    assert.deepEqual(span.attributes, {
+        ...operation,
+        "jsonrpc.request.id": "7",
+        "qyl.mcp.server.id": "server-1",
+        "qyl.mcp.execution.id": "execution-1",
+        "qyl.mcp.evaluation_run.id": "evaluation-1",
+        "qyl.mcp.test_case.id": "case-1",
+    });
+    assert.deepEqual(describeMcpOperationMetric(input), {
+        name: "mcp.client.operation.duration",
+        unit: "s",
+        value: 0.25,
+        attributes: operation,
+    });
+    const log = describeMcpOperationLog(input);
+    assert.equal(log.eventName, "qyl.mcp.operation");
+    assert.deepEqual(log.attributes, span.attributes);
+    assert.equal(describeMcpOperationMetric({ ...input, role: "server" }).name,
+        "mcp.server.operation.duration");
+});

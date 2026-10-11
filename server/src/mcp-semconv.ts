@@ -15,8 +15,13 @@ import {
     ATTR_SERVER_PORT,
     NETWORK_TRANSPORT_VALUE_PIPE,
     NETWORK_TRANSPORT_VALUE_TCP,
-} from "@opentelemetry/semantic-conventions";
+} from "@ancplua/qyl-semantic-conventions";
 import {
+    ATTR_QYL_MCP_EXECUTION_ID,
+    ATTR_QYL_MCP_EVALUATION_RUN_ID,
+    ATTR_QYL_MCP_TEST_CASE_ID,
+    ATTR_QYL_MCP_SERVER_ID,
+    EVENT_QYL_MCP_OPERATION,
     ATTR_GEN_AI_OPERATION_NAME,
     ATTR_GEN_AI_PROMPT_NAME,
     ATTR_GEN_AI_TOOL_NAME,
@@ -28,15 +33,17 @@ import {
     ATTR_RPC_RESPONSE_STATUS_CODE,
     GEN_AI_OPERATION_NAME_VALUE_EXECUTE_TOOL,
     METRIC_MCP_CLIENT_OPERATION_DURATION,
+    METRIC_MCP_CLIENT_OPERATION_DURATION_UNIT,
     METRIC_MCP_SERVER_OPERATION_DURATION,
-} from "@opentelemetry/semantic-conventions/incubating";
+    METRIC_MCP_SERVER_OPERATION_DURATION_UNIT,
+} from "@ancplua/qyl-semantic-conventions/incubating";
 import { SecretRedactor } from "./secret-redactor.js";
 
 const ATTRIBUTE_VALUE_LIMIT = 2_000;
 const LOG_BODY_CHARACTER_LIMIT = 64_000;
 const JSONRPC_DEFAULT_VERSION = "2.0";
 
-export const EVENT_QYL_MCP_OPERATION = "qyl.mcp.operation";
+export { EVENT_QYL_MCP_OPERATION };
 
 export type McpTelemetryRole = "client" | "server";
 export type McpTelemetryTransport =
@@ -94,7 +101,8 @@ export interface McpMetricDescriptor {
     name:
         | typeof METRIC_MCP_CLIENT_OPERATION_DURATION
         | typeof METRIC_MCP_SERVER_OPERATION_DURATION;
-    unit: "s";
+    unit: typeof METRIC_MCP_CLIENT_OPERATION_DURATION_UNIT
+        | typeof METRIC_MCP_SERVER_OPERATION_DURATION_UNIT;
     value: number;
     attributes: Attributes;
 }
@@ -108,10 +116,10 @@ export interface McpLogDescriptor {
 }
 
 export const WorkbenchTelemetryAttributes = {
-    executionId: "qyl.mcp.execution.id",
-    evaluationRunId: "qyl.mcp.evaluation_run.id",
-    testCaseId: "qyl.mcp.test_case.id",
-    serverId: "qyl.mcp.server.id",
+    executionId: ATTR_QYL_MCP_EXECUTION_ID,
+    evaluationRunId: ATTR_QYL_MCP_EVALUATION_RUN_ID,
+    testCaseId: ATTR_QYL_MCP_TEST_CASE_ID,
+    serverId: ATTR_QYL_MCP_SERVER_ID,
 } as const;
 
 export function describeMcpOperationSpan(
@@ -158,7 +166,9 @@ export function describeMcpOperationMetric(
         name: input.role === "client"
             ? METRIC_MCP_CLIENT_OPERATION_DURATION
             : METRIC_MCP_SERVER_OPERATION_DURATION,
-        unit: "s",
+        unit: input.role === "client"
+            ? METRIC_MCP_CLIENT_OPERATION_DURATION_UNIT
+            : METRIC_MCP_SERVER_OPERATION_DURATION_UNIT,
         value: durationSeconds(input.startTimeMs, input.endTimeMs),
         attributes,
     };
