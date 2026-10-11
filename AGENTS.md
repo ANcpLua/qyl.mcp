@@ -14,15 +14,15 @@ Before you change a tool, the contract, or a doc in any qyl-dev repo, read
 they fix which write tools come next, in which order, and how each known
 finding is resolved.
 
-## How we review
+## How we judge a change
 
 - Look for concrete regressions: what triggers it, which path is affected and
   what the consequence is. A finding without those three parts is a question
   for the author, not a blocker.
-- Judge a PR against the rules in this file and the requirements it touches,
+- Judge a change against the rules in this file and the requirements it touches,
   not against requirements we never adopted. When a rule should change, change
-  it here in the same PR and say why.
-- A clean Codex review is enough to merge.
+  it here in the same commit and say why.
+- No review gates a push; the gate is `mise run check`.
 - Version bumps and deliberate requirement changes are normal work.
 
 ## What must stay true
@@ -108,9 +108,9 @@ rely on. Everything else is judgment.
   manifests.
 - `bun run smoke` for transport changes, `bun run smoke:otlp` for Collector
   contracts, `bun run smoke:projects` for account and Events isolation. Run
-  what your diff touches; CI runs the combined gates.
+  what your diff touches; `mise run check` runs the combined gates.
 - Don't weaken a gate or regenerate an expected result just to get green. If a
-  gate is wrong, fix the gate and say so in the PR.
+  gate is wrong, fix the gate and say so in the commit message.
 - A contract bump that changes the revision deploys in order: merge the
   Collector side, wait for its Railway deployment to reach `SUCCESS`, then merge
   here. The hosted server refuses a mismatched Collector and Railway stops the
@@ -120,7 +120,7 @@ rely on. Everything else is judgment.
 
 ## Publishing across the qyl-dev repos
 
-Push to `main` directly; no pull request, review or CI wait is required. CI runs on the push and reports; nothing gates on it.
+Push to `main` directly; no pull request, review, approval or CI exists. The only gate is the repo's local command named in SKILL.md, run before the push.
 
 A release is done from the developer's machine with the registry API keys registered in Vitals (`vitals keys`): bump the version source, pack, push the packages to the registry, then tag `v<version>` on the released commit and create the GitHub release. No workflow publishes. Here that is `./release.sh <x.y.z>` (bumps `server/package.json`, publishes `qyl-mcp-server`, pushes `main`, tags, creates the GitHub release from the `### <x.y.z>` entry in `server/README.md`); `./release.sh <x.y.z> --dry-run` rehearses it without publishing.
 
