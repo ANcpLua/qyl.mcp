@@ -90,3 +90,15 @@ No repo runs the upstream OpenTelemetry Collector, configures `queuebatch`, or h
 | qyl | One Collector PR: U+FFFD decoding on OTLP/HTTP protobuf, gRPC and OTLP/JSON; 413 for an oversized OTLP/HTTP body and a cap on the decompressed gRPC message; the protos re-vendored at v1.11.1. The contract revision stays, so no qyl.mcp ordering applies; the release act follows the [release ripple](../../AGENTS.md#release-ripple-across-the-qyl-dev-repos). | OTLP-1, OTLP-2, OTLP-3 |
 | qyl.mcp | `maxExportBatchSize: MAX_QUEUE` on the metric reader. Semantic Conventions 1.44.0 arrives with the Codex TS migration. | SPEC-1, SEM-8 |
 | qyl.at, qyl-api-schema, SemanticConventions, AutoInstrumentation | None. | |
+
+## Status, 2026-10-11 18:00 Europe/Vienna
+
+Done:
+- OTLP-1, OTLP-2 (HTTP 413) and OTLP-3 in qyl #672 (`0ad16bba`), for qyl 10.0.0.
+- OTLP-2's gRPC half (the decompressed-size bound) in qyl #670 (`7e29bfb1`), released in qyl 9.2.0.
+- SPEC-1 in qyl.mcp #148 (`e57a66f`), released in 7.4.0.
+
+OTLP-1 per path:
+- OTLP/HTTP protobuf: a strict parse first; on failure the `string` fields are rewritten on the wire with U+FFFD, guided by the message descriptor, and parsed again.
+- OTLP/gRPC: the three export services bind `Export` through `OtlpExportMethodProvider`, whose request marshaller uses the same parse.
+- OTLP/JSON: invalid bytes and unpaired surrogate escapes decode as U+FFFD.
