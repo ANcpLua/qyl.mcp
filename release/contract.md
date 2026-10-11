@@ -374,20 +374,6 @@ check_v2: 0 error(s), 0 warning(s) in 82 file(s)
 GREEN: no v1 fingerprints at error severity.
 ```
 
-`python scripts/verify-completion.py` in a fresh virtual environment from
-`scripts/completion-audit-requirements.txt`:
-
-```text
-PASS: 8 bundle files and 5 handoff files
-PASS: plugin.json and mcp.json validate against submission/schemas (Draft 2020-12)
-PASS: README 263 words outside code blocks (minimum 40)
-PASS: all 11 tool descriptions state user need without model instructions
-PASS: strict native record contains only reviewed metadata; no arguments/_meta
-PASS: ledger has no not-recorded table rows
-PASS: 238 local documentation/evidence links and heading anchors resolve
-Completion audit passed; production, owner actions and prose evidence still require review.
-```
-
 Done-when 2 is read from the `verify` CI job of each merged point, not from a
 local run. At that observation, Done-when 5 held through the documented
 Collector-lockstep blocker. The [later Option-A continuation](../docs/evidence/2026-10-08-point-8-options.md)

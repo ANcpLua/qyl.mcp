@@ -23,26 +23,6 @@ python3 submission/build-openai-package.py
 claude plugin validate ./submission/qyl
 ```
 
-The completion audit runs in `verify` CI. To run it locally without changing
-your global Python environment:
-
-```sh
-python3 -m venv /tmp/qyl-completion-audit
-/tmp/qyl-completion-audit/bin/python -m pip install -r scripts/completion-audit-requirements.txt
-PATH="/tmp/qyl-completion-audit/bin:$PATH" bun run verify:completion
-```
-
-[Point-14 evidence](../docs/evidence/2026-10-08-followup-14.md) records local audit
-and negative-control results. The audit checks bundle/handoff files, schemas,
-README length, tool descriptions, the strict native record, ledger rows and
-local links across the goal/handoff documents and their evidence. It does not
-establish production or portal state or the truth of arbitrary claims.
-Run the external skill's `check_v2.mjs` separately; its path,
-unchanged hashes and earlier zero-error output are in [point-3 evidence](../docs/evidence/2026-10-08-followup-03.md).
-For transport changes, the required `smoke` commands remain in AGENTS.md; the
-[HTTP both-era command](../docs/evidence/2026-10-08-followup-12.md) also records
-its Bun-only entry and conformance scope.
-
 The [point-10 completion](../docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#point-10-manifest-fields) on 2026-10-11 set
 the published support, privacy and terms URLs, `developerName` and `./` icon
 paths, and produced local `submission/packages/qyl-openai-1.0.0-draft.zip` with

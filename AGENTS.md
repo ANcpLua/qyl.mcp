@@ -120,7 +120,7 @@ rely on. Everything else is judgment.
 
 Push to `main` directly; no pull request, review or CI wait is required. CI runs on the push and reports; nothing gates on it.
 
-A release is done from the developer's machine with the registry API keys registered in Vitals (`vitals keys`): bump the version source, pack, push the packages to the registry, then tag `v<version>` on the released commit and create the GitHub release. No workflow publishes.
+A release is done from the developer's machine with the registry API keys registered in Vitals (`vitals keys`): bump the version source, pack, push the packages to the registry, then tag `v<version>` on the released commit and create the GitHub release. No workflow publishes. Here that is `./release.sh <x.y.z>` (bumps `server/package.json`, publishes `qyl-mcp-server`, pushes `main`, tags, creates the GitHub release from the `### <x.y.z>` entry in `server/README.md`); `./release.sh <x.y.z> --dry-run` rehearses it without publishing.
 
 | Repo | Version source | Publishes |
 |---|---|---|
