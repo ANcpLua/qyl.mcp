@@ -201,9 +201,16 @@ records Railway's running commit and main-branch trigger on 2026-10-08.
 
 For a hosted bind, configure `MCP_PUBLIC_URL`, `MCP_BIND_HOST`, allowed hosts
 and origins, and the intended Collector URL/credential. The public URL sets
-the resource audience and viewer origin. Keep Collector credentials on the
-server. With project mapping enabled, only the verified subject selects the
-project; tool arguments and metadata do not select credentials.
+the resource audience and viewer origin. For Claude, viewer metadata uses
+the first 32 hex characters of SHA-256 over the full public `/mcp` URL plus
+`.claudemcpcontent.com`; ChatGPT receives the HTTPS origin in `ui.domain`
+and its `openai/widgetDomain` alias. Unknown hosts omit both fields.
+The SDK's per-request client name and the `User-Agent` are both checked for
+Claude or ChatGPT, including `Claude-User`, `openai-mcp/1.0.0` and `ChatGPT-User`.
+An unknown client name does not mask a recognized User-Agent. Local viewers
+omit the domain. Keep Collector credentials on the server. With project mapping
+enabled, only the verified subject selects the project; tool arguments and
+metadata do not select credentials.
 
 The default Auth0 mode accepts only the qyl production Auth0 issuer
 `https://qyl-eu.eu.auth0.com/`; arbitrary issuer substitution is not an
