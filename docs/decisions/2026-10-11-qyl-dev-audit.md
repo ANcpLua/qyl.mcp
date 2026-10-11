@@ -225,8 +225,8 @@ Findings made while fixing, with the same vocabulary. Upstream OpenTelemetry row
 
 | ID | Finding | Decision |
 |---|---|---|
-| QYL-U1 | The Collector drops `jsonrpc.request.id` and `jsonrpc.protocol.version`, which qyl.mcp emits on its own spans, logs and metrics: `jsonrpc.` is not an allowed prefix in `eng/config/collector-semantic-policy.json`, and the deprecated `rpc.jsonrpc.request_id` is renamed into the same dropped key before the check. The drop is reproduced | **Fix**: allow `jsonrpc.` in the Collector policy; it is upstream vocabulary. In qyl #672 (`feat/otlp-upstream-1.11.1`, with OTLP-1, OTLP-2 HTTP and OTLP-3), for qyl 10.0.0 |
-| QYL-F1 | `tests/Qyl.Cli.Tests/RunnerApiTests.cs:158` (`Runner_is_loopback_only_has_no_wildcard_cors_and_rejects_an_untrusted_host`) fails intermittently on linux-arm64 (run 38145289046 on #667, once on #632, #664's first run) with its own diagnostic "Cross-site POST to port 33567 answered 200; Server: Microsoft-NetCore/2.0; body empty": an `HttpListener` closed the response without a status. Either a runner path that ends a response before writing 403, or a port reused between parallel test runners | **Fix**, investigated: neither candidate. The probe `GET` with `Host: attacker.example` matches no prefix, so the managed `HttpListener` answers it with its own `404`, re-arms the keep-alive connection and then closes it, which writes the fresh context's unused response as a bare `200 OK` (a dotnet/runtime defect). The test's client pooled that connection, and the cross-site POST read the stray `200`. Reproduced on macOS arm64 (5 in 300). The probe now sends `Connection: close`. Found on the way: a resource action pending at shutdown was also answered `200`, because `HttpListener.Stop()` writes unsent responses as `200`. Shutdown now answers `503` `runner.shutting_down`, then stops the listener. qyl #671, for qyl 10.0.0 |
+| QYL-U1 | The Collector drops `jsonrpc.request.id` and `jsonrpc.protocol.version`, which qyl.mcp emits on its own spans, logs and metrics: `jsonrpc.` is not an allowed prefix in `eng/config/collector-semantic-policy.json`, and the deprecated `rpc.jsonrpc.request_id` is renamed into the same dropped key before the check. The drop is reproduced | **Fix**: allow `jsonrpc.` in the Collector policy; it is upstream vocabulary. Done in qyl #672 (`0ad16bba`, with OTLP-1, OTLP-2 HTTP and OTLP-3), in qyl 10.0.0 |
+| QYL-F1 | `tests/Qyl.Cli.Tests/RunnerApiTests.cs:158` (`Runner_is_loopback_only_has_no_wildcard_cors_and_rejects_an_untrusted_host`) fails intermittently on linux-arm64 (run 38145289046 on #667, once on #632, #664's first run) with its own diagnostic "Cross-site POST to port 33567 answered 200; Server: Microsoft-NetCore/2.0; body empty": an `HttpListener` closed the response without a status. Either a runner path that ends a response before writing 403, or a port reused between parallel test runners | **Fix**, investigated: neither candidate. The probe `GET` with `Host: attacker.example` matches no prefix, so the managed `HttpListener` answers it with its own `404`, re-arms the keep-alive connection and then closes it, which writes the fresh context's unused response as a bare `200 OK` (a dotnet/runtime defect). The test's client pooled that connection, and the cross-site POST read the stray `200`. Reproduced on macOS arm64 (5 in 300). The probe now sends `Connection: close`. Found on the way: a resource action pending at shutdown was also answered `200`, because `HttpListener.Stop()` writes unsent responses as `200`. Shutdown now answers `503` `runner.shutting_down`, then stops the listener. Done in qyl #671 (`a6df35d4`), in qyl 10.0.0 |
 
 ## Status, 2026-10-11 16:00 Europe/Vienna
 
@@ -295,3 +295,35 @@ In progress:
 | **Contract 12.0.0** | qyl-api-schema draft #51; qyl.at serves `https://qyl.at/problems/<name>` (SCH-20) first |
 
 Still open: OTLP-1, QYL-F1, QYL-U1, MCP-C1, MCP-S7, AT-2, AT-4, QYL-A9, AI-A1, AI-A2, every **Contract 11.7.0** and **Contract 12.0.0** row, AT-19 (**Owner**).
+
+## Status, 2026-10-11 18:00 Europe/Vienna
+
+Closed since 17:30:
+
+| Row | PR (merge), release |
+|---|---|
+| QYL-F1 | qyl #671 (`a6df35d4`); it also opened qyl 10.0.0 |
+| OTLP-1, OTLP-2 (HTTP), OTLP-3, QYL-U1 | qyl #672 (`0ad16bba`) |
+| QYL-A9 (**Major** Qyl.Api.Sdk 10.0.0) | qyl #666 (`fb575456`), with the re-pin to AutoInstrumentation 24.0.0 |
+| AI-A1, AI-A2 (**Major** 24.0.0) | AutoInstrumentation #63 (`db93054`), tag `v24.0.0`; indexed on NuGet |
+| MCP-C1, MCP-S7 and the write tools | qyl.mcp #150 (`0e197f55`), released as `qyl-mcp-server` 7.5.0 (npm `latest`, deployed to `mcp.qyl.at`). The protected-resource metadata lists `qyl:read`, `qyl:write`, `qyl:delete` |
+| AT-2, AT-4 | qyl.at #43 (`39d22592`): terms (effective 11 October 2026), privacy (effective 11 October 2026), support, FAQ, auth, pricing, the MCP and workbench docs |
+| SCH-20 type URIs | qyl.at #41 (`f5969f6`) serves `https://qyl.at/problems/<name>` for the ten Contract 12.0.0 problem types |
+| SCH-6, SCH-10, SCH-11, SCH-14, SCH-16, SCH-20 (**Contract 12.0.0**) | qyl-api-schema #51 (`e7a29bba`), released as v12.0.0 (revision `sha256:b29439eba28e752b`) on npm and NuGet; consumers pending: Collector qyl #673, then qyl.mcp #153 |
+| qyl 9.2.0 | published 15:36 UTC: all eight packages indexed. qyl.at #42 (`36fbe0ad`) displays 9.2.0, Contract 11.6.0 and `qyl-mcp-server` 7.5.0 |
+
+Production changes outside the repositories, for the write tools:
+- Auth0, tenant `qyl-eu`: the API `https://mcp.qyl.at/mcp` gained `qyl:write` and `qyl:delete`. The user client grants of ChatGPT, Claude, Claude Code, Codex, qyl MCP Inspector review, qyl-workspace hosted eval and qyl.mcp (Test Application) include both. Both users hold them as direct permissions, since the API enforces RBAC. A connection authorized before 7.5.0 holds only `qyl:read` and must reconnect.
+- Collector keys: the production `QYL_OTLP_PROJECT_KEYS` keys for projects `default` and `openai-review` carry roles `ingest`, `read`, `write` and `delete`. Checked end to end against `api.qyl.at`: a saved-query create answered `201`, its delete `204`, and a read after it `404`.
+- Live smoke: `server/live-tools-smoke.mjs` from qyl.mcp 7.4.0 against the published qyl 9.2.0 Collector passed all checks.
+
+Open question answered (#150): ChatGPT and claude.ai re-authorizing on a `403` `insufficient_scope` is not reliable across clients. Claude Code had step-up bugs, Codex surfaces the error and stops, and nothing is published for ChatGPT. The write tools do not depend on it: the challenge names the missing scope and tells the user to reconnect qyl and allow it.
+
+In progress:
+
+| Thread | State |
+|---|---|
+| qyl 10.0.0 | #671, #666 and #672 are on `main`; tag `v10.0.0` on `0ad16bba` once its CI is green |
+| **Contract 12.0.0** consumers | qyl #673 (Collector and runner, `QylVersion` 11.0.0), after `v10.0.0`. Then Railway, and `api.qyl.at` serving `sha256:b29439eba28e752b`. Then qyl.mcp #153 (7.6.0) |
+
+Still open: every **Contract 11.7.0** row (alert rules, SCH-22); the remaining **Contract 12.0.0** rows until #673 and #153 merge; AT-19 (**Owner**). From here, session "17 05 giga waifu" writes this file.
