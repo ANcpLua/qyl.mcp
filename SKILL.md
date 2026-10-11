@@ -51,9 +51,9 @@ is `mise run check`; bun is the package manager (workspace lock `bun.lock` at th
    release.
 5. The moment it is indexed: stop watching and notify qyl.at (section "Notify").
 6. Record the published version in
-   `/Users/alexandernachtmann/Downloads/qyl-codex-claude/qyl-handoff-for-codex.md` and rewrite
-   `/Users/alexandernachtmann/Downloads/qyl-codex-claude/qyl-published-versions.yaml` (the
-   registries are the truth; this file is the snapshot every agent reads first), and update
+   `/Users/alexandernachtmann/Downloads/qyl-codex-claude/qyl-handoff-for-codex.md` and run
+   `/Users/alexandernachtmann/Downloads/qyl-codex-claude/refresh-published-versions.sh`, which rewrites
+   `qyl-published-versions.yaml` beside it from the registries (the snapshot every agent reads first), and update
    `qyl-mcp-32-tools-both-platforms.md` there when the tool set changed.
 
 ## Notify
