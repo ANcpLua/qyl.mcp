@@ -207,8 +207,11 @@ the first 32 hex characters of SHA-256 over the full public `/mcp` URL plus
 and its `openai/widgetDomain` alias. Unknown hosts omit both fields.
 The SDK's per-request client name and the `User-Agent` are both checked for
 Claude or ChatGPT, including `Claude-User`, `openai-mcp/1.0.0` and `ChatGPT-User`.
-An unknown client name does not mask a recognized User-Agent. Local viewers
-omit the domain. Keep Collector credentials on the server. With project mapping
+A recognized client name takes precedence if the hints disagree; an unknown
+name does not mask a recognized User-Agent. These identifiers and ChatGPT's
+origin mapping are compatibility assumptions tested with synthetic clients;
+real client identifiers and successful ChatGPT rendering still need observation.
+Local viewers omit the domain. Keep Collector credentials on the server. With project mapping
 enabled, only the verified subject selects the project; tool arguments and
 metadata do not select credentials.
 

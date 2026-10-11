@@ -72,7 +72,7 @@ test("hosted viewers select Claude's hash or ChatGPT's origin per modern request
   const cases = [
     ["claude-ai", undefined, claudeDomain, undefined],
     ["Anthropic/ClaudeAI", undefined, claudeDomain, undefined],
-    ["ChatGPT", undefined, "https://mcp.qyl.at", "https://mcp.qyl.at"],
+    ["ChatGPT", "Claude-User/1.0", "https://mcp.qyl.at", "https://mcp.qyl.at"],
     ["openai-mcp", undefined, "https://mcp.qyl.at", "https://mcp.qyl.at"],
     ["generic-mcp-client", "Claude-User/1.0", claudeDomain, undefined],
     ["generic-mcp-client", "openai-mcp/1.0.0", "https://mcp.qyl.at", "https://mcp.qyl.at"],
@@ -90,6 +90,8 @@ test("hosted viewers select Claude's hash or ChatGPT's origin per modern request
 
 for (const [label, name, userAgent, domain, widgetDomain] of [
   ["Claude by name", "Claude", "generic-mcp-client/1.0", claudeDomain, undefined],
+  ["Claude by name despite a conflicting ChatGPT UA", "Claude", "ChatGPT-User/1.0", claudeDomain, undefined],
+  ["ChatGPT by name despite a conflicting Claude UA", "ChatGPT", "Claude-User/1.0", "https://mcp.qyl.at", "https://mcp.qyl.at"],
   ["Claude by UA with an unknown name", "generic-mcp-client", "Claude-User", claudeDomain, undefined],
   ["ChatGPT by openai-mcp UA with an unknown name", "generic-mcp-client", "openai-mcp/1.0.0", "https://mcp.qyl.at", "https://mcp.qyl.at"],
   ["ChatGPT by ChatGPT-User UA with an unknown name", "generic-mcp-client", "ChatGPT-User/1.0", "https://mcp.qyl.at", "https://mcp.qyl.at"],
