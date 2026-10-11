@@ -38,6 +38,8 @@ jobs:
           repository: ANcpLua/qyl
           path: qyl
 
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+
       # The two repos ride the same contract by lockstep bumps, not by a pinned
       # ref — so name a cross-repo skew before the long build does, instead of
       # letting smoke:otlp fail at the spawned server's startup handshake on a
@@ -46,8 +48,6 @@ jobs:
       # It is now verify-contract-pins.mjs, invoked identically from CI and from
       # `bun run verify:pins`, so there is one implementation rather than a
       # workflow copy and a local approximation.
-      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
-
       - name: Cross-repo contract pins must agree
         run: node verify-contract-pins.mjs
 
