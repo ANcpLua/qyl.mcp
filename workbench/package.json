@@ -19,7 +19,7 @@
     "@modelcontextprotocol/core": "2.3.1",
     "@modelcontextprotocol/server": "2.3.1",
     "express": "5.3.0",
-    "qyl-mcp-server": "7.7.0",
+    "qyl-mcp-server": "8.0.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
