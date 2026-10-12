@@ -176,7 +176,7 @@ try {
     ["compare_traces", { a: { trace_id: f.traceId }, b: { trace_id: f.traceId } }],
     ["verify_fix", { failure_id: failure.failure_id, since: new Date().toISOString() }],
     ["aggregate_telemetry", { signal: "spans", group_by: ["service.name"], measures: ["count"] }],
-    ["discover_attributes", {}], ["get_agent_run", { trace_id: f.traceId }],
+    ["discover_attributes", { signal: "spans" }], ["get_agent_run", { trace_id: f.traceId }],
     ["list_releases", {}], ["get_service_map", {}], ["check_telemetry_health", {}], ["get_mcp_stats", {}],
   ]; }
   for (const revision of ["2026-07-28", "2025-11-25"]) {
@@ -202,7 +202,7 @@ try {
       for (const [name, args] of cases(f)) {
         const result = await client.callTool({ name, arguments: args,
           _meta: { subject: foreign.subject, project: foreign.project } });
-        assert(!result.isError, `${revision} ${f.project} ${name}: ${JSON.stringify(result)}`);
+        assert(!result.isError, `${revision} ${f.project} ${name} ${JSON.stringify(args)}: ${JSON.stringify(result)}`);
         const json = JSON.stringify(result);
         assert(json.includes(f.marker), `${name} contains no seeded ${f.project} data`);
         assert(!json.includes(foreign.marker), `${name} leaked the other project's data`);

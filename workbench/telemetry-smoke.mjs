@@ -479,9 +479,9 @@ try {
       name: "get_trace",
       arguments: { trace_id: "0".repeat(32) },
     });
-    if (!missing.isError || !missing.content?.[0]?.text?.includes("trace not found")) {
-      throw new Error("live collector 404 did not flow through generated Problem Details");
-    }
+    assert.equal(missing.isError, true);
+    assert.equal(missing.structuredContent?.error?.code, "not_found");
+    assert.equal(missing.structuredContent?.error?.problem_type, "https://qyl.at/problems/not-found");
 
     // Every distractor differs in one filter, so silently ignoring any of the
     // published query names produces more than one row through the real MCP tool.
