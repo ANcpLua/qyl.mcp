@@ -6,7 +6,7 @@
  * in live mode through the MCP client and calls every tool — the write tools
  * through one annotation and one saved query it creates, changes and deletes
  * again — then repeats tools/list and one call over Streamable HTTP against a
- * second process. The Collector must serve Contract 11.6.0. Prints one
+ * second process. The Collector must serve the same contract revision as this package. Prints one
  * line per tool with isError, the structured-content keys and the first
  * numbers that matter, so a reader can judge "useful" as well as "works".
  *
@@ -118,7 +118,7 @@ const call = async (name, args) => { const r = await client.callTool({ name, arg
 try {
   await client.connect(transport);
   const { tools } = await client.listTools();
-  ok("18 tools listed", tools.length === 18, tools.map((t) => t.name).join(","));
+  ok("32 tools listed", tools.length === 32, tools.map((t) => t.name).join(","));
   const windowArgs = { start_time: new Date(Date.now() - 3_600_000).toISOString(), end_time: new Date(Date.now() + 60_000).toISOString() };
 
   let r = await call("list_traces", { limit: 20 });
@@ -152,6 +152,30 @@ try {
   r = await call("fetch_telemetry", { view: "traces", limit: 5 });
   ok("fetch_telemetry (app plumbing) answers", !r.isError);
 
+  // Every added read has a concrete call; results are validated by the client.
+  /** @type {Array<[string, Record<string, unknown>]>} */
+  const addedReads = [
+    ["triage", windowArgs], ["list_failures", windowArgs],
+    ["get_failure_context", { ...windowArgs, trace_id: traceId }],
+    ["compare_groups", { ...windowArgs, signal: "spans", group_a: { matchers: [{ key: "error.type", op: "exists" }] }, group_b: "rest" }],
+    ["compare_traces", { ...windowArgs, a: { trace_id: traceId }, b: { trace_id: traceId } }],
+    ["aggregate_telemetry", { ...windowArgs, signal: "spans", measures: ["count", "error_rate"] }],
+    ["discover_attributes", { ...windowArgs, signal: "resources" }],
+    ["get_agent_run", { ...windowArgs, trace_id: traceId }],
+    ["list_releases", windowArgs], ["get_service_map", windowArgs],
+    ["check_telemetry_health", windowArgs], ["get_mcp_stats", windowArgs],
+  ];
+  for (const [name, args] of addedReads) { const result = await call(name, args); ok(name + " validates", !result.isError, summary(result)); }
+  const failureList = await call("list_failures", windowArgs);
+  const failure = failureList.structuredContent?.failures?.[0];
+  ok("failure available for lifecycle checks", !!failure);
+  if (failure) {
+    r = await call("verify_fix", { ...windowArgs, failure_id: failure.failure_id, since: windowArgs.start_time });
+    ok("verify_fix validates", !r.isError, summary(r));
+    r = await call("update_failure_status", { failure_id: failure.failure_id, etag: failure.etag, status: "open" });
+    ok("update_failure_status validates", !r.isError && !!r.structuredContent?.failure?.etag, summary(r));
+  }
+
   // ------------------------------------------------------------ write tools
   // Local stdio has no OAuth: the Collector key decides what may change. Each
   // object the smoke creates is deleted again; the telemetry stays as sent.
@@ -175,7 +199,10 @@ try {
   ok("list_saved_queries lists it", JSON.stringify(r.structuredContent ?? r).includes(saved?.id ?? "missing"));
   r = await call("run_saved_query", { id: saved?.id });
   ok("run_saved_query finds the smoke trace", !r.isError && JSON.stringify(r.structuredContent ?? r).includes(traceId), summary(r));
-  r = await call("delete", { kind: "saved_query", id: saved?.id, etag: saved?.etag });
+  r = await call("update_saved_query", { id: saved?.id, etag: saved?.etag, name: queryName + "-updated" });
+  const updatedQuery = r.structuredContent?.saved_query;
+  ok("update_saved_query changes the saved object", !r.isError && updatedQuery?.etag !== saved?.etag, summary(r));
+  r = await call("delete", { kind: "saved_query", id: updatedQuery?.id, etag: updatedQuery?.etag });
   ok("delete removes the saved query", r.structuredContent?.deleted === true, summary(r));
   r = await call("delete", { kind: "annotation", id: edited?.id, etag: edited?.etag });
   ok("delete removes the annotation", r.structuredContent?.deleted === true, summary(r));

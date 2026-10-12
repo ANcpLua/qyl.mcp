@@ -11,7 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ancplua/qyl-api-schema": "12.0.0",
+    "@ancplua/qyl-api-schema": "12.1.0",
     "@modelcontextprotocol/core": "2.3.1",
     "qyl-mcp-server": "7.6.1",
     "react": "19.3.0",

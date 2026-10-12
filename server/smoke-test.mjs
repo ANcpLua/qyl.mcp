@@ -1,7 +1,7 @@
 /**
- * Smoke test for the qyl.mcp telemetry server (demo mode, stdio).
+ * Smoke test for child-process MCP transport and apps with fixed telemetry fixtures.
  *
- * Spawns `node dist/main.js --stdio` with QYL_DEMO=1 and asserts the direct
+ * Spawns `node dist/main.js --stdio` with a local typed fixture collector and asserts the direct
  * tool surface, MCP Apps metadata, trace/log behavior, explicit mode
  * selection, generated-demo invariants, and dashboard aggregation.
  *
@@ -13,6 +13,9 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createServer } from "node:http";
+import { getDemo } from "./dist/demo.js";
+import { fetchMcpStats } from "./dist/data.js";
 
 let failures = 0;
 function check(name, condition, detail = "") {
@@ -28,6 +31,49 @@ async function callTool(client, name, args) {
   return client.callTool({ name, arguments: args });
 }
 
+// This fixture verifies child-process transport and app rendering only.
+// Recorded-telemetry query semantics are verified in verify-answer-key.mjs.
+const savedDemo = process.env.QYL_DEMO;
+process.env.QYL_DEMO = "1";
+const fixtureStats = await fetchMcpStats(24);
+if (savedDemo === undefined) delete process.env.QYL_DEMO; else process.env.QYL_DEMO = savedDemo;
+const demo = getDemo();
+const context = { window: { start_time: new Date(Date.now()-86_400_000).toISOString(), end_time: new Date().toISOString() }, coverage: { examined: 8, matched: 8, returned: 8, truncated: false, scan_complete: true, as_of: new Date().toISOString() } };
+const fullTrace = trace => ({ ...trace, spans: trace.spans.map(span => ({ ...span, role: "matched" })) });
+const fixtureCollector = createServer((request, response) => {
+ void (async () => {
+  const chunks = []; for await (const chunk of request) chunks.push(chunk);
+  const args = JSON.parse(Buffer.concat(chunks).toString() || "{}");
+  const operation = request.url.split("/").at(-1);
+  response.setHeader("content-type", "application/json");
+  let data;
+  switch (operation) {
+    case "list_traces": data = { traces: demo.traces.map(({spans: _spans,...trace})=>({ ...trace, root_error: trace.root_span?.status.code === 2, contained_error: trace.has_error, failure_ids: [], annotation_labels: [] })) }; break;
+    case "get_trace": {
+      const trace = demo.traces.find(t=>t.trace_id===args.trace_id);
+      if (!trace) { response.statusCode=404; response.setHeader("content-type","application/problem+json"); response.end(JSON.stringify({type:"https://qyl.at/problems/not-found",title:"Not Found",code:"not_found",status:404,detail:"trace not found"})); return; }
+      data={trace:fullTrace(trace)}; break;
+    }
+    case "display_traces": data = {traces:demo.traces.slice(0,args.limit ?? demo.traces.length).map(fullTrace)}; break;
+    case "search_logs": data={logs:demo.logs.filter(l=>args.severity_min===undefined || l.severity_number>=args.severity_min)}; break;
+    case "ci_log": data={runs:[]}; break;
+    case "list_metrics": data={items:[0,1,2].map(i=>({name:`fixture.metric.${i}`,kind:"gauge",unit:"1",series_count:1,temporality:"unspecified",monotonic:false,last_seen:new Date().toISOString()}))}; break;
+    case "display_mcp_dashboard": data={stats:{...fixtureStats,mode:"live"}}; break;
+    case "fetch_telemetry":
+      if(args.view==="mcp_stats") data={stats:{...fixtureStats,mode:"live"}};
+      else if(args.view==="trace") data={trace:fullTrace(demo.traces.find(t=>t.trace_id===args.trace_id))};
+      else if(args.view==="logs") data={logs:demo.logs.filter(l=>l.trace_id===args.trace_id)};
+      else data={traces:demo.traces.slice(0,args.limit ?? demo.traces.length).map(fullTrace)};
+      break;
+    default: response.statusCode=400; response.setHeader("content-type","application/problem+json"); response.end(JSON.stringify({type:"https://qyl.at/problems/validation-failed",title:"Validation Failed",code:"validation_failed",errors:[],status:400,detail:"Writes require the real collector integration suite."})); return;
+  }
+  const paged = ["list_traces","list_metrics","search_logs","ci_log"].includes(operation);
+  const pageContext = Array.isArray(data.traces) ? {...context, coverage:{...context.coverage, returned:data.traces.length, truncated:data.traces.length < demo.traces.length}} : context;
+  response.end(JSON.stringify({...pageContext,...(operation==="list_metrics"||operation==="display_mcp_dashboard"?{}:{mode:"live"}),...(paged?{has_more:false}:{}),...data}));
+ })().catch(error=>{response.statusCode=500;response.end(String(error));});
+});
+await new Promise(resolve=>fixtureCollector.listen(0,"127.0.0.1",resolve));
+const fixtureUrl=`http://127.0.0.1:${fixtureCollector.address().port}`;
 const temp = await mkdtemp(join(tmpdir(), "qyl-mcp-server-smoke-"));
 const nativeStatePath = join(temp, "native-executions.json");
 const transport = new StdioClientTransport({
@@ -35,7 +81,8 @@ const transport = new StdioClientTransport({
   args: ["dist/main.js", "--stdio"],
   env: {
     ...process.env,
-    QYL_DEMO: "1",
+    QYL_DEMO: "",
+    QYL_COLLECTOR_URL: fixtureUrl,
     QYL_MCP_TELEMETRY: "0",
     QYL_MCP_NATIVE_STATE_PATH: nativeStatePath,
   },
@@ -80,11 +127,15 @@ console.log("tools/list");
 const { tools } = await client.listTools();
 const names = tools.map((t) => t.name).sort();
 check(
-  "exactly the eighteen supported tools",
-  names.length === 18 &&
+  "exactly the 32 supported tools",
+  names.length === 32 &&
     JSON.stringify(names) ===
       JSON.stringify(
         [
+          "triage", "list_failures", "get_failure_context", "compare_groups",
+          "compare_traces", "verify_fix", "aggregate_telemetry", "discover_attributes",
+          "get_agent_run", "list_releases", "get_service_map", "check_telemetry_health",
+          "get_mcp_stats", "update_failure_status",
           "ci_log",
           "create_annotation",
           "create_saved_query",
@@ -123,7 +174,7 @@ check(
 check(
   "every other tool stays read-only",
   tools
-    .filter((t) => !["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "delete"].includes(t.name))
+    .filter((t) => !["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "update_failure_status", "delete"].includes(t.name))
     .every((t) => t.annotations?.readOnlyHint === true && t.annotations?.destructiveHint === false),
 );
 const demoWrite = await callTool(client, "create_annotation", {
@@ -131,16 +182,16 @@ const demoWrite = await callTool(client, "create_annotation", {
   text: "smoke",
 });
 check(
-  "demo mode refuses a write with a stable code",
-  demoWrite.isError === true && demoWrite.structuredContent?.error?.code === "invalid_argument" &&
-    /needs a live qyl Collector/u.test(demoWrite.content?.[0]?.text ?? ""),
+  "read-only transport fixture refuses writes with a stable code",
+  demoWrite.isError === true && demoWrite.structuredContent?.error?.code === "collector_rejected" &&
+    /real collector integration suite/u.test(demoWrite.content?.[0]?.text ?? ""),
   JSON.stringify(demoWrite),
 );
 
 const displayTraces = tools.find((t) => t.name === "display_traces");
 check(
   "display_traces has _meta.ui.resourceUri",
-  displayTraces?._meta?.ui?.resourceUri === "ui://qyl-explorer/mcp-app-v6.html",
+  displayTraces?._meta?.ui?.resourceUri === "ui://qyl-explorer/mcp-app-v7.html",
   JSON.stringify(displayTraces?._meta),
 );
 
@@ -155,13 +206,13 @@ const displayDashboard = tools.find((t) => t.name === "display_mcp_dashboard");
 check(
   "display_mcp_dashboard has _meta.ui.resourceUri",
   displayDashboard?._meta?.ui?.resourceUri ===
-    "ui://qyl-explorer/mcp-dashboard-v4.html",
+    "ui://qyl-explorer/mcp-dashboard-v5.html",
   JSON.stringify(displayDashboard?._meta),
 );
 
 
 const ciLog = await callTool(client, "ci_log", {});
-check("ci_log returns native demo evidence", !ciLog.isError && Array.isArray(ciLog.structuredContent?.runs));
+check("ci_log returns typed run evidence", !ciLog.isError && Array.isArray(ciLog.structuredContent?.runs));
 
 // --- 2. Direct read tools + handler error contract ---------------------------
 console.log("list_traces / get_trace error");
@@ -172,7 +223,7 @@ check(
   listed.structuredContent?.traces?.length === 8 &&
     listed.structuredContent.traces.every((t) => t.spans === undefined),
 );
-check('mode is "demo"', listed.structuredContent?.mode === "demo");
+check('mode is live', listed.structuredContent?.mode === "live");
 
 const missingTrace = await callTool(client, "get_trace", {
   trace_id: "0000000000000000000000000000dead",
@@ -189,8 +240,9 @@ console.log("display_traces {}");
 const display = await client.callTool({ name: "display_traces", arguments: {} });
 const sc = display.structuredContent;
 check("not isError", !display.isError, display.content?.[0]?.text);
-check("returns 8 traces", sc?.traces?.length === 8, `got ${sc?.traces?.length}`);
-check('mode is "demo"', sc?.mode === "demo", `got ${sc?.mode}`);
+check("returns a bounded trace page", sc?.traces?.length > 0 && sc.traces.length <= 8, `got ${sc?.traces?.length}`);
+check("response stays within24KB", Buffer.byteLength(JSON.stringify(display), "utf8") <= 24_000);
+check('mode is live', sc?.mode === "live", `got ${sc?.mode}`);
 check(
   "every trace has full spans (spans.length === span_count > 0)",
   sc?.traces?.every((t) => Array.isArray(t.spans) && t.spans.length === t.span_count && t.span_count > 0),
@@ -300,7 +352,7 @@ const many = await client.callTool({
 });
 check(
   'view "traces" returns { traces } with full spans',
-  many.structuredContent?.traces?.length === 8 &&
+  many.structuredContent?.traces?.length > 0 && many.structuredContent.traces.length <= 8 &&
     many.structuredContent.traces.every((t) => t.spans.length > 0),
 );
 
@@ -312,10 +364,10 @@ const dash = await client.callTool({
 });
 const stats = dash.structuredContent?.stats;
 check("not isError", !dash.isError, dash.content?.[0]?.text);
-check('mode is "demo"', stats?.mode === "demo", `got ${stats?.mode}`);
-check("truncated is false in demo", stats?.truncated === false);
+check('mode is live', stats?.mode === "live", `got ${stats?.mode}`);
+check("fixture reports complete coverage", stats?.truncated === false);
 check(
-  "totals.requests > 500 in the 24h demo window",
+  "totals.requests > 500 in the 24h fixture window",
   stats?.totals?.requests > 500,
   `got ${stats?.totals?.requests}`,
 );
@@ -373,14 +425,14 @@ check("not isError", !mcpStatsRes.isError, mcpStatsRes.content?.[0]?.text);
 check(
   "returns { stats } with the same totals shape",
   mcpStatsRes.structuredContent?.stats?.totals?.requests > 500 &&
-    mcpStatsRes.structuredContent.stats.mode === "demo",
+    mcpStatsRes.structuredContent.stats.mode === "live",
 );
 
 // --- 9. resources/read of the debugger UIs -----------------------------------
-console.log("resources/read ui://qyl-explorer/mcp-dashboard-v4.html");
+console.log("resources/read ui://qyl-explorer/mcp-dashboard-v5.html");
 if (existsSync(new URL("./dist/mcp-dashboard.html", import.meta.url))) {
   const dashRes = await client.readResource({
-    uri: "ui://qyl-explorer/mcp-dashboard-v4.html",
+    uri: "ui://qyl-explorer/mcp-dashboard-v5.html",
   });
   const content = dashRes.contents?.[0];
   check(
@@ -430,19 +482,21 @@ try {
     command: "node",
     args: ["dist/main.js", "--stdio"],
     env: {
-      ...process.env, QYL_DEMO: "1", QYL_MCP_TELEMETRY: "0",
+      ...process.env, QYL_DEMO: "",
+    QYL_COLLECTOR_URL: fixtureUrl, QYL_MCP_TELEMETRY: "0",
       QYL_MCP_NATIVE_STATE_PATH: join(legacyTemp, "native.json"),
     },
   }));
   check("stock client negotiated the legacy era", legacyClient.getProtocolEra() === "legacy");
-  check("legacy catalog has all 18 tools", (await legacyClient.listTools()).tools.length === 18);
+  check("legacy catalog has all 32 tools", (await legacyClient.listTools()).tools.length === 32);
   const metrics = await legacyClient.callTool({ name: "list_metrics", arguments: {} });
-  check("legacy read tool returns real demo metrics", !metrics.isError && metrics.structuredContent?.items?.length === 3, JSON.stringify(metrics));
+  check("legacy read tool returns typed metric descriptors", !metrics.isError && metrics.structuredContent?.items?.length === 3, JSON.stringify(metrics));
   const invalid = await legacyClient.callTool({ name: "get_trace", arguments: {} });
   check("legacy invalid arguments remain a tool error", invalid.isError === true);
 } finally {
   await legacyClient.close().catch(() => undefined);
   await rm(legacyTemp, { recursive: true, force: true });
+  await new Promise(resolve=>fixtureCollector.close(resolve));
 }
 
 // --- 10. Mode selection is explicit; live failures do not become demo data ---

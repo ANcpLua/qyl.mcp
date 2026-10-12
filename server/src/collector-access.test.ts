@@ -11,6 +11,7 @@ import { createResourceAuthorization } from "./authorization.js";
 import { CollectorAccessError, collectorAccessForSubject, readCollectorProjects } from "./collector-access.js";
 import { collectorGet } from "./collector.js";
 import { API_KEY_HEADER, PROJECT_HEADER } from "./contract-headers.js";
+import { readContext, toolTrace, toolSummary } from "./analysis-context.test-helper.js";
 import { getDemo } from "./demo.js";
 import { EventsRuntime, createEventStore, type Principal, type SubscribeParams } from "./events.js";
 import { hostedAuth } from "./main.js";
@@ -121,8 +122,12 @@ for (const revision of ["2026-07-28", "2025-11-25"] as const) {
       calls.push({ project, path: pathname });
       // Overlap calls to expose any process-global credential switching.
       await new Promise((resolve) => setTimeout(resolve, project === "owner" ? 5 : 1));
-      if (pathname === "/api/v1/traces") return Response.json({ items: [selected], has_more: false });
-      if (pathname === `/api/v1/traces/${selected.trace_id}`) return Response.json(selected);
+      if (pathname === "/api/v1/analysis/list_traces") return Response.json({ ...readContext(1), traces: [toolSummary(selected)], mode: "live", has_more: false });
+      if (["/api/v1/analysis/display_traces", "/api/v1/analysis/fetch_telemetry"].includes(pathname)) return Response.json({ ...readContext(1), traces: [toolTrace(selected)], mode: "live" });
+      if (pathname === "/api/v1/analysis/get_trace") {
+        const args = await request.json() as { trace_id: string };
+        if (args.trace_id === selected.trace_id) return Response.json({ ...readContext(1), trace: toolTrace(selected), mode: "live" });
+      }
       return Response.json({ type: "https://qyl.at/problems/not-found", code: "not_found", title: "Not Found", status: 404 }, {
         status: 404, headers: { "content-type": "application/problem+json" },
       });

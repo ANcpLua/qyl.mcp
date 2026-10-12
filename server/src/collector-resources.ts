@@ -85,36 +85,18 @@ async function requireLiveCollector(tool: string): Promise<void> {
  * HTTP field value, so one that could not be sent is refused here instead of
  * failing inside fetch as if the Collector were unreachable.
  */
-function ifMatch(etag: string): Readonly<Record<string, string>> {
+export function ifMatch(etag: string): Readonly<Record<string, string>> {
   if (!/^[\x21-\x7e](?:[\x20-\x7e]*[\x21-\x7e])?$/u.test(etag)) {
     throw new CollectorError("etag is not a valid HTTP field value; pass the etag a qyl tool returned");
   }
   return { [IF_MATCH_HEADER]: etag };
 }
 
-/** JSON with object keys in one order at every depth, so equal bodies hash equal. */
-function canonicalJson(value: unknown): string {
-  return JSON.stringify(value, (_key, item: unknown) =>
-    item !== null && typeof item === "object" && !Array.isArray(item)
-      ? Object.fromEntries(
-        Object.entries(item as Record<string, unknown>).sort(([left], [right]) =>
-          left < right ? -1 : left > right ? 1 : 0),
-      )
-      : item);
-}
-
-/**
- * The retry key of a creating POST. A create's result can be lost after the
- * Collector committed it (a timeout, a dropped connection), and the failure is
- * reported retryable; the same intended create must then repeat the same key,
- * so the Collector returns the first object instead of making a second one.
- * The key is derived from the canonical body and the resolved project, never
- * chosen by the model: an identical note on the same target within the
- * Collector's 24-hour window is the same note.
- */
-function idempotencyKey(body: unknown, options: CollectorRequestOptions): Readonly<Record<string, string>> {
+/** Explicit retry keys deduplicate creates for 24 hours; absent keys create new objects. */
+function idempotencyKey(options: CollectorRequestOptions, suppliedKey?: string): Readonly<Record<string, string>> {
+  if (suppliedKey === undefined) return {};
   const digest = createHash("sha256")
-    .update(`${options.access?.project ?? ""}\0${canonicalJson(body)}`)
+    .update(`${options.access?.project ?? ""}\0${suppliedKey}`)
     .digest("hex");
   return { [IDEMPOTENCY_KEY_HEADER]: digest };
 }
@@ -162,7 +144,11 @@ export async function createAnnotation(
   await requireLiveCollector("create_annotation");
   // The create's 404 is its target: nothing by that id is recorded in this
   // project, so there is nothing to attach the note to.
-  const create = { target: input.target, text: input.text };
+  const create = {
+    target: input.target, text: input.text,
+    ...(input.labels === undefined ? {} : { labels: input.labels }),
+    ...(input.classification === undefined ? {} : { classification: input.classification }),
+  };
   const body = await refusals(
     {
       403: "the Collector refused the change: the server's Collector key needs the write role",
@@ -170,7 +156,7 @@ export async function createAnnotation(
     },
     () => collectorPost(ANNOTATIONS_PATH, create, {
       ...options,
-      headers: { ...options.headers, ...idempotencyKey(create, options) },
+      headers: { ...options.headers, ...idempotencyKey(options, input.idempotency_key) },
     }),
   );
   return redactTelemetry(parseCollectorBody(body, `POST ${ANNOTATIONS_PATH}`, AnnotationCreatedSchema));
@@ -182,8 +168,16 @@ export async function updateAnnotation(
 ): Promise<Annotation> {
   await requireLiveCollector("update_annotation");
   const path = resourcePath(ANNOTATIONS_PATH, input.id);
+  const changes = {
+    ...(input.text === undefined ? {} : { text: input.text }),
+    ...(input.labels === undefined ? {} : { labels: input.labels }),
+    ...(input.classification === undefined ? {} : { classification: input.classification }),
+  };
+  if (Object.keys(changes).length === 0) {
+    throw new CollectorError("update_annotation changes nothing: pass text, labels or classification");
+  }
   const body = await refusals(changeRefusals("annotation", input.id, "write"), () =>
-    collectorPatch(path, { text: input.text }, { ...options, headers: ifMatch(input.etag) }));
+    collectorPatch(path, changes, { ...options, headers: ifMatch(input.etag) }));
   return redactTelemetry(parseCollectorBody(body, `PATCH ${path}`, AnnotationUpdatedSchema));
 }
 
@@ -204,7 +198,7 @@ export async function createSavedQuery(
     },
     () => collectorPost(SAVED_QUERIES_PATH, create, {
       ...options,
-      headers: { ...options.headers, ...idempotencyKey(create, options) },
+      headers: { ...options.headers, ...idempotencyKey(options, input.idempotency_key) },
     }),
   );
   return redactTelemetry(parseCollectorBody(body, `POST ${SAVED_QUERIES_PATH}`, SavedQueryCreatedSchema));
@@ -309,6 +303,8 @@ export function describeTarget(target: Annotation["target"]): string {
       return `span ${target.span_id} of trace ${target.trace_id}`;
     case "session":
       return `session ${target.session_id}`;
+    case "failure":
+      return `failure ${target.failure_id}`;
   }
 }
 
@@ -320,6 +316,8 @@ function targetLabel(target: Annotation["target"]): string {
       return `span ${target.span_id}`;
     case "session":
       return `session ${target.session_id}`;
+    case "failure":
+      return `failure ${target.failure_id}`;
   }
 }
 

@@ -68,6 +68,6 @@ test("every tool input schema is an object at its root, the discriminated union 
   }
   const fetchTelemetry = tools.find((tool) => tool.name === "fetch_telemetry");
   assert.ok(fetchTelemetry);
-  assert.equal(fetchTelemetry.inputSchema.oneOf?.length, 4, "one variant per view");
+  assert.equal(fetchTelemetry.inputSchema.oneOf?.length, 5, "one variant per view");
   assert.equal(fetchTelemetry.inputSchema.allOf, undefined, "the union is hoisted to the root");
 });

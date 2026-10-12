@@ -182,6 +182,8 @@ export class SecretRedactor {
       for (const [key, child] of Object.entries(source)) {
         if (semanticKey !== undefined && key === "value") {
           result[key] = this.replacement;
+        } else if (key === "tokens" && isTokenUsage(child)) {
+          result[key] = this.redactValue(child, depth + 1, seen);
         } else if (isCredentialKey(key)) {
           result[key] = this.replacement;
         } else if (typeof child === "string" && isUriKey(key)) {
@@ -285,4 +287,14 @@ function positiveInteger(value: number, name: string): number {
     throw new Error(`${name} must be a positive integer.`);
   }
   return value;
+}
+
+/** Token usage is quantitative evidence, while string tokens remain credentials. */
+function isTokenUsage(value: unknown): boolean {
+  if (value === null || typeof value === "number") return true;
+  if (typeof value !== "object" || Array.isArray(value)) return false;
+  const allowed = new Set(["input", "output", "cache_read", "cache_write", "reasoning"]);
+  const entries = Object.entries(value);
+  return entries.length > 0 && entries.every(([key, count]) =>
+    allowed.has(key) && (count === null || typeof count === "number"));
 }

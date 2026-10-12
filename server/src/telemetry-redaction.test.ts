@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createServer as createHttpServer, type Server as HttpServer } from "node:http";
 import test from "node:test";
 import { CallToolResultSchema } from "@modelcontextprotocol/core";
+import { readContext, toolTrace } from "./analysis-context.test-helper.js";
 import { getDemo } from "./demo.js";
 import { connectModernTestClient } from "./modern-test-client.test-helper.js";
 import { createServer } from "./server.js";
@@ -66,12 +67,12 @@ test("telemetry tools redact secrets before model text and structured content", 
 
   const collector = createHttpServer((request, response) => {
     response.setHeader("content-type", "application/json");
-    if (request.url?.startsWith("/api/v1/logs")) {
-      response.end(JSON.stringify({ items: [textualLog, semanticLog], has_more: false }));
+    if (request.url?.startsWith("/api/v1/analysis/search_logs")) {
+      response.end(JSON.stringify({ ...readContext(2), logs: [textualLog, semanticLog], mode: "live", has_more: false }));
       return;
     }
-    if (request.url?.startsWith(`/api/v1/traces/${trace.trace_id}`)) {
-      response.end(JSON.stringify(trace));
+    if (request.url?.startsWith("/api/v1/analysis/get_trace")) {
+      response.end(JSON.stringify({ ...readContext(1), trace: toolTrace(trace), mode: "live" }));
       return;
     }
     response.statusCode = 404;
@@ -159,3 +160,15 @@ function close(server: HttpServer): Promise<void> {
     server.close((error) => error ? reject(error) : resolve());
   });
 }
+
+test("numeric agent token usage survives while credential tokens remain redacted", () => {
+  assert.deepEqual(redactTelemetry({
+    run: { tokens: { input: 12, output: 4, cache_read: null, cache_write: 0, reasoning: 2 } },
+    share: { tokens: 18 }, credential: { tokens: "secret-string" },
+    nested: { tokens: { access_token: "secret-string" } },
+  }), {
+    run: { tokens: { input: 12, output: 4, cache_read: null, cache_write: 0, reasoning: 2 } },
+    share: { tokens: 18 }, credential: "[REDACTED]",
+    nested: { tokens: "[REDACTED]" },
+  });
+});

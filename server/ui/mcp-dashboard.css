@@ -616,3 +616,12 @@
     display: none;
   }
 }
+
+.dashboard-filters, .dashboard-totals, .dashboard-calls { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; }
+.dashboard-filters input { min-width: 0; flex: 1 1 130px; padding: 6px; }
+.dashboard-totals p { flex-basis: 100%; }
+.dashboard-totals span { padding: 4px; }
+.dashboard-calls { flex-direction: column; }
+.dashboard button, .bl-row[role=button], .traffic-hit { cursor: pointer; }
+.name-cell button { text-align: left; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .dashboard-filters input { flex-basis: 100%; } }

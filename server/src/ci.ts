@@ -11,20 +11,13 @@
  *
  */
 import type {
-  CiLogInput,
-  CiLogOutput,
   CiPhase,
   CiRunSummary,
 } from "@ancplua/qyl-api-schema/types";
-import type { McpServer, CallToolResult, ServerContext } from "@modelcontextprotocol/server";
-import {
-  CiLogInputSchema,
-  CiLogOutputSchema,
-  compactOutputSchema,
-} from "./contract-validation.js";
-import { fetchSessions, fetchSessionTraces } from "./data.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import { compactOutputSchema, contractSchema } from "./contract-validation.js";
+import { queryAnalysis } from "./analysis-client.js";
 import { runTool } from "./request-scope.js";
-import { telemetryToolResult } from "./telemetry-redaction.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, TELEMETRY_TOOL_AUTH_META } from "./tools.js";
 import type { Mode, QylSession, QylSpan, QylTrace } from "./wire.js";
 
@@ -115,55 +108,19 @@ export function summarizeCiRun(
   return `CI run ${runId} (${mode} mode):\n${lines.join("\n")}`;
 }
 
-/** Register the CI dogfooding block. */
+/** Query all matching CI telemetry before pagination. */
 export function registerCiTools(server: McpServer): void {
   server.registerTool(
     "ci_log",
     {
       title: "CI Log",
-      description:
-        "Read CI telemetry from qyl when the user wants recent runs or a per-leg " +
-        "phase breakdown with failures first. Any CI can emit this convention: " +
-        `resource service.name starts with service_prefix (default '${CI_SERVICE_PREFIX}'), session.id identifies ` +
-        "the run, and one span per phase carries a ci.leg attribute; failed phases " +
-        "set span status to error. Without run_id, filters the 50 most recent " +
-        "sessions and returns up to limit matching runs (default 10). With run_id, " +
-        "reads up to 100 traces for that session and returns only phases matching " +
-        "the same case-sensitive service prefix; phase output can be large.",
-      inputSchema: CiLogInputSchema,
-      outputSchema: compactOutputSchema(CiLogOutputSchema),
+      description: "List or compare CI runs and phase failures when investigating a build or test regression.",
+      inputSchema: contractSchema("Mcp.Tools.CiLogInput"),
+      outputSchema: compactOutputSchema(contractSchema("Mcp.Tools.CiLogOutput")),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: TELEMETRY_TOOL_AUTH_META,
     },
-    (args: CiLogInput, ctx: ServerContext): Promise<CallToolResult> =>
-      // A run breakdown is two units a client can watch: the collector round
-      // trip for the run's traces, then the flatten into per-leg phases. The
-      // run list is one round trip.
-      runTool(ctx, args.run_id ? 2 : 1, async (scope) => {
-        const servicePrefix = args.service_prefix ?? CI_SERVICE_PREFIX;
-        if (args.run_id) {
-          const { traces, mode } = await fetchSessionTraces(args.run_id, 100, scope.collector);
-          await scope.step(`Fetched ${traces.length} trace(s) of CI run ${args.run_id}`);
-          const phases = collectCiPhases(traces, servicePrefix);
-          const legs = new Set(phases.map((phase) => phase.leg)).size;
-          await scope.step(`Collected ${phases.length} phase(s) across ${legs} leg(s)`);
-          const output: CiLogOutput = { run_id: args.run_id, phases, mode };
-          return telemetryToolResult(summarizeCiRun(args.run_id, phases, mode, servicePrefix), output);
-        }
-        const { sessions, mode } = await fetchSessions({ limit: 50 }, scope.collector);
-        const runs = filterCiSessions(sessions, servicePrefix)
-          .slice(0, args.limit ?? 10)
-          .map((session): CiRunSummary => ({
-            run_id: session["session_id"],
-            state: session.state,
-            start_time: session.start_time,
-            ...(session.duration_ms === undefined ? {} : { duration_ms: session.duration_ms }),
-            error_count: session.error_count,
-            services: session.services,
-          }));
-        await scope.step(`Found ${runs.length} CI run(s) among ${sessions.length} session(s)`);
-        const output: CiLogOutput = { runs, mode };
-        return telemetryToolResult(summarizeCiRuns(runs, mode, servicePrefix), output);
-      }),
+    (args, ctx) => runTool(ctx, 1, async (scope) =>
+      queryAnalysis("ci_log", args, contractSchema("Mcp.Tools.CiLogOutput"), scope)),
   );
 }

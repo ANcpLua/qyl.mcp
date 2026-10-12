@@ -22,13 +22,8 @@ import type {
   CreateSavedQueryInput,
   DeleteInput,
   DeleteOutput,
-  ListSavedQueriesInput,
-  ListSavedQueriesOutput,
-  RunSavedQueryInput,
-  RunSavedQueryOutput,
   SavedQuery,
   SavedQueryOutput,
-  SavedQueryRunResult,
   UpdateAnnotationInput,
   UpdateSavedQueryInput,
 } from "@ancplua/qyl-api-schema/types";
@@ -45,14 +40,12 @@ import {
   createSavedQuery,
   deleteResource,
   describeTarget,
-  listSavedQueries,
-  runSavedQuery,
   updateAnnotation,
   updateSavedQuery,
 } from "./collector-resources.js";
 import { QYL_MCP_DELETE_SCOPE, QYL_MCP_SCOPE, QYL_MCP_WRITE_SCOPE } from "./oauth.js";
 import { runTool } from "./request-scope.js";
-import { humanizeNs, pageNote, shortId } from "./summaries.js";
+import { queryAnalysis } from "./analysis-client.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 import { assertToolScopes, toolScopeChallenge } from "./tool-scopes.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, TELEMETRY_TOOL_AUTH_META } from "./tools.js";
@@ -95,10 +88,6 @@ const AnnotationOutputSchema = contractSchema("Mcp.Tools.AnnotationOutput");
 const CreateSavedQueryInputSchema = contractSchema("Mcp.Tools.CreateSavedQueryInput");
 const UpdateSavedQueryInputSchema = contractSchema("Mcp.Tools.UpdateSavedQueryInput");
 const SavedQueryOutputSchema = contractSchema("Mcp.Tools.SavedQueryOutput");
-const ListSavedQueriesInputSchema = contractSchema("Mcp.Tools.ListSavedQueriesInput");
-const ListSavedQueriesOutputSchema = contractSchema("Mcp.Tools.ListSavedQueriesOutput");
-const RunSavedQueryInputSchema = contractSchema("Mcp.Tools.RunSavedQueryInput");
-const RunSavedQueryOutputSchema = contractSchema("Mcp.Tools.RunSavedQueryOutput");
 const DeleteInputSchema = contractSchema("Mcp.Tools.DeleteInput");
 const DeleteOutputSchema = contractSchema("Mcp.Tools.DeleteOutput");
 
@@ -107,36 +96,13 @@ function savedQueryLine(query: SavedQuery): string {
   return `- ${query.name} (${query.filter.signal}) · id ${query.id} · etag ${query.etag}${description}`;
 }
 
-function summarizeRun(id: string, result: SavedQueryRunResult): string {
-  switch (result.signal) {
-    case "traces": {
-      const rows = result.items.map((trace) =>
-        `- ${shortId(trace.trace_id)} ${trace.root_span?.name ?? "unknown root"} · ${humanizeNs(trace.duration_ns)} · ` +
-          `${trace.span_count} spans · ${trace.has_error ? "ERROR" : "OK"} · ${trace.services.slice(0, 3).join(", ")}`);
-      return `Saved query ${id}: ${result.items.length} trace(s)` +
-        (rows.length === 0 ? "." : `\n${rows.join("\n")}`) + pageNote({ hasMore: result.has_more });
-    }
-    case "logs":
-      return `Saved query ${id}: ${result.items.length} log record(s); the records are in the structured result.` +
-        pageNote({ hasMore: result.has_more });
-    case "metrics":
-      return `Saved query ${id}: ${result.result.name} ${result.result.aggregation} over ` +
-        `${result.result.start_time}..${result.result.end_time}, ${result.result.series.length} series` +
-        (result.result.truncated ? " (truncated at the series limit)" : "") + ".";
-  }
-}
-
 /** Registers the seven tools; every handler runs inside runTool. */
 export function registerWriteTools(server: McpServer): void {
   server.registerTool(
     "create_annotation",
     {
       title: "Create Annotation",
-      description:
-        "Attach a plain-text note of at most 2000 characters to a trace, a span or a session " +
-        "in the user's qyl project when the user wants to record a finding next to the telemetry. " +
-        "The note leaves the telemetry it points at unchanged; get_trace and list_sessions return " +
-        "it with its id and etag. Each call adds a new annotation.",
+      description: "Create a labeled note on a trace, span, session or failure when recording a finding; get_trace, list_sessions or list_failures returns it.",
       inputSchema: CreateAnnotationInputSchema,
       outputSchema: compactOutputSchema(AnnotationOutputSchema),
       annotations: CREATE_TOOL_ANNOTATIONS,
@@ -160,10 +126,7 @@ export function registerWriteTools(server: McpServer): void {
     "update_annotation",
     {
       title: "Update Annotation",
-      description:
-        "Replace the text of one annotation when the user wants to correct or extend a note. " +
-        "Pass its id and current etag from get_trace, list_sessions or create_annotation; a stale " +
-        "etag is refused instead of overwriting a newer version. What the note is attached to stays fixed.",
+      description: "Update annotation text, labels or class with its current etag when revising a finding; get_trace, list_sessions or list_failures returns it.",
       inputSchema: UpdateAnnotationInputSchema,
       outputSchema: compactOutputSchema(AnnotationOutputSchema),
       annotations: UPDATE_TOOL_ANNOTATIONS,
@@ -187,10 +150,7 @@ export function registerWriteTools(server: McpServer): void {
     "create_saved_query",
     {
       title: "Create Saved Query",
-      description:
-        "Save a named filter for traces, logs or metrics in the user's qyl project when the user " +
-        "wants to ask the same question again later. Names are unique per project. Only the filter " +
-        "is stored, never results; run_saved_query evaluates it against the telemetry of that moment.",
+      description: "Store a named telemetry filter when saving a reusable question; list_saved_queries returns it.",
       inputSchema: CreateSavedQueryInputSchema,
       outputSchema: compactOutputSchema(SavedQueryOutputSchema),
       annotations: CREATE_TOOL_ANNOTATIONS,
@@ -215,10 +175,7 @@ export function registerWriteTools(server: McpServer): void {
     "update_saved_query",
     {
       title: "Update Saved Query",
-      description:
-        "Rename a saved query or change its description or filter when the user wants to adjust a " +
-        "stored question. Pass its id and current etag from list_saved_queries or create_saved_query; " +
-        "omitted fields keep their value, and a stale etag is refused instead of overwriting a newer version.",
+      description: "Update a saved filter with its current etag when revising a question; list_saved_queries returns it.",
       inputSchema: UpdateSavedQueryInputSchema,
       outputSchema: compactOutputSchema(SavedQueryOutputSchema),
       annotations: UPDATE_TOOL_ANNOTATIONS,
@@ -242,62 +199,35 @@ export function registerWriteTools(server: McpServer): void {
     "list_saved_queries",
     {
       title: "List Saved Queries",
-      description:
-        "List the saved queries in the user's qyl project by name when the user wants to find a " +
-        "stored question to run, change or delete, optionally only those for traces, logs or metrics. " +
-        "Each entry carries its id, etag and filter; pass next_cursor as cursor for the next page.",
-      inputSchema: ListSavedQueriesInputSchema,
-      outputSchema: compactOutputSchema(ListSavedQueriesOutputSchema),
+      description: "List saved filters with their current etags when choosing a question to run or edit.",
+      inputSchema: contractSchema("Mcp.Tools.ListSavedQueriesInput"),
+      outputSchema: compactOutputSchema(contractSchema("Mcp.Tools.ListSavedQueriesOutput")),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: TELEMETRY_TOOL_AUTH_META,
     },
-    (args: ListSavedQueriesInput, ctx: ServerContext): Promise<CallToolResult> =>
-      runTool(ctx, 1, async (scope) => {
-        const page = await listSavedQueries(args, scope.collector);
-        await scope.step(`Fetched ${page.savedQueries.length} saved query(s)`);
-        const output: ListSavedQueriesOutput = {
-          saved_queries: page.savedQueries,
-          has_more: page.hasMore,
-          ...(page.nextCursor === undefined ? {} : { next_cursor: page.nextCursor }),
-        };
-        const text = page.savedQueries.length === 0
-          ? `No saved queries${args.signal === undefined ? "" : ` for ${args.signal}`} in this project.`
-          : `Saved queries (${page.savedQueries.length}):\n${page.savedQueries.map(savedQueryLine).join("\n")}`;
-        return telemetryToolResult(text + pageNote(page), output);
-      }),
+    (args, ctx) => runTool(ctx, 1, async (scope) =>
+      queryAnalysis("list_saved_queries", args, contractSchema("Mcp.Tools.ListSavedQueriesOutput"), scope)),
   );
 
   server.registerTool(
     "run_saved_query",
     {
       title: "Run Saved Query",
-      description:
-        "Run one saved query against the current telemetry when the user wants the stored question's " +
-        "answer now: trace summaries, log records or a metric range result, depending on its signal. " +
-        "It only reads. start_time and end_time replace the saved look-back window, and next_cursor " +
-        "pages trace and log results.",
-      inputSchema: RunSavedQueryInputSchema,
-      outputSchema: compactOutputSchema(RunSavedQueryOutputSchema),
+      description: "Evaluate a saved filter against current telemetry when answering a previously saved question.",
+      inputSchema: contractSchema("Mcp.Tools.RunSavedQueryInput"),
+      outputSchema: compactOutputSchema(contractSchema("Mcp.Tools.RunSavedQueryOutput")),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
       _meta: TELEMETRY_TOOL_AUTH_META,
     },
-    (args: RunSavedQueryInput, ctx: ServerContext): Promise<CallToolResult> =>
-      runTool(ctx, 1, async (scope) => {
-        const result = await runSavedQuery(args, scope.collector);
-        await scope.step(`Ran saved query ${args.id}`);
-        const output: RunSavedQueryOutput = { result, mode: "live" };
-        return telemetryToolResult(summarizeRun(args.id, result), output);
-      }),
+    (args, ctx) => runTool(ctx, 1, async (scope) =>
+      queryAnalysis("run_saved_query", args, contractSchema("Mcp.Tools.RunSavedQueryOutput"), scope)),
   );
 
   server.registerTool(
     "delete",
     {
       title: "Delete Annotation or Saved Query",
-      description:
-        "Delete one annotation or saved query by id when the user asks to remove it. Pass its current " +
-        "etag; a stale etag is refused instead of deleting a newer version. It deletes only objects users " +
-        "created in qyl, never traces, logs or metrics: retention removes telemetry.",
+      description: "Delete an annotation or saved query with its current etag when removing a stored note or question, never traces, logs or metrics.",
       inputSchema: DeleteInputSchema,
       outputSchema: compactOutputSchema(DeleteOutputSchema),
       annotations: DELETE_TOOL_ANNOTATIONS,

@@ -68,7 +68,7 @@ test("HTTP tools/list carries cache hints and preserves order across requests", 
     assert.equal(body.id, id);
     assert.equal(body.result.ttlMs, 300_000);
     assert.equal(body.result.cacheScope, "public");
-    assert.equal(body.result.tools.length, 18);
+    assert.equal(body.result.tools.length, 32);
     catalogs.push(body.result);
   }
 

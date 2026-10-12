@@ -17,6 +17,7 @@
  *     construction; `runTool` reports the final step itself once the result is
  *     built, so a handler declares only the steps it reports.
  */
+import type { ProblemDetails, ValidationErrorDetail } from "@ancplua/qyl-api-schema/types";
 import type { CallToolResult, ServerContext } from "@modelcontextprotocol/server";
 import {
   CollectorError,
@@ -25,7 +26,7 @@ import {
   isRetryableToolError,
 } from "./collector.js";
 import { CollectorAccessError, collectorAccessForSubject } from "./collector-access.js";
-import { redactTelemetryText } from "./telemetry-redaction.js";
+import { redactTelemetry, redactTelemetryText } from "./telemetry-redaction.js";
 import { InsufficientScopeError, WWW_AUTHENTICATE_META_KEY } from "./tool-scopes.js";
 
 /** What a tool's work receives: collector options and a progress step. */
@@ -43,6 +44,8 @@ export interface ToolErrorDetail {
   message: string;
   /** Whether repeating the same call unchanged can succeed. */
   retryable: boolean;
+  problem_type?: ProblemDetails["type"];
+  fields?: ValidationErrorDetail[];
 }
 
 /**
@@ -51,7 +54,11 @@ export interface ToolErrorDetail {
  */
 export function describeToolError(err: unknown): ToolErrorDetail {
   if (err instanceof CollectorError) {
-    return { code: err.code, message: err.message, retryable: isRetryableToolError(err.code) };
+    return {
+      code: err.code, message: err.message, retryable: isRetryableToolError(err.code),
+      ...(err.problemType === undefined ? {} : { problem_type: err.problemType }),
+      ...(err.fields === undefined ? {} : { fields: err.fields }),
+    };
   }
   if (err instanceof CollectorAccessError) {
     return { code: "no_project_access", message: err.message, retryable: false };
@@ -73,7 +80,7 @@ export function toolError(err: unknown): CallToolResult {
   const message = redactTelemetryText(detail.message);
   return {
     content: [{ type: "text", text: message }],
-    structuredContent: { error: { code: detail.code, message, retryable: detail.retryable } },
+    structuredContent: { error: redactTelemetry({ ...detail, message }) },
     isError: true,
     // The challenge a client answers with step-up authorization (tool-scopes.ts).
     ...(err instanceof InsufficientScopeError

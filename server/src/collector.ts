@@ -14,9 +14,11 @@ import type {
   ProblemDetails,
   SessionEntity,
   ToolErrorCode,
+  ValidationErrorDetail,
   Trace,
 } from "@ancplua/qyl-api-schema/types";
 import * as z from "zod/v4";
+import { redactTelemetryText } from "./telemetry-redaction.js";
 import { collectorHeaders, collectorUrl } from "./config.js";
 import { CollectorAccessError, readCollectorProjects, type CollectorAccess } from "./collector-access.js";
 import {
@@ -27,6 +29,7 @@ import {
   ProblemDetailsSchema,
   SessionSchema,
   TraceSchema,
+  ValidationErrorSchema,
 } from "./contract-validation.js";
 import type { Mode } from "./wire.js";
 
@@ -88,6 +91,8 @@ export class CollectorError extends Error {
     readonly connectionError = false,
     readonly status?: number,
     code?: ToolErrorCode,
+    readonly problemType?: ProblemDetails["type"],
+    readonly fields?: ValidationErrorDetail[],
   ) {
     super(message);
     this.name = "CollectorError";
@@ -439,11 +444,18 @@ async function collectorRequest(
         codeForUnexpectedBody(response),
       );
     }
+    const validation = problem.code === "validation_failed"
+      ? ValidationErrorSchema.safeParse(responseBody)
+      : undefined;
+    const fields = validation?.success ? validation.data.errors : undefined;
+    const fieldMessage = fields?.map((field) => `${field.field}: ${field.message}`).join("; ");
     throw new CollectorError(
-      `collector request failed (${response.status} ${response.statusText}) for ${pathname}`,
+      redactTelemetryText(fieldMessage || problem.detail || problem.title),
       false,
       response.status,
       codeForProblem(problem, response.status),
+      problem.type,
+      fields,
     );
   }
 

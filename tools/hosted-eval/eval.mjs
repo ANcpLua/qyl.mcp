@@ -45,11 +45,11 @@ try {
 
   const listing = await client.listTools();
   const tools = listing.tools.map((t) => t.name);
-  check(tools.length === 18, "tools/list returns eighteen tools", `${tools.length}: ${tools.join(", ")}`);
-  const writes = ["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "delete"];
+  check(tools.length === 32, "tools/list returns 32 tools", `${tools.length}: ${tools.join(", ")}`);
+  const writes = ["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "delete", "update_failure_status"];
   check(
     writes.every((name) => listing.tools.find((t) => t.name === name)?.annotations?.readOnlyHint === false),
-    "the five write tools are published without readOnlyHint",
+    "the six write tools are published without readOnlyHint",
   );
 
   // A token without qyl:write meets the MCP scope challenge before anything
@@ -64,6 +64,15 @@ try {
 
   /** @type {ReadonlyArray<readonly [string, Record<string, unknown>]>} */
   const plan = [
+    ["triage", {}],
+    ["list_failures", {}],
+    ["aggregate_telemetry", { signal: "spans", measures: ["count", "error_rate"] }],
+    ["discover_attributes", { signal: "resources" }],
+    ["list_releases", {}],
+    ["get_service_map", {}],
+    ["check_telemetry_health", {}],
+    ["get_mcp_stats", {}],
+    ["list_saved_queries", {}],
     ["list_traces", {}],
     ["list_sessions", {}],
     ["list_metrics", {}],
@@ -86,7 +95,7 @@ try {
   }
 
   if (firstTrace) {
-    for (const name of ["get_trace", "display_traces"].filter((n) => tools.includes(n))) {
+    for (const name of ["get_trace", "display_traces", "get_failure_context", "get_agent_run"].filter((n) => tools.includes(n))) {
       const { res, text: t, err } = await call(name, { trace_id: firstTrace });
       check(res !== null && !res.isError, `${name} answers for ${firstTrace.slice(0, 12)}…`, err ?? t);
     }
@@ -94,6 +103,7 @@ try {
     console.log("info\tno trace on the hosted collector; get_trace and display_traces not exercised");
   }
 
+  check(!client.getServerCapabilities()?.events, "shared deployment does not advertise MCP Events");
   const covered = new Set([...plan.map(([n]) => n), "get_trace", "display_traces", "create_annotation"]);
   for (const name of tools.filter((n) => !covered.has(n)).sort()) {
     const { res, text: t, err } = await call(name, {});

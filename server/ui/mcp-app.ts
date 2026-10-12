@@ -12,9 +12,9 @@ import type {
   FetchTelemetryOutput,
   LogRecord as QylLogRecord,
   McpDataMode as Mode,
-  Span as QylSpan,
+  ToolSpan as QylSpan,
   SpanEvent as QylSpanEvent,
-  Trace as QylTrace,
+  ToolTrace as QylTrace,
 } from "@ancplua/qyl-api-schema/types";
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import packageMetadata from "../package.json";
@@ -26,6 +26,7 @@ import {
 import { formatAttributeValue } from "@ancplua/qyl-api-schema/runtime";
 import { traceQueryForResult } from "../src/trace-query.ts";
 import { computeWaterfall, type WaterfallRow } from "./waterfall.ts";
+import { renderComparison, traceActions } from "./trace-actions.ts";
 import "./global.css";
 import "./mcp-app.css";
 
@@ -39,6 +40,7 @@ const state = {
   traceQuery: DisplayTracesInputSchema.parse({}),
   mode: undefined as Mode | undefined,
   traces: [] as QylTrace[],
+  comparison: undefined as TracesPayload["comparison"],
   selectedTraceId: undefined as string | undefined,
   selectedSpanId: undefined as string | undefined,
   activeTab: "waterfall" as Tab,
@@ -84,6 +86,12 @@ const detailPanelEl = document.getElementById("detail-panel")!;
 const detailTitleEl = document.getElementById("detail-title")!;
 const detailBodyEl = document.getElementById("detail-body")!;
 const detailCloseBtn = document.getElementById("detail-close-btn") as HTMLButtonElement;
+const comparisonEl = document.createElement("section");
+comparisonEl.className = "trace-comparison";
+comparisonEl.hidden = true;
+traceViewBodyEl.prepend(comparisonEl);
+const actionsEl = document.createElement("div");
+traceViewBodyEl.insertBefore(actionsEl, comparisonEl.nextSibling);
 
 
 const KIND_LABELS: Record<number, string> = {
@@ -292,13 +300,15 @@ function applyTraces(payload: TracesPayload) {
   state.traces = payload.traces;
   state.mode = payload.mode;
   state.logsCache.clear();
-  state.selectedSpanId = undefined;
-  closeDetail();
+  const preferredSpan = payload.selected_span_id ?? state.traceQuery.selected_span_id ?? state.selectedSpanId;
+  state.comparison = payload.comparison;
 
   const preferred = payload.selected_trace_id ?? state.selectedTraceId;
   const stillThere = state.traces.some((t) => t.trace_id === preferred);
   state.selectedTraceId = stillThere ? preferred : state.traces[0]?.trace_id;
-  state.activeTab = "waterfall";
+  state.selectedSpanId = selectedTrace()?.spans.some((span) => span.span_id === preferredSpan)
+    ? preferredSpan : undefined;
+  if (!state.selectedSpanId) closeDetail();
 
   renderHeader();
   renderTraceList();
@@ -310,6 +320,8 @@ function selectTrace(traceId: string) {
   if (state.selectedTraceId === traceId) return;
   state.selectedTraceId = traceId;
   state.selectedSpanId = undefined;
+  state.traceQuery = { ...state.traceQuery };
+  delete state.traceQuery.selected_span_id;
   state.activeTab = "waterfall";
   closeDetail();
   renderTraceList();
@@ -426,6 +438,10 @@ function renderTraceView() {
 
   renderTabs();
   renderWaterfall(trace);
+  renderComparison(comparisonEl, state.comparison);
+  actionsEl.replaceChildren(traceActions(trace, () => state.selectedSpanId, (request) => app.callServerTool(request)));
+  const selected = trace.spans.find((span) => span.span_id === state.selectedSpanId);
+  if (selected) openDetail(selected, computeWaterfall(trace.spans).traceStartNs);
   if (state.activeTab === "logs") void showLogsTab(trace);
 }
 
@@ -637,6 +653,7 @@ function renderEvent(event: QylSpanEvent, spanStartNs: string): HTMLElement {
 
 function openDetail(span: QylSpan, traceStartNs: string) {
   state.selectedSpanId = span.span_id;
+  state.traceQuery = { ...state.traceQuery, selected_span_id: span.span_id };
   for (const row of spanRowsEl.querySelectorAll<HTMLElement>(".span-row")) {
     row.classList.toggle("selected", row.dataset.spanId === span.span_id);
   }
@@ -648,6 +665,8 @@ function openDetail(span: QylSpan, traceStartNs: string) {
   stats.className = "detail-stats";
   stats.appendChild(detailStat("Service", serviceName(span)));
   stats.appendChild(detailStat("Kind", KIND_LABELS[span.kind] ?? String(span.kind)));
+  stats.appendChild(detailStat("Evidence", span.role));
+  if (span.self_time_ms !== undefined) stats.appendChild(detailStat("Self time", `${span.self_time_ms} ms`));
   stats.appendChild(
     detailStat("Duration", formatNs(nsDelta(span.start_time_unix_nano, span.end_time_unix_nano))),
   );
@@ -731,6 +750,8 @@ function closeDetail() {
   if (detailPanelEl.hidden) return;
   detailPanelEl.hidden = true;
   state.selectedSpanId = undefined;
+  state.traceQuery = { ...state.traceQuery };
+  delete state.traceQuery.selected_span_id;
   for (const row of spanRowsEl.querySelectorAll<HTMLElement>(".span-row.selected")) {
     row.classList.remove("selected");
   }

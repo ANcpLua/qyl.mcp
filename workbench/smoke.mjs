@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { request } from "node:http";
+import { request, createServer as createHttpServer } from "node:http";
+import { CONTRACT_REVISION } from "@ancplua/qyl-api-schema/types";
+import { getDemo } from "../server/dist/demo.js";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,11 +26,35 @@ async function freePort() {
 const workbenchPort = await freePort();
 const baseUrl = `http://127.0.0.1:${workbenchPort}`;
 const temp = await mkdtemp(join(tmpdir(), "qyl-mcp-smoke-"));
+// Exercise the real workbench and SDK against a typed local transport fixture.
+// The real collector query behavior is covered by the seeded answer-key suite.
+const { spans: _spans, ...trace } = getDemo().traces[0];
+void _spans;
+const fixtureCollector = createHttpServer((request, response) => {
+  response.setHeader("content-type", "application/json");
+  if (request.url === "/health") {
+    response.end(JSON.stringify({ contract_revision: CONTRACT_REVISION }));
+    return;
+  }
+  if (request.url !== "/api/v1/analysis/list_traces") {
+    response.statusCode = 404;
+    response.end("{}");
+    return;
+  }
+  const now = new Date().toISOString();
+  response.end(JSON.stringify({ mode: "live", has_more: false,
+    window: { start_time: new Date(Date.now() - 3_600_000).toISOString(), end_time: now },
+    coverage: { examined: 1, matched: 1, returned: 1, truncated: false, scan_complete: true, as_of: now },
+    traces: [{ ...trace, root_error: false, contained_error: false, failure_ids: [], annotation_labels: [] }],
+  }));
+});
+await new Promise(resolve => fixtureCollector.listen(0, "127.0.0.1", resolve));
 const child = spawn(process.execPath, ["dist/main.js"], {
   cwd: import.meta.dirname,
   env: {
     ...process.env,
-    QYL_DEMO: "1",
+    QYL_DEMO: "0",
+    QYL_COLLECTOR_URL: `http://127.0.0.1:${fixtureCollector.address().port}`,
     QYL_MCP_TELEMETRY: "0",
     QYL_MCP_WORKBENCH_PORT: String(workbenchPort),
     QYL_MCP_STATE_PATH: join(temp, "workbench.json"),
@@ -154,10 +180,10 @@ try {
   );
   const discovery = await discoveryResponse.json();
   check(
-    "real SDK discovery returns eighteen tools and server surfaces",
-    discoveryResponse.ok && discovery.tools?.count === 18 && Array.isArray(discovery.prompts?.items),
+    "real SDK discovery returns32 tools and server surfaces",
+    discoveryResponse.ok && discovery.tools?.count === 32 && Array.isArray(discovery.prompts?.items),
   );
-  const writeTools = new Set(["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "delete"]);
+  const writeTools = new Set(["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "delete", "update_failure_status"]);
   check(
     "all qyl inspection tools publish complete read-only safety annotations",
     discovery.tools?.items
@@ -169,14 +195,14 @@ try {
         && tool.annotations?.openWorldHint === false),
   );
   check(
-    "the five qyl write tools are not read-only, and update and delete are destructive",
+    "the six qyl write tools are not read-only, and update and delete are destructive",
     discovery.tools?.items
       ?.filter((tool) => writeTools.has(tool.name))
       .every((tool) =>
         tool.annotations?.readOnlyHint === false
         && tool.annotations?.destructiveHint === !tool.name.startsWith("create_")
         && tool.annotations?.openWorldHint === false)
-      && discovery.tools?.items?.filter((tool) => writeTools.has(tool.name)).length === 5,
+      && discovery.tools?.items?.filter((tool) => writeTools.has(tool.name)).length === 6,
   );
 
   const executionUrl = `${baseUrl}/workbench/workspaces/default/servers/${serverId}/executions`;
@@ -291,5 +317,6 @@ try {
       if (child.exitCode === null) child.kill("SIGKILL");
     }),
   ]);
+  await new Promise(resolve => fixtureCollector.close(resolve));
   await rm(temp, { recursive: true, force: true });
 }

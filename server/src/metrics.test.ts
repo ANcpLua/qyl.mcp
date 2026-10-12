@@ -1,3 +1,4 @@
+import { readContext } from "./analysis-context.test-helper.js";
 /**
  * The metrics read surface: the tool inputs the contract publishes, and the
  * demo path that answers them.
@@ -65,8 +66,8 @@ test("tool inputs are the published tool models, defaults and bounds included", 
   );
   assert.equal(
     QueryMetricInputSchema.safeParse({ metric_name: HISTOGRAM, start_time: window.start_time }).success,
-    false,
-    "end_time is a required published parameter",
+    true,
+    "the query resolves an omitted end_time to now",
   );
   assert.equal(
     QueryMetricInputSchema.safeParse({ ...window, step_ms: 1.5 }).success,
@@ -83,8 +84,8 @@ test("tool inputs are the published tool models, defaults and bounds included", 
       metric_name: HISTOGRAM,
       matchers: [{ key: "http.route", op: "contains", value: "check" }],
     }).success,
-    false,
-    "only the published matcher operators exist",
+    true,
+    "contains is a shared published matcher operator",
   );
   assert.deepEqual(ListMetricsInputSchema.parse({}), { limit: 200 });
 
@@ -99,7 +100,7 @@ test("the demo catalog answers the published list body", async () => {
   await inDemoMode(async () => {
     const page = await listMetrics({});
     assert.equal(page.mode, "demo");
-    const output = ListMetricsOutputSchema.parse({ items: page.items, has_more: page.hasMore });
+    const output = ListMetricsOutputSchema.parse({ ...readContext(page.items.length), items: page.items, has_more: page.hasMore });
     assert.equal(output.items.length, 3);
 
     const histogram = output.items.find((metric) => metric.name === HISTOGRAM);
@@ -154,7 +155,7 @@ test("the catalog and the series list page with an opaque cursor, never a guess"
 test("series discovery filters by structured exact and prefix matchers", async () => {
   await inDemoMode(async () => {
     const { items: series, hasMore } = await listMetricSeries({ metric_name: HISTOGRAM });
-    GetMetricSeriesOutputSchema.parse({ items: series, has_more: hasMore });
+    GetMetricSeriesOutputSchema.parse({ ...readContext(series.length), items: series, has_more: hasMore });
     assert.equal(series.length, 4);
     assert.equal(new Set(series.map((stream) => stream.series_id)).size, 4);
 

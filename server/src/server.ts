@@ -19,11 +19,8 @@
 
 import type {
   DisplayMcpDashboardInput,
-  DisplayMcpDashboardOutput,
   DisplayTracesInput,
-  DisplayTracesOutput,
   FetchTelemetryInput,
-  FetchTelemetryOutput,
 } from "@ancplua/qyl-api-schema/types";
 import { McpServer, ResourceNotFoundError } from "@modelcontextprotocol/server";
 import type {
@@ -46,28 +43,18 @@ import {
   objectRootInputSchema,
 } from "./contract-validation.js";
 import {
-  fetchLogs,
-  fetchMcpStats,
-  fetchTrace,
-  fetchTracesForDisplay,
-} from "./data.js";
-import {
-  humanizeNs,
-  rootSpanName,
-  shortId,
-  summarizeMcpStats,
-} from "./summaries.js";
-import {
   READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
   TELEMETRY_TOOL_AUTH_META,
   registerTelemetryTools,
 } from "./tools.js";
+import { queryAnalysis } from "./analysis-client.js";
+import { registerAnalysisTools } from "./analysis-tools.js";
 import { registerCiTools } from "./ci.js";
 import { registerMetricsTools } from "./metrics-tools.js";
 import { registerWriteTools } from "./write-tools.js";
 import type { EventsRuntime } from "./events.js";
 import { runTool } from "./request-scope.js";
-import { redactTelemetry, telemetryToolResult } from "./telemetry-redaction.js";
+import { redactTelemetry } from "./telemetry-redaction.js";
 import { TRACE_QUERY_META_KEY } from "./trace-query.js";
 import type { UiDomain } from "./ui-domain.js";
 import type { McpTelemetryTransport } from "./mcp-semconv.js";
@@ -200,7 +187,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
     {
       instructions:
         "qyl reads telemetry from the connected collector. Its write tools change only annotations " +
-        "(notes on a trace, span or session) and saved queries (named filters) in the user's qyl project. " +
+        "(notes on a trace, span, session or failure) and saved queries (named filters), plus recorded failure status in the user's qyl project. " +
         "Its tools cannot delete or change telemetry, deploy or roll back services, or search the public " +
         "web. For requests only for those actions, explain the limitation without calling qyl tools. " +
         "Use read tools when the user asks to inspect or investigate recorded telemetry, and create, " +
@@ -230,11 +217,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
     "display_traces",
     {
       title: "Trace Explorer",
-      description:
-        "Show qyl traces in the interactive trace explorer with a span waterfall, " +
-        "detail panel, and correlated logs when the user wants to see the trace " +
-        "waterfall. A trace_id opens one trace, a session_id shows that session's " +
-        "traces, and neither shows recent traces.",
+      description: "Show an interactive trace waterfall or execution comparison when inspecting spans, logs and recorded findings.",
       inputSchema: DisplayTracesInputSchema,
       outputSchema: compactOutputSchema(DisplayTracesOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
@@ -247,65 +230,18 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
         "openai/ui": { entrypoints: [{ type: "global" }, { type: "thread" }] },
       },
     },
-    (
-      { trace_id, session_id, limit }: DisplayTracesInput,
-      ctx: ServerContext,
-    ): Promise<CallToolResult> =>
-      runTool(ctx, 1, async (scope) => {
-        const query: DisplayTracesInput & { limit: number } = {
-          limit: limit ?? 20,
-          ...(trace_id === undefined ? {} : { trace_id }),
-          ...(session_id === undefined ? {} : { session_id }),
-        };
-        const result = await fetchTracesForDisplay(query, scope.collector);
-        const target = trace_id
-          ? `trace ${trace_id}`
-          : session_id
-            ? `session ${session_id}`
-            : "recent traces";
-        await scope.step(`Fetched ${result.traces.length} trace(s) for ${target}`);
-
-        let text: string;
-        if (result.selected_trace_id) {
-          const trace = result.traces[0];
-          text =
-            `Showing trace ${shortId(trace.trace_id)} (${rootSpanName(trace)}, ` +
-            `${trace.span_count} spans, ${humanizeNs(trace.duration_ns)}) in the qyl explorer` +
-            `${result.mode === "demo" ? " (demo data)" : ""}.`;
-        } else {
-          const errorCount = result.traces.filter((t) => t.has_error).length;
-          const scopeText = session_id ? `session ${session_id}` : "recent";
-          text =
-            `Showing ${result.traces.length} ${scopeText} traces in the qyl explorer` +
-            `${errorCount > 0 ? ` (${errorCount} with errors)` : ""}` +
-            `${result.mode === "demo" ? " (demo data)" : ""}.`;
-        }
-
-        const output: DisplayTracesOutput = {
-          traces: result.traces,
-          ...(result.selected_trace_id
-            ? { selected_trace_id: result.selected_trace_id }
-            : {}),
-          mode: result.mode,
-        };
-
-        return {
-          ...telemetryToolResult(text, output),
-          _meta: redactTelemetry({ [TRACE_QUERY_META_KEY]: query }),
-        };
-      }),
+    (args: DisplayTracesInput, ctx: ServerContext): Promise<CallToolResult> =>
+      runTool(ctx, 1, async (scope) => ({
+        ...await queryAnalysis("display_traces", args, DisplayTracesOutputSchema, scope),
+        _meta: redactTelemetry({ [TRACE_QUERY_META_KEY]: args }),
+      })),
   );
 
   server.registerTool(
     "display_mcp_dashboard",
     {
       title: "MCP Dashboard",
-      description:
-        "Show an aggregate dashboard of MCP traffic (spans carrying an " +
-        "`mcp.method.name` attribute): request/error timeline, per-server and " +
-        "per-transport breakdowns, and per-tool latency and error " +
-        "rates. Useful when the user wants to inspect MCP usage or tool health " +
-        "over a time window.",
+      description: "Show MCP traffic, failures and latency with drilldowns when investigating tool or server health.",
       inputSchema: DisplayMcpDashboardInputSchema,
       outputSchema: compactOutputSchema(DisplayMcpDashboardOutputSchema),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
@@ -317,16 +253,14 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
         "openai/ui": { entrypoints: [{ type: "global" }] },
       },
     },
-    ({ hours }: DisplayMcpDashboardInput, ctx: ServerContext): Promise<CallToolResult> =>
-      runTool(ctx, 1, async (scope) => {
-        const window = hours ?? 24;
-        const stats = await fetchMcpStats(window, scope.collector);
-        await scope.step(`Aggregated ${stats.totals.requests} MCP request(s) over ${window}h`);
-        const output: DisplayMcpDashboardOutput = { stats };
-        return telemetryToolResult(summarizeMcpStats(stats, window), output);
-      }),
+    (args: DisplayMcpDashboardInput, ctx: ServerContext): Promise<CallToolResult> =>
+      runTool(ctx, 1, async (scope) => ({
+        ...await queryAnalysis("display_mcp_dashboard", args, DisplayMcpDashboardOutputSchema, scope),
+        _meta: redactTelemetry({ "qyl/dashboardQuery": args }),
+      })),
   );
 
+  registerAnalysisTools(server);
   registerTelemetryTools(server);
   registerCiTools(server);
   registerMetricsTools(server);
@@ -336,10 +270,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
     "fetch_telemetry",
     {
       title: "Fetch Telemetry",
-      description:
-        "Fetch traces, a single trace, logs or MCP stats for the viewers when the " +
-        "user refreshes a view or changes its filters. The input is one of four " +
-        "shapes selected by view; view \"trace\" requires trace_id.",
+      description: "Refresh traces, a trace, logs, comparisons or MCP statistics when an app view requests current data.",
       // The contract spells the input as a discriminated union over `view`, so
       // `view: "trace"` requires `trace_id` at the schema layer; the wrapper
       // publishes it with the object root MCP requires.
@@ -349,55 +280,8 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
       _meta: { ...TELEMETRY_TOOL_AUTH_META, ui: { visibility: ["app"] } },
     },
     (args: FetchTelemetryInput, ctx: ServerContext): Promise<CallToolResult> =>
-      runTool(ctx, 1, async (scope) => {
-        switch (args.view) {
-          case "mcp_stats": {
-            const hours = args.hours ?? 24;
-            const stats = await fetchMcpStats(hours, scope.collector);
-            await scope.step(`Aggregated ${stats.totals.requests} MCP request(s)`);
-            const output: FetchTelemetryOutput = { stats, mode: stats.mode };
-            return telemetryToolResult(
-              `Fetched MCP stats: ${stats.totals.requests} requests over ${hours}h (${stats.mode} mode).`,
-              output,
-            );
-          }
-          case "trace": {
-            const { trace, mode } = await fetchTrace(args.trace_id, scope.collector);
-            await scope.step(`Fetched trace ${args.trace_id}`);
-            const output: FetchTelemetryOutput = { trace, mode };
-            return telemetryToolResult(
-              `Fetched trace ${shortId(trace.trace_id)} (${trace.span_count} spans, ${mode} mode).`,
-              output,
-            );
-          }
-          case "logs": {
-            const { logs, mode } = await fetchLogs(
-              {
-                trace_id: args.trace_id,
-                service_name: args.service_name,
-                severity_min: args.severity_min,
-                query: args.query,
-                limit: args.limit ?? 50,
-              },
-              scope.collector,
-            );
-            await scope.step(`Fetched ${logs.length} log record(s)`);
-            const output: FetchTelemetryOutput = { logs, mode };
-            return telemetryToolResult(`Fetched ${logs.length} logs (${mode} mode).`, output);
-          }
-          case "traces": {
-            // A trace_id on the traces view returns that one trace as the list,
-            // selected, which is what the explorer asks for when it opens a trace.
-            const { traces, mode } = await fetchTracesForDisplay(
-              { trace_id: args.trace_id, limit: args.limit ?? 20 },
-              scope.collector,
-            );
-            await scope.step(`Fetched ${traces.length} trace(s)`);
-            const output: FetchTelemetryOutput = { traces, mode };
-            return telemetryToolResult(`Fetched ${traces.length} traces (${mode} mode).`, output);
-          }
-        }
-      }),
+      runTool(ctx, 1, async (scope) =>
+        queryAnalysis("fetch_telemetry", args, FetchTelemetryOutputSchema, scope)),
   );
 
   registerViewerResource(server, RESOURCE_URI, "mcp-app.html", options.uiDomain);

@@ -101,7 +101,18 @@ function matchesStream(
     key === "service.name" ? stream.serviceName : attributeFormatted(stream.attributes, key);
   return (matchers ?? []).every((matcher) => {
     const value = read(matcher.key);
-    return matcher.op === "eq" ? value === matcher.value : value?.startsWith(matcher.value) === true;
+    switch (matcher.op) {
+      case "exists": return value !== undefined;
+      case "eq": return value === String(matcher.value);
+      case "neq": return value !== String(matcher.value);
+      case "in": return matcher.values?.some((candidate) => value === String(candidate)) === true;
+      case "prefix": return value?.startsWith(String(matcher.value)) === true;
+      case "contains": return value?.includes(String(matcher.value)) === true;
+      case "gt": return value !== undefined && Number(value) > Number(matcher.value);
+      case "gte": return value !== undefined && Number(value) >= Number(matcher.value);
+      case "lt": return value !== undefined && Number(value) < Number(matcher.value);
+      case "lte": return value !== undefined && Number(value) <= Number(matcher.value);
+    }
   });
 }
 
@@ -281,8 +292,10 @@ export async function queryMetric(
     if (!getDemoMetrics().some((stream) => stream.name === args.metric_name)) {
       throw demoNotFound(args.metric_name);
     }
-    const startMs = Date.parse(args.start_time);
-    const endMs = Date.parse(args.end_time);
+    const endMs = args.end_time === undefined ? Date.now() : Date.parse(args.end_time);
+    const startMs = args.start_time === undefined
+      ? endMs - (args.lookback_minutes ?? 60) * 60_000
+      : Date.parse(args.start_time);
     if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
       throw new CollectorError("end_time must be a valid timestamp after start_time");
     }

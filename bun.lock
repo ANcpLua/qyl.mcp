@@ -20,7 +20,7 @@
       "name": "qyl-mcp-dashboard",
       "version": "1.1.1",
       "dependencies": {
-        "@ancplua/qyl-api-schema": "12.0.0",
+        "@ancplua/qyl-api-schema": "12.1.0",
         "@modelcontextprotocol/core": "2.3.1",
         "qyl-mcp-server": "7.6.1",
         "react": "19.3.0",
@@ -44,7 +44,7 @@
         "qyl-mcp-server": "dist/main.js",
       },
       "dependencies": {
-        "@ancplua/qyl-api-schema": "12.0.0",
+        "@ancplua/qyl-api-schema": "12.1.0",
         "@ancplua/qyl-semantic-conventions": "9.9.0",
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
@@ -74,7 +74,7 @@
       "name": "qyl-mcp-workbench",
       "version": "1.1.1",
       "dependencies": {
-        "@ancplua/qyl-api-schema": "12.0.0",
+        "@ancplua/qyl-api-schema": "12.1.0",
         "@modelcontextprotocol/client": "2.3.1",
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
@@ -97,7 +97,7 @@
     },
   },
   "packages": {
-    "@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@12.0.0", "", { "peerDependencies": { "@typespec/compiler": "~1.17.0", "@typespec/events": "^0.87.0", "@typespec/http": "~1.17.0", "@typespec/openapi": "~1.17.0", "@typespec/openapi3": "~1.17.0", "@typespec/sse": "^0.87.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-I1iDp1I0+RYATqKpb95WGcqu2aQ4vV7ds9i0jKDQj+ONLcmbAcSXyIFO8oMEgvIpKVO/u/yUo35GadOIUKuLLQ=="],
+    "@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@12.1.0", "", { "peerDependencies": { "@typespec/compiler": "~1.17.0", "@typespec/events": "^0.87.0", "@typespec/http": "~1.17.0", "@typespec/openapi": "~1.17.0", "@typespec/openapi3": "~1.17.0", "@typespec/sse": "^0.87.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-KmcHowKuMP5PIMwNtLFiOS5rW54ZXZDoNmJWBbCvMDg5hF4YFp0aKBH2uWUMwcqHdUQR4jlM+r2YN3bUAcjliA=="],
 
     "@ancplua/qyl-semantic-conventions": ["@ancplua/qyl-semantic-conventions@9.9.0", "", {}, "sha512-RJ8UkURmbFvgz7Nn8NG91bCCAtnYxMIX3QwZohRDwKEAMGFA5b90yy+zAD1KG30rHCqJH6BRrKqSnrffCd5GRw=="],
 

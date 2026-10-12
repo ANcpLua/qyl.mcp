@@ -15,7 +15,7 @@ import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS } from "./tools.js";
 import { QYL_MCP_SCOPE } from "./oauth.js";
 
 /** The tools that change annotations or saved queries; write-tools.test.ts pins their hints. */
-const WRITE_TOOLS = new Set(["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "delete"]);
+const WRITE_TOOLS = new Set(["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "update_failure_status", "delete"]);
 
 test("qyl read tools publish read-only safety annotations", async () => {
   const connection = await connectModernTestClient(
@@ -28,24 +28,38 @@ test("qyl read tools publish read-only safety annotations", async () => {
     assert.deepEqual(
       tools.map((tool) => tool.name).sort(),
       [
+        "aggregate_telemetry",
+        "check_telemetry_health",
         "ci_log",
+        "compare_groups",
+        "compare_traces",
         "create_annotation",
         "create_saved_query",
         "delete",
+        "discover_attributes",
         "display_mcp_dashboard",
         "display_traces",
         "fetch_telemetry",
+        "get_agent_run",
+        "get_failure_context",
+        "get_mcp_stats",
         "get_metric_series",
+        "get_service_map",
         "get_trace",
+        "list_failures",
         "list_metrics",
+        "list_releases",
         "list_saved_queries",
         "list_sessions",
         "list_traces",
         "query_metric",
         "run_saved_query",
         "search_logs",
+        "triage",
         "update_annotation",
+        "update_failure_status",
         "update_saved_query",
+        "verify_fix",
       ],
     );
     for (const tool of tools.filter((candidate) => !WRITE_TOOLS.has(candidate.name))) {
@@ -86,7 +100,7 @@ test("qyl server factory serves protocol revision 2026-07-28 over the fetch entr
       cacheScope: string;
     };
     const { tools } = toolsResult;
-    assert.equal(tools.length, 18);
+    assert.equal(tools.length, 32);
     assert.equal(toolsResult.ttlMs, 300_000);
     assert.equal(toolsResult.cacheScope, "public");
     const discover = client.getDiscoverResult() as ReturnType<Client["getDiscoverResult"]> & {
@@ -100,7 +114,7 @@ test("qyl server factory serves protocol revision 2026-07-28 over the fetch entr
       | undefined;
     assert.equal(
       displayMetadata?.ui?.resourceUri,
-      "ui://qyl-explorer/mcp-app-v6.html",
+      "ui://qyl-explorer/mcp-app-v7.html",
     );
 
     const resourcesResult = await client.listResources() as Awaited<ReturnType<Client["listResources"]>> & {
@@ -111,10 +125,10 @@ test("qyl server factory serves protocol revision 2026-07-28 over the fetch entr
     assert.equal(resourcesResult.ttlMs, 300_000);
     assert.equal(resourcesResult.cacheScope, "public");
     assert.equal(
-      resources.find((resource) => resource.uri === "ui://qyl-explorer/mcp-app-v6.html")?.mimeType,
+      resources.find((resource) => resource.uri === "ui://qyl-explorer/mcp-app-v7.html")?.mimeType,
       "text/html;profile=mcp-app",
     );
-    const appResult = await client.readResource({ uri: "ui://qyl-explorer/mcp-app-v6.html" }) as
+    const appResult = await client.readResource({ uri: "ui://qyl-explorer/mcp-app-v7.html" }) as
       Awaited<ReturnType<Client["readResource"]>> & { ttlMs: number; cacheScope: string };
     assert.equal(appResult.ttlMs, 86_400_000);
     assert.equal(appResult.cacheScope, "public");

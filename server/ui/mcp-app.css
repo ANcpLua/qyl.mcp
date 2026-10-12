@@ -346,7 +346,7 @@
   min-width: 0;
   min-height: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   overflow: clip;
 }
 
@@ -359,10 +359,16 @@
 
 .trace-view-body {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
+
+.trace-view-body > * { flex-shrink: 0; }
+.trace-view-body > .waterfall-panel,
+.trace-view-body > .logs-panel { flex: 1 0 240px; min-height: 240px; }
 
 .trace-summary {
   padding: var(--spacing-sm) var(--spacing-md) 6px;
@@ -699,14 +705,12 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* Span detail panel (slide-in)                                        */
+/* Span details stay alongside the selected execution.               */
 /* ------------------------------------------------------------------ */
 
 .detail-panel {
-  position: absolute;
-  inset: 0 0 0 auto;
-  z-index: 3;
-  width: min(360px, 92%);
+  flex: none;
+  width: min(360px, 45%);
   display: flex;
   flex-direction: column;
   background-color: var(--color-background-primary);
@@ -911,7 +915,7 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* Narrow layout: trace list stacks on top, detail overlays fully      */
+/* Narrow layout: trace list and selected span details stack.         */
 /* ------------------------------------------------------------------ */
 
 @media (max-width: 640px) {
@@ -931,8 +935,26 @@
     --q-name-col: clamp(120px, 40%, 200px);
   }
 
+  .trace-view { flex-direction: column; }
+
   .detail-panel {
     width: 100%;
+    max-height: 45%;
     border-left: none;
+    border-top: var(--border-width-regular) solid var(--q-border);
   }
 }
+
+/* Comparison remains two aligned columns until the host becomes narrow. */
+.trace-comparison { padding: 12px; border-bottom: 1px solid var(--color-border-primary, #444); }
+.comparison-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin: 6px 0; }
+.comparison-span { padding: 8px; overflow-wrap: anywhere; border: 1px solid var(--color-border-primary, #444); border-radius: 5px; }
+.first-divergence .comparison-span { border-color: #d89938; background: #d8993815; }
+.trace-actions { padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+.trace-actions button { cursor: pointer; padding: 6px 10px; }
+.trace-actions p { margin: 4px 0; }
+.annotation-editor { width: 100%; }
+.annotation-editor form { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0; }
+.annotation-editor textarea { width: 100%; min-height: 72px; }
+.annotation-editor input { min-width: 0; flex: 1; }
+@media (max-width: 640px) { .comparison-pair { grid-template-columns: minmax(0, 1fr); } }

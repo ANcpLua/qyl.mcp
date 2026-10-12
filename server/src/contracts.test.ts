@@ -37,6 +37,7 @@ import {
   parseCollectorSession,
   parseCollectorTrace,
 } from "./collector.js";
+import { readContext, toolTrace, toolSummary } from "./analysis-context.test-helper.js";
 import { getDemo } from "./demo.js";
 import { fetchMcpStats } from "./data.js";
 import { toolError } from "./request-scope.js";
@@ -138,26 +139,28 @@ test("the server's error codes are the contract's ToolErrorCode enum", () => {
 test("published output schemas accept the programmatically generated demo dataset", async () => {
   const demo = getDemo();
   const [trace] = demo.traces;
-  const summaries = demo.traces.map(({ spans: _spans, ...summary }) => summary);
+  const summaries = demo.traces.map(toolSummary);
+  const context = readContext(demo.traces.length);
+  const traces = demo.traces.map(toolTrace);
 
-  assert(DisplayTracesOutputSchema.safeParse({ traces: demo.traces, mode: "demo" }).success);
-  assert(ListTracesOutputSchema.safeParse({ traces: summaries, mode: "demo", has_more: false }).success);
+  assert(DisplayTracesOutputSchema.safeParse({ ...context, traces, mode: "demo" }).success);
+  assert(ListTracesOutputSchema.safeParse({ ...context, traces: summaries, mode: "demo", has_more: false }).success);
   assert(
-    !ListTracesOutputSchema.safeParse({ traces: summaries, mode: "demo" }).success,
+    !ListTracesOutputSchema.safeParse({ ...context, traces: summaries, mode: "demo" }).success,
     "has_more is required: a page must say whether it is the whole result",
   );
-  assert(ListTracesOutputSchema.safeParse({ traces: summaries, mode: "demo", has_more: true, next_cursor: "c" }).success);
-  assert(GetTraceOutputSchema.safeParse({ trace, mode: "demo" }).success);
-  assert(ListSessionsOutputSchema.safeParse({ sessions: demo.sessions, mode: "demo", has_more: false }).success);
-  assert(SearchLogsOutputSchema.safeParse({ logs: demo.logs, mode: "demo", has_more: false }).success);
-  assert(FetchTelemetryOutputSchema.safeParse({ traces: demo.traces, mode: "demo" }).success);
+  assert(ListTracesOutputSchema.safeParse({ ...context, traces: summaries, mode: "demo", has_more: true, next_cursor: "c" }).success);
+  assert(GetTraceOutputSchema.safeParse({ ...context, trace: toolTrace(trace!), mode: "demo" }).success);
+  assert(ListSessionsOutputSchema.safeParse({ ...context, sessions: demo.sessions, mode: "demo", has_more: false }).success);
+  assert(SearchLogsOutputSchema.safeParse({ ...context, logs: demo.logs, mode: "demo", has_more: false }).success);
+  assert(FetchTelemetryOutputSchema.safeParse({ ...context, traces, mode: "demo" }).success);
 
   const previousDemo = process.env.QYL_DEMO;
   process.env.QYL_DEMO = "1";
   try {
     const stats = await fetchMcpStats(24);
-    assert(DisplayMcpDashboardOutputSchema.safeParse({ stats }).success);
-    assert(FetchTelemetryOutputSchema.safeParse({ stats, mode: stats.mode }).success);
+    assert(DisplayMcpDashboardOutputSchema.safeParse({ ...context, stats }).success);
+    assert(FetchTelemetryOutputSchema.safeParse({ ...context, stats, mode: stats.mode }).success);
   } finally {
     if (previousDemo === undefined) delete process.env.QYL_DEMO;
     else process.env.QYL_DEMO = previousDemo;

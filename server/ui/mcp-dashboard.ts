@@ -7,6 +7,8 @@ import {
   toolErrorText,
 } from "./mcp-app-client.ts";
 import type {
+  DisplayMcpDashboardInput,
+  TelemetryMatcher,
   McpDashboardBucket as McpBucket,
   McpDashboardStats,
   McpDataMode as Mode,
@@ -16,6 +18,8 @@ import type {
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import packageMetadata from "../package.json";
 import {
+  DisplayTracesOutputSchema,
+  DisplayMcpDashboardInputSchema,
   DisplayMcpDashboardOutputSchema,
   FetchTelemetryOutputSchema,
 } from "../src/contract-validation.ts";
@@ -36,6 +40,7 @@ const state = {
   mode: undefined as Mode | undefined,
   stats: undefined as McpDashboardStats | undefined,
   hours: 24,
+  query: {} as DisplayMcpDashboardInput,
   // Prevent an older fetch from replacing newer data.
   requestSeq: 0,
   toolsSort: { key: "requests", dir: -1 } as SortState,
@@ -67,6 +72,85 @@ const toolsTableEl = document.getElementById("tools-table")!;
 const windowButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>(".win-btn"),
 );
+
+const totalsEl = document.createElement("div");
+totalsEl.className = "dashboard-totals";
+dashboardEl.prepend(totalsEl);
+const callsEl = document.createElement("section");
+callsEl.className = "dashboard-calls";
+callsEl.hidden = true;
+dashboardEl.prepend(callsEl);
+const filtersEl = document.createElement("form");
+filtersEl.className = "dashboard-filters";
+const filterInputs = new Map<string, HTMLInputElement>();
+for (const [key, label] of [["server_name", "Server"], ["tool_name", "Tool"], ["transport", "Transport"], ["compare_to", "Compare to (previous_window or version)"]]) {
+  const input = document.createElement("input");
+  input.name = key!; input.placeholder = label!; input.setAttribute("aria-label", label!);
+  filterInputs.set(key!, input); filtersEl.appendChild(input);
+}
+const applyFilters = document.createElement("button");
+applyFilters.type = "submit"; applyFilters.textContent = "Apply filters";
+filtersEl.appendChild(applyFilters);
+mainEl.insertBefore(filtersEl, mainEl.querySelector(".header")!.nextSibling);
+filtersEl.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const fields = Object.fromEntries([...filterInputs].map(([key, input]) => [key, input.value.trim() || undefined]));
+  const parsed = DisplayMcpDashboardInputSchema.safeParse({ ...state.query, ...fields });
+  if (!parsed.success) { showBanner(parsed.error.issues.map((issue) => issue.message).join("; ")); return; }
+  state.query = parsed.data; void fetchStats();
+});
+
+async function showCalls(matchers: TelemetryMatcher[] = [], start?: string, end?: string, failureClass?: string, group?: { server_name?: string; tool_name?: string; transport?: string }) {
+  const stats = state.stats;
+  if (!stats) return;
+  callsEl.hidden = false;
+  callsEl.textContent = "Loading matching calls…";
+  try {
+    const selected = [...matchers, { key: "mcp.method.name", op: "exists" as const }];
+    if (state.query.tool_name) selected.push({ key: "gen_ai.tool.name", op: "eq", value: state.query.tool_name });
+    const result = await app.callServerTool({ name: "display_traces", arguments: {
+      start_time: start ?? stats.window.start, end_time: end ?? stats.window.end,
+      ...(state.query.server_name ? { server_name: state.query.server_name } : {}),
+      ...(state.query.tool_name ? { tool_name: state.query.tool_name } : {}),
+      ...(state.query.transport ? { transport: state.query.transport } : {}),
+      ...(failureClass ? { failure_class: failureClass } : {}),
+      ...group,
+      matchers: selected, limit: 50,
+    } });
+    if (result.isError) throw new Error(toolErrorText(result) ?? "Unable to load matching calls");
+    const parsed = DisplayTracesOutputSchema.parse(result.structuredContent);
+    callsEl.replaceChildren();
+    const title = document.createElement("h3"); title.textContent = `${parsed.traces.length} matching calls`;
+    callsEl.appendChild(title);
+    for (const trace of parsed.traces) {
+      const button = document.createElement("button"); button.type = "button";
+      button.textContent = `${trace.root_span?.name ?? trace.trace_id} · ${Number(trace.duration_ns) / 1_000_000} ms`;
+      button.addEventListener("click", () => { void app.callServerTool({ name: "display_traces", arguments: { trace_id: trace.trace_id } }); });
+      callsEl.appendChild(button);
+    }
+    callsEl.scrollIntoView({ block: "nearest" });
+  } catch (error) { callsEl.textContent = error instanceof Error ? error.message : String(error); }
+}
+
+function renderTotals(stats: McpDashboardStats) {
+  totalsEl.replaceChildren();
+  const totals = document.createElement("button"); totals.type = "button";
+  totals.textContent = `${stats.totals.requests} requests · ${stats.totals.errors} errors / ${stats.totals.requests} requests (${formatRate(stats.totals.error_rate)})`;
+  totals.addEventListener("click", () => { void showCalls(); });
+  totalsEl.appendChild(totals);
+  for (const [name, count] of Object.entries(stats.failure_classes ?? {})) {
+    const item = document.createElement("button"); item.type = "button";
+    item.textContent = `${name}: ${count} errors`;
+    item.addEventListener("click", () => { void showCalls([], undefined, undefined, name); });
+    totalsEl.appendChild(item);
+  }
+  if (stats.comparison) {
+    const before = stats.comparison.totals;
+    const comparison = document.createElement("p");
+    comparison.textContent = `Comparison: ${before.errors}/${before.requests} requests failed (${formatRate(before.error_rate)})`;
+    totalsEl.appendChild(comparison);
+  }
+}
 
 function formatMs(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return "—";
@@ -416,6 +500,9 @@ function renderTrafficChart() {
       showTrafficTip(b, windowHours, rect.left + rect.width / 2, rect.top + 20);
     });
     hit.addEventListener("blur", hideTrafficTip);
+    const openBucket = () => { void showCalls([], b.start, new Date(Date.parse(b.start) + stats.window.bucket_ms).toISOString()); };
+    hit.addEventListener("click", openBucket);
+    hit.addEventListener("keydown", (event) => { if (event.key === "Enter") openBucket(); });
     svg.appendChild(hit);
   }
 
@@ -460,6 +547,12 @@ function renderBarList(
     const row = document.createElement("div");
     row.className = "bl-row";
     row.title = item.title ?? item.name;
+    row.tabIndex = 0; row.setAttribute("role", "button");
+    const group = container === byServerEl ? { server_name: item.name }
+      : container === byTransportEl ? { transport: item.name } : { tool_name: item.name };
+    const open = () => { void showCalls([], undefined, undefined, undefined, group); };
+    row.addEventListener("click", open);
+    row.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(); } });
 
     const name = document.createElement("span");
     name.className = "bl-name";
@@ -544,7 +637,7 @@ function renderRankedWidgets(stats: McpDashboardStats) {
       .map((t) => ({
         name: t.name,
         value: t.error_rate,
-        label: formatRate(t.error_rate),
+        label: `${formatRate(t.error_rate)} (${t.errors}/${t.requests})`,
         title: `${t.name} — ${t.errors} of ${t.requests} requests failed`,
       })),
     "fill-err",
@@ -624,7 +717,9 @@ function renderTable(
 
     const nameTd = document.createElement("td");
     nameTd.className = "name-cell";
-    nameTd.textContent = row.name;
+    const open = document.createElement("button"); open.type = "button"; open.textContent = row.name;
+    open.addEventListener("click", () => { void showCalls([{ key: "gen_ai.tool.name", op: "eq", value: row.name }]); });
+    nameTd.appendChild(open);
     nameTd.title = row.name;
     tr.appendChild(nameTd);
 
@@ -635,7 +730,7 @@ function renderTable(
 
     const rateTd = document.createElement("td");
     rateTd.className = `num err-cell${row.error_rate > 0.01 ? " err-hot" : ""}`;
-    rateTd.textContent = formatRate(row.error_rate);
+    rateTd.textContent = `${formatRate(row.error_rate)} (${row.errors}/${row.requests})`;
     tr.appendChild(rateTd);
 
     const avgTd = document.createElement("td");
@@ -679,6 +774,7 @@ function applyStats(stats: McpDashboardStats) {
   state.stats = stats;
   state.mode = stats.mode;
   renderHeader();
+  renderTotals(stats);
   if (stats.span_count_analyzed === 0) {
     showView("empty");
     return;
@@ -704,7 +800,7 @@ async function fetchStats() {
   try {
     const result = await app.callServerTool({
       name: "fetch_telemetry",
-      arguments: { view: "mcp_stats", hours: state.hours },
+      arguments: { ...state.query, view: "mcp_stats", hours: state.hours },
     });
     if (seq !== state.requestSeq) return;
     if (result.isError) {
@@ -735,6 +831,8 @@ async function fetchStats() {
 function setWindow(hours: number) {
   if (state.hours === hours) return;
   state.hours = hours;
+  state.query = { ...state.query, hours };
+  delete state.query.start_time; delete state.query.end_time; delete state.query.lookback_minutes;
   renderHeader();
   void fetchStats();
 }
@@ -761,18 +859,22 @@ app.onteardown = async () => {
 };
 
 app.ontoolinput = (params) => {
-  const args = (params.arguments ?? {}) as { hours?: number };
-  if (typeof args.hours === "number" && Number.isFinite(args.hours)) {
-    state.hours = args.hours <= 1 ? 1 : args.hours <= 24 ? 24 : 168;
-    renderHeader();
-    loadingTextEl.textContent = `Loading MCP stats (last ${args.hours}h)…`;
-  } else {
-    loadingTextEl.textContent = "Loading MCP stats…";
+  const parsed = DisplayMcpDashboardInputSchema.safeParse(params.arguments ?? {});
+  if (!parsed.success) { showError("Invalid dashboard filters"); return; }
+  state.query = parsed.data;
+  state.hours = parsed.data.hours ?? 24;
+  for (const [key, input] of filterInputs) {
+    const value = state.query[key as keyof DisplayMcpDashboardInput];
+    input.value = typeof value === "string" ? value : "";
   }
+  renderHeader();
+  loadingTextEl.textContent = "Loading MCP stats…";
   showView("loading");
 };
 
 app.ontoolresult = (result) => {
+  const restored = DisplayMcpDashboardInputSchema.safeParse(result._meta?.["qyl/dashboardQuery"]);
+  if (restored.success) state.query = restored.data;
   const stats = parseStatsPayload(result);
   if (!stats) {
     showError(toolErrorText(result) ?? "Received an invalid tool result.");

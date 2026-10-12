@@ -4,6 +4,7 @@ import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/cli
 import { createMcpHandler, type CallToolResult } from "@modelcontextprotocol/server";
 import { createServer } from "./server.js";
 import { traceQueryForResult, TRACE_QUERY_META_KEY } from "./trace-query.js";
+import { readContext, toolTrace } from "./analysis-context.test-helper.js";
 import { getDemo } from "./demo.js";
 import { DisplayTracesInputSchema, DisplayTracesOutputSchema } from "./contract-validation.js";
 
@@ -11,13 +12,20 @@ for (const revision of ["2026-07-28", "2025-11-25"] as const) {
   test(`display results retain their refresh query without a host input notification over ${revision}`, async (context) => {
     const previousDemo = process.env.QYL_DEMO;
     const previousProjects = process.env.MCP_COLLECTOR_PROJECTS;
-    process.env.QYL_DEMO = "1";
+    delete process.env.QYL_DEMO;
     delete process.env.MCP_COLLECTOR_PROJECTS;
     context.after(() => {
       if (previousDemo === undefined) delete process.env.QYL_DEMO;
       else process.env.QYL_DEMO = previousDemo;
       if (previousProjects === undefined) delete process.env.MCP_COLLECTOR_PROJECTS;
       else process.env.MCP_COLLECTOR_PROJECTS = previousProjects;
+    });
+    context.mock.method(globalThis, "fetch", async (input: string | Request | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      assert.equal(new URL(request.url).pathname, "/api/v1/analysis/display_traces");
+      const args = await request.json() as { trace_id?: string; limit?: number };
+      const traces = (args.trace_id ? getDemo().traces.filter((t) => t.trace_id === args.trace_id) : getDemo().traces.slice(0, args.limit ?? 20)).map(toolTrace);
+      return Response.json({ ...readContext(traces.length), traces, mode: "live" });
     });
     const handler = createMcpHandler(() => createServer({ nativeExecution: false }));
     const client = new Client({ name: "trace-query-test", version: "1.0.0" }, {
