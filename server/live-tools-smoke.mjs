@@ -179,14 +179,20 @@ try {
   // ------------------------------------------------------------ write tools
   // Local stdio has no OAuth: the Collector key decides what may change. Each
   // object the smoke creates is deleted again; the telemetry stays as sent.
-  r = await call("create_annotation", { target: { kind: "trace", trace_id: traceId }, text: "live smoke note" });
+  r = await call("create_annotation", { target: { kind: "trace", trace_id: traceId }, text: "live smoke note", labels: ["live-smoke"] });
   const note = r.structuredContent?.annotation;
   ok("create_annotation attaches a note to the smoke trace", !r.isError && note?.target?.trace_id === traceId, summary(r));
   r = await call("get_trace", { trace_id: traceId });
   ok("get_trace reads the note back", JSON.stringify(r.structuredContent?.annotations ?? []).includes("live smoke note"));
+  r = await call("list_traces", { annotation_label: "live-smoke", limit: 20 });
+  ok("list_traces filters and returns annotation labels", r.structuredContent?.traces?.some((trace) => trace.trace_id === traceId && trace.annotation_labels?.includes("live-smoke")));
+  r = await call("list_traces", { annotation_label: "missing-smoke-label", limit: 20 });
+  ok("list_traces excludes traces without the requested label", r.structuredContent?.traces?.length === 0);
   r = await call("update_annotation", { id: note?.id, etag: note?.etag, text: "live smoke note, edited" });
   const edited = r.structuredContent?.annotation;
   ok("update_annotation replaces the text and moves the etag", !r.isError && edited?.etag !== note?.etag, summary(r));
+  r = await call("get_trace", { trace_id: traceId });
+  ok("get_trace reads the updated note back", r.structuredContent?.annotations?.some((annotation) => annotation.id === edited?.id && annotation.text === "live smoke note, edited"));
   r = await call("update_annotation", { id: note?.id, etag: note?.etag, text: "stale" });
   ok("a stale etag is refused as precondition_failed", r.structuredContent?.error?.code === "precondition_failed", summary(r));
   const queryName = `${sessionId}-query`;
