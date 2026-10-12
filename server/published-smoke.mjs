@@ -49,9 +49,9 @@ for (const era of ["modern", "legacy"]) {
       : [entry, "--stdio"],
     cwd,
     env: {
-      ...Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== undefined)),
+      ...Object.fromEntries(Object.entries(process.env).filter(([key, value]) =>
+        value !== undefined && !["QYL_API_KEY", "QYL_PROJECT", "MCP_COLLECTOR_PROJECTS"].includes(key))),
       QYL_COLLECTOR_URL: `http://127.0.0.1:${collector.address().port}`,
-      QYL_API_KEY: "", QYL_PROJECT: "", MCP_COLLECTOR_PROJECTS: "",
       QYL_MCP_TELEMETRY: "0",
       QYL_MCP_NATIVE_STATE_PATH: join(cwd, "native.json"),
     },
