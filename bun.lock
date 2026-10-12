@@ -39,7 +39,7 @@
     },
     "server": {
       "name": "qyl-mcp-server",
-      "version": "7.6.1",
+      "version": "7.7.0",
       "bin": {
         "qyl-mcp-server": "dist/main.js",
       },
