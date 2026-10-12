@@ -4,7 +4,7 @@ import { once } from "node:events";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { request, createServer as createHttpServer } from "node:http";
 import { CONTRACT_REVISION } from "@ancplua/qyl-api-schema/types";
-import { getDemo } from "../server/dist/demo.js";
+import { getTelemetryFixture } from "../server/src/telemetry-fixtures.test-helper.ts";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -28,7 +28,7 @@ const baseUrl = `http://127.0.0.1:${workbenchPort}`;
 const temp = await mkdtemp(join(tmpdir(), "qyl-mcp-smoke-"));
 // Exercise the real workbench and SDK against a typed local transport fixture.
 // The real collector query behavior is covered by the seeded answer-key suite.
-const { spans: _spans, ...trace } = getDemo().traces[0];
+const { spans: _spans, ...trace } = getTelemetryFixture().traces[0];
 void _spans;
 const fixtureCollector = createHttpServer((request, response) => {
   response.setHeader("content-type", "application/json");
@@ -53,7 +53,6 @@ const child = spawn(process.execPath, ["dist/main.js"], {
   cwd: import.meta.dirname,
   env: {
     ...process.env,
-    QYL_DEMO: "0",
     QYL_COLLECTOR_URL: `http://127.0.0.1:${fixtureCollector.address().port}`,
     QYL_MCP_TELEMETRY: "0",
     QYL_MCP_WORKBENCH_PORT: String(workbenchPort),

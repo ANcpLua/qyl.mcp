@@ -1,9 +1,9 @@
 /**
  * Smoke test for child-process MCP transport and apps with fixed telemetry fixtures.
  *
- * Spawns `node dist/main.js --stdio` with a local typed fixture collector and asserts the direct
+ * Spawns `bun dist/main.js --stdio` with a local typed fixture collector and asserts the direct
  * tool surface, MCP Apps metadata, trace/log behavior, explicit mode
- * selection, generated-demo invariants, and dashboard aggregation.
+ * selection, generated-fixture invariants, and dashboard aggregation.
  *
  * Run: node smoke-test.mjs   (after `bun run build`)
  */
@@ -14,8 +14,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
-import { getDemo } from "./dist/demo.js";
-import { fetchMcpStats } from "./dist/data.js";
+import { getTelemetryFixture } from "./src/telemetry-fixtures.test-helper.ts";
+import fixtureStats from "./fixtures/dashboard-stats.json" with { type: "json" };
 
 let failures = 0;
 function check(name, condition, detail = "") {
@@ -33,11 +33,7 @@ async function callTool(client, name, args) {
 
 // This fixture verifies child-process transport and app rendering only.
 // Recorded-telemetry query semantics are verified in verify-answer-key.mjs.
-const savedDemo = process.env.QYL_DEMO;
-process.env.QYL_DEMO = "1";
-const fixtureStats = await fetchMcpStats(24);
-if (savedDemo === undefined) delete process.env.QYL_DEMO; else process.env.QYL_DEMO = savedDemo;
-const demo = getDemo();
+const fixture = getTelemetryFixture();
 const context = { window: { start_time: new Date(Date.now()-86_400_000).toISOString(), end_time: new Date().toISOString() }, coverage: { examined: 8, matched: 8, returned: 8, truncated: false, scan_complete: true, as_of: new Date().toISOString() } };
 const fullTrace = trace => ({ ...trace, spans: trace.spans.map(span => ({ ...span, role: "matched" })) });
 const fixtureCollector = createServer((request, response) => {
@@ -48,27 +44,27 @@ const fixtureCollector = createServer((request, response) => {
   response.setHeader("content-type", "application/json");
   let data;
   switch (operation) {
-    case "list_traces": data = { traces: demo.traces.map(({spans: _spans,...trace})=>({ ...trace, root_error: trace.root_span?.status.code === 2, contained_error: trace.has_error, failure_ids: [], annotation_labels: [] })) }; break;
+    case "list_traces": data = { traces: fixture.traces.map(({spans: _spans,...trace})=>({ ...trace, root_error: trace.root_span?.status.code === 2, contained_error: trace.has_error, failure_ids: [], annotation_labels: [] })) }; break;
     case "get_trace": {
-      const trace = demo.traces.find(t=>t.trace_id===args.trace_id);
+      const trace = fixture.traces.find(t=>t.trace_id===args.trace_id);
       if (!trace) { response.statusCode=404; response.setHeader("content-type","application/problem+json"); response.end(JSON.stringify({type:"https://qyl.at/problems/not-found",title:"Not Found",code:"not_found",status:404,detail:"trace not found"})); return; }
       data={trace:fullTrace(trace)}; break;
     }
-    case "display_traces": data = {traces:demo.traces.slice(0,args.limit ?? demo.traces.length).map(fullTrace)}; break;
-    case "search_logs": data={logs:demo.logs.filter(l=>args.severity_min===undefined || l.severity_number>=args.severity_min)}; break;
+    case "display_traces": data = {traces:fixture.traces.slice(0,args.limit ?? fixture.traces.length).map(fullTrace)}; break;
+    case "search_logs": data={logs:fixture.logs.filter(l=>args.severity_min===undefined || l.severity_number>=args.severity_min)}; break;
     case "ci_log": data={runs:[]}; break;
     case "list_metrics": data={items:[0,1,2].map(i=>({name:`fixture.metric.${i}`,kind:"gauge",unit:"1",series_count:1,temporality:"unspecified",monotonic:false,last_seen:new Date().toISOString()}))}; break;
     case "display_mcp_dashboard": data={stats:{...fixtureStats,mode:"live"}}; break;
     case "fetch_telemetry":
       if(args.view==="mcp_stats") data={stats:{...fixtureStats,mode:"live"}};
-      else if(args.view==="trace") data={trace:fullTrace(demo.traces.find(t=>t.trace_id===args.trace_id))};
-      else if(args.view==="logs") data={logs:demo.logs.filter(l=>l.trace_id===args.trace_id)};
-      else data={traces:demo.traces.slice(0,args.limit ?? demo.traces.length).map(fullTrace)};
+      else if(args.view==="trace") data={trace:fullTrace(fixture.traces.find(t=>t.trace_id===args.trace_id))};
+      else if(args.view==="logs") data={logs:fixture.logs.filter(l=>l.trace_id===args.trace_id)};
+      else data={traces:fixture.traces.slice(0,args.limit ?? fixture.traces.length).map(fullTrace)};
       break;
     default: response.statusCode=400; response.setHeader("content-type","application/problem+json"); response.end(JSON.stringify({type:"https://qyl.at/problems/validation-failed",title:"Validation Failed",code:"validation_failed",errors:[],status:400,detail:"Writes require the real collector integration suite."})); return;
   }
-  const paged = ["list_traces","list_metrics","search_logs","ci_log"].includes(operation);
-  const pageContext = Array.isArray(data.traces) ? {...context, coverage:{...context.coverage, returned:data.traces.length, truncated:data.traces.length < demo.traces.length}} : context;
+  const paged = ["list_traces","get_trace","list_metrics","search_logs","ci_log","fetch_telemetry"].includes(operation);
+  const pageContext = Array.isArray(data.traces) ? {...context, coverage:{...context.coverage, returned:data.traces.length, truncated:data.traces.length < fixture.traces.length}} : context;
   response.end(JSON.stringify({...pageContext,...(operation==="list_metrics"||operation==="display_mcp_dashboard"?{}:{mode:"live"}),...(paged?{has_more:false}:{}),...data}));
  })().catch(error=>{response.statusCode=500;response.end(String(error));});
 });
@@ -77,11 +73,10 @@ const fixtureUrl=`http://127.0.0.1:${fixtureCollector.address().port}`;
 const temp = await mkdtemp(join(tmpdir(), "qyl-mcp-server-smoke-"));
 const nativeStatePath = join(temp, "native-executions.json");
 const transport = new StdioClientTransport({
-  command: "node",
+  command: "bun",
   args: ["dist/main.js", "--stdio"],
   env: {
     ...process.env,
-    QYL_DEMO: "",
     QYL_COLLECTOR_URL: fixtureUrl,
     QYL_MCP_TELEMETRY: "0",
     QYL_MCP_NATIVE_STATE_PATH: nativeStatePath,
@@ -103,8 +98,8 @@ console.log("stdout hygiene");
   const rawPath = join(temp, "stdout.raw");
   const hygieneTransport = new StdioClientTransport({
     command: "sh",
-    args: ["-c", `exec node dist/main.js --stdio | tee "${rawPath}"`],
-    env: { ...process.env, QYL_DEMO: "", QYL_COLLECTOR_URL: "http://127.0.0.1:9", QYL_MCP_TELEMETRY: "0", QYL_MCP_NATIVE_STATE_PATH: join(temp, "hygiene-native.json") },
+    args: ["-c", `exec bun dist/main.js --stdio | tee "${rawPath}"`],
+    env: { ...process.env, QYL_COLLECTOR_URL: "http://127.0.0.1:9", QYL_MCP_TELEMETRY: "0", QYL_MCP_NATIVE_STATE_PATH: join(temp, "hygiene-native.json") },
     stderr: "ignore",
   });
   let transportErrors = 0;
@@ -160,11 +155,11 @@ check(
 );
 
 // Writes change only annotations and saved queries; their hints say so, and
-// demo mode, which has no Collector project to keep them in, refuses them.
+// the collector enforces the verified project and required write roles.
 const hints = (name) => JSON.stringify(tools.find((t) => t.name === name)?.annotations);
 check(
   "create tools are additive, update and delete destructive and idempotent",
-  hints("create_annotation") === JSON.stringify({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }) &&
+  hints("create_annotation") === JSON.stringify({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }) &&
     hints("create_saved_query") === hints("create_annotation") &&
     hints("update_annotation") === JSON.stringify({ readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }) &&
     hints("update_saved_query") === hints("update_annotation") &&
@@ -177,21 +172,21 @@ check(
     .filter((t) => !["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "update_failure_status", "delete"].includes(t.name))
     .every((t) => t.annotations?.readOnlyHint === true && t.annotations?.destructiveHint === false),
 );
-const demoWrite = await callTool(client, "create_annotation", {
+const fixtureWrite = await callTool(client, "create_annotation", {
   target: { kind: "trace", trace_id: "0af7651916cd43dd8448eb211c80319c" },
   text: "smoke",
 });
 check(
   "read-only transport fixture refuses writes with a stable code",
-  demoWrite.isError === true && demoWrite.structuredContent?.error?.code === "collector_rejected" &&
-    /real collector integration suite/u.test(demoWrite.content?.[0]?.text ?? ""),
-  JSON.stringify(demoWrite),
+  fixtureWrite.isError === true && fixtureWrite.structuredContent?.error?.code === "collector_rejected" &&
+    !/real collector integration suite/u.test(fixtureWrite.content?.[0]?.text ?? ""),
+  JSON.stringify(fixtureWrite),
 );
 
 const displayTraces = tools.find((t) => t.name === "display_traces");
 check(
   "display_traces has _meta.ui.resourceUri",
-  displayTraces?._meta?.ui?.resourceUri === "ui://qyl-explorer/mcp-app-v7.html",
+  displayTraces?._meta?.ui?.resourceUri === "ui://qyl-explorer/mcp-app-v8.html",
   JSON.stringify(displayTraces?._meta),
 );
 
@@ -206,7 +201,7 @@ const displayDashboard = tools.find((t) => t.name === "display_mcp_dashboard");
 check(
   "display_mcp_dashboard has _meta.ui.resourceUri",
   displayDashboard?._meta?.ui?.resourceUri ===
-    "ui://qyl-explorer/mcp-dashboard-v5.html",
+    "ui://qyl-explorer/mcp-dashboard-v6.html",
   JSON.stringify(displayDashboard?._meta),
 );
 
@@ -219,7 +214,7 @@ console.log("list_traces / get_trace error");
 const listed = await callTool(client, "list_traces", {});
 check("list_traces: not isError", !listed.isError, listed.content?.[0]?.text);
 check(
-  "list_traces returns 8 demo trace summaries without spans",
+  "list_traces returns 8 fixture trace summaries without spans",
   listed.structuredContent?.traces?.length === 8 &&
     listed.structuredContent.traces.every((t) => t.spans === undefined),
 );
@@ -231,7 +226,7 @@ const missingTrace = await callTool(client, "get_trace", {
 check("handler failure returns isError:true", missingTrace.isError === true);
 check(
   "missing-trace error is descriptive",
-  missingTrace.content?.[0]?.text?.includes("trace not found"),
+  missingTrace.structuredContent?.error?.code === "not_found" && /404/u.test(missingTrace.content?.[0]?.text ?? ""),
   missingTrace.content?.[0]?.text,
 );
 
@@ -248,7 +243,7 @@ check(
   sc?.traces?.every((t) => Array.isArray(t.spans) && t.spans.length === t.span_count && t.span_count > 0),
 );
 
-// Demo-data sanity the waterfall depends on: children contained in parents,
+// Fixture-data sanity the waterfall depends on: children contained in parents,
 // no negative offsets, deep chain and error trace present.
 for (const trace of sc.traces) {
   const byId = new Map(trace.spans.map((s) => [s.span_id, s]));
@@ -356,7 +351,7 @@ check(
     many.structuredContent.traces.every((t) => t.spans.length > 0),
 );
 
-// --- 7. display_mcp_dashboard (demo aggregation) -----------------------------
+// --- 7. display_mcp_dashboard (fixture aggregation) -----------------------------
 console.log("display_mcp_dashboard {}");
 const dash = await client.callTool({
   name: "display_mcp_dashboard",
@@ -429,10 +424,10 @@ check(
 );
 
 // --- 9. resources/read of the debugger UIs -----------------------------------
-console.log("resources/read ui://qyl-explorer/mcp-dashboard-v5.html");
+console.log("resources/read ui://qyl-explorer/mcp-dashboard-v6.html");
 if (existsSync(new URL("./dist/mcp-dashboard.html", import.meta.url))) {
   const dashRes = await client.readResource({
-    uri: "ui://qyl-explorer/mcp-dashboard-v5.html",
+    uri: "ui://qyl-explorer/mcp-dashboard-v6.html",
   });
   const content = dashRes.contents?.[0];
   check(
@@ -479,10 +474,10 @@ const legacyTemp = await mkdtemp(join(tmpdir(), "qyl-mcp-legacy-smoke-"));
 const legacyClient = new Client({ name: "qyl-smoke-legacy", version: "1.0.0" });
 try {
   await legacyClient.connect(new StdioClientTransport({
-    command: "node",
+    command: "bun",
     args: ["dist/main.js", "--stdio"],
     env: {
-      ...process.env, QYL_DEMO: "",
+      ...process.env,
     QYL_COLLECTOR_URL: fixtureUrl, QYL_MCP_TELEMETRY: "0",
       QYL_MCP_NATIVE_STATE_PATH: join(legacyTemp, "native.json"),
     },
@@ -499,31 +494,6 @@ try {
   await new Promise(resolve=>fixtureCollector.close(resolve));
 }
 
-// --- 10. Mode selection is explicit; live failures do not become demo data ---
-console.log("explicit live/demo mode selection");
-const previousDemo = process.env.QYL_DEMO;
-const previousCollectorUrl = process.env.QYL_COLLECTOR_URL;
-const { collectorGet, resolveMode } = await import("./dist/collector.js");
-delete process.env.QYL_DEMO;
-process.env.QYL_COLLECTOR_URL = "http://127.0.0.1:1";
-check('QYL_DEMO unset selects "live"', (await resolveMode()) === "live");
-let liveFailure;
-try {
-  await collectorGet("/api/v1/traces");
-} catch (error) {
-  liveFailure = error;
-}
-check(
-  "unreachable live collector remains a connection error",
-  liveFailure?.name === "CollectorError" && liveFailure.connectionError === true,
-  liveFailure?.message,
-);
-process.env.QYL_DEMO = "1";
-check('QYL_DEMO=1 selects "demo"', (await resolveMode()) === "demo");
-if (previousDemo === undefined) delete process.env.QYL_DEMO;
-else process.env.QYL_DEMO = previousDemo;
-if (previousCollectorUrl === undefined) delete process.env.QYL_COLLECTOR_URL;
-else process.env.QYL_COLLECTOR_URL = previousCollectorUrl;
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) FAILED`);

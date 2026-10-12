@@ -2,7 +2,7 @@
   "name": "qyl-mcp-server",
   "version": "7.7.0",
   "type": "module",
-  "description": "qyl telemetry MCP Apps server: trace explorer and MCP dashboard for a live collector or explicit demo mode",
+  "description": "qyl telemetry MCP server: analysis tools and viewers for a live collector; Bun 1.4 runtime",
   "repository": {
     "type": "git",
     "url": "https://github.com/ANcpLua/qyl.mcp",
@@ -71,14 +71,17 @@
     "verify:readme": "node verify-package-readme.mjs",
     "verify:frame": "node verify-tool-frame.mjs",
     "snapshot:tools": "bun run build && tsc -p tsconfig.test.json && node update-tool-manifest-snapshot.mjs",
-    "test": "bun run verify:readme && bun run verify:frame && bun run build && tsc -p tsconfig.test.json && node -e \"const fs=require('node:fs'); for (const name of ['mcp-app.html','mcp-dashboard.html']) fs.copyFileSync('dist/'+name,'dist-test/'+name)\" && node --test dist-test/*.test.js",
+    "test": "bun run build && bun run test:built",
     "smoke": "node smoke-test.mjs",
+    "smoke:quiet": "node quiet-stream-smoke.mjs",
+    "test:answer-key": "node run-answer-key.mjs",
     "smoke:live": "node live-tools-smoke.mjs",
     "prepack": "bun run build",
-    "smoke:projects": "node project-access-smoke.mjs"
+    "smoke:projects": "node project-access-smoke.mjs",
+    "test:built": "bun run verify:readme && bun run verify:frame && tsc -p tsconfig.test.json && node -e \"const fs=require('node:fs'); for (const name of ['mcp-app.html','mcp-dashboard.html']) fs.copyFileSync('dist/'+name,'dist-test/'+name)\" && node --test --test-concurrency=4 dist-test/*.test.js"
   },
   "dependencies": {
-    "@ancplua/qyl-api-schema": "12.1.0",
+    "@ancplua/qyl-api-schema": "12.1.1",
     "@modelcontextprotocol/core": "2.3.1",
     "@modelcontextprotocol/server": "2.3.1",
     "@opentelemetry/api": "1.9.1",
@@ -94,16 +97,18 @@
     "@opentelemetry/sdk-trace-node": "2.12.0",
     "jose": "6.2.12",
     "zod": "4.6.5",
-    "@ancplua/qyl-semantic-conventions": "9.9.0"
+    "@ancplua/qyl-semantic-conventions": "9.9.1"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "2.3.1",
     "@types/node": "26.6.5",
     "typescript": "7.0.2",
     "vite": "8.3.4",
-    "vite-plugin-singlefile": "2.3.3"
+    "vite-plugin-singlefile": "2.3.3",
+    "@types/bun": "1.4.3"
   },
   "engines": {
-    "node": "24.x"
+    "node": "24.x",
+    "bun": ">=1.4"
   }
 }

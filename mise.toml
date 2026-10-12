@@ -1,26 +1,28 @@
-# The toolchain this repository builds with. CI installs it with jdx/mise-action;
-# locally `mise install` does the same. dotnet also keeps global.json, which dotnet itself reads.
+# The toolchain used by the local gate and Railway builds. Install with mise install.
 [tools]
 "bun" = "1.4.3"
 # bun installs and runs the scripts; node runs `node --test`, the build and verify scripts,
-# and the published qyl-mcp-server, so it must stay inside every engines.node range (24.x).
-# Exact like bun: CI, Railway builds and local mise resolve the same Node.
+# and the library consumers, so it stays inside every engines.node range (24.x).
+# The qyl-mcp-server executable runs on Bun.
+# Exact like bun: Railway builds and local mise resolve the same Node.
 "node" = "24.21.0"
 
 [tasks.check]
-description = "The gate: what CI runs, in order"
+description = "Local release gate, running one check at a time"
 run = [
   "node verify-contract-pins.mjs",
   "bun install --frozen-lockfile",
   "bun run build",
   "bun run lint",
-  "bun run test",
+  "bun run test:built",
   "python3 -m unittest discover -s tools/auth0 -p 'test_*.py'",
   "bun run smoke",
+  "bun run --cwd server smoke:quiet",
+  "bun run --cwd server test:answer-key",
 ]
 
 [tasks.smoke-otlp]
-description = "Live OTLP and MCP surface against a built collector; set QYL_COLLECTOR_PROJECT to its csproj"
+description = "Live OTLP and MCP surface against a built collector; override with QYL_COLLECTOR_DLL"
 run = [
   "bun run smoke:otlp",
 ]

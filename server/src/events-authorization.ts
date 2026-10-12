@@ -38,7 +38,7 @@ const UserGrantSchema = z.object({
 export interface EventsAuthorizationOptions {
   clientId: string;
   clientSecret: string;
-  fetch?: typeof fetch;
+  fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
   now?: () => number;
 }
 

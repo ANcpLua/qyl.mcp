@@ -1,37 +1,24 @@
 /**
- * Collector REST client + live/demo mode selection.
+ * Collector REST client.
  *
- * QYL_DEMO=1 selects explicit demo mode. Every other invocation is live;
+ * All operations query the configured Collector;
  * connection, HTTP, JSON, and contract failures surface to the caller rather
  * than silently substituting generated telemetry or invented defaults.
  */
 
 import type {
-  LogRecord,
-  MetricDescriptor,
-  MetricQueryResult,
-  MetricSeries,
   ProblemDetails,
-  SessionEntity,
   ToolErrorCode,
   ValidationErrorDetail,
-  Trace,
 } from "@ancplua/qyl-api-schema/types";
 import * as z from "zod/v4";
 import { redactTelemetryText } from "./telemetry-redaction.js";
 import { collectorHeaders, collectorUrl } from "./config.js";
 import { CollectorAccessError, readCollectorProjects, type CollectorAccess } from "./collector-access.js";
 import {
-  LogRecordSchema,
-  MetricDescriptorSchema,
-  MetricQueryResultSchema,
-  MetricSeriesSchema,
   ProblemDetailsSchema,
-  SessionSchema,
-  TraceSchema,
   ValidationErrorSchema,
 } from "./contract-validation.js";
-import type { Mode } from "./wire.js";
 
 /**
  * The stable failure codes a tool result carries in `structuredContent.error`:
@@ -106,18 +93,6 @@ export class CollectorError extends Error {
   }
 }
 
-function asRecord(value: unknown, context: string): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new CollectorError(
-      `collector contract mismatch for ${context}: expected an object`,
-      false,
-      undefined,
-      "contract_mismatch",
-    );
-  }
-  return value as Record<string, unknown>;
-}
-
 function contractMismatch(context: string, error: z.ZodError): CollectorError {
   return new CollectorError(
     `collector contract mismatch for ${context}: ${z.prettifyError(error)}`,
@@ -125,130 +100,6 @@ function contractMismatch(context: string, error: z.ZodError): CollectorError {
     undefined,
     "contract_mismatch",
   );
-}
-
-/**
- * Not a validation workaround: the generated contract validator accepts every
- * RFC 3339 spelling, offsets included. This normalizes so that live timestamps
- * read exactly like demo ones, which demo.ts builds with `Date#toISOString`,
- * because consumers use the string as the value -- summaries.ts renders it and
- * ci.ts reports it, where a `+02:00` trace must not print unlike a `Z` trace.
- * Validating before converting keeps a malformed timestamp a contract mismatch
- * instead of a `RangeError`; the canonical form costs sub-millisecond digits.
- */
-const rfc3339 = z.iso.datetime({ offset: true });
-
-function canonicalDateTime(value: unknown, context: string): string {
-  const parsed = rfc3339.safeParse(value);
-  if (!parsed.success) throw contractMismatch(context, parsed.error);
-  return new Date(parsed.data).toISOString();
-}
-
-/** Normalize RFC 3339 spelling, then enforce the public Trace schema exactly. */
-export function parseCollectorTrace(value: unknown, context = "trace"): Trace {
-  const trace = asRecord(value, context);
-  const normalized: Record<string, unknown> = {
-    ...trace,
-    start_time: canonicalDateTime(trace.start_time, `${context}.start_time`),
-    end_time: canonicalDateTime(trace.end_time, `${context}.end_time`),
-  };
-  const parsed = TraceSchema.safeParse(normalized);
-  if (!parsed.success) throw contractMismatch(context, parsed.error);
-  return parsed.data;
-}
-
-/** Normalize RFC 3339 spelling, then enforce the public Session schema exactly. */
-export function parseCollectorSession(value: unknown, context = "session"): SessionEntity {
-  const session = asRecord(value, context);
-  const normalized: Record<string, unknown> = {
-    ...session,
-    start_time: canonicalDateTime(session.start_time, `${context}.start_time`),
-  };
-  if (session.end_time !== undefined) {
-    normalized.end_time = canonicalDateTime(session.end_time, `${context}.end_time`);
-  }
-
-  const parsed = SessionSchema.safeParse(normalized);
-  if (!parsed.success) throw contractMismatch(context, parsed.error);
-  return parsed.data;
-}
-
-/** Normalize RFC 3339 spelling, then enforce the public MetricDescriptor schema. */
-export function parseCollectorMetricDescriptor(
-  value: unknown,
-  context = "metric",
-): MetricDescriptor {
-  const descriptor = asRecord(value, context);
-  const parsed = MetricDescriptorSchema.safeParse({
-    ...descriptor,
-    last_seen: canonicalDateTime(descriptor.last_seen, `${context}.last_seen`),
-  });
-  if (!parsed.success) throw contractMismatch(context, parsed.error);
-  return parsed.data;
-}
-
-/** Normalize RFC 3339 spelling, then enforce the public MetricSeries schema. */
-export function parseCollectorMetricSeries(value: unknown, context = "series"): MetricSeries {
-  const series = asRecord(value, context);
-  const parsed = MetricSeriesSchema.safeParse({
-    ...series,
-    first_seen: canonicalDateTime(series.first_seen, `${context}.first_seen`),
-    last_seen: canonicalDateTime(series.last_seen, `${context}.last_seen`),
-  });
-  if (!parsed.success) throw contractMismatch(context, parsed.error);
-  return parsed.data;
-}
-
-/**
- * Normalize every timestamp a range query answers with, then enforce the
- * operation's own 200 body. Bucket starts are normalized too: a chart axis
- * built from `+02:00` labels next to `Z` labels is a rendering bug the reader
- * would have to diagnose.
- */
-export function parseCollectorMetricQueryResult(
-  value: unknown,
-  context = "metric query",
-): MetricQueryResult {
-  const result = asRecord(value, context);
-  const series = Array.isArray(result.series) ? result.series : [];
-  const parsed = MetricQueryResultSchema.safeParse({
-    ...result,
-    start_time: canonicalDateTime(result.start_time, `${context}.start_time`),
-    end_time: canonicalDateTime(result.end_time, `${context}.end_time`),
-    series: series.map((stream, streamIndex) => {
-      const entry = asRecord(stream, `${context}.series[${streamIndex}]`);
-      const buckets = Array.isArray(entry.buckets) ? entry.buckets : [];
-      return {
-        ...entry,
-        buckets: buckets.map((bucket, bucketIndex) => {
-          const point = asRecord(bucket, `${context}.series[${streamIndex}].buckets[${bucketIndex}]`);
-          return {
-            ...point,
-            bucket_start: canonicalDateTime(
-              point.bucket_start,
-              `${context}.series[${streamIndex}].buckets[${bucketIndex}].bucket_start`,
-            ),
-          };
-        }),
-      };
-    }),
-  });
-  if (!parsed.success) throw contractMismatch(context, parsed.error);
-  return parsed.data;
-}
-
-/** Enforce the public LogRecord schema without alternate wire encodings. */
-export function parseCollectorLog(value: unknown, context = "log"): LogRecord {
-  const parsed = LogRecordSchema.safeParse(asRecord(value, context));
-  if (!parsed.success) throw contractMismatch(context, parsed.error);
-  return parsed.data;
-}
-
-interface ParsedCollectorPage<T> {
-  items: T[];
-  hasMore: boolean;
-  /** The Collector's opaque cursor for the next page; absent on the last page. */
-  nextCursor?: string;
 }
 
 export interface CollectorRequestOptions {
@@ -264,42 +115,8 @@ export interface CollectorRequestOptions {
 }
 
 /**
- * Normalize endpoint items, then validate the complete operation-specific
- * response body. The supplied schema must be an Operations.*.Response.200
- * definition from the generated contract.
- */
-export function parseCollectorPage<
-  T,
-  TPage extends { items: T[]; has_more: boolean; next_cursor?: string | null },
->(
-  value: unknown,
-  context: string,
-  pageSchema: z.ZodType<TPage>,
-  parseItem: (item: unknown, context: string) => T,
-): ParsedCollectorPage<T> {
-  try {
-    const source = asRecord(value, context);
-    const sourceItems = z.array(z.unknown()).safeParse(source.items);
-    if (!sourceItems.success) throw contractMismatch(`${context}.items`, sourceItems.error);
-    const page = pageSchema.parse({
-      ...source,
-      items: sourceItems.data.map((item, index) =>
-        parseItem(item, `${context}.items[${index}]`)),
-    });
-    const nextCursor = typeof page.next_cursor === "string" && page.next_cursor !== ""
-      ? page.next_cursor
-      : undefined;
-    return { items: page.items, hasMore: page.has_more, ...(nextCursor === undefined ? {} : { nextCursor }) };
-  } catch (error) {
-    if (error instanceof CollectorError) throw error;
-    if (error instanceof z.ZodError) throw contractMismatch(context, error);
-    throw error;
-  }
-}
-
-/**
  * Validate one whole response body against its generated operation schema,
- * for the operations that answer with a single resource rather than a page.
+ * including resources, pages and analysis evidence.
  */
 export function parseCollectorBody<T>(value: unknown, context: string, schema: z.ZodType<T>): T {
   const parsed = schema.safeParse(value);
@@ -339,14 +156,12 @@ function codeForProblem(problem: ProblemDetails, status: number): ToolErrorCode 
 }
 
 /**
- * Call a collector endpoint. Query params use their generated wire names;
- * `undefined` values are omitted. All response data remains unknown until the
+ * Call a collector endpoint. All response data remains unknown until the
  * endpoint-specific generated contract parser accepts it.
  */
 async function collectorRequest(
   pathname: string,
-  method: "GET" | "POST" | "PATCH" | "DELETE",
-  params: CollectorQueryParams,
+  method: "POST" | "PATCH" | "DELETE",
   body: unknown,
   options: CollectorRequestOptions,
 ): Promise<unknown> {
@@ -354,18 +169,6 @@ async function collectorRequest(
     throw new CollectorAccessError();
   }
   const url = new URL(pathname, collectorUrl());
-  for (const [key, value] of Object.entries(params)) {
-    if (value === undefined) continue;
-    // A repeatable parameter is repeated, not joined: the metrics operations
-    // publish `group_by`, `attr`, and `attr_prefix` as arrays with no
-    // collection format, which is one `key=` pair per value.
-    if (Array.isArray(value)) {
-      for (const item of value) url.searchParams.append(key, String(item));
-      continue;
-    }
-    url.searchParams.set(key, String(value));
-  }
-
   const timeout = AbortSignal.timeout(options.timeoutMs ?? 10_000);
   const signal = options.signal
     ? AbortSignal.any([options.signal, timeout])
@@ -404,7 +207,7 @@ async function collectorRequest(
     }
     throw new CollectorError(
       `collector unreachable at ${collectorUrl()} — start it with ` +
-        "`dotnet run --project services/qyl.collector` or set QYL_DEMO=1",
+        "`qyl` or configure QYL_COLLECTOR_URL",
       true,
     );
   }
@@ -450,7 +253,7 @@ async function collectorRequest(
     const fields = validation?.success ? validation.data.errors : undefined;
     const fieldMessage = fields?.map((field) => `${field.field}: ${field.message}`).join("; ");
     throw new CollectorError(
-      redactTelemetryText(fieldMessage || problem.detail || problem.title),
+      redactTelemetryText(fieldMessage || `Collector request failed (HTTP ${response.status}); retry reads after correcting the request or Collector access.`),
       false,
       response.status,
       codeForProblem(problem, response.status),
@@ -462,26 +265,12 @@ async function collectorRequest(
   return responseBody;
 }
 
-/** Query values a published operation parameter can carry, repeatable included. */
-export type CollectorQueryParams = Record<
-  string,
-  string | number | boolean | readonly string[] | undefined
->;
-
-export function collectorGet(
-  pathname: string,
-  params: CollectorQueryParams = {},
-  options: CollectorRequestOptions = {},
-): Promise<unknown> {
-  return collectorRequest(pathname, "GET", params, undefined, options);
-}
-
 export function collectorPost(
   pathname: string,
   body: unknown,
   options: CollectorRequestOptions = {},
 ): Promise<unknown> {
-  return collectorRequest(pathname, "POST", {}, body, options);
+  return collectorRequest(pathname, "POST", body, options);
 }
 
 export function collectorPatch(
@@ -489,16 +278,12 @@ export function collectorPatch(
   body: unknown,
   options: CollectorRequestOptions = {},
 ): Promise<unknown> {
-  return collectorRequest(pathname, "PATCH", {}, body, options);
+  return collectorRequest(pathname, "PATCH", body, options);
 }
 
 export function collectorDelete(
   pathname: string,
   options: CollectorRequestOptions = {},
 ): Promise<unknown> {
-  return collectorRequest(pathname, "DELETE", {}, undefined, options);
-}
-
-export function resolveMode(): Promise<Mode> {
-  return Promise.resolve(process.env.QYL_DEMO === "1" ? "demo" : "live");
+  return collectorRequest(pathname, "DELETE", undefined, options);
 }

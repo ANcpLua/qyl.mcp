@@ -35,14 +35,15 @@ test("malformed or query credentials never reach the verifier, even alongside a 
   assert.equal(calls, 0);
 });
 
-test("scope challenges emit all operation requirements, without offline_access", async () => {
+test("initial sign-in requests product scopes and step-up names only missing scopes", async () => {
   const gate = createResourceAuthorization({ verifier, resourceMetadataUrl: metadata,
     requiredScopes: ["files:write", "files:read", "files:write"] });
   for (const request of [new Request(resource), bearer("files:read")]) {
     const response = await gate(request);
     assert(response instanceof Response);
     assert.equal(response.status, request.headers.has("authorization") ? 403 : 401);
-    assert.match(response.headers.get("www-authenticate")!, /scope="files:read files:write"/u);
+    assert.match(response.headers.get("www-authenticate")!, request.headers.has("authorization")
+      ? /scope="files:write"/u : /scope="files:read files:write"/u);
     assert.match(response.headers.get("www-authenticate")!, /resource_metadata=/u);
     assert.doesNotMatch(response.headers.get("www-authenticate")!, /offline_access/u);
   }
@@ -99,4 +100,19 @@ test("unsafe or refresh-only resource scope configuration is refused", () => {
     "https://mcp.example/\nmetadata"]) {
     assert.throws(() => createResourceAuthorization({ verifier, resourceMetadataUrl, requiredScopes: [] }), /safe HTTPS/u);
   }
+});
+
+
+test("initial qyl sign-in requests read, write and delete while read-only tokens remain valid", async () => {
+  const gate = createResourceAuthorization({ verifier, resourceMetadataUrl: metadata,
+    requiredScopes: ["qyl:read"], authorizationScopes: ["qyl:read", "qyl:write", "qyl:delete"] });
+  const response = await gate(new Request(resource, { method: "POST" }));
+  assert(response instanceof Response);
+  assert.equal(response.status, 401);
+  assert.match(response.headers.get("www-authenticate")!, /scope="qyl:read qyl:write qyl:delete"/u);
+  assert(!((await gate(bearer("qyl:read"))) instanceof Response));
+  const denied = await gate(bearer("qyl:write qyl:delete"));
+  assert(denied instanceof Response);
+  assert.equal(denied.status, 403);
+  assert.match(denied.headers.get("www-authenticate")!, /scope="qyl:read"/u);
 });

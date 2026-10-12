@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { mock } from "node:test";
 import {
   SignJWT,
   createLocalJWKSet,
@@ -228,11 +228,10 @@ async function withMockFetch<T>(
   body: Record<string, unknown>,
   action: () => Promise<T>,
 ): Promise<T> {
-  const original = globalThis.fetch;
-  globalThis.fetch = (async () => Response.json(body)) as typeof fetch;
+  const mocked = mock.method(globalThis, "fetch", async () => Response.json(body));
   try {
     return await action();
   } finally {
-    globalThis.fetch = original;
+    mocked.mock.restore();
   }
 }

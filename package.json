@@ -11,7 +11,7 @@
   "scripts": {
     "build": "bun run --cwd server build && bun run --cwd workbench build && bun run --cwd dashboard build",
     "postbuild": "node scripts/build-site.mjs",
-    "test": "bun install --frozen-lockfile && bun run --cwd server test && bun run --cwd workbench test && bun run --cwd dashboard test && bun run postbuild && node --test scripts/build-site.test.mjs",
+    "test": "bun install --frozen-lockfile && bun run build && bun run test:built",
     "start": "bun server/dist/main.js",
     "start:workbench": "node workbench/dist/main.js",
     "smoke": "bun run --cwd server smoke && bun run --cwd workbench smoke",
@@ -21,7 +21,8 @@
     "verify:pins": "node verify-contract-pins.mjs",
     "verify:sdk": "node --test scripts/verify-mcp-sdk.test.mjs && bun scripts/verify-mcp-sdk.mjs",
     "lint": "oxlint .",
-    "smoke:projects": "bun run --cwd server smoke:projects"
+    "smoke:projects": "bun run --cwd server smoke:projects",
+    "test:built": "bun run --cwd server test:built && bun run --cwd workbench test:built && bun run --cwd dashboard test && node --test scripts/build-site.test.mjs"
   },
   "engines": {
     "node": "24.x"

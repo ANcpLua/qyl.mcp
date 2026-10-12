@@ -2,6 +2,8 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import type * as z from "zod/v4";
 import { CollectorError, collectorPost, parseCollectorBody } from "./collector.js";
+import { ANALYSIS_RESPONSE_BYTES, compactAnalysisResult, responseBytes } from "./analysis-budget.js";
+import { analysisSummary } from "./analysis-summary.js";
 import type { ToolScope } from "./request-scope.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 
@@ -11,9 +13,6 @@ export async function queryAnalysis<Input extends object, Output extends object>
   schema: z.ZodType<Output>,
   scope: ToolScope,
 ): Promise<CallToolResult> {
-  if (process.env.QYL_DEMO === "1") {
-    throw new CollectorError("Analysis needs a live qyl Collector; unset QYL_DEMO to query recorded telemetry.");
-  }
   const path = `/api/v1/analysis/${operation}`;
   const deadline = Date.now() + 55_000;
   let query: object = input;
@@ -23,10 +22,10 @@ export async function queryAnalysis<Input extends object, Output extends object>
     if (remaining <= 0) throw new CollectorError("The query exceeded its time budget; narrow the time window and matchers.");
     const response = await collectorPost(path, query, { ...scope.collector, timeoutMs: remaining });
     const output = parseCollectorBody(response, path, schema);
-    const result = telemetryToolResult(`${operation}: results are in the structured data.`, output);
+    const result = telemetryToolResult(analysisSummary(operation, output), output);
     // Bytes give a conservative upper bound even for token-dense identifiers.
-    const bytes = Buffer.byteLength(JSON.stringify(result), "utf8");
-    if (bytes <= 24_000) {
+    const bytes = responseBytes(result);
+    if (bytes <= ANALYSIS_RESPONSE_BYTES) {
       await scope.step(`Queried ${operation}`);
       return result;
     }
@@ -34,18 +33,22 @@ export async function queryAnalysis<Input extends object, Output extends object>
     // smaller page. Never slice a response and leave its paging metadata stale.
     const args = query as Record<string, unknown>;
     const page = output as Record<string, unknown>;
-    const canPage = (operation === "display_traces" && !args.trace_id)
-      || (operation === "fetch_telemetry" && args.view === "traces");
-    if (canPage && Array.isArray(page.traces) && page.traces.length > 1 && page.traces.length < previousPageSize) {
-      previousPageSize = page.traces.length;
-      const limit = Math.max(1, Math.floor(page.traces.length * 24_000 / bytes * 0.8));
-      const window = page.window as { start_time?: string; end_time?: string } | undefined;
-      query = { ...args, ...window, limit };
+    const traceView = operation === "get_trace" || operation === "fetch_telemetry" && args.view === "trace";
+    const sizeKey = traceView ? "max_spans" : operation === "query_metric" ? "series_limit" : operation === "get_agent_run" ? "max_steps" : "limit";
+    const trace = page.trace as { spans?: unknown[] } | undefined;
+    const observed = page.observed as { error_spans?: unknown[]; logs?: unknown[] } | undefined;
+    const sizes = [trace?.spans?.length, observed?.error_spans?.length, observed?.logs?.length,
+      ...Object.values(page).filter(Array.isArray).map((items) => items.length)].filter((size): size is number => size !== undefined);
+    const pageSize = Math.max(0, ...sizes);
+    if (pageSize > 1 && pageSize < previousPageSize) {
+      previousPageSize = pageSize;
+      const limit = Math.max(1, Math.floor(pageSize * ANALYSIS_RESPONSE_BYTES / bytes * 0.8));
+      // The collector creates the smaller page and its continuation together.
+      query = { ...args, ...(page.window as object), [sizeKey]: limit,
+        ...(operation === "get_failure_context" ? { max_spans: limit, max_logs: limit } : {}) };
       continue;
     }
-    throw new CollectorError(
-      "The result exceeds the response budget; reduce limit or narrow the time window and matchers.",
-      false, 413, "collector_rejected",
-    );
+    await scope.step(`Queried ${operation}; large evidence compacted`);
+    return compactAnalysisResult(operation, output);
   }
 }

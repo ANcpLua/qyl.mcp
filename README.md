@@ -21,7 +21,7 @@ checks are distinct in the evidence ledger.
 
 Endpoint: `https://mcp.qyl.at/mcp`. On 2026-10-08, `curl` returned `401` with
 `resource_metadata`; the metadata identified that resource, issuer
-`https://qyl-eu.eu.auth0.com/` and scope `qyl:read`.
+`https://qyl-eu.eu.auth0.com/` and scopes `qyl:read qyl:write qyl:delete`.
 [Exact commands and responses](docs/evidence/2026-10-08-step4.md#endpoint).
 These observations establish discovery, not a successful OAuth login. The
 source's metadata now also lists `qyl:write` and `qyl:delete`, which only the
@@ -39,11 +39,11 @@ in the [client setup evidence](docs/evidence/2026-10-08-step7.md#client-setup-an
 
 | Client | Connection setting | Registration path |
 | --- | --- | --- |
-| ChatGPT web | In Plugins, choose **Add custom MCP server**, enter `https://mcp.qyl.at/mcp`, select OAuth and request `qyl:read` (add `qyl:write` and `qyl:delete` for the write tools); create and install the personal plugin. | Choose CIMD, DCR or a provisioned OAuth client as offered. For CIMD, use the metadata document and callback shown by the connection page; stable metadata is `https://chatgpt.com/oauth/client.json` where issuer-bound callbacks are supported. |
+| ChatGPT web | In Plugins, choose **Add custom MCP server**, enter `https://mcp.qyl.at/mcp`, select OAuth and request `qyl:read qyl:write qyl:delete`; create and install the personal plugin. | Choose CIMD, DCR or a provisioned OAuth client as offered. For CIMD, use the metadata document and callback shown by the connection page; stable metadata is `https://chatgpt.com/oauth/client.json` where issuer-bound callbacks are supported. |
 | claude.ai | In **Customize → Connectors**, add a custom connector for `https://mcp.qyl.at/mcp`, select sign-in and complete OAuth. Organization users first need their owner to add the connector under organization settings. | Select Claude's published identity (CIMD), automatic registration (DCR), or a provisioned client. Public CIMD: `https://claude.ai/oauth/mcp-oauth-client-metadata`. |
 | Claude Code | Run `claude mcp add --transport http qyl https://mcp.qyl.at/mcp`, then open `/mcp` to authenticate. | Automatic CIMD/DCR discovery; if a provisioned client is required, use the CLI's `--client-id` and `--client-secret` prompt, with its actual callback registered. |
-| Codex CLI | Add the TOML below to the intended Codex configuration, then run `codex mcp login qyl --scopes qyl:read` (or `--scopes "qyl:read qyl:write qyl:delete"` for the write tools). | Automatic CIMD/DCR selection; for a targeted registration check, the inspected CLI accepts `--oauth-client-registration cimd` or `dcr` on login. A configured client ID takes precedence. |
-| MCP Inspector | Save the JSON below as `inspector-modern.json`; run `npx -y @modelcontextprotocol/inspector@2.9.0 --config inspector-modern.json`, complete OAuth with `qyl:read`, then invoke `tools/list`. | Use the provisioned client or registration flow offered by Inspector and the issuer. Record which path was used; registration alone does not grant resource access. |
+| Codex CLI | Add the TOML below to the intended Codex configuration, then run `codex mcp login qyl --scopes "qyl:read qyl:write qyl:delete"`. | Automatic CIMD/DCR selection; for a targeted registration check, the inspected CLI accepts `--oauth-client-registration cimd` or `dcr` on login. A configured client ID takes precedence. |
+| MCP Inspector | Save the JSON below as `inspector-modern.json`; run `bunx @modelcontextprotocol/inspector@2.9.0 --config inspector-modern.json`, complete OAuth with `qyl:read qyl:write qyl:delete`, then invoke `tools/list`. | Use the provisioned client or registration flow offered by Inspector and the issuer. Record which path was used; registration alone does not grant resource access. |
 
 Codex configuration:
 
@@ -72,35 +72,42 @@ Locally, the pinned Inspector passed modern and legacy `tools/list` with all
 
 ## Run the server yourself
 
-From a checkout, these commands build the server and start explicit demo stdio:
+Run the published package with Bun:
+
+```sh
+bunx qyl-mcp-server --stdio
+bunx qyl-mcp-server
+```
+
+`npx` and `pnpm dlx` also work when Bun 1.4 or newer is installed.
+
+From a checkout, build the server and start stdio:
 
 ```sh
 bun install --frozen-lockfile
 bun run build
-QYL_DEMO=1 node server/dist/main.js --stdio
+bun server/dist/main.js --stdio
 ```
 
-For live data, omit `QYL_DEMO` and configure `QYL_COLLECTOR_URL` and, when
+Configure `QYL_COLLECTOR_URL` and, when
 needed, `QYL_API_KEY`. For local HTTP, run `bun server/dist/main.js`; the source
 defaults to loopback port 3001. `QYL_API_KEY` is an outgoing Collector
 credential, not an incoming MCP login.
 [Configuration and serving source, 2026-10-08](docs/evidence/2026-10-08-step7.md#configuration-and-serving).
 
 `./release.sh <version>` publishes `qyl-mcp-server` from the developer's machine
-(see `SKILL.md`). The retired release workflow, with provenance and clean `npx`
-consumer smokes in both protocol eras, on 2026-10-11 published `7.2.0`, `7.2.1`, `7.2.2` and `7.2.3` that way. The
-source declares `7.6.1` (shared qyl C#/TypeScript semantic conventions; Contract 12.0.0: RFC 9457 problems with a type URI and
-a stable `code`, one page limit of 1 to 1000; on top of 7.5.0's write tools
-behind `qyl:write` and `qyl:delete` and 7.4.0's paging, filters, structured
-metric matchers and the `fetch_telemetry` union);
-`npm view qyl-mcp-server dist-tags` names the published `latest`.
-[Release and consumer evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md#releases).
+(see `SKILL.md`). The executable uses Bun; the exported library subpaths support
+Node 24. C# and TypeScript telemetry definitions come from the qyl convention
+registry, while product API contracts come from `qyl-api-schema`. The official
+MCP SDK, OpenTelemetry SDKs and exporters remain in use. See
+[release notes](server/README.md#release-notes); the npm registry's `latest` tag
+identifies the published version.
 
 ### Tools and viewers
 
 The [generated manifest](server/tool-manifest.snapshot.json) is the tool
-contract. It has 18 tools: 13 read tools annotated `readOnlyHint: true` and the
-five [write tools](#write-tools); `fetch_telemetry` is app-only through
+contract. It has 32 tools: 26 read tools annotated `readOnlyHint: true` and the
+six [write tools](#write-tools); `fetch_telemetry` is app-only through
 `_meta.ui.visibility: ["app"]`. The tool matrix maps each
 tool to the user's question and its limits, with dated manifest evidence.
 
@@ -127,9 +134,9 @@ retention alone removes telemetry. The hints follow the
 
 | Tool | Changes | Annotations | Scope |
 | --- | --- | --- | --- |
-| `create_annotation` | adds a note | `readOnlyHint: false`, `destructiveHint: false`, `idempotentHint: false` | `qyl:write` |
+| `create_annotation` | adds a note | `readOnlyHint: false`, `destructiveHint: false`, `idempotentHint: true` | `qyl:write` |
 | `update_annotation` | replaces a note's text | `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true` | `qyl:write` |
-| `create_saved_query` | adds a named filter | `readOnlyHint: false`, `destructiveHint: false`, `idempotentHint: false` | `qyl:write` |
+| `create_saved_query` | adds a named filter | `readOnlyHint: false`, `destructiveHint: false`, `idempotentHint: true` | `qyl:write` |
 | `update_saved_query` | renames it or replaces its description or filter | `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true` | `qyl:write` |
 | `delete` | removes one annotation or saved query (`kind` is `annotation` or `saved_query`) | `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true` | `qyl:delete` |
 
@@ -138,11 +145,10 @@ retention alone removes telemetry. The hints follow the
 `list_sessions` return the annotations on what they read, so there is no
 annotation listing tool. Updates and deletes send the object's `etag` as
 `If-Match`: a stale etag is refused with `precondition_failed`, a duplicate
-saved-query name with `conflict`. Alert rules are not deletable yet: they
-arrive with Contract 11.7.0. On the hosted server a write call without its
+saved-query name with `conflict`. Alert rules are outside the current write surface.
+On the hosted server a write call without its
 scope gets a `403` `insufficient_scope` challenge naming the scopes to request,
-in both protocol eras, before any Collector request. Demo mode keeps no such
-objects and refuses these tools.
+in both protocol eras, before any Collector request.
 
 The two viewers declare versioned resource URIs, a configured hosted origin
 and empty external connection/resource CSP allowlists. Local tests cover
@@ -224,7 +230,6 @@ and [Workbench](docs/evidence/2026-10-08-step7.md#workbench).
 | `QYL_MCP_STATE_PATH` | Workbench state location. |
 | `QYL_MCP_NATIVE_STATE_PATH` | Native incoming-call record location. |
 | `QYL_MCP_WORKBENCH_PORT` | Workbench port, default 18888. |
-| `QYL_DEMO=1` | Explicit demo mode; no silent live-to-demo fallback. |
 
 ## Deploying your own
 
@@ -361,11 +366,8 @@ verification are pending owner actions.
 ## Verification and limits
 
 ```sh
+mise run check
 bun run verify:sdk
-bun run build
-bun run test
-bun run lint
-bun run smoke
 bun run smoke:otlp
 bun run smoke:projects
 ```
@@ -373,21 +375,22 @@ bun run smoke:projects
 The [2026-10-08 transcript](docs/evidence/2026-10-08-step4.md) records actual
 results, including the initial OTLP failure against the adjacent Collector
 feature branch and the successful rerun against a fresh Collector `main`.
-Use `QYL_COLLECTOR_PROJECT` to select the intended fixture. Static `check_v2`
+Build the collector once in Release configuration; these checks reuse its output.
+Set `QYL_COLLECTOR_DLL` to use a different completed build. Static `check_v2`
 historically returned 31 error-severity findings; the per-rule assessments
 explain the installed paths without suppressing diagnostics. Both-era runtime
 evidence is recorded separately. The revised point-3 run on 2026-10-08 reports
 zero errors with an unchanged checker after explicit `zod/v4` imports and a
 justified Events JSON-Schema marker; see [command and output](docs/evidence/2026-10-08-followup-03.md#static-checker-before-and-after).
 
-Remote connections, production Events, deployed commit and a fresh npm
-consumer remain owner observations. Local tests cannot substitute for
-them. Review cases and the demo are drafts until run in an owner client.
+Hosted connections, Events, the deployed commit and a fresh npm consumer
+require separate runtime evidence. Local tests do not establish those results.
 
 ## Contracts
 
-As of 2026-10-11, the source pins `@ancplua/qyl-api-schema` 12.0.0 (revision `sha256:b29439eba28e752b`), official split MCP
-SDK packages 2.3.1 and Zod 4.6.5. SDK major version and wire revision are
+The generated contracts come from `@ancplua/qyl-api-schema`; exact dependency
+versions are recorded in [server/package.json](server/package.json) and `bun.lock`.
+SDK major version and wire revision are
 independent. Server HTTP/stdio use SDK factories and negotiation defaults;
 Workbench uses automatic negotiation. [Contract 11.4.0 and 11.5.0 evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md) and
 [package/serving evidence, 2026-10-08](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory).

@@ -231,7 +231,6 @@ export const SearchLogsInputSchema = contractSchema("Mcp.Tools.SearchLogsInput")
 export const SearchLogsOutputSchema = contractSchema("Mcp.Tools.SearchLogsOutput");
 export const FetchTelemetryInputSchema = contractSchema("Mcp.Tools.FetchTelemetryInput");
 export const FetchTelemetryOutputSchema = contractSchema("Mcp.Tools.FetchTelemetryOutput");
-export const CiLogInputSchema = contractSchema("Mcp.Tools.CiLogInput");
 export const CiRunSummarySchema = contractSchema("Mcp.Tools.CiRunSummary");
 export const CiPhaseSchema = contractSchema("Mcp.Tools.CiPhase");
 export const CiLogOutputSchema = contractSchema("Mcp.Tools.CiLogOutput");

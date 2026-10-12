@@ -11,7 +11,6 @@ import {
   FetchTelemetryOutputSchema,
   GetTraceInputSchema,
   GetTraceOutputSchema,
-  CiLogInputSchema,
   ListSessionsInputSchema,
   ListSessionsOutputSchema,
   ListTracesInputSchema,
@@ -28,18 +27,15 @@ import {
   SpanSchema,
   ToolErrorSchema,
   TraceSchema,
-  TracesListResponseSchema,
 } from "./contract-validation.js";
 import {
   CollectorError,
-  parseCollectorLog,
-  parseCollectorPage,
-  parseCollectorSession,
-  parseCollectorTrace,
+  parseCollectorBody,
 } from "./collector.js";
 import { readContext, toolTrace, toolSummary } from "./analysis-context.test-helper.js";
-import { getDemo } from "./demo.js";
-import { fetchMcpStats } from "./data.js";
+import { getTelemetryFixture } from "./telemetry-fixtures.test-helper.js";
+import fixtureStats from "../fixtures/dashboard-stats.json" with { type: "json" };
+const CiLogInputSchema = ContractSchemas.contractSchema("Mcp.Tools.CiLogInput");
 import { toolError } from "./request-scope.js";
 
 test("every published Workbench definition has a runtime validator", () => {
@@ -136,39 +132,31 @@ test("the server's error codes are the contract's ToolErrorCode enum", () => {
   }
 });
 
-test("published output schemas accept the programmatically generated demo dataset", async () => {
-  const demo = getDemo();
-  const [trace] = demo.traces;
-  const summaries = demo.traces.map(toolSummary);
-  const context = readContext(demo.traces.length);
-  const traces = demo.traces.map(toolTrace);
+test("published output schemas accept the test telemetry fixture", async () => {
+  const fixture = getTelemetryFixture();
+  const [trace] = fixture.traces;
+  const summaries = fixture.traces.map(toolSummary);
+  const context = readContext(fixture.traces.length);
+  const traces = fixture.traces.map(toolTrace);
 
-  assert(DisplayTracesOutputSchema.safeParse({ ...context, traces, mode: "demo" }).success);
-  assert(ListTracesOutputSchema.safeParse({ ...context, traces: summaries, mode: "demo", has_more: false }).success);
+  assert(DisplayTracesOutputSchema.safeParse({ ...readContext(fixture.traces.length, false), traces, mode: "live" }).success);
+  assert(ListTracesOutputSchema.safeParse({ ...context, traces: summaries, mode: "live", has_more: false }).success);
   assert(
-    !ListTracesOutputSchema.safeParse({ ...context, traces: summaries, mode: "demo" }).success,
+    !ListTracesOutputSchema.safeParse({ ...readContext(fixture.traces.length, false), traces: summaries, mode: "live" }).success,
     "has_more is required: a page must say whether it is the whole result",
   );
-  assert(ListTracesOutputSchema.safeParse({ ...context, traces: summaries, mode: "demo", has_more: true, next_cursor: "c" }).success);
-  assert(GetTraceOutputSchema.safeParse({ ...context, trace: toolTrace(trace!), mode: "demo" }).success);
-  assert(ListSessionsOutputSchema.safeParse({ ...context, sessions: demo.sessions, mode: "demo", has_more: false }).success);
-  assert(SearchLogsOutputSchema.safeParse({ ...context, logs: demo.logs, mode: "demo", has_more: false }).success);
-  assert(FetchTelemetryOutputSchema.safeParse({ ...context, traces, mode: "demo" }).success);
+  assert(ListTracesOutputSchema.safeParse({ ...context, traces: summaries, mode: "live", has_more: true, next_cursor: "c" }).success);
+  assert(GetTraceOutputSchema.safeParse({ ...context, trace: toolTrace(trace!), mode: "live" }).success);
+  assert(ListSessionsOutputSchema.safeParse({ ...context, sessions: fixture.sessions, mode: "live", has_more: false }).success);
+  assert(SearchLogsOutputSchema.safeParse({ ...context, logs: fixture.logs, mode: "live", has_more: false }).success);
+  assert(FetchTelemetryOutputSchema.safeParse({ ...context, traces, mode: "live" }).success);
 
-  const previousDemo = process.env.QYL_DEMO;
-  process.env.QYL_DEMO = "1";
-  try {
-    const stats = await fetchMcpStats(24);
-    assert(DisplayMcpDashboardOutputSchema.safeParse({ ...context, stats }).success);
-    assert(FetchTelemetryOutputSchema.safeParse({ ...context, stats, mode: stats.mode }).success);
-  } finally {
-    if (previousDemo === undefined) delete process.env.QYL_DEMO;
-    else process.env.QYL_DEMO = previousDemo;
-  }
+  assert(DisplayMcpDashboardOutputSchema.safeParse({ ...readContext(fixture.traces.length, false), stats: fixtureStats }).success);
+  assert(FetchTelemetryOutputSchema.safeParse({ ...context, stats: fixtureStats, mode: "live" }).success);
 });
 
 test("64-bit nanosecond timestamps survive the wire exactly, above the safe-integer ceiling", () => {
-  const span = getDemo().traces[0].spans[0];
+  const span = getTelemetryFixture().traces[0].spans[0];
   // Past Number.MAX_SAFE_INTEGER: as a JS number literal this value silently becomes
   // ...456_800, which is the precision loss the decimal-string encoding exists to remove.
   const unixNanos = "1742000000123456789";
@@ -182,7 +170,7 @@ test("64-bit nanosecond timestamps survive the wire exactly, above the safe-inte
 });
 
 test("TypeSpec record dictionaries retain their value contract at runtime", () => {
-  const span = structuredClone(getDemo().traces[0].spans[0]);
+  const span = structuredClone(getTelemetryFixture().traces[0].spans[0]);
   span.attributes = [
     {
       key: "nested",
@@ -297,70 +285,21 @@ test("published workbench assertion, evaluation, and export unions reject local 
   );
 });
 
-test("collector boundary normalizes RFC 3339 offsets and rejects alternate wire encodings", () => {
-  const demo = getDemo();
-  const sourceTrace = structuredClone(demo.traces[0]);
-  sourceTrace.start_time = sourceTrace.start_time.replace("Z", "+00:00");
-  sourceTrace.end_time = sourceTrace.end_time.replace("Z", "+00:00");
-  assert(TraceSchema.safeParse(sourceTrace).success);
-  const page = parseCollectorPage(
-    { items: [sourceTrace], has_more: false },
-    "/api/v1/traces",
-    TracesListResponseSchema,
-    parseCollectorTrace,
-  );
-  assert.equal(page.items[0].start_time.endsWith("Z"), true);
-  assert.equal(typeof page.items[0].spans[0].kind, "number");
-  assert.equal(page.hasMore, false);
-
-  assert.throws(
-    () => parseCollectorPage(
-      [sourceTrace],
-      "/api/v1/traces",
-      TracesListResponseSchema,
-      parseCollectorTrace,
-    ),
-    /expected an object/u,
-  );
-  assert.throws(
-    () => parseCollectorPage(
-      { items: [] },
-      "/api/v1/traces",
-      TracesListResponseSchema,
-      parseCollectorTrace,
-    ),
-    /has_more/u,
-  );
-  assert.throws(
-    () => parseCollectorPage(
-      { items: [], has_more: false, invented: true },
-      "/api/v1/traces",
-      TracesListResponseSchema,
-      parseCollectorTrace,
-    ),
-    /Unrecognized key/u,
-  );
-
-  const session = structuredClone(demo.sessions[0]);
-  session.start_time = session.start_time.replace("Z", "+00:00");
-  assert.equal(parseCollectorSession(session).state, demo.sessions[0].state);
-
-  const log = structuredClone(demo.logs[0]);
-  const normalizedLog = parseCollectorLog(log);
-  assert.equal(normalizedLog.severity_number, log.severity_number);
-  assert.equal(normalizedLog.severity_text, log.severity_text);
-
-  const malformedTrace = structuredClone(sourceTrace);
-  malformedTrace.spans[0].kind = "Client" as never;
-  assert.throws(() => parseCollectorTrace(malformedTrace), /collector contract mismatch/);
-
-  const malformedLog = structuredClone(log);
-  malformedLog.severity_number = "Info" as never;
-  assert.throws(() => parseCollectorLog(malformedLog), /collector contract mismatch/);
+test("analysis boundary preserves RFC 3339 precision and rejects alternate wire encodings", () => {
+  const trace = toolSummary(structuredClone(getTelemetryFixture().traces[0]!));
+  trace.start_time = "2026-07-28T12:00:00.123456789+02:00";
+  const body = { ...readContext(1), traces: [trace], mode: "live" };
+  const parse = (value: unknown) => parseCollectorBody(value, "/api/v1/analysis/list_traces", ListTracesOutputSchema);
+  assert.equal(parse(body).traces[0]?.start_time, trace.start_time);
+  assert.throws(() => parse([trace]), /collector contract mismatch/u);
+  assert.throws(() => parse({ ...body, has_more: undefined }), /has_more/u);
+  assert.throws(() => parse({ ...body, invented: true }), /Unrecognized key/u);
+  trace.root_span!.kind = "Client" as never;
+  assert.throws(() => parse(body), /collector contract mismatch/u);
 });
 
 test("contract date-time fields accept RFC 3339 and reject its near-misses", () => {
-  const trace = structuredClone(getDemo().traces[0]);
+  const trace = structuredClone(getTelemetryFixture().traces[0]);
   // Seconds are mandatory in RFC 3339 `partial-time`, an offset is `HH:MM`, and
   // one of `Z` or an offset is mandatory -- the three rejections below. A Zod
   // pattern change that loosens or tightens any of them fails here by value.

@@ -53,7 +53,7 @@ test("Cloudflare mode validates the edge assertion and passes read authorization
 });
 
 test("Cloudflare mode never accepts an opaque Bearer token or a forged assertion directly at the origin", async () => {
-  for (const headers of [{}, { authorization: "Bearer oauth:opaque" }, { "cf-access-jwt-assertion": "forged" }]) {
+  for (const headers of [{}, { authorization: "Bearer oauth:opaque" }, { "cf-access-jwt-assertion": "forged" }] as Record<string, string>[]) {
     const response = await auth.gate(new Request(resource, { headers }));
     assert(response instanceof Response);
     assert.equal(response.status, 401);

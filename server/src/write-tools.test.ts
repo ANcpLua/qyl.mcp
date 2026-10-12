@@ -17,7 +17,7 @@ import type { Annotation, SavedQuery } from "@ancplua/qyl-api-schema/types";
 import { createResourceAuthorization } from "./authorization.js";
 import { API_KEY_HEADER, IDEMPOTENCY_KEY_HEADER, IF_MATCH_HEADER, PROJECT_HEADER } from "./contract-headers.js";
 import { readContext, toolTrace } from "./analysis-context.test-helper.js";
-import { getDemo } from "./demo.js";
+import { getTelemetryFixture } from "./telemetry-fixtures.test-helper.js";
 import {
   QYL_MCP_DELETE_SCOPE,
   QYL_MCP_RESOURCE,
@@ -41,9 +41,9 @@ const PROJECTS = [
   { project: "owner", apiKey: "owner-write-key", subjects: [OWNER] },
   { project: "review", apiKey: "review-write-key", subjects: [REVIEWER] },
 ];
-const TRACE = getDemo().traces[0]!;
+const TRACE = getTelemetryFixture().traces[0]!;
 const SPAN_ID = TRACE.spans[0]!.span_id;
-const SESSION_ID = getDemo().sessions[0]!.session_id;
+const SESSION_ID = getTelemetryFixture().sessions[0]!.session_id;
 
 const WRITE_TOOLS = {
   create_annotation: { annotations: CREATE_TOOL_ANNOTATIONS, scopes: [QYL_MCP_SCOPE, QYL_MCP_WRITE_SCOPE] },
@@ -73,7 +73,6 @@ function environment(context: TestContext, values: Record<string, string | undef
 function liveCollector(context: TestContext, projects = true): void {
   environment(context, {
     QYL_COLLECTOR_URL: "https://collector.example.test",
-    QYL_DEMO: undefined,
     QYL_API_KEY: projects ? "default-must-not-be-used" : "local-write-key",
     QYL_PROJECT: projects ? "default-must-not-be-used" : undefined,
     MCP_COLLECTOR_PROJECTS: projects ? JSON.stringify(PROJECTS) : undefined,
@@ -278,7 +277,7 @@ for (const era of ["modern", "legacy"] as const) {
       }),
       (error: unknown) => {
         assert(error instanceof InsufficientScopeError, String(error));
-        assert.equal(error.requiredScope, "qyl:read qyl:write");
+        assert.equal(error.requiredScope, "qyl:write");
         assert.equal(error.resourceMetadataUrl?.href, METADATA_URL);
         assert.equal(error.errorDescription, "create_annotation needs the qyl:write scope");
         return true;
@@ -286,13 +285,13 @@ for (const era of ["modern", "legacy"] as const) {
     );
     assert.equal(calls.length, 0);
 
-    // Re-authorizing for delete keeps the write grant the token already has.
+    // A step-up challenge names only the scope this operation still lacks.
     const writer = await hostedClient(context, OWNER, [QYL_MCP_SCOPE, QYL_MCP_WRITE_SCOPE], era);
     await assert.rejects(
       writer.callTool({ name: "delete", arguments: { kind: "annotation", id: "ann-1", etag: "\"1\"" } }),
       (error: unknown) => {
         assert(error instanceof InsufficientScopeError, String(error));
-        assert.equal(error.requiredScope, "qyl:delete qyl:read qyl:write");
+        assert.equal(error.requiredScope, "qyl:delete");
         return true;
       },
     );
@@ -330,7 +329,7 @@ test("a transport without scope challenges still refuses, in band, with the chal
   });
   assert.deepEqual(result._meta?.[WWW_AUTHENTICATE_META_KEY], [
     `Bearer error="insufficient_scope", error_description="update_annotation needs the qyl:write scope", ` +
-      `scope="qyl:read qyl:write", resource_metadata="${METADATA_URL}"`,
+      `scope="qyl:write", resource_metadata="${METADATA_URL}"`,
   ]);
   assert.equal(calls.length, 0);
 });
@@ -445,7 +444,7 @@ test("saved queries: create, conflict, update, list with paging, run and delete"
     }
     if (call.method === "POST" && call.path === "/api/v1/analysis/run_saved_query") {
       const { spans: _spans, ...summary } = TRACE;
-      return Response.json({ ...readContext(1), result: { signal: "traces", items: [summary], has_more: false }, mode: "live" });
+      return Response.json({ ...readContext(1, false), result: { signal: "traces", items: [summary], has_more: false }, mode: "live" });
     }
     if (call.method === "DELETE" && call.path === "/api/v1/saved-queries/sq-1") {
       return new Response(null, { status: 204 });
@@ -532,30 +531,10 @@ test("a Collector key without the write or delete role surfaces as collector_una
   assert.match(errorOf(deleted).message, /needs the delete role/u);
 });
 
-test("demo mode refuses every annotation and saved-query tool instead of inventing a store", async (context) => {
-  environment(context, { QYL_DEMO: "1", MCP_COLLECTOR_PROJECTS: undefined });
-  const calls = mockCollector(context, () => problem(500, "Internal Server Error"));
-  const client = await inMemoryClient(context);
-  for (const [name, args] of [
-    ["create_annotation", { target: { kind: "trace", trace_id: TRACE.trace_id }, text: "note" }],
-    ["list_saved_queries", {}],
-    ["run_saved_query", { id: "sq-1" }],
-    ["delete", { kind: "annotation", id: "ann-1", etag: "\"1\"" }],
-  ] as const) {
-    const result = await client.callTool({ name, arguments: args }) as CallToolResult;
-    const error = errorOf(result);
-    assert.equal(error.code, "invalid_argument", name);
-    assert.match(error.message, /needs a live qyl Collector/u, name);
-  }
-  assert.equal(calls.length, 0);
-
-  const trace = await client.callTool({ name: "get_trace", arguments: { trace_id: TRACE.trace_id } }) as CallToolResult;
-  assert.equal(errorOf(trace).code, "invalid_argument", "analysis requires a real collector");
-});
 
 test("get_trace and list_sessions read the annotations back; a failed read leaves the telemetry result", async (context) => {
   liveCollector(context, false);
-  const sessions = getDemo().sessions.slice(0, 2);
+  const sessions = getTelemetryFixture().sessions.slice(0, 2);
   let annotationsUp = true;
   const calls = mockCollector(context, (call) => {
     if (call.path === "/api/v1/analysis/get_trace") return Response.json({ ...readContext(1), trace: toolTrace(TRACE), mode: "live", ...(annotationsUp ? { annotations: [annotation()] } : {}) });
@@ -582,4 +561,35 @@ test("get_trace and list_sessions read the annotations back; a failed read leave
   assert.equal(degraded.isError, undefined, "the trace read itself succeeded");
   assert.equal(Object.hasOwn(degraded.structuredContent ?? {}, "annotations"), false);
   assert.equal(calls.at(-1)!.path, "/api/v1/analysis/get_trace");
+});
+
+
+test("creates without a supplied idempotency key are stable and project-scoped", async context => {
+  liveCollector(context);
+  const calls = mockCollector(context, () => Response.json({annotation:annotation(),idempotent_replay:false}));
+  const owner = await hostedClient(context, OWNER, [QYL_MCP_SCOPE,QYL_MCP_WRITE_SCOPE]);
+  const reviewer = await hostedClient(context, REVIEWER, [QYL_MCP_SCOPE,QYL_MCP_WRITE_SCOPE]);
+  const args = {target:{kind:"trace",trace_id:TRACE.trace_id},text:"retry-safe bookmark"};
+  await owner.callTool({name:"create_annotation",arguments:args});
+  await owner.callTool({name:"create_annotation",arguments:args});
+  await reviewer.callTool({name:"create_annotation",arguments:args});
+  assert(calls[0]?.idempotencyKey);
+  assert.equal(calls[0]?.idempotencyKey,calls[1]?.idempotencyKey);
+  assert.notEqual(calls[0]?.idempotencyKey,calls[2]?.idempotencyKey);
+});
+
+test("failure update rejects ignore_until outside ignored and explains stale or inaccessible state", async context => {
+  liveCollector(context);
+  let status = 412;
+  const calls = mockCollector(context, () => problem(status,"unsafe raw detail"));
+  const owner = await hostedClient(context, OWNER, [QYL_MCP_SCOPE,QYL_MCP_WRITE_SCOPE]);
+  const args = {failure_id:"fail_"+"a".repeat(64),etag:'"1"',status:"open"};
+  const invalid = await owner.callTool({name:"update_failure_status",arguments:{...args,ignore_until:"2026-10-13T00:00:00Z"}});
+  assert.equal(invalid.isError,true); assert.match(JSON.stringify(invalid),/status=ignored/u); assert.equal(calls.length,0);
+  for (const [value,message] of [[412,/changed|current|etag/iu],[404,/not found|no longer/iu],[403,/write role/iu]] as const) {
+    status=value;
+    const result=await owner.callTool({name:"update_failure_status",arguments:args});
+    assert.equal(result.isError,true); assert.match(JSON.stringify(result),message); assert.doesNotMatch(JSON.stringify(result),/unsafe raw detail/u);
+    assert.equal(calls.at(-1)?.ifMatch,'"1"');
+  }
 });

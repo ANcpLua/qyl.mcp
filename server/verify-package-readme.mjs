@@ -15,9 +15,8 @@
  *      catches drift at the commit that introduces it — an author adding a tool
  *      has to confront the page rather than forget it.
  *   2. No sentence may claim ALL tools are read-only while a mutating tool
- *      exists, unless it carves out the exception by name. The manifest has
- *      five mutating tools (the annotation and saved-query writes and
- *      `delete`), so this check fires on any blanket read-only claim.
+ *      exists, unless it carves out the exception by name. The manifest identifies
+ *      the mutating tools, so this check follows the current write surface.
  *
  * Scope is deliberately the published README only. The root README states that
  * the manifest is authoritative and defers to it, which is a legitimate choice

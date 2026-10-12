@@ -109,6 +109,7 @@ export function traceActions(trace: Trace, selectedSpan: () => string | undefine
     void (async () => {
     editor.hidden = !editor.hidden;
     if (editor.hidden) return;
+    if (editor.childElementCount > 0) return;
     editor.replaceChildren(form());
     try {
       const result = await call({ name: "get_trace", arguments: { trace_id: trace.trace_id, max_spans: 1 } });
@@ -122,7 +123,7 @@ export function traceActions(trace: Trace, selectedSpan: () => string | undefine
     void (async () => {
     bookmark.disabled = true;
     try {
-      await send("create_annotation", { target: target(), text: "Bookmarked execution", labels: ["bookmark"], classification: "note", idempotency_key: crypto.randomUUID() });
+      await send("create_annotation", { target: target(), text: "Bookmarked execution", labels: ["bookmark"], classification: "note" });
       status.textContent = "Bookmark saved.";
     } catch (error) { status.textContent = error instanceof Error ? error.message : String(error); }
     finally { bookmark.disabled = false; }

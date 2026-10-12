@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import { LOG_LEVEL_META_KEY } from "@modelcontextprotocol/client";
 import { connectModernTestClient, type ModernTestClient } from "./modern-test-client.test-helper.js";
-import { getDemo } from "./demo.js";
+import { getTelemetryFixture } from "./telemetry-fixtures.test-helper.js";
 import { readContext, toolSummary, toolTrace } from "./analysis-context.test-helper.js";
 import { createServer } from "./server.js";
 
@@ -46,7 +46,7 @@ async function until(condition: () => boolean, what: string, timeoutMs = 2_000):
   }
 }
 
-function demoConnection(): Promise<ModernTestClient> {
+function fixtureConnection(): Promise<ModernTestClient> {
   return connectModernTestClient(
     { name: "request-scope-test", version: "1.0.0" },
     () => createServer({ nativeExecution: false }),
@@ -64,29 +64,26 @@ function collectLogs(connection: ModernTestClient): LogLine[] {
 
 /** Transport tests use fixed typed responses; query semantics run through real OTLP in verify-answer-key. */
 async function collectorConnection(context: TestContext, reply: (operation: string, args: Record<string, unknown>) => Response = responseFor): Promise<ModernTestClient> {
-  const previous = process.env.QYL_DEMO;
-  delete process.env.QYL_DEMO;
-  context.after(() => { if (previous === undefined) delete process.env.QYL_DEMO; else process.env.QYL_DEMO = previous; });
   context.mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
     const request = new Request(input, init);
     assert.equal(request.method, "POST");
     return reply(new URL(request.url).pathname.split("/").at(-1)!, await request.json() as Record<string, unknown>);
   });
-  const connection = await demoConnection();
+  const connection = await fixtureConnection();
   context.after(() => connection.close());
   return connection;
 }
 function responseFor(operation: string, args: Record<string, unknown>): Response {
   const context = readContext(1);
   switch (operation) {
-    case "list_traces": return Response.json({ ...context, mode: "live", has_more: false, traces: [toolSummary(getDemo().traces[0]!)] });
-    case "get_trace": return Response.json({ ...context, mode: "live", trace: toolTrace(getDemo().traces[0]!) });
-    case "list_sessions": return Response.json({ ...context, mode: "live", has_more: false, sessions: [getDemo().sessions[0]] });
-    case "search_logs": return Response.json({ ...context, mode: "live", has_more: false, logs: [getDemo().logs[0]] });
+    case "list_traces": return Response.json({ ...context, mode: "live", has_more: false, traces: [toolSummary(getTelemetryFixture().traces[0]!)] });
+    case "get_trace": return Response.json({ ...context, mode: "live", trace: toolTrace(getTelemetryFixture().traces[0]!) });
+    case "list_sessions": return Response.json({ ...context, mode: "live", has_more: false, sessions: [getTelemetryFixture().sessions[0]] });
+    case "search_logs": return Response.json({ ...context, mode: "live", has_more: false, logs: [getTelemetryFixture().logs[0]] });
     case "ci_log": return Response.json({ ...context, mode: "live", has_more: false, ...(args.run_id ? { run_id: args.run_id, phases: [] } : { runs: [] }) });
     case "list_metrics": return Response.json({ ...context, has_more: false, items: [] });
-    case "display_traces": return Response.json({ ...context, mode: "live", traces: [toolTrace(getDemo().traces[0]!)] });
-    case "fetch_telemetry": return Response.json({ ...context, mode: "live", traces: [toolTrace(getDemo().traces[0]!)] });
+    case "display_traces": return Response.json({ ...readContext(1, false), mode: "live", traces: [toolTrace(getTelemetryFixture().traces[0]!)] });
+    case "fetch_telemetry": return Response.json({ ...context, mode: "live", traces: [toolTrace(getTelemetryFixture().traces[0]!)] });
     default: throw new Error(`Unexpected operation ${operation}`);
   }
 }
@@ -119,7 +116,7 @@ test("get_trace and list_sessions include annotation read-back in the single col
   const connection = await collectorConnection(context);
   for (const name of ["get_trace", "list_sessions"]) {
     const updates: ProgressUpdate[] = [];
-    const result = await connection.client.callTool({ name, arguments: name === "get_trace" ? { trace_id: getDemo().traces[0]!.trace_id } : {} }, { onprogress: update => void updates.push(update) });
+    const result = await connection.client.callTool({ name, arguments: name === "get_trace" ? { trace_id: getTelemetryFixture().traces[0]!.trace_id } : {} }, { onprogress: update => void updates.push(update) });
     assert.equal(result.isError, undefined);
     assert.deepEqual(updates.map(update => update.progress), [1, 2]);
     assert.equal(updates[0]!.message, `Queried ${name}`);
@@ -146,7 +143,7 @@ test("list tools forward opaque cursors unchanged across the MCP boundary", asyn
   const connection = await collectorConnection(context, (operation, args) => {
     assert.equal(operation, "list_traces"); calls.push(args);
     const second = args.cursor !== undefined;
-    return Response.json({ ...readContext(1), mode: "live", traces: [toolSummary(getDemo().traces[second ? 1 : 0]!)], has_more: !second, ...(second ? {} : { next_cursor: "opaque.signed.cursor" }) });
+    return Response.json({ ...readContext(1), mode: "live", traces: [toolSummary(getTelemetryFixture().traces[second ? 1 : 0]!)], has_more: !second, ...(second ? {} : { next_cursor: "opaque.signed.cursor" }) });
   });
   const first = await connection.client.callTool({ name: "list_traces", arguments: { limit: 1, errors_only: true } });
   assert.equal(first.isError, undefined);
@@ -179,7 +176,7 @@ test("modern tool calls emit no logging notifications even when a log level is r
 });
 
 test("cancelling a tool call aborts the in-flight collector fetch", async () => {
-  await withEnv({ QYL_DEMO: undefined, QYL_COLLECTOR_URL: "http://qyl-collector.invalid" }, async () => {
+  await withEnv({ QYL_COLLECTOR_URL: "http://qyl-collector.invalid" }, async () => {
     const originalFetch = globalThis.fetch;
     const signals: AbortSignal[] = [];
     // A collector that never answers: the only way this fetch settles is
@@ -196,7 +193,7 @@ test("cancelling a tool call aborts the in-flight collector fetch", async () => 
         );
       })) as typeof fetch;
 
-    const connection = await demoConnection();
+    const connection = await fixtureConnection();
     try {
       const controller = new AbortController();
       const call = connection.client.callTool(
@@ -219,13 +216,13 @@ test("cancelling a tool call aborts the in-flight collector fetch", async () => 
 
 test("oversized viewer pages requery with a smaller limit and retain collector coverage", async (context) => {
   const requests: Record<string, unknown>[] = [];
-  const trace = toolTrace(getDemo().traces[0]!);
+  const trace = toolTrace(getTelemetryFixture().traces[0]!);
   trace.spans[0]!.name = "x".repeat(6_000);
   const traces = Array.from({ length: 8 }, () => trace);
   const connection = await collectorConnection(context, (_operation, args) => {
     requests.push(args);
     const page = traces.slice(0, Number(args.limit ?? traces.length));
-    const metadata = readContext(8);
+    const metadata = readContext(8, false);
     return Response.json({ ...metadata, mode: "live", traces: page,
       coverage: { ...metadata.coverage, returned: page.length, truncated: page.length < 8 } });
   });

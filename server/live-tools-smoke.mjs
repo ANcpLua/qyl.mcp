@@ -104,7 +104,7 @@ await new Promise((r) => setTimeout(r, 2500)); // ingest settle
 // ---------------------------------------------------------------- MCP client
 const temp = await mkdtemp(join(tmpdir(), "qyl-live-smoke-"));
 const transport = new StdioClientTransport({
-  command: "node", args: ["dist/main.js", "--stdio"],
+  command: "bun", args: ["dist/main.js", "--stdio"],
   env: { ...process.env, QYL_COLLECTOR_URL: COLLECTOR, QYL_MCP_TELEMETRY: "0", QYL_MCP_NATIVE_STATE_PATH: join(temp, "native.json") },
 });
 const client = new Client({ name: "qyl-live-smoke", version: "1.0.0" }, { versionNegotiation: { mode: { pin: "2026-07-28" } } });

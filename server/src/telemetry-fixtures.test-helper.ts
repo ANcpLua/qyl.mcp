@@ -1,25 +1,9 @@
-/**
- * Programmatically generated demo telemetry. Two independent sets:
- *
- * - 8 explorer traces + ~30 correlated logs + 3 sessions (trace explorer);
- * - ~2 weeks of synthesized MCP passthrough spans (MCP dashboard), aggregated
- *   through the production aggregateMcpStats() path.
- *
- * Timestamps are anchored to now and the dataset is rebuilt when the anchor
- * ages past a short TTL. The long-lived runner would otherwise let an
- * import-time snapshot age out of the
- * dashboard's 24h/168h windows entirely. Ids are seed-derived, so they stay
- * stable across rebuilds; only the timestamps slide.
- */
-
-import { collectorUrl } from "./config.js";
+/** Small deterministic trace, log and session fixtures for tests; never shipped. */
+const collectorUrl = () => "http://127.0.0.1:5343";
 import type { QylLogRecord, QylSession, QylSpan, QylTrace } from "./wire.js";
-import packageMetadata from "../package.json" with { type: "json" };
 import type {
   Attribute,
   AttributeValue,
-  MetricKind,
-  MetricTemporality,
   Resource,
   SessionState,
   SeverityNumber,
@@ -40,17 +24,17 @@ function hexId(seed: number, length: number): string {
   return hex.slice(0, length);
 }
 
-/** The "now" every demo timestamp offsets from; refreshed by refreshDemo(). */
-let demoAnchorMs = 0;
-const minutesAgoMs = (minutes: number) => demoAnchorMs - minutes * 60_000;
+/** The "now" every fixture timestamp offsets from. */
+const fixtureAnchorMs = Date.now();
+const minutesAgoMs = (minutes: number) => fixtureAnchorMs - minutes * 60_000;
 // Absolute nanosecond timestamps are decimal strings on the wire: an epoch-ns value
 const intAttribute = (value: number): AttributeValue => ({
   type: "int",
   value: String(value),
 });
 
-/** Per-service OTel resources shared by demo spans and logs. */
-const DEMO_RESOURCES: Record<string, Resource> = {
+/** Per-service OTel resources shared by fixture spans and logs. */
+const FIXTURE_RESOURCES: Record<string, Resource> = {
   "qyl-collector": {
     "service_name": "qyl-collector",
     "service_version": "0.4.2",
@@ -70,11 +54,11 @@ const DEMO_RESOURCES: Record<string, Resource> = {
 };
 
 /** Span blueprint: offsets are milliseconds relative to the trace start. */
-interface DemoSpanSpec {
+interface FixtureSpanSpec {
   parent?: number; // index into the spec array
   name: string;
   kind: QylSpan["kind"];
-  service: keyof typeof DEMO_RESOURCES;
+  service: keyof typeof FIXTURE_RESOURCES;
   start: number;
   end: number;
   attrs?: Record<string, AttributeValue>;
@@ -82,10 +66,10 @@ interface DemoSpanSpec {
   events?: Array<{ name: string; atMs: number; attributes?: Attribute[] }>;
 }
 
-function buildDemoTrace(
+function buildFixtureTrace(
   seq: number,
   startMs: number,
-  specs: DemoSpanSpec[],
+  specs: FixtureSpanSpec[],
 ): QylTrace {
   const traceId = parseTraceId(hexId(seq * 7919 + 17, 32));
 
@@ -98,7 +82,7 @@ function buildDemoTrace(
       start_time_unix_nano: epochMsToUnixNanos(startMs + spec.start),
       end_time_unix_nano: epochMsToUnixNanos(startMs + spec.end),
       status: spec.status ?? { code: 0 },
-      resource: DEMO_RESOURCES[spec.service],
+      resource: FIXTURE_RESOURCES[spec.service],
     };
     if (spec.attrs) {
       span.attributes = Object.entries(spec.attrs).map(([key, value]) => ({
@@ -146,14 +130,14 @@ function buildDemoTrace(
   };
 }
 
-interface DemoData {
+interface TelemetryFixture {
   traces: QylTrace[]; // newest first
   logs: QylLogRecord[]; // oldest first
   sessions: QylSession[];
   sessionTraces: Record<string, QylTrace[]>;
 }
 
-function buildDemoData(): DemoData {
+function buildTelemetryFixture(): TelemetryFixture {
   const NPGSQL_STACKTRACE = [
     "Npgsql.NpgsqlException (0x80004005): Exception while writing to stream",
     " ---> System.IO.IOException: Unable to write data to the transport connection: Connection reset by peer.",
@@ -168,7 +152,7 @@ function buildDemoData(): DemoData {
 
   // --- Trace 1 (2 min ago): agentic GenAI run — plan, two model calls, a tool
   // with a DuckDB lookup. agent-worker.
-  const agentRun = buildDemoTrace(1, minutesAgoMs(2), [
+  const agentRun = buildFixtureTrace(1, minutesAgoMs(2), [
     {
       name: "POST /v1/agent/run",
       kind: 2,
@@ -247,7 +231,7 @@ function buildDemoData(): DemoData {
 
   // --- Trace 2 (5 min ago): GenAI summarize that calls the collector's own
   // API cross-service (agent-worker → qyl-collector → DuckDB).
-  const agentSummarize = buildDemoTrace(2, minutesAgoMs(5), [
+  const agentSummarize = buildFixtureTrace(2, minutesAgoMs(5), [
     {
       name: "POST /v1/agent/summarize",
       kind: 2,
@@ -319,7 +303,7 @@ function buildDemoData(): DemoData {
 
   // --- Trace 3 (8 min ago): failed checkout — Postgres insert dies with an
   // exception event; root span carries the error status too.
-  const checkoutError = buildDemoTrace(3, minutesAgoMs(8), [
+  const checkoutError = buildFixtureTrace(3, minutesAgoMs(8), [
     {
       name: "POST /checkout",
       kind: 2,
@@ -395,7 +379,7 @@ function buildDemoData(): DemoData {
   ]);
 
   // --- Trace 4 (11 min ago): read-path order lookup, two Postgres queries.
-  const orderLookup = buildDemoTrace(4, minutesAgoMs(11), [
+  const orderLookup = buildFixtureTrace(4, minutesAgoMs(11), [
     {
       name: "GET /orders/{orderId}",
       kind: 2,
@@ -446,7 +430,7 @@ function buildDemoData(): DemoData {
 
   // --- Trace 5 (13 min ago): messaging — checkout publishes order.shipped,
   // agent-worker consumes it and notifies the customer.
-  const orderShipped = buildDemoTrace(5, minutesAgoMs(13), [
+  const orderShipped = buildFixtureTrace(5, minutesAgoMs(13), [
     {
       name: "POST /orders/{orderId}/ship",
       kind: 2,
@@ -499,7 +483,7 @@ function buildDemoData(): DemoData {
 
   // --- Trace 6 (3 min ago): deep async pipeline — 13 spans, 4 levels, with a
   // slow shard that needed a retry.
-  const pipeline = buildDemoTrace(6, minutesAgoMs(3), [
+  const pipeline = buildFixtureTrace(6, minutesAgoMs(3), [
     {
       name: "pipeline.run nightly-eval",
       kind: 1,
@@ -570,7 +554,7 @@ function buildDemoData(): DemoData {
   ]);
 
   // --- Trace 7 (15 min ago): the collector ingesting an OTLP batch.
-  const otlpIngest = buildDemoTrace(7, minutesAgoMs(15), [
+  const otlpIngest = buildFixtureTrace(7, minutesAgoMs(15), [
     {
       name: "POST /v1/traces",
       kind: 2,
@@ -608,7 +592,7 @@ function buildDemoData(): DemoData {
   ]);
 
   // --- Trace 8 (1 min ago): quick single-turn chat.
-  const quickChat = buildDemoTrace(8, minutesAgoMs(1), [
+  const quickChat = buildFixtureTrace(8, minutesAgoMs(1), [
     {
       name: "POST /v1/agent/chat",
       kind: 2,
@@ -808,317 +792,8 @@ function buildDemoData(): DemoData {
   return { traces, logs, sessions, sessionTraces };
 }
 
-const DEMO_REBUILD_INTERVAL_MS = 60_000;
-let demoData: DemoData | undefined;
-let demoMcpSpans: QylSpan[] | undefined;
-let demoMetrics: DemoMetricStream[] | undefined;
+let fixture: TelemetryFixture | undefined;
 
-// Rebuild both datasets when the anchor ages past the TTL. Cheap enough to do
-// lazily on access (~10k synthesized spans), and only demo mode ever gets here.
-function refreshDemo(): void {
-  const now = Date.now();
-  if (demoData && now - demoAnchorMs < DEMO_REBUILD_INTERVAL_MS) return;
-  demoAnchorMs = now;
-  demoData = buildDemoData();
-  demoMcpSpans = buildDemoMcpSpans();
-  demoMetrics = buildDemoMetrics();
-}
-
-export function getDemo(): DemoData {
-  refreshDemo();
-  return demoData!;
-}
-
-export function getDemoMcpSpans(): QylSpan[] {
-  refreshDemo();
-  return demoMcpSpans!;
-}
-
-export function getDemoMetrics(): DemoMetricStream[] {
-  refreshDemo();
-  return demoMetrics!;
-}
-
-// =============================================================================
-// Demo MCP spans (dashboard dataset — separate from the 8-trace explorer set)
-//
-// ~2 weeks of plausible qyl.mcp passthrough spans (service.name "qyl.mcp",
-// `mcp.method.name` attribute): 4 tools with one failing-ish,
-// 3 server names, stdio-dominant transports, a day/night traffic rhythm, and
-// log-normal-ish durations with p95 tails. Aggregated through the production
-// aggregateMcpStats() as live data.
-// =============================================================================
-
-/** Deterministic PRNG (mulberry32) so demo stats are stable within a run. */
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-const QYL_MCP_RESOURCE: Resource = {
-  "service_name": "qyl.mcp",
-  "service_version": packageMetadata.version,
-  "telemetry_sdk_language": "nodejs",
-};
-
-/** Per-tool traffic profile: pick weight, log-normal duration, error rate. */
-const DEMO_MCP_TOOLS: Array<{
-  name: string;
-  weight: number;
-  medianMs: number;
-  sigma: number;
-  errorRate: number;
-}> = [
-  { name: "display_traces", weight: 0.35, medianMs: 30, sigma: 0.7, errorRate: 0.01 },
-  { name: "list_traces", weight: 0.3, medianMs: 14, sigma: 0.65, errorRate: 0.008 },
-  // The deliberately failing-ish tool — its error_rate must dominate.
-  { name: "search_logs", weight: 0.2, medianMs: 20, sigma: 0.8, errorRate: 0.12 },
-  { name: "get_trace", weight: 0.15, medianMs: 8, sigma: 0.6, errorRate: 0.018 },
-];
-
-const DEMO_MCP_SERVERS: Array<{ name: string; weight: number }> = [
-  { name: "qyl-telemetry", weight: 0.6 },
-  { name: "x-apps", weight: 0.25 },
-  { name: "docs-mcp", weight: 0.15 },
-];
-
-function pickWeighted<T extends { weight: number }>(items: T[], roll: number): T {
-  let acc = 0;
-  for (const item of items) {
-    acc += item.weight;
-    if (roll < acc) return item;
-  }
-  return items[items.length - 1];
-}
-
-/** Requests per hour by hour-of-day: office-hours peak, quiet nights. */
-function demoMcpHourlyRate(hourOfDay: number): number {
-  if (hourOfDay >= 8 && hourOfDay <= 19) return 48; // working day
-  if (hourOfDay >= 6 && hourOfDay <= 23) return 26; // morning/evening shoulder
-  return 9; // night
-}
-
-function buildDemoMcpSpans(): QylSpan[] {
-  const rng = mulberry32(0x9e3779b9);
-  /** Log-normal-ish duration with an occasional heavier tail spike. */
-  const durationMs = (medianMs: number, sigma: number): number => {
-    const u1 = Math.max(rng(), 1e-9);
-    const u2 = rng();
-    const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-    const base = medianMs * Math.exp(sigma * normal);
-    return rng() < 0.02 ? base * 4 : base; // p95 tail spikes
-  };
-
-  const spans: QylSpan[] = [];
-  const endMs = demoAnchorMs;
-  const startMs = endMs - 14 * 24 * 3_600_000;
-  let seq = 0;
-
-  for (let hourStart = startMs; hourStart < endMs; hourStart += 3_600_000) {
-    const rate = demoMcpHourlyRate(new Date(hourStart).getHours());
-    const count = Math.round(rate * (0.75 + rng() * 0.5));
-
-    for (let i = 0; i < count; i++) {
-      seq++;
-      const spanStartMs = hourStart + rng() * 3_600_000;
-      const server = pickWeighted(DEMO_MCP_SERVERS, rng()).name;
-      const transport = rng() < 0.78 ? "pipe" : "tcp";
-
-      const methodRoll = rng();
-      let method: string;
-      let name: string;
-      let median: number;
-      let sigma: number;
-      let errorRate: number;
-      const attrs: Attribute[] = [];
-
-      if (methodRoll < 0.7) {
-        method = "tools/call";
-        const tool = pickWeighted(DEMO_MCP_TOOLS, rng());
-        name = `tools/call ${tool.name}`;
-        median = tool.medianMs;
-        sigma = tool.sigma;
-        errorRate = tool.errorRate;
-        attrs.push({ key: "gen_ai.tool.name", value: tool.name });
-      } else if (methodRoll < 0.85) {
-        method = "tools/list";
-        name = "tools/list";
-        median = 3;
-        sigma = 0.5;
-        errorRate = 0.004;
-      } else {
-        method = "resources/read";
-        name = "resources/read";
-        median = 6;
-        sigma = 0.7;
-        errorRate = 0.01;
-      }
-
-      const isError = rng() < errorRate;
-      const ms = durationMs(median, sigma);
-      attrs.push(
-        { key: "mcp.method.name", value: method },
-        { key: "service.peer.name", value: server },
-        { key: "network.transport", value: transport },
-      );
-
-      spans.push({
-        span_id: parseSpanId(hexId(seq * 65_537 + 11, 16)),
-        trace_id: parseTraceId(hexId(seq * 92_821 + 3, 32)),
-        name,
-        kind: 3,
-        start_time_unix_nano: epochMsToUnixNanos(spanStartMs),
-        end_time_unix_nano: epochMsToUnixNanos(spanStartMs + ms),
-        attributes: attrs,
-        status: isError
-          ? { code: 2, message: "MCP request failed" }
-          : { code: 1 },
-        resource: QYL_MCP_RESOURCE,
-      });
-    }
-  }
-  return spans;
-}
-
-// =============================================================================
-// Demo metrics (contract 8.0.0 metrics read surface)
-//
-// Stored points rather than pre-aggregated answers: query_metric's demo path
-// runs the same bucketing and reducer the collector would, so a demo answer
-// exercises step_ms, aggregation, group_by and the matchers instead of
-// pretending they were honored. Three instruments covering the three kinds a
-// reader actually meets — a histogram in seconds, a monotonic delta sum, and a
-// gauge in bytes — each with several attribute streams.
-// =============================================================================
-
-/** One stored demo stream: its identity, and the points recorded under it. */
-export interface DemoMetricStream {
-  name: string;
-  kind: MetricKind;
-  temporality: MetricTemporality;
-  monotonic: boolean;
-  unit: string;
-  description: string;
-  serviceName: string;
-  attributes: Attribute[];
-  /** Newest last. Point timestamps are epoch milliseconds. */
-  points: Array<{ atMs: number; value: number }>;
-}
-
-const DEMO_METRIC_WINDOW_MS = 6 * 3_600_000;
-const DEMO_METRIC_STEP_MS = 30_000;
-
-interface DemoMetricSpec {
-  name: string;
-  kind: MetricKind;
-  temporality: MetricTemporality;
-  monotonic: boolean;
-  unit: string;
-  description: string;
-  streams: Array<{
-    service: string;
-    attributes: Record<string, string>;
-    median: number;
-    /** Multiplicative spread; 0 is a flat line. */
-    spread: number;
-  }>;
-}
-
-const DEMO_METRIC_SPECS: DemoMetricSpec[] = [
-  {
-    name: "http.server.request.duration",
-    kind: "histogram",
-    temporality: "cumulative",
-    monotonic: false,
-    unit: "s",
-    description: "Duration of inbound HTTP server requests.",
-    streams: [
-      {
-        service: "checkout-api",
-        attributes: { "http.route": "/checkout", "http.response.status_code": "200" },
-        median: 0.082,
-        spread: 0.55,
-      },
-      {
-        service: "checkout-api",
-        attributes: { "http.route": "/checkout", "http.response.status_code": "500" },
-        median: 1.9,
-        spread: 0.4,
-      },
-      {
-        service: "checkout-api",
-        attributes: { "http.route": "/health", "http.response.status_code": "200" },
-        median: 0.0021,
-        spread: 0.3,
-      },
-      {
-        service: "agent-worker",
-        attributes: { "http.route": "/v1/agent/run", "http.response.status_code": "200" },
-        median: 2.4,
-        spread: 0.6,
-      },
-    ],
-  },
-  {
-    name: "qyl.collector.spans.ingested",
-    kind: "sum",
-    temporality: "delta",
-    monotonic: true,
-    unit: "{span}",
-    description: "Spans accepted by the collector's OTLP receiver.",
-    streams: [
-      { service: "qyl-collector", attributes: { "otel.signal": "traces" }, median: 420, spread: 0.35 },
-      { service: "qyl-collector", attributes: { "otel.signal": "logs" }, median: 96, spread: 0.5 },
-    ],
-  },
-  {
-    name: "process.runtime.dotnet.gc.heap.size",
-    kind: "gauge",
-    temporality: "unspecified",
-    monotonic: false,
-    unit: "By",
-    description: "Managed heap size per GC generation.",
-    streams: [
-      { service: "checkout-api", attributes: { "gc.heap.generation": "gen0" }, median: 12_500_000, spread: 0.2 },
-      { service: "checkout-api", attributes: { "gc.heap.generation": "gen2" }, median: 88_000_000, spread: 0.08 },
-    ],
-  },
-];
-
-function buildDemoMetrics(): DemoMetricStream[] {
-  const streams: DemoMetricStream[] = [];
-  let seed = 0x51ee7;
-  for (const spec of DEMO_METRIC_SPECS) {
-    for (const stream of spec.streams) {
-      const random = mulberry32((seed += 0x9e3779b9));
-      const points: Array<{ atMs: number; value: number }> = [];
-      const start = demoAnchorMs - DEMO_METRIC_WINDOW_MS;
-      // A slow sine plus per-point jitter: enough shape that p95 differs from
-      // avg and a max lands somewhere a reader can point at.
-      for (let at = start; at <= demoAnchorMs; at += DEMO_METRIC_STEP_MS) {
-        const phase = ((at - start) / DEMO_METRIC_WINDOW_MS) * Math.PI * 2;
-        const wave = 1 + stream.spread * 0.6 * Math.sin(phase);
-        const jitter = 1 + stream.spread * (random() - 0.5);
-        points.push({ atMs: at, value: Math.max(0, stream.median * wave * jitter) });
-      }
-      streams.push({
-        name: spec.name,
-        kind: spec.kind,
-        temporality: spec.temporality,
-        monotonic: spec.monotonic,
-        unit: spec.unit,
-        description: spec.description,
-        serviceName: stream.service,
-        attributes: Object.entries(stream.attributes).map(([key, value]) => ({ key, value })),
-        points,
-      });
-    }
-  }
-  return streams;
+export function getTelemetryFixture(): TelemetryFixture {
+  return fixture ??= buildTelemetryFixture();
 }

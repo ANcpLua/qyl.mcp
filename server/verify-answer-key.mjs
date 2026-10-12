@@ -2,19 +2,24 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import { createServer } from './dist/server.js';
-const fixture = JSON.parse(await readFile(process.env.QYL_ANSWER_KEY_FILE ?? '/tmp/qyl-answer-key.json','utf8'));
+const fixture = JSON.parse(await readFile(process.env.QYL_ANSWER_KEY_FILE ?? new URL('missing-answer-key-use-run-answer-key', import.meta.url),'utf8'));
 process.env.QYL_COLLECTOR_URL = process.env.QYL_ANSWER_KEY_COLLECTOR ?? 'http://127.0.0.1:5510';
 process.env.QYL_PROJECT = fixture.project;
-delete process.env.QYL_DEMO;
 delete process.env.QYL_API_KEY;
 delete process.env.MCP_COLLECTOR_PROJECTS;
 const w=fixture.window, key=fixture.keys;
 const scoped=(service)=>({ ...w, matchers:[{key:'service.name',op:'eq',value:service,scope:'resource'}] });
-async function withClient(run) {
+async function withClient(run, project = fixture.project) {
+ const previousProject=process.env.QYL_PROJECT;
+ process.env.QYL_PROJECT=project;
  const handler=createMcpHandler(()=>createServer({nativeExecution:false}));
  const client=new Client({name:'qyl-32-answer-key',version:'1.0.0'},{versionNegotiation:{mode:{pin:'2026-07-28'}}});
  await client.connect(new StreamableHTTPClientTransport(new URL('http://qyl.test/mcp'),{fetch:(url,init)=>handler.fetch(new Request(url,init))}));
@@ -27,21 +32,39 @@ async function withClient(run) {
      assert(result.structuredContent.coverage, name+' omits coverage');
    }
    return result.structuredContent;
- });} finally {await client.close();await handler.close();}
+ });} finally {await client.close();await handler.close();process.env.QYL_PROJECT=previousProject;}
 }
 async function failures(call) {
  return (await call('list_failures',{...w,service_name:'checkout',status:'all'})).failures;
 }
 const registrations=[];
-function verify(name,run){registrations.push(name);void test(name,()=>withClient(run));}
-verify('01 triage ranks F first, includes rare R and silent billing, excludes healthy sessions',async call=>{
+function verify(name,run){registrations.push(name);void test(name,{concurrency:false},()=>withClient(run));}
+function verifyIsolated(name,run){
+ registrations.push(name);
+ void test(name,{concurrency:false},async()=>{
+  const project='answer-key-'+randomBytes(8).toString('hex');
+  const output=join(dirname(process.env.QYL_ANSWER_KEY_FILE),project+'.json');
+  const repo=process.env.QYL_COLLECTOR_REPO??fileURLToPath(new URL('../../qyl',import.meta.url));
+  await promisify(execFile)('python3',[join(repo,'tests/Qyl.Collector.Tests/Fixtures/seed-answer-key.py'),process.env.QYL_ANSWER_KEY_OTLP,output,project]);
+  await withClient(run,project);
+ });
+}
+verify('01 triage ranks F first, includes rare R and silent billing, excludes healthy sess_ok',async call=>{
  const data=await call('triage',{...w,matchers:[{key:'service.name',op:'in',values:['checkout','orders-db','payments','billing','sessions'],scope:'resource'}]});
  const F=(await failures(call)).find(f=>f.operation==='checkout'); assert(F);
  assert.equal(data.failures[0].failure_id,F.failure_id);
  assert.equal(data.failures[0].coinciding_release.version,'1.4.1');
  assert(data.failures.some(f=>f.count===2 && f.services.includes('payments')));
  assert(data.silent_services.some(s=>s.service==='billing'));
- assert(!JSON.stringify(data).includes('sess_ok'));
+ const sessionFailures = data.failures.filter(f => f.services.includes('sessions'));
+ assert.equal(sessionFailures.length, 1);
+ assert.equal(sessionFailures[0].count, 3, 'only sess_bad contributes failures');
+ const badIds = new Set(Object.entries(key).filter(([name]) => name.startsWith('sess_bad-')).map(([, id]) => id.trace_id));
+ assert(badIds.has(sessionFailures[0].example_trace_id));
+ const healthyIds = new Set(Object.entries(key).filter(([name]) => name.startsWith('sess_ok-')).map(([, id]) => id.trace_id));
+ assert(data.failures.every(f => !healthyIds.has(f.example_trace_id)));
+ assert(!data.regressions.some(r => r.service === 'sessions'));
+ assert(!data.silent_services.some(r => r.service === 'sessions'));
 });
 verify('02 db chain yields two stable failure ids',async call=>{
  const time=Date.parse(fixture.T)+60_000;
@@ -58,9 +81,9 @@ verify('03b newly arrived execution remains unsettled',async call=>{
  const response=await fetch((process.env.QYL_ANSWER_KEY_OTLP ?? 'http://127.0.0.1:5518')+'/v1/traces',{method:'POST',headers:{'content-type':'application/json','x-qyl-project':fixture.project},body:JSON.stringify({resourceSpans:[{resource:{attributes:[{key:'qyl.project.id',value:{stringValue:fixture.project}},{key:'service.name',value:{stringValue:'arrival-test'}}]},scopeSpans:[{spans:[{traceId:trace,spanId:span,name:'arrival',kind:2,startTimeUnixNano:String(now-1_000_000n),endTimeUnixNano:String(now),status:{code:2}}]}]}]})});assert.equal(response.status,200);
  const data=await call('get_failure_context',{trace_id:trace,lookback_minutes:60});assert.equal(data.settled,false);
 });
-verify('04 error-group discriminators are eu and app version 2.3',async call=>{
+verify('04 error-group discriminators are eu and service version 2.3',async call=>{
  const data=await call('compare_groups',{...scoped('regional'),signal:'spans',group_a:{matchers:[{key:'error.type',op:'exists'}]},group_b:'rest',attribute_scope:'both'});
- assert.deepEqual(new Set(data.discriminators.slice(0,2).map(x=>`${x.key}=${x.value}`)),new Set(['cloud.region=eu','app.version=2.3']));
+ assert.deepEqual(new Set(data.discriminators.slice(0,2).map(x=>`${x.key}=${x.value}`)),new Set(['cloud.region=eu','service.version=2.3']));
 });
 verify('05 db executions first diverge at db status',async call=>{
  const data=await call('compare_traces',{...w,a:{trace_id:key['db-root'].trace_id},b:{trace_id:key['db-success-root'].trace_id}});
@@ -96,9 +119,13 @@ verify('12 silent billing last seen2hours beforeseed',async call=>{
 });
 verify('13 MCP stats preserve denominator, failure class and exampleids',async call=>{
  const data=await call('get_mcp_stats',{...w,tool_name:'search_logs'});const group=data.groups.find(g=>g.name==='search_logs');assert.equal(group.requests,40);assert.equal(group.errors,8);assert.equal(group.error_rate,.2);assert.equal(data.failure_classes.timeout,8);assert(group.example_trace_ids.length>0);
+ for (const id of group.example_trace_ids) {
+   const trace = await call('get_trace', {...w, trace_id:id});
+   assert(trace.trace.spans.some(span => span.status.code === 2), 'example must contain an error');
+ }
 });
 verify('14 active error filter returns only sess_bad',async call=>{
- const data=await call('list_sessions',{...w,active_only:true,has_error:true,service_name:'sessions'});assert.deepEqual(data.sessions.map(s=>s.session_id),['sess_bad']);
+ const data=await call('list_sessions',{...w,active_only:true,has_error:true});assert.deepEqual(data.sessions.map(s=>s.session_id),['sess_bad']);
 });
 verify('15 sess_bad errors returns3traces',async call=>{const data=await call('list_traces',{...w,session_id:'sess_bad',errors_only:true});assert.equal(data.traces.length,3);});
 verify('16a critical path is rooted under checkout',async call=>{const data=await call('get_trace',{...w,trace_id:key['latency-/checkout-0'].trace_id,selection:'critical_path'});assert(data.trace.spans.every(s=>s.name.includes('/checkout')));assert(data.trace.spans.length>0);});
@@ -110,13 +137,13 @@ verify('20a histogram p95 remains seconds and approximate',async call=>{const da
 verify('20b cumulative100,150,190 increase90',async call=>{const data=await call('query_metric',{...w,metric_name:'requests.total',function:'increase',step_ms:3_600_000});assert.equal(data.series.flatMap(s=>s.buckets).reduce((sum,b)=>sum+(b.value??0),0),90);});
 verify('21 CI new test failure and build3xregression',async call=>{const data=await call('ci_log',{...w,run_id:'ci_current',compare_to:'last_success'});assert(data.comparison.new_failures.some(p=>p.leg==='test'));assert(data.comparison.duration_regressions.some(p=>p.leg==='build'&&p.ratio===3));});
 verify('25 dashboard shares8/40timeout stats',async call=>{const data=await call('display_mcp_dashboard',{...w,tool_name:'search_logs'});const group=data.stats.tools.find(g=>g.name==='search_logs');assert.equal(group.error_rate,.2);assert.equal(group.errors,8);assert.equal(group.requests,40);assert.equal(data.stats.failure_classes.timeout,8);});
-verify('27 annotation on F read back as count1',async call=>{const F=(await failures(call)).find(f=>f.operation==='checkout');assert(F);await call('create_annotation',{target:{kind:'failure',failure_id:F.failure_id},text:'Answer-key finding',classification:'finding',labels:['answer-key'],idempotency_key:'answer-key-finding'});const data=await call('list_failures',{...w,failure_id:F.failure_id});assert.equal(data.failures[0].annotation_count,1);});
-verify('32a ignored F suppressed fromtriage',async call=>{const F=(await failures(call)).find(f=>f.operation==='checkout');assert(F);const saved=await call('update_failure_status',{failure_id:F.failure_id,etag:F.etag,status:'ignored'});assert.equal(saved.failure.status,'ignored');assert(!(await call('triage',w)).failures.some(f=>f.failure_id===F.failure_id));});
-verify('32b resolved F recurrence markedregressed',async call=>{
- const F=(await failures(call)).find(f=>f.operation==='checkout');assert(F);await call('update_failure_status',{failure_id:F.failure_id,etag:F.etag,status:'resolved'});
+verifyIsolated('27 annotation on F read back as count1',async call=>{const F=(await failures(call)).find(f=>f.operation==='checkout');assert(F);await call('create_annotation',{target:{kind:'failure',failure_id:F.failure_id},text:'Answer-key finding',classification:'finding',labels:['answer-key'],idempotency_key:'answer-key-finding'});const data=await call('list_failures',{...w,failure_id:F.failure_id});assert.equal(data.failures[0].annotation_count,1);});
+verifyIsolated('32a ignored F suppressed fromtriage',async call=>{const F=(await failures(call)).find(f=>f.operation==='checkout');assert(F);const saved=await call('update_failure_status',{failure_id:F.failure_id,etag:F.etag,status:'ignored'});assert.equal(saved.failure.status,'ignored');try { assert(!(await call('triage',w)).failures.some(f=>f.failure_id===F.failure_id)); } finally { await call('update_failure_status',{failure_id:F.failure_id,etag:saved.failure.etag,status:'open'}); }});
+verifyIsolated('32b resolved F recurrence markedregressed',async call=>{
+ const F=(await failures(call)).find(f=>f.operation==='checkout');assert(F);const resolved=await call('update_failure_status',{failure_id:F.failure_id,etag:F.etag,status:'resolved'});
  const now=BigInt(Date.now())*1_000_000n;
- const response=await fetch((process.env.QYL_ANSWER_KEY_OTLP??'http://127.0.0.1:5518')+'/v1/traces',{method:'POST',headers:{'content-type':'application/json','x-qyl-project':fixture.project},body:JSON.stringify({resourceSpans:[{resource:{attributes:[{key:'qyl.project.id',value:{stringValue:fixture.project}},{key:'service.name',value:{stringValue:'checkout'}},{key:'service.version',value:{stringValue:'1.4.1'}}]},scopeSpans:[{spans:[{traceId:randomBytes(16).toString('hex'),spanId:randomBytes(8).toString('hex'),name:'checkout',kind:2,startTimeUnixNano:String(now-1_000_000n),endTimeUnixNano:String(now),status:{code:2,message:'dependency failed'},attributes:[{key:'error.type',value:{stringValue:'downstream'}}]}]}]}]})});assert.equal(response.status,200);
- const data=await call('triage',{lookback_minutes:60});assert.equal(data.failures.find(f=>f.failure_id===F.failure_id).change,'regressed');
+ const response=await fetch((process.env.QYL_ANSWER_KEY_OTLP??'http://127.0.0.1:5518')+'/v1/traces',{method:'POST',headers:{'content-type':'application/json','x-qyl-project':process.env.QYL_PROJECT},body:JSON.stringify({resourceSpans:[{resource:{attributes:[{key:'qyl.project.id',value:{stringValue:process.env.QYL_PROJECT}},{key:'service.name',value:{stringValue:'checkout'}},{key:'service.version',value:{stringValue:'1.4.1'}}]},scopeSpans:[{spans:[{traceId:randomBytes(16).toString('hex'),spanId:randomBytes(8).toString('hex'),name:'checkout',kind:2,startTimeUnixNano:String(now-1_000_000n),endTimeUnixNano:String(now),status:{code:2,message:'dependency failed'},attributes:[{key:'error.type',value:{stringValue:'downstream'}}]}]}]}]})});assert.equal(response.status,200);
+ try { const data=await call('triage',{lookback_minutes:60});assert.equal(data.failures.find(f=>f.failure_id===F.failure_id).change,'regressed'); } finally { await call('update_failure_status',{failure_id:F.failure_id,etag:resolved.failure.etag,status:'open'}); }
 });
 
 

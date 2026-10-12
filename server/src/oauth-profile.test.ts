@@ -172,7 +172,8 @@ test("real signed access tokens reach modern MCP tools with zero, one, or both e
     ] as const) {
       const response = await fetch(new Request(resource, { method: "POST", headers: { Authorization: `Bearer ${signed}` } }));
       assert.equal(response.status, status);
-      assert.match(response.headers.get("www-authenticate")!, /scope="qyl:read"/u);
+      assert.match(response.headers.get("www-authenticate")!, status === 401
+        ? /scope="qyl:read qyl:write qyl:delete"/u : /scope="qyl:read"/u);
       assert.match(response.headers.get("www-authenticate")!, /resource_metadata=/u);
     }
   }

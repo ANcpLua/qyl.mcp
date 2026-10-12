@@ -23,9 +23,6 @@ export const TELEMETRY_TOOL_AUTH_META = {
   securitySchemes: [{ type: "oauth2", scopes: [QYL_MCP_SCOPE] }],
 } as const;
 
-/** Re-exported for the callers that learned it here; it lives with `runTool`. */
-export { toolError } from "./request-scope.js";
-
 export function registerTelemetryTools(server: McpServer): void {
   server.registerTool(
     "list_traces",

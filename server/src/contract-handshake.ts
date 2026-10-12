@@ -28,7 +28,6 @@
  */
 
 import { CONTRACT_REVISION } from "@ancplua/qyl-api-schema/types";
-import { resolveMode } from "./collector.js";
 import { collectorHeaders, collectorUrl } from "./config.js";
 import { logInfo, logWarning } from "./stderr-log.js";
 
@@ -117,11 +116,6 @@ export interface HandshakeOptions {
 export async function assertCollectorContractRevision(
   options: HandshakeOptions = {},
 ): Promise<void> {
-  // Demo mode never reaches a collector, so there is no peer to handshake with.
-  // This is the same condition that decides whether a collector is used at all,
-  // not a bypass for live deployments.
-  if (await resolveMode() === "demo") return;
-
   const expected = options.expected ?? generatedContractRevision();
   const transport = options.transport ?? (process.argv.includes("--stdio") ? "stdio" : "http");
   const probe = options.probe ?? probeCollectorHealth;

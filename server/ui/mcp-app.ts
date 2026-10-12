@@ -11,7 +11,6 @@ import type {
   DisplayTracesOutput,
   FetchTelemetryOutput,
   LogRecord as QylLogRecord,
-  McpDataMode as Mode,
   ToolSpan as QylSpan,
   SpanEvent as QylSpanEvent,
   ToolTrace as QylTrace,
@@ -31,14 +30,13 @@ import "./global.css";
 import "./mcp-app.css";
 
 type TracesPayload = DisplayTracesOutput;
-type LogsPayload = Required<Pick<FetchTelemetryOutput, "logs" | "mode">>;
+type LogsPayload = Required<Pick<FetchTelemetryOutput, "logs">>;
 
 
 type Tab = "waterfall" | "logs";
 
 const state = {
   traceQuery: DisplayTracesInputSchema.parse({}),
-  mode: undefined as Mode | undefined,
   traces: [] as QylTrace[],
   comparison: undefined as TracesPayload["comparison"],
   selectedTraceId: undefined as string | undefined,
@@ -49,11 +47,11 @@ const state = {
   // Prevent an older response from replacing the active trace's logs.
   logsRequestSeq: 0,
 };
+const actionPanels = new Map<string, HTMLElement>();
 let pendingTraceQuery: DisplayTracesInput | undefined;
 
 
 const mainEl = document.querySelector(".main") as HTMLElement;
-const demoBadgeEl = document.getElementById("demo-badge")!;
 const traceCountLabelEl = document.getElementById("trace-count-label")!;
 const refreshBtn = document.getElementById("refresh-btn") as HTMLButtonElement;
 const emptyRefreshBtn = document.getElementById("empty-refresh-btn") as HTMLButtonElement;
@@ -246,7 +244,7 @@ function parseTracesPayload(result: CallToolResult): TracesPayload | null {
 function parseLogsPayload(result: CallToolResult): LogsPayload | null {
   const parsed = FetchTelemetryOutputSchema.safeParse(result.structuredContent);
   return parsed.success && parsed.data.logs !== undefined
-    ? { logs: parsed.data.logs, mode: parsed.data.mode }
+    ? { logs: parsed.data.logs }
     : null;
 }
 
@@ -277,7 +275,6 @@ function showBanner(message: string) {
 }
 
 function renderHeader() {
-  demoBadgeEl.hidden = state.mode !== "demo";
   const n = state.traces.length;
   traceCountLabelEl.textContent = n === 0 ? "" : `${n} trace${n === 1 ? "" : "s"}`;
 }
@@ -298,7 +295,6 @@ function traceDisplayName(trace: QylTrace): string {
 
 function applyTraces(payload: TracesPayload) {
   state.traces = payload.traces;
-  state.mode = payload.mode;
   state.logsCache.clear();
   const preferredSpan = payload.selected_span_id ?? state.traceQuery.selected_span_id ?? state.selectedSpanId;
   state.comparison = payload.comparison;
@@ -439,7 +435,14 @@ function renderTraceView() {
   renderTabs();
   renderWaterfall(trace);
   renderComparison(comparisonEl, state.comparison);
-  actionsEl.replaceChildren(traceActions(trace, () => state.selectedSpanId, (request) => app.callServerTool(request)));
+  let actions = actionPanels.get(trace.trace_id);
+  if (!actions) {
+    actions = traceActions(trace, () => state.selectedSpanId, (request) => app.callServerTool(request));
+    actionPanels.set(trace.trace_id, actions);
+    // Bound draft state to the most recently visited traces.
+    if (actionPanels.size > 20) actionPanels.delete(actionPanels.keys().next().value!);
+  }
+  actionsEl.replaceChildren(actions);
   const selected = trace.spans.find((span) => span.span_id === state.selectedSpanId);
   if (selected) openDetail(selected, computeWaterfall(trace.spans).traceStartNs);
   if (state.activeTab === "logs") void showLogsTab(trace);

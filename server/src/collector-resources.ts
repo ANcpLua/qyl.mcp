@@ -7,9 +7,6 @@
  * subject; no argument names a project or a credential. Nothing here changes
  * telemetry: an annotation points at a trace, span or session and leaves it
  * as recorded, and the one delete operation removes only these objects.
- *
- * Demo mode has no Collector and therefore no such objects. A call there is
- * refused rather than answered from an invented store.
  */
 
 import type {
@@ -17,12 +14,7 @@ import type {
   CreateAnnotationInput,
   CreateSavedQueryInput,
   DeletableKind,
-  ListSavedQueriesInput,
-  RunSavedQueryInput,
   SavedQuery,
-  SavedQueryRunResult,
-  SessionId,
-  TraceId,
   UpdateAnnotationInput,
   UpdateSavedQueryInput,
 } from "@ancplua/qyl-api-schema/types";
@@ -30,17 +22,13 @@ import {
   CollectorError,
   type CollectorRequestOptions,
   collectorDelete,
-  collectorGet,
   collectorPatch,
   collectorPost,
   parseCollectorBody,
-  parseCollectorPage,
-  resolveMode,
 } from "./collector.js";
 import { createHash } from "node:crypto";
 import { IDEMPOTENCY_KEY_HEADER, IF_MATCH_HEADER } from "./contract-headers.js";
 import { contractSchema } from "./contract-validation.js";
-import { describeToolError, type ToolScope } from "./request-scope.js";
 import { shortId } from "./summaries.js";
 import { redactTelemetry } from "./telemetry-redaction.js";
 
@@ -51,34 +39,15 @@ const SAVED_QUERIES_PATH = "/api/v1/saved-queries";
 // contract-validation.ts, which the dashboard and workbench bundles import.
 const AnnotationCreatedSchema = contractSchema("Operations.AnnotationsApi_create.Response.201");
 const AnnotationUpdatedSchema = contractSchema("Operations.AnnotationsApi_update.Response.200");
-const AnnotationsPageSchema = contractSchema("Operations.AnnotationsApi_list.Response.200");
 const SavedQueryCreatedSchema = contractSchema("Operations.SavedQueriesApi_create.Response.201");
 const SavedQueryUpdatedSchema = contractSchema("Operations.SavedQueriesApi_update.Response.200");
-const SavedQueriesPageSchema = contractSchema("Operations.SavedQueriesApi_list.Response.200");
-const SavedQueryRunSchema = contractSchema("Operations.SavedQueriesApi_run.Response.200");
 
-/** One page of the Collector's annotation listing per read-back. */
-const ANNOTATIONS_PER_READ = 100;
-/** Parallel annotation reads for one list_sessions page. */
-const SESSION_READ_CONCURRENCY = 8;
 
 /** Where each deletable kind lives on the Collector API. */
 const DELETE_PATHS: Readonly<Record<DeletableKind, string>> = {
   annotation: ANNOTATIONS_PATH,
   saved_query: SAVED_QUERIES_PATH,
 };
-
-/** Refuses demo mode: its generated dataset has no project to keep these objects in. */
-async function requireLiveCollector(tool: string): Promise<void> {
-  if (await resolveMode() === "live") return;
-  throw new CollectorError(
-    `${tool} needs a live qyl Collector: annotations and saved queries are kept in a Collector ` +
-      "project, and demo mode (QYL_DEMO=1) has none. Set QYL_COLLECTOR_URL and unset QYL_DEMO.",
-    false,
-    undefined,
-    "invalid_argument",
-  );
-}
 
 /**
  * The If-Match value for a change. An etag is opaque, but it travels as an
@@ -92,11 +61,12 @@ export function ifMatch(etag: string): Readonly<Record<string, string>> {
   return { [IF_MATCH_HEADER]: etag };
 }
 
-/** Explicit retry keys deduplicate creates for 24 hours; absent keys create new objects. */
-function idempotencyKey(options: CollectorRequestOptions, suppliedKey?: string): Readonly<Record<string, string>> {
-  if (suppliedKey === undefined) return {};
+/** Retry keys deduplicate for 24 hours; identical bodies get a deterministic default key. */
+function idempotencyKey(options: CollectorRequestOptions, operation: string, body: object, suppliedKey?: string): Readonly<Record<string, string>> {
+  const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical) : value !== null && typeof value === "object" ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, canonical(v)])) : value;
+  const key = suppliedKey ?? JSON.stringify(canonical(body));
   const digest = createHash("sha256")
-    .update(`${options.access?.project ?? ""}\0${suppliedKey}`)
+    .update(`${options.access?.project ?? ""}\0${operation}\0${key}`)
     .digest("hex");
   return { [IDEMPOTENCY_KEY_HEADER]: digest };
 }
@@ -112,7 +82,7 @@ function resourcePath(base: string, id: string, suffix = ""): string {
  * `collector_unauthorized`). A body that breaks the contract stays a
  * contract mismatch, and every other failure passes through unchanged.
  */
-async function refusals<T>(
+export async function refusals<T>(
   messages: Readonly<Partial<Record<number, string>>>,
   request: () => Promise<T>,
 ): Promise<T> {
@@ -129,7 +99,7 @@ async function refusals<T>(
 }
 
 /** The refusals every change to an existing object shares. */
-function changeRefusals(kind: string, id: string, role: "write" | "delete"): Partial<Record<number, string>> {
+export function changeRefusals(kind: string, id: string, role: "write" | "delete"): Partial<Record<number, string>> {
   return {
     403: `the Collector refused the change: the server's Collector key needs the ${role} role`,
     404: `${kind} not found: ${id}`,
@@ -141,7 +111,6 @@ export async function createAnnotation(
   input: CreateAnnotationInput,
   options: CollectorRequestOptions,
 ): Promise<Annotation> {
-  await requireLiveCollector("create_annotation");
   // The create's 404 is its target: nothing by that id is recorded in this
   // project, so there is nothing to attach the note to.
   const create = {
@@ -156,7 +125,7 @@ export async function createAnnotation(
     },
     () => collectorPost(ANNOTATIONS_PATH, create, {
       ...options,
-      headers: { ...options.headers, ...idempotencyKey(options, input.idempotency_key) },
+      headers: { ...options.headers, ...idempotencyKey(options, ANNOTATIONS_PATH, create, input.idempotency_key) },
     }),
   );
   return redactTelemetry(parseCollectorBody(body, `POST ${ANNOTATIONS_PATH}`, AnnotationCreatedSchema));
@@ -166,7 +135,6 @@ export async function updateAnnotation(
   input: UpdateAnnotationInput,
   options: CollectorRequestOptions,
 ): Promise<Annotation> {
-  await requireLiveCollector("update_annotation");
   const path = resourcePath(ANNOTATIONS_PATH, input.id);
   const changes = {
     ...(input.text === undefined ? {} : { text: input.text }),
@@ -185,7 +153,6 @@ export async function createSavedQuery(
   input: CreateSavedQueryInput,
   options: CollectorRequestOptions,
 ): Promise<SavedQuery> {
-  await requireLiveCollector("create_saved_query");
   const create = {
     name: input.name,
     ...(input.description === undefined ? {} : { description: input.description }),
@@ -198,7 +165,7 @@ export async function createSavedQuery(
     },
     () => collectorPost(SAVED_QUERIES_PATH, create, {
       ...options,
-      headers: { ...options.headers, ...idempotencyKey(options, input.idempotency_key) },
+      headers: { ...options.headers, ...idempotencyKey(options, SAVED_QUERIES_PATH, create, input.idempotency_key) },
     }),
   );
   return redactTelemetry(parseCollectorBody(body, `POST ${SAVED_QUERIES_PATH}`, SavedQueryCreatedSchema));
@@ -212,7 +179,6 @@ export async function updateSavedQuery(
   if (changes.name === undefined && changes.description === undefined && changes.filter === undefined) {
     throw new CollectorError("update_saved_query changes nothing: pass a name, description or filter");
   }
-  await requireLiveCollector("update_saved_query");
   const path = resourcePath(SAVED_QUERIES_PATH, id);
   const body = await refusals(
     {
@@ -224,48 +190,12 @@ export async function updateSavedQuery(
   return redactTelemetry(parseCollectorBody(body, `PATCH ${path}`, SavedQueryUpdatedSchema));
 }
 
-export interface SavedQueryPage {
-  savedQueries: SavedQuery[];
-  hasMore: boolean;
-  nextCursor?: string;
-}
-
-export async function listSavedQueries(
-  input: ListSavedQueriesInput,
-  options: CollectorRequestOptions,
-): Promise<SavedQueryPage> {
-  await requireLiveCollector("list_saved_queries");
-  const body = await collectorGet(
-    SAVED_QUERIES_PATH,
-    { signal: input.signal, limit: input.limit ?? 20, cursor: input.cursor },
-    options,
-  );
-  const page = parseCollectorPage(body, SAVED_QUERIES_PATH, SavedQueriesPageSchema, (item) => item as SavedQuery);
-  return redactTelemetry({
-    savedQueries: page.items,
-    hasMore: page.hasMore,
-    ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }),
-  });
-}
-
-export async function runSavedQuery(
-  input: RunSavedQueryInput,
-  options: CollectorRequestOptions,
-): Promise<SavedQueryRunResult> {
-  const { id, ...run } = input;
-  await requireLiveCollector("run_saved_query");
-  const path = resourcePath(SAVED_QUERIES_PATH, id, ":run");
-  const body = await refusals({ 404: `saved query not found: ${id}` }, () => collectorPost(path, run, options));
-  return redactTelemetry(parseCollectorBody(body, `POST ${path}`, SavedQueryRunSchema));
-}
-
 export async function deleteResource(
   kind: DeletableKind,
   id: string,
   etag: string,
   options: CollectorRequestOptions,
 ): Promise<void> {
-  await requireLiveCollector("delete");
   const path = resourcePath(DELETE_PATHS[kind], id);
   const body = await refusals(
     changeRefusals(kind === "annotation" ? "annotation" : "saved query", id, "delete"),
@@ -285,14 +215,6 @@ export async function deleteResource(
 // Read-back: get_trace and list_sessions return the annotations on what they
 // read, so there is no annotation listing tool.
 // -----------------------------------------------------------------------------
-
-/** What a read tool adds to its result: the annotations and one text line. */
-export interface AnnotationReadBack {
-  /** Present when the read succeeded; absent in demo mode and when it failed. */
-  annotations?: Annotation[];
-  /** Appended to the tool's text summary; empty when there is nothing to say. */
-  text: string;
-}
 
 /** The telemetry object an annotation names, in full. */
 export function describeTarget(target: Annotation["target"]): string {
@@ -326,94 +248,4 @@ export function annotationLine(annotation: Annotation): string {
   const note = annotation.text.replace(/\s+/gu, " ");
   const text = note.length > 200 ? `${note.slice(0, 200)}…` : note;
   return `- ${targetLabel(annotation.target)} · id ${annotation.id} · etag ${annotation.etag}: ${text}`;
-}
-
-/** The text block for a list of annotations, newest first. */
-export function summarizeAnnotations(annotations: readonly Annotation[], truncated: boolean): string {
-  if (annotations.length === 0) return "\nAnnotations: none.";
-  return (
-    `\nAnnotations (${annotations.length}, newest first${truncated ? `; the newest ${ANNOTATIONS_PER_READ} per object` : ""}):\n` +
-    annotations.map(annotationLine).join("\n")
-  );
-}
-
-async function readAnnotationPage(
-  params: { trace_id?: TraceId; session_id?: SessionId },
-  options: CollectorRequestOptions,
-): Promise<{ annotations: Annotation[]; hasMore: boolean }> {
-  const body = await collectorGet(ANNOTATIONS_PATH, { ...params, limit: ANNOTATIONS_PER_READ }, options);
-  const page = parseCollectorPage(body, ANNOTATIONS_PATH, AnnotationsPageSchema, (item) => item as Annotation);
-  return { annotations: page.items, hasMore: page.hasMore };
-}
-
-/**
- * An annotation read that fails leaves the telemetry result standing: the
- * field is omitted and the text says why, instead of failing a trace read
- * that succeeded or reporting "no annotations" that were never read.
- */
-function unavailable(error: unknown): AnnotationReadBack {
-  return { text: `\nAnnotations could not be read: ${describeToolError(error).message}` };
-}
-
-/** The annotations on one trace and its spans, for get_trace. */
-export async function readTraceAnnotations(traceId: TraceId, scope: ToolScope): Promise<AnnotationReadBack> {
-  if (await resolveMode() === "demo") {
-    await scope.step("Demo data carries no annotations");
-    return { text: "" };
-  }
-  try {
-    const { annotations, hasMore } = await readAnnotationPage({ trace_id: traceId }, scope.collector);
-    await scope.step(`Read ${annotations.length} annotation(s) for trace ${traceId}`);
-    const safe = redactTelemetry(annotations);
-    return { annotations: safe, text: summarizeAnnotations(safe, hasMore) };
-  } catch (error) {
-    await scope.step("Annotations unavailable");
-    return unavailable(error);
-  }
-}
-
-/** The annotations on the listed sessions, newest first, for list_sessions. */
-export async function readSessionAnnotations(
-  sessionIds: readonly SessionId[],
-  scope: ToolScope,
-): Promise<AnnotationReadBack> {
-  if (await resolveMode() === "demo") {
-    await scope.step("Demo data carries no annotations");
-    return { text: "" };
-  }
-  if (sessionIds.length === 0) {
-    await scope.step("No sessions to read annotations for");
-    return { annotations: [], text: "" };
-  }
-  try {
-    // One session's failed page costs that session's notes, not every session's.
-    const pages: Array<{ annotations: Annotation[]; hasMore: boolean }> = [];
-    let failed = 0;
-    let firstFailure: unknown;
-    for (let start = 0; start < sessionIds.length; start += SESSION_READ_CONCURRENCY) {
-      const settled = await Promise.allSettled(sessionIds
-        .slice(start, start + SESSION_READ_CONCURRENCY)
-        .map((sessionId) => readAnnotationPage({ session_id: sessionId }, scope.collector)));
-      for (const outcome of settled) {
-        if (outcome.status === "fulfilled") pages.push(outcome.value);
-        else {
-          failed += 1;
-          firstFailure ??= outcome.reason;
-        }
-      }
-    }
-    if (pages.length === 0) throw firstFailure;
-    const annotations = pages
-      .flatMap((page) => page.annotations)
-      .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at));
-    await scope.step(`Read ${annotations.length} annotation(s) for ${sessionIds.length} session(s)`);
-    const safe = redactTelemetry(annotations);
-    const partial = failed === 0
-      ? ""
-      : `\nAnnotations of ${failed} session(s) could not be read: ${describeToolError(firstFailure).message}`;
-    return { annotations: safe, text: summarizeAnnotations(safe, pages.some((page) => page.hasMore)) + partial };
-  } catch (error) {
-    await scope.step("Annotations unavailable");
-    return unavailable(error);
-  }
 }

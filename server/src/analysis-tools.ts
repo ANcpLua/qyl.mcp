@@ -5,9 +5,10 @@ import { runTool } from "./request-scope.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, TELEMETRY_TOOL_AUTH_META } from "./tools.js";
 import { queryAnalysis } from "./analysis-client.js";
 import { collectorPatch, parseCollectorBody } from "./collector.js";
-import { ifMatch } from "./collector-resources.js";
+import { ifMatch, refusals, changeRefusals } from "./collector-resources.js";
 import { assertToolScopes, toolScopeChallenge } from "./tool-scopes.js";
-import { QYL_MCP_SCOPE, QYL_MCP_WRITE_SCOPE } from "./oauth.js";
+import { WRITE_SCOPES, UPDATE_TOOL_ANNOTATIONS, securityMeta } from "./write-tools.js";
+import { CollectorError } from "./collector.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
 
 const TriageInputSchema = contractSchema("Mcp.Tools.TriageInput");
@@ -39,7 +40,7 @@ const GetMcpStatsOutputSchema = contractSchema("Mcp.Tools.GetMcpStatsOutput");
 
 const UpdateFailureStatusInputSchema = contractSchema("Mcp.Tools.UpdateFailureStatusInput");
 const UpdateFailureStatusOutputSchema = contractSchema("Mcp.Tools.UpdateFailureStatusOutput");
-const FAILURE_WRITE_SCOPES = [QYL_MCP_SCOPE, QYL_MCP_WRITE_SCOPE] as const;
+
 
 export function registerAnalysisTools(server: McpServer): void {
   server.registerTool(
@@ -218,18 +219,19 @@ export function registerAnalysisTools(server: McpServer): void {
       description: "Set a failure's status or assignee when recording triage decisions, returning the stored failure available through list_failures.",
       inputSchema: UpdateFailureStatusInputSchema,
       outputSchema: compactOutputSchema(UpdateFailureStatusOutputSchema),
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-      scopeChallenge: toolScopeChallenge("update_failure_status", FAILURE_WRITE_SCOPES),
-      _meta: { securitySchemes: [{ type: "oauth2", scopes: [...FAILURE_WRITE_SCOPES] }] },
+      annotations: UPDATE_TOOL_ANNOTATIONS,
+      scopeChallenge: toolScopeChallenge("update_failure_status", WRITE_SCOPES),
+      _meta: securityMeta(WRITE_SCOPES),
     },
     (args, ctx) => runTool(ctx, 1, async (scope) => {
-      assertToolScopes("update_failure_status", FAILURE_WRITE_SCOPES, ctx.http?.authInfo);
+      assertToolScopes("update_failure_status", WRITE_SCOPES, ctx.http?.authInfo);
+      if (args.ignore_until !== undefined && args.status !== "ignored") throw new CollectorError("ignore_until is valid only with status=ignored", false, 400, "invalid_argument");
       const { failure_id, etag, ...changes } = args;
       const path = `/api/v1/failures/${encodeURIComponent(failure_id)}`;
-      const response = await collectorPatch(path, changes, {
+      const response = await refusals(changeRefusals("failure", failure_id, "write"), () => collectorPatch(path, changes, {
         ...scope.collector,
         headers: { ...scope.collector.headers, ...ifMatch(etag) },
-      });
+      }));
       const output = parseCollectorBody(response, path, UpdateFailureStatusOutputSchema);
       await scope.step("Failure status saved");
       return telemetryToolResult("Failure status saved; list_failures returns the current failure.", output);

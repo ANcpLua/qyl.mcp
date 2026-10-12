@@ -23,12 +23,8 @@ import qylOpenApi from "@ancplua/qyl-api-schema/openapi" with { type: "json" };
 
 const apiKeyHeader = qylOpenApi.components.securitySchemes.ApiKeyAuth.name;
 
-// Contract 8.0.0 publishes the metrics read surface this repo's list_metrics,
-// get_metric_series, and query_metric tools are generated from. Until 8.0.0 the
-// assertion here was the opposite one — that no such surface existed — so it is
-// kept as an assertion rather than deleted: the tools cannot be built from
-// operations the contract does not publish, and discovering that at startup
-// beats discovering it in a tool call.
+// This smoke reads the Collector's product metrics API to independently verify
+// the OTLP exported by the workbench. MCP tools use the analysis API.
 const METRICS_OPERATIONS = [
   "/api/v1/metrics",
   "/api/v1/metrics/{metric_name}/series",
@@ -47,16 +43,8 @@ const collectorProject = resolve(
 );
 const mcpServerMain = resolve(here, "..", "server", "dist", "main.js");
 const workbenchMain = resolve(here, "dist", "main.js");
-const collectorExecutable = resolve(
-  dirname(collectorProject),
-  "..",
-  "..",
-  "artifacts",
-  "bin",
-  "qyl.collector",
-  "release",
-  "qyl.collector",
-);
+const collectorExecutable = resolve(process.env.QYL_COLLECTOR_DLL ?? resolve(dirname(collectorProject), "../../artifacts/bin/qyl.collector/release/qyl.collector.dll"));
+assert(existsSync(collectorExecutable), "Build the collector once before smoke:otlp, or set QYL_COLLECTOR_DLL");
 if (!existsSync(collectorProject)) {
   throw new Error(
     `Qyl collector project not found at ${collectorProject}; set QYL_COLLECTOR_PROJECT`,
@@ -120,7 +108,7 @@ for (const key of Object.keys(childEnv)) {
   if (key.startsWith("OTEL_EXPORTER_OTLP")) delete childEnv[key];
 }
 Object.assign(childEnv, {
-  DOTNET_ENVIRONMENT: "Development",
+  DOTNET_PROCESSOR_COUNT: "4", DOTNET_ENVIRONMENT: "Development",
   QYL_BIND_ADDRESS: "127.0.0.1",
   QYL_PORT: String(port),
   QYL_OTLP_PORT: "0",
@@ -131,11 +119,7 @@ Object.assign(childEnv, {
   QYL_DATA_PATH: join(temp, "telemetry-smoke.duckdb"),
 });
 
-const collector = spawn(
-  existsSync(collectorExecutable) ? collectorExecutable : "dotnet",
-  existsSync(collectorExecutable)
-    ? []
-    : ["run", "--no-launch-profile", "--project", collectorProject],
+const collector = spawn("dotnet", [collectorExecutable],
   { cwd: dirname(collectorProject), env: childEnv, stdio: ["ignore", "pipe", "pipe"] },
 );
 let collectorOutput = "";
@@ -269,7 +253,6 @@ try {
   const workbenchEnv = {
     ...process.env,
     QYL_COLLECTOR_URL: baseUrl,
-    QYL_DEMO: "0",
     QYL_MCP_TELEMETRY: "1",
     QYL_MCP_WORKBENCH_PORT: String(workbenchPort),
     QYL_MCP_STATE_PATH: join(temp, "workbench-state.json"),
@@ -433,12 +416,11 @@ try {
     throw new Error(`qyl MCP server build not found at ${mcpServerMain}; run bun run --cwd ../server build`);
   }
   const transport = new StdioClientTransport({
-    command: process.execPath,
+    command: "bun",
     args: [mcpServerMain, "--stdio"],
     env: {
       ...getDefaultEnvironment(),
       QYL_COLLECTOR_URL: baseUrl,
-      QYL_DEMO: "0",
       QYL_API_KEY: collectorApiKey,
       QYL_PROJECT: projectScope,
       QYL_MCP_NATIVE_STATE_PATH: join(temp, "stdio-native-executions.json"),

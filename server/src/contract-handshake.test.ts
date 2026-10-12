@@ -131,19 +131,6 @@ test("a mismatch is fatal immediately, without burning the retry budget", async 
   assert.equal(probes, 1);
 });
 
-test("demo mode has no collector to handshake with", async (context) => {
-  const previous = process.env.QYL_DEMO;
-  process.env.QYL_DEMO = "1";
-  context.after(() => {
-    if (previous === undefined) delete process.env.QYL_DEMO;
-    else process.env.QYL_DEMO = previous;
-  });
-
-  // Resolves without probing anything.
-  await assertCollectorContractRevision({
-    probe: () => Promise.reject(new Error("must not be probed in demo mode")),
-  });
-});
 
 test("the generated revision is present and well formed", () => {
   // A named import of CONTRACT_REVISION makes a pin without the export a

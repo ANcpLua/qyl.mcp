@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import test from "node:test";
-import { CollectorError, collectorGet } from "./collector.js";
+import { CollectorError, collectorPost } from "./collector.js";
 import { collectorUrl } from "./config.js";
-import { toolError } from "./tools.js";
+import { toolError } from "./request-scope.js";
 
 test("collector URL rejects embedded credentials and query secrets", () => {
   const previous = process.env.QYL_COLLECTOR_URL;
@@ -50,7 +50,7 @@ test("collector Problem Details cannot inject remote detail into tool-facing err
   process.env.QYL_COLLECTOR_URL = `http://127.0.0.1:${address.port}`;
   try {
     await assert.rejects(
-      collectorGet("/failure"),
+      collectorPost("/failure", {}),
       (error: unknown) => error instanceof CollectorError
         && error.status === 503
         && !error.message.includes("remote-secret"),
@@ -78,7 +78,7 @@ test("transient answers without a contract body keep their retryable status code
     const previous = process.env.QYL_COLLECTOR_URL;
     process.env.QYL_COLLECTOR_URL = `http://127.0.0.1:${address.port}`;
     try {
-      await assert.rejects(collectorGet("/failure"), (error: unknown) => {
+      await assert.rejects(collectorPost("/failure", {}), (error: unknown) => {
         assert(error instanceof CollectorError);
         assert.equal(error.code, expected.code, `status ${expected.status}`);
         const structured = toolError(error).structuredContent as { error: { retryable: boolean } };
@@ -105,7 +105,7 @@ test("collector requests fail closed on the configured timeout", async () => {
   process.env.QYL_COLLECTOR_URL = `http://127.0.0.1:${address.port}`;
   try {
     await assert.rejects(
-      collectorGet("/slow", {}, { timeoutMs: 20 }),
+      collectorPost("/slow", {}, { timeoutMs: 20 }),
       (error: unknown) => error instanceof CollectorError
         && error.connectionError
         && error.message === "collector timed out for /slow",

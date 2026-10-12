@@ -9,8 +9,8 @@
  * so a host can approve them separately, and each write is its own tool:
  * create, update and delete are never one generic executor.
  *
- * Annotations follow the contract's tool table: create is not idempotent (each
- * call adds a note), update and delete are destructive and idempotent (they
+ * Identical creates are deduplicated for 24 hours; a new explicit retry key
+ * requests another object. Update and delete are destructive and idempotent (they
  * replace or remove a version named by its etag, and repeating them changes
  * nothing more). The create and update tools need `qyl:write`, delete needs
  * `qyl:delete`, and the saved-query reads keep `qyl:read` (tool-scopes.ts).
@@ -50,11 +50,11 @@ import { telemetryToolResult } from "./telemetry-redaction.js";
 import { assertToolScopes, toolScopeChallenge } from "./tool-scopes.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, TELEMETRY_TOOL_AUTH_META } from "./tools.js";
 
-/** Adds an object; a repeated call adds another. */
+/** Adds an object; identical retries replay for 24 hours. */
 export const CREATE_TOOL_ANNOTATIONS = {
   readOnlyHint: false,
   destructiveHint: false,
-  idempotentHint: false,
+  idempotentHint: true,
   openWorldHint: false,
 } as const satisfies ToolAnnotations;
 
@@ -74,11 +74,11 @@ export const DELETE_TOOL_ANNOTATIONS = {
   openWorldHint: false,
 } as const satisfies ToolAnnotations;
 
-const WRITE_SCOPES = [QYL_MCP_SCOPE, QYL_MCP_WRITE_SCOPE] as const;
+export const WRITE_SCOPES = [QYL_MCP_SCOPE, QYL_MCP_WRITE_SCOPE] as const;
 const DELETE_SCOPES = [QYL_MCP_SCOPE, QYL_MCP_DELETE_SCOPE] as const;
 
 /** OpenAI's per-tool `securitySchemes`, in the `_meta` form the read tools use. */
-function securityMeta(scopes: readonly string[]): { securitySchemes: { type: "oauth2"; scopes: string[] }[] } {
+export function securityMeta(scopes: readonly string[]): { securitySchemes: { type: "oauth2"; scopes: string[] }[] } {
   return { securitySchemes: [{ type: "oauth2", scopes: [...scopes] }] };
 }
 

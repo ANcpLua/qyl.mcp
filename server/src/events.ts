@@ -31,6 +31,7 @@ import { CollectorAccessError, collectorAccessForSubject } from "./collector-acc
 import { collectorUrl } from "./config.js";
 import { rootSpanName } from "./summaries.js";
 import type { QylTrace } from "./wire.js";
+type EventTrace = Pick<QylTrace, "trace_id" | "root_span" | "services" | "span_count" | "duration_ns" | "start_time" | "has_error">;
 import {
   CallbackAddressError,
   WEBHOOK_MAX_BODY_BYTES,
@@ -245,7 +246,7 @@ function sameText(a: string, b: string): boolean {
 }
 
 /** The `data` of a `trace.error` delivery; matches `payloadSchema`. */
-export function traceErrorPayload(trace: QylTrace): Record<string, unknown> {
+export function traceErrorPayload(trace: EventTrace): Record<string, unknown> {
   return {
     trace_id: trace.trace_id,
     root_span: rootSpanName(trace),
@@ -256,7 +257,7 @@ export function traceErrorPayload(trace: QylTrace): Record<string, unknown> {
   };
 }
 
-function matches(subscription: StoredSubscription, trace: QylTrace): boolean {
+function matches(subscription: StoredSubscription, trace: EventTrace): boolean {
   const service = subscription.arguments.service_name;
   return service === undefined || trace.services.includes(service);
 }
@@ -268,7 +269,7 @@ export interface EventsRuntimeOptions {
   /** Network seam; defaults to the public-HTTPS-only `postWebhook`. */
   post?: WebhookPost;
   /** Trace source scoped to the authenticated subscriber's project. */
-  recentTraces?: (principal: Principal) => Promise<readonly QylTrace[]>;
+  recentTraces?: (principal: Principal) => Promise<readonly EventTrace[]>;
   pollIntervalMs?: number;
   now?: () => number;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
@@ -303,7 +304,7 @@ export class EventsRuntime {
     this.recentTraces = options.recentTraces
       ?? (async (principal) => {
         const access = collectorAccessForSubject(principal.subject);
-        return (await fetchTraces({ limit: TRACES_PER_POLL }, access === undefined ? {} : { access })).traces;
+        return await fetchTraces({ limit: TRACES_PER_POLL }, access === undefined ? {} : { access });
       });
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.now = options.now ?? Date.now;
@@ -590,7 +591,7 @@ export class EventsRuntime {
       if (!retainedKeys.has(key)) this.seen.delete(key);
     }
     const results = (await Promise.all([...groups].map(async ([key, group]) => {
-      let traces: readonly QylTrace[];
+      let traces: readonly EventTrace[];
       try {
         traces = await this.recentTraces(group[0]!);
       } catch {
@@ -632,7 +633,7 @@ export class EventsRuntime {
     return canonicalJson([collectorUrl(), project]);
   }
 
-  private deliver(subscription: StoredSubscription, trace: QylTrace, sourceKey: string): Promise<void> {
+  private deliver(subscription: StoredSubscription, trace: EventTrace, sourceKey: string): Promise<void> {
     const controller = new AbortController();
     const done = this.deliverWhileActive(subscription, trace, sourceKey, controller.signal);
     const active = this.deliveries.get(subscription.id) ?? new Set();
@@ -647,7 +648,7 @@ export class EventsRuntime {
 
   /** POST one signed event, retrying transient failures with backoff. */
   private async deliverWhileActive(
-    subscription: StoredSubscription, trace: QylTrace, sourceKey: string, signal: AbortSignal,
+    subscription: StoredSubscription, trace: EventTrace, sourceKey: string, signal: AbortSignal,
   ): Promise<void> {
     const event = {
       eventId: `evt_${trace.trace_id}`,

@@ -3,7 +3,7 @@ import { createServer as createHttpServer, type Server as HttpServer } from "nod
 import test from "node:test";
 import { CallToolResultSchema } from "@modelcontextprotocol/core";
 import { readContext, toolTrace } from "./analysis-context.test-helper.js";
-import { getDemo } from "./demo.js";
+import { getTelemetryFixture } from "./telemetry-fixtures.test-helper.js";
 import { connectModernTestClient } from "./modern-test-client.test-helper.js";
 import { createServer } from "./server.js";
 import { redactTelemetry, redactTelemetryText } from "./telemetry-redaction.js";
@@ -32,7 +32,7 @@ test("JSON-configured project credentials are redacted in free text and structur
 });
 
 test("telemetry tools redact secrets before model text and structured content", async () => {
-  const trace = structuredClone(getDemo().traces[0]);
+  const trace = structuredClone(getTelemetryFixture().traces[0]);
   const root = trace.spans[0];
   assert(root);
   root.name = `${EnvironmentSecret} secret=${TraceNameSecret}; ordinary-span-kept`;
@@ -48,7 +48,7 @@ test("telemetry tools redact secrets before model text and structured content", 
   trace.root_span = structuredClone(root);
   trace.has_error = true;
 
-  const textualLog = structuredClone(getDemo().logs[0]);
+  const textualLog = structuredClone(getTelemetryFixture().logs[0]);
   textualLog.body =
     `token=${LogTokenSecret}; password=${LogPasswordSecret}; ` +
     `secret=${LogSecretSecret}; ordinary-log-kept`;
@@ -56,7 +56,7 @@ test("telemetry tools redact secrets before model text and structured content", 
     { key: "gen_ai.usage.output_tokens", value: { type: "int", value: "17" } },
   ];
 
-  const semanticLog = structuredClone(getDemo().logs[1]);
+  const semanticLog = structuredClone(getTelemetryFixture().logs[1]);
   semanticLog.body = {
     type: "kvlist",
     values: {
@@ -83,11 +83,9 @@ test("telemetry tools redact secrets before model text and structured content", 
   const address = collector.address();
   assert(address && typeof address === "object");
   const previousCollectorUrl = process.env.QYL_COLLECTOR_URL;
-  const previousDemo = process.env.QYL_DEMO;
   const previousApiKey = process.env.QYL_API_KEY;
   process.env.QYL_COLLECTOR_URL = `http://127.0.0.1:${address.port}`;
   process.env.QYL_API_KEY = EnvironmentSecret;
-  delete process.env.QYL_DEMO;
 
   const connection = await connectModernTestClient(
     { name: "redaction-test", version: "1.0.0" },
@@ -129,7 +127,6 @@ test("telemetry tools redact secrets before model text and structured content", 
   } finally {
     await connection.close();
     restoreEnvironment("QYL_COLLECTOR_URL", previousCollectorUrl);
-    restoreEnvironment("QYL_DEMO", previousDemo);
     restoreEnvironment("QYL_API_KEY", previousApiKey);
     await close(collector);
   }

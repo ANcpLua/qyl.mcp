@@ -9,10 +9,10 @@ import { Client, StreamableHTTPClientTransport, type FetchLike } from "@modelcon
 import { createMcpHandler, type AuthInfo } from "@modelcontextprotocol/server";
 import { createResourceAuthorization } from "./authorization.js";
 import { CollectorAccessError, collectorAccessForSubject, readCollectorProjects } from "./collector-access.js";
-import { collectorGet } from "./collector.js";
+import { collectorPost } from "./collector.js";
 import { API_KEY_HEADER, PROJECT_HEADER } from "./contract-headers.js";
 import { readContext, toolTrace, toolSummary } from "./analysis-context.test-helper.js";
-import { getDemo } from "./demo.js";
+import { getTelemetryFixture } from "./telemetry-fixtures.test-helper.js";
 import { EventsRuntime, createEventStore, type Principal, type SubscribeParams } from "./events.js";
 import { hostedAuth } from "./main.js";
 import { QYL_MCP_RESOURCE, QYL_MCP_SCOPE } from "./oauth.js";
@@ -74,8 +74,8 @@ test("project access configuration requires hosted Auth0", async () => {
 
 test("stdio rejects project mappings before accepting a connection", () => {
   for (const mapping of [JSON.stringify(PROJECTS), "{invalid}"]) {
-    const child = spawnSync(process.execPath, [fileURLToPath(new URL("./main.js", import.meta.url)), "--stdio"], {
-      env: { ...process.env, QYL_DEMO: "1", MCP_COLLECTOR_PROJECTS: mapping },
+    const child = spawnSync("bun", [fileURLToPath(new URL("./main.js", import.meta.url)), "--stdio"], {
+      env: { ...process.env, MCP_COLLECTOR_PROJECTS: mapping },
       input: "", encoding: "utf8", timeout: 5_000,
     });
     assert.equal(child.status, 1, child.stderr);
@@ -92,7 +92,7 @@ test("unscoped data requests cannot use the default credential when project acce
   const fetchMock = context.mock.method(globalThis, "fetch", async () => {
     throw new Error("unscoped request reached the network");
   });
-  await assert.rejects(collectorGet("/api/v1/traces"), CollectorAccessError);
+  await assert.rejects(collectorPost("/api/v1/traces", {}), CollectorAccessError);
   assert.equal(fetchMock.mock.callCount(), 0);
 });
 
@@ -103,9 +103,8 @@ for (const revision of ["2026-07-28", "2025-11-25"] as const) {
       QYL_COLLECTOR_URL: "https://collector.example.test",
       QYL_API_KEY: "default-must-not-be-used",
       QYL_PROJECT: "default-must-not-be-used",
-      QYL_DEMO: undefined,
     });
-    const traces = getDemo().traces;
+    const traces = getTelemetryFixture().traces;
     const ownerTrace = traces[0]!;
     const reviewerTrace = traces[1]!;
     assert.notEqual(ownerTrace.trace_id, reviewerTrace.trace_id);
@@ -123,7 +122,7 @@ for (const revision of ["2026-07-28", "2025-11-25"] as const) {
       // Overlap calls to expose any process-global credential switching.
       await new Promise((resolve) => setTimeout(resolve, project === "owner" ? 5 : 1));
       if (pathname === "/api/v1/analysis/list_traces") return Response.json({ ...readContext(1), traces: [toolSummary(selected)], mode: "live", has_more: false });
-      if (["/api/v1/analysis/display_traces", "/api/v1/analysis/fetch_telemetry"].includes(pathname)) return Response.json({ ...readContext(1), traces: [toolTrace(selected)], mode: "live" });
+      if (["/api/v1/analysis/display_traces", "/api/v1/analysis/fetch_telemetry"].includes(pathname)) return Response.json({ ...readContext(1, pathname.endsWith("fetch_telemetry")), traces: [toolTrace(selected)], mode: "live" });
       if (pathname === "/api/v1/analysis/get_trace") {
         const args = await request.json() as { trace_id: string };
         if (args.trace_id === selected.trace_id) return Response.json({ ...readContext(1), trace: toolTrace(selected), mode: "live" });
@@ -201,7 +200,7 @@ test("Events poll and deduplicate within each account's Collector scope", { time
   environment(context, {
     MCP_COLLECTOR_PROJECTS: JSON.stringify(PROJECTS),
     QYL_COLLECTOR_URL: "https://collector.example.test",
-    QYL_API_KEY: "default-must-not-be-used", QYL_DEMO: undefined,
+    QYL_API_KEY: "default-must-not-be-used",
   });
   const dir = await mkdtemp(join(tmpdir(), "qyl-project-events-"));
   context.after(() => rm(dir, { recursive: true, force: true }));
@@ -213,10 +212,10 @@ test("Events poll and deduplicate within each account's Collector scope", { time
   context.after(() => releaseOwner());
   let markReviewDelivered!: () => void;
   const reviewDelivered = new Promise<void>((resolve) => { markReviewDelivered = resolve; });
-  const sharedId = getDemo().traces[0]!.trace_id;
+  const sharedId = getTelemetryFixture().traces[0]!.trace_id;
   const traces = new Map<string, QylTrace>(PROJECTS.map((entry) => [entry.project, {
-    ...getDemo().traces[0]!, trace_id: sharedId, has_error: true,
-    services: [entry.project], root_span: { ...getDemo().traces[0]!.root_span!, name: `${entry.project}-sample` },
+    ...getTelemetryFixture().traces[0]!, trace_id: sharedId, has_error: true,
+    services: [entry.project], root_span: { ...getTelemetryFixture().traces[0]!.root_span!, name: `${entry.project}-sample` },
   }]));
   context.mock.method(globalThis, "fetch", async (input: string | Request | URL, init?: RequestInit) => {
     const request = new Request(input, init);
@@ -227,7 +226,7 @@ test("Events poll and deduplicate within each account's Collector scope", { time
       await ownerGate;
       throw new Error("upstream unavailable");
     }
-    return Response.json({ items: phase === 0 ? [] : [traces.get(project)], has_more: false });
+    return Response.json({ ...readContext(phase === 0 ? 0 : 1), traces: phase === 0 ? [] : [toolSummary(traces.get(project)!)], has_more: false, mode: "live" });
   });
   const deliveries: Array<{ url: string; body: string }> = [];
   const runtime = new EventsRuntime({
@@ -300,7 +299,7 @@ for (const configured of [false, true]) {
       log: () => {},
       recentTraces: async () => {
         reads++;
-        return phase === 0 ? [] : [{ ...getDemo().traces[0]!, has_error: true }];
+        return phase === 0 ? [] : [{ ...getTelemetryFixture().traces[0]!, has_error: true }];
       },
       post: async (url, body) => {
         const event = JSON.parse(body) as { type?: string; challenge?: string };

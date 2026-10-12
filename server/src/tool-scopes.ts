@@ -28,7 +28,6 @@ import {
   type ScopeChallenge,
   type ScopeChallengeHandler,
 } from "@modelcontextprotocol/server";
-import { QYL_MCP_SCOPES_SUPPORTED } from "./oauth.js";
 
 /** The tool-result `_meta` key OpenAI documents for an authentication challenge. */
 export const WWW_AUTHENTICATE_META_KEY = "mcp/www_authenticate";
@@ -51,21 +50,6 @@ function missingScopes(required: readonly string[], authInfo: AuthInfo): string[
   return required.filter((scope) => !granted.has(scope));
 }
 
-/**
- * The scopes a challenge names: the tool's own plus the qyl scopes the token
- * already holds, so re-authorizing for this tool does not drop another
- * tool's grant (MCP authorization, "Scope challenge handling").
- */
-function challengeScopes(
-  required: readonly [string, ...string[]],
-  authInfo: AuthInfo,
-): [string, ...string[]] {
-  const supported = new Set(QYL_MCP_SCOPES_SUPPORTED);
-  const kept = authInfo.scopes.filter((scope) => supported.has(scope));
-  const scopes = [...new Set([...required, ...kept])].sort();
-  return [scopes[0] ?? required[0], ...scopes.slice(1)];
-}
-
 function errorDescription(tool: string, missing: readonly string[]): string {
   return `${tool} needs the ${missing.join(" and ")} scope`;
 }
@@ -80,7 +64,7 @@ export function toolScopeChallenge(
     const missing = missingScopes(required, authInfo);
     if (missing.length === 0) return undefined;
     return {
-      scopes: challengeScopes(required, authInfo),
+      scopes: [missing[0] ?? required[0], ...missing.slice(1)],
       errorDescription: errorDescription(tool, missing),
     };
   };
@@ -110,7 +94,7 @@ export function assertToolScopes(
   const metadata = resourceMetadataUrl(authInfo);
   const challenge =
     `Bearer error="insufficient_scope", error_description="${errorDescription(tool, missing)}", ` +
-    `scope="${challengeScopes(required, authInfo).join(" ")}"` +
+    `scope="${missing.join(" ")}"` +
     (metadata === undefined ? "" : `, resource_metadata="${metadata}"`);
   throw new InsufficientScopeError(
     `${errorDescription(tool, missing)}, which this sign-in does not grant. ` +

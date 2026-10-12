@@ -26,7 +26,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const projectFile = resolve(process.env.QYL_COLLECTOR_PROJECT ??
   join(here, "../../qyl/services/qyl.collector/qyl.collector.csproj"));
 assert(existsSync(projectFile), "set QYL_COLLECTOR_PROJECT to a real Collector checkout");
-const executable = resolve(dirname(projectFile), "../../artifacts/bin/qyl.collector/release/qyl.collector");
+const executable = resolve(process.env.QYL_COLLECTOR_DLL ?? resolve(dirname(projectFile), "../../artifacts/bin/qyl.collector/release/qyl.collector.dll"));
+assert(existsSync(executable), "Build the collector once before smoke:projects, or set QYL_COLLECTOR_DLL");
 const temp = await mkdtemp(join(tmpdir(), "qyl-project-smoke-"));
 const fixtures = ["owner", "reviewer"].map((project) => ({
   project, marker: `qyl_scope_${project}`, subject: `auth0|local-smoke-${project}`,
@@ -42,14 +43,13 @@ for (const key of Object.keys(collectorEnv)) {
   if (key.startsWith("OTEL_EXPORTER_OTLP")) delete collectorEnv[key];
 }
 Object.assign(collectorEnv, {
-  DOTNET_ENVIRONMENT: "Development", QYL_BIND_ADDRESS: "127.0.0.1", QYL_PORT: String(port),
+  DOTNET_PROCESSOR_COUNT: "4", DOTNET_ENVIRONMENT: "Development", QYL_BIND_ADDRESS: "127.0.0.1", QYL_PORT: String(port),
   QYL_OTLP_PORT: "0", QYL_GRPC_PORT: "0", QYL_OTLP_AUTH_MODE: "ApiKey",
   QYL_OTLP_PROJECT_KEYS: JSON.stringify(Object.fromEntries(fixtures.map((f) =>
     [f.project, [{ key: f.apiKey, roles: ["ingest", "read", "write", "delete"] }]]))),
   QYL_DATA_PATH: join(temp, "project-scope.duckdb"),
 });
-const collector = spawn(existsSync(executable) ? executable : "dotnet",
-  existsSync(executable) ? [] : ["run", "--no-launch-profile", "--project", projectFile],
+const collector = spawn("dotnet", [executable],
   { cwd: dirname(projectFile), env: collectorEnv, stdio: ["ignore", "pipe", "pipe"] });
 let collectorLog = "";
 let startupError;
@@ -84,7 +84,7 @@ function spans(f, traceId) {
       traceId, spanId: randomBytes(8).toString("hex"), name: `tools/call ${f.marker}_tool`, kind: 1,
       startTimeUnixNano: String(start), endTimeUnixNano: String(start + 10_000_000n),
       attributes: [attr("session.id", `${f.marker}_session`), attr("mcp.method.name", "tools/call"),
-        attr("gen_ai.tool.name", `${f.marker}_tool`), attr("ci.leg", f.marker)],
+        attr("gen_ai.tool.name", `${f.marker}_tool`), attr("cicd.pipeline.task.name", f.marker)],
       status: { code: 2, message: `${f.marker} intentional test error` },
     }],
   }] }] };
@@ -130,7 +130,6 @@ try {
   }
   console.log("ok real OTLP traces, logs and metrics stored under two separate project credentials");
 
-  delete process.env.QYL_DEMO;
   Object.assign(process.env, {
     QYL_COLLECTOR_URL: baseUrl, QYL_MCP_TELEMETRY: "0", QYL_API_KEY: "must-not-fall-back",
     MCP_COLLECTOR_PROJECTS: JSON.stringify(fixtures.map((f) => ({
@@ -168,8 +167,18 @@ try {
     ["fetch_telemetry", { view: "trace", trace_id: f.traceId }],
     ["fetch_telemetry", { view: "logs" }], ["fetch_telemetry", { view: "mcp_stats", hours: 1 }],
   ];
-  const writeTools = ["create_annotation", "update_annotation", "create_saved_query", "update_saved_query",
+  const writeTools = ["update_failure_status", "create_annotation", "update_annotation", "create_saved_query", "update_saved_query",
     "delete", "list_saved_queries", "run_saved_query"];
+  /** @returns {Array<[string, Record<string, unknown>]>} */
+  function extraReads(f, failure) { return [
+    ["triage", {}], ["list_failures", {}], ["get_failure_context", { trace_id: f.traceId }],
+    ["compare_groups", { signal: "spans", group_a: { matchers: [] }, group_b: "rest" }],
+    ["compare_traces", { a: { trace_id: f.traceId }, b: { trace_id: f.traceId } }],
+    ["verify_fix", { failure_id: failure.failure_id, since: new Date().toISOString() }],
+    ["aggregate_telemetry", { signal: "spans", group_by: ["service.name"], measures: ["count"] }],
+    ["discover_attributes", {}], ["get_agent_run", { trace_id: f.traceId }],
+    ["list_releases", {}], ["get_service_map", {}], ["check_telemetry_health", {}], ["get_mcp_stats", {}],
+  ]; }
   for (const revision of ["2026-07-28", "2025-11-25"]) {
     async function connect(token) {
       const client = new Client({ name: "project-smoke", version: "1.0.0" }, {
@@ -189,7 +198,7 @@ try {
       const { tools } = await client.listTools();
       toolCount = tools.length;
       assert.deepEqual(tools.map((tool) => tool.name).sort((a, b) => a.localeCompare(b)),
-        [...new Set([...cases(f).map(([name]) => name), ...writeTools])].sort((a, b) => a.localeCompare(b)));
+        [...new Set([...cases(f).map(([name]) => name), ...extraReads(f, {}).map(([name]) => name), ...writeTools])].sort((a, b) => a.localeCompare(b)));
       for (const [name, args] of cases(f)) {
         const result = await client.callTool({ name, arguments: args,
           _meta: { subject: foreign.subject, project: foreign.project } });
@@ -199,6 +208,19 @@ try {
         assert(!json.includes(foreign.marker), `${name} leaked the other project's data`);
         for (const entry of fixtures) assert(!json.includes(entry.apiKey), `${name} exposed a key`);
       }
+      assert.equal(toolCount, 32);
+      const failures = await client.callTool({ name: "list_failures", arguments: {} });
+      assert(!failures.isError, JSON.stringify(failures));
+      const failure = failures.structuredContent.failures[0];
+      assert(failure, "each project has its own seeded failure");
+      for (const [name, args] of extraReads(f, failure)) {
+        const result = await client.callTool({ name, arguments: args, _meta: { subject: foreign.subject, project: foreign.project } });
+        assert(!result.isError, `${revision} ${f.project} ${name}: ${JSON.stringify(result)}`);
+        assert(!JSON.stringify(result).includes(foreign.marker), `${name} leaked the other project`);
+        for (const entry of fixtures) assert(!JSON.stringify(result).includes(entry.apiKey), `${name} exposed a key`);
+      }
+      const status = await client.callTool({ name: "update_failure_status", arguments: { failure_id: failure.failure_id, etag: failure.etag, status: "open" } });
+      assert(!status.isError, JSON.stringify(status));
       /** @type {ReadonlyArray<readonly [string, Record<string, unknown>]>} */
       const foreignCases = [
         ["get_trace", { trace_id: foreign.traceId }],

@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import { CiLogOutputSchema, GetTraceOutputSchema } from "./contract-validation.js";
-import { getDemo } from "./demo.js";
+import { getTelemetryFixture } from "./telemetry-fixtures.test-helper.js";
 import { connectModernTestClient, type ModernTestClient } from "./modern-test-client.test-helper.js";
 import { createServer } from "./server.js";
 import { readContext, toolTrace } from "./analysis-context.test-helper.js";
 import type { QylSpan, QylTrace } from "./wire.js";
 
 function fixtureTrace(): QylTrace {
-  const trace = structuredClone(getDemo().traces[0]!);
+  const trace = structuredClone(getTelemetryFixture().traces[0]!);
   const base = trace.spans[0]!;
   const services = ["qyl-ci-build", "custom-ci-build", "custom-ci-test", "web"];
   trace.spans = ([1, 2, 2, 0] as const).map((code, index): QylSpan => ({
@@ -16,7 +16,7 @@ function fixtureTrace(): QylTrace {
     span_id: (index + 1).toString(16).padStart(16, "0") as QylSpan["span_id"],
     name: `phase-${index}`,
     status: { code },
-    attributes: [{ key: "payload", value: "span-payload" }, { key: "ci.leg", value: `leg-${index}` }],
+    attributes: [{ key: "payload", value: "span-payload" }, { key: "cicd.pipeline.task.name", value: `leg-${index}` }],
     resource: { service_name: services[index]!, attributes: [{ key: "payload", value: "resource-payload" }] },
     events: [{
       name: "event-kept", time_unix_nano: base.start_time_unix_nano,
@@ -44,7 +44,6 @@ async function connectCollector(
 ): Promise<ModernTestClient> {
   const env = {
     QYL_COLLECTOR_URL: "https://collector.example.test",
-    QYL_DEMO: undefined,
     MCP_COLLECTOR_PROJECTS: undefined,
   };
   const previous = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));

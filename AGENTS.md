@@ -37,7 +37,7 @@ rely on. Everything else is judgment.
   discovery and challenges.
 - With account/project mapping enabled, access comes from the verified subject.
   Tool arguments, UI inputs and request metadata never select credentials or
-  another project. Local/demo and single-project modes remain supported.
+  another project. Local and single-project modes remain supported. Synthetic telemetry belongs only in tests.
 
 ### Events behave
 

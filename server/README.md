@@ -5,8 +5,8 @@ logs, metrics, sessions and CI runs, plus the Trace Explorer and MCP Dashboard
 viewers for hosts that render MCP Apps.
 
 ```bash
-npx qyl-mcp-server --stdio    # stdio MCP server
-npx qyl-mcp-server            # Streamable HTTP on 127.0.0.1:3001
+bunx qyl-mcp-server --stdio    # stdio MCP server
+bunx qyl-mcp-server      # Streamable HTTP on 127.0.0.1:3001
 ```
 
 Use a modern or 2025-era MCP client. Point it at a collector:
@@ -38,7 +38,8 @@ with PKCE S256, both `private_key_jwt` and `none` for ChatGPT CIMD compatibility
 issuance; this server validates resource-bound RFC 9068 access tokens on every
 MCP request. It rejects malformed/query credentials, invalid tokens and
 insufficient scopes with distinct 400/401/403 responses. Every request needs
-`qyl:read`; a write tool called without `qyl:write` or `qyl:delete` gets a
+`qyl:read`. The initial 401 requests `qyl:read qyl:write qyl:delete` so new
+connections can authorize the complete tool set. A write tool called without `qyl:write` or `qyl:delete` gets a
 `403` with `error="insufficient_scope"` naming the scopes to request, in both
 protocol eras, before the handler runs.
 
@@ -98,8 +99,10 @@ The 26 read tools carry `readOnlyHint: true`. Six write tools change annotations
 queries or failure status in the caller's project. An annotation can target a trace, span,
 session or failure and has optional labels and a classification. A bookmark is a note
 labelled `bookmark`. Updates and deletes require the current `etag`; stale writes are
-rejected. Optional `idempotency_key` on create calls reuses the stored result for 24 hours.
-Omitting it creates a new record. No tool edits or deletes recorded telemetry.
+rejected. Create calls reuse the stored result for 24 hours. Without an explicit
+`idempotency_key`, the server derives one from the project, operation and request
+body, so identical retries are safe. Supply a different key to deliberately create
+another identical record. No tool edits or deletes recorded telemetry.
 
 `qyl:read` covers reads, `qyl:write` adds creation and updates, and `qyl:delete` permits
 `delete`. A missing scope returns the supported OAuth step-up challenge. Failed calls
@@ -108,8 +111,7 @@ when available. Secrets are redacted before model text or structured content is 
 
 Every tool runs inside its request scope, forwarding cancellation to the collector.
 Requested progress reports completion; no logging notifications are sent to clients.
-Analysis reads require a live collector. Synthetic demo data remains available for local
-UI fixtures, and is never substituted when a collector fails.
+Analysis reads require a live collector. Synthetic data is used only by test fixtures, and is never substituted when a collector fails.
 
 Every inbound `tools/call` on a local server — `--stdio`, or HTTP without
 `MCP_PUBLIC_URL` — records only its tool name, timing, status and error type,
@@ -130,7 +132,6 @@ multi-tenant audit log.
 | `QYL_PROJECT` | Server-owned collector project scope. Unset, the server sends no project-scope header, so the Collector's default project applies. Never accepted as tool input. This is the only place that states the default; other documents link here. |
 | `MCP_COLLECTOR_PROJECTS` | Optional secret JSON mapping validated Auth0 subjects to project-bound Collector keys; see account isolation below. |
 | `QYL_OTLP_ENDPOINT` | Optional OTLP base for self-telemetry. |
-| `QYL_DEMO=1` | Local synthetic UI fixtures; analysis tools require a live collector. |
 | `QYL_MCP_TELEMETRY=0` | Disable MCP spans, metrics, and operation logs. |
 | `QYL_MCP_CAPTURE_CONTENT=1` | Workbench content capture; native incoming tool-call telemetry never supplies request or response bodies. |
 | `QYL_MCP_NATIVE_STATE_PATH` | Override the native execution-evidence path. |
@@ -142,9 +143,8 @@ multi-tenant audit log.
 Secrets are redacted before results reach the model, structured content, or
 durable evidence.
 
-`--stdio` runs under Node.js 24 or Bun 1.4, which is what `npx` gives you.
-The HTTP entry is a web-standard fetch handler served by its default export,
-so serving it requires Bun.
+`npx` and `pnpm dlx` also work when Bun 1.4 or newer is installed.
+Both the HTTP and stdio executables use Bun 1.4 or newer.
 
 ### Account isolation for hosted Auth0
 
@@ -180,30 +180,32 @@ this JSON configuration. Keep the map in host secrets and out of the plugin ZIP.
 
 `bun run smoke:projects` from the repository root checks every tool, the
 writes included, viewer query paths and both protocol eras against a
-real local Collector with two temporary projects. Set `QYL_COLLECTOR_PROJECT` to its
-`.csproj` when using a different checkout. The script uses local test identities
+real local Collector with two temporary projects. It reuses the completed Release
+build; set `QYL_COLLECTOR_DLL` for another build. The script uses local test identities
 and an in-process signed webhook receiver; the hosted reviewer OAuth login and
 real ChatGPT demonstration are separate checks before upload.
 
 ### Seeded analysis verification
 
-The collector fixture `tests/Qyl.Collector.Tests/Fixtures/seed-answer-key.py`
-emits real OTLP data and writes the trace IDs and absolute windows used by
-`server/verify-answer-key.mjs`. Seed a fresh temporary collector database before
-each run because the checks exercise annotations and failure status changes.
-After building this workspace, run the verifier from `server/`:
-
-```sh
-QYL_ANSWER_KEY_FILE=/tmp/qyl-answer-key.json \
-QYL_ANSWER_KEY_COLLECTOR=http://127.0.0.1:5510 \
-QYL_ANSWER_KEY_OTLP=http://127.0.0.1:5518 \
-node --test verify-answer-key.mjs
-```
+`bun run --cwd server test:answer-key` starts a fresh temporary collector database,
+seeds real OTLP, and runs the 32 analysis checks through MCP and generated validators.
+It reuses the collector's completed build; set `QYL_COLLECTOR_DLL` when its location
+or configuration differs. `mise run check` includes this verification and the quiet
+SSE check. No pre-existing temporary file or manually seeded database is required.
 
 `QYL_BIN=/path/to/installed/qyl node live-tools-smoke.mjs` additionally checks
 all 32 tools against an isolated collector started by the published CLI.
 
 ## Release notes
+
+### 8.0.0
+
+- The executable now requires Bun 1.4 or later, including stdio. Library subpaths remain usable on Node 24; TypeScript 7 continues to emit the package.
+- Start HTTP explicitly with a 60-second idle timeout so quiet SSE responses survive the SDK keep-alive. Stop the HTTP server during shutdown.
+- Request read, write and delete scopes at initial sign-in; step-up challenges name only missing scopes.
+- Return useful text summaries, bounded evidence and continuations; validate failure updates and make create retries idempotent by default.
+- Use collector contract 12.1.1 for corrected analysis paging, coverage and failure timestamps. Remove the obsolete demo runtime and duplicate read implementations.
+- Preserve note drafts, render trace drill-down results and use consistent dashboard filters. Gate the real OTLP answer-key and Bun quiet-stream regressions.
 
 ### 7.7.0
 

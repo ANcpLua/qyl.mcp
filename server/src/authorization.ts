@@ -8,6 +8,8 @@ export interface ResourceAuthorizationOptions {
   readonly verifier: OAuthTokenVerifier;
   readonly resourceMetadataUrl: string;
   readonly requiredScopes: readonly string[];
+  /** Scopes requested at initial sign-in; individual operations still enforce their own requirements. */
+  readonly authorizationScopes?: readonly string[];
   /** Explicit implications only; a wildcard-looking string grants nothing by itself. */
   readonly scopeImplications?: Readonly<Record<string, readonly string[]>>;
 }
@@ -47,6 +49,8 @@ export function createResourceAuthorization(
 ): (request: Request) => Promise<AuthInfo | Response> {
   const requiredScopes = [...new Set(options.requiredScopes)].sort();
   validateScopes(requiredScopes);
+  const authorizationScopes = [...new Set(options.authorizationScopes ?? requiredScopes)];
+  validateScopes(authorizationScopes);
   const implications = new Map(Object.entries(options.scopeImplications ?? {})
     .map(([scope, implied]) => {
       validateScopes([scope, ...implied]);
@@ -62,10 +66,10 @@ export function createResourceAuthorization(
     verifier: options.verifier,
     resourceMetadataUrl: metadataUrl.href,
   });
-  const challenge = (status: number, error?: string): Response => {
+  const challenge = (status: number, error?: string, scopes = requiredScopes): Response => {
     const parameters = [
       ...(error === undefined ? [] : [`error="${error}"`]),
-      ...(requiredScopes.length === 0 ? [] : [`scope="${requiredScopes.join(" ")}"`]),
+      ...(scopes.length === 0 ? [] : [`scope="${scopes.join(" ")}"`]),
       `resource_metadata="${metadataUrl.href}"`,
     ];
     return Response.json({ error: error ?? "unauthorized" }, {
@@ -86,14 +90,14 @@ export function createResourceAuthorization(
       headers: { authorization: `Bearer ${bearer[1]}` },
     }));
     if (auth instanceof Response) {
-      // Keep authentication failures distinct from authorization failures and
-      // include the complete operation scope set on every challenge.
-      if (auth.status === 401) return challenge(401, authorization === null ? undefined : "invalid_token");
+      // Hosts use this scope list for sign-in. Request the complete product
+      // grant here without requiring every scope for a read-only request.
+      if (auth.status === 401) return challenge(401, authorization === null ? undefined : "invalid_token", authorizationScopes);
       return auth;
     }
     const effectiveScopes = scopeClosure(auth.scopes, implications);
     if (!requiredScopes.every((scope) => effectiveScopes.has(scope))) {
-      return challenge(403, "insufficient_scope");
+      return challenge(403, "insufficient_scope", requiredScopes.filter((scope) => !effectiveScopes.has(scope)));
     }
     return auth;
   };

@@ -96,17 +96,6 @@
   font-weight: var(--font-weight-normal);
 }
 
-.demo-badge {
-  flex: none;
-  padding: 1px 7px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--q-warn) 45%, transparent);
-  background-color: var(--q-warn-tint);
-  color: var(--q-warn);
-  font-size: 0.625rem;
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.08em;
-}
 
 .header-actions {
   display: flex;

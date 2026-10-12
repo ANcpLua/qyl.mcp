@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import {
   createMcpHandler,
   getOAuthProtectedResourceMetadataUrl,
@@ -291,6 +291,7 @@ export async function hostedAuth(
     gate: createResourceAuthorization({
       verifier: oauth.verifier,
       requiredScopes: oauth.requiredScopes,
+      authorizationScopes: oauth.scopesSupported,
       resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resourceServerUrl),
     }),
     metadata: {
@@ -301,11 +302,7 @@ export async function hostedAuth(
   };
 }
 
-export interface ServeOptions {
-  port: number;
-  hostname: string;
-  fetch: (request: Request) => Promise<Response>;
-}
+
 
 /** The SDK serves modern and stateless 2025 requests from the same factory. */
 export function createHostedHandler(
@@ -368,7 +365,7 @@ export async function hostedEvents(
 
 async function createHostedRuntime(
   config: StreamableHTTPServerConfig,
-): Promise<ServeOptions> {
+): Promise<void> {
   const auth = await hostedAuth(config);
   const events = await hostedEvents(auth);
   const uiDomain = config.publicUrl === undefined
@@ -394,11 +391,13 @@ async function createHostedRuntime(
     ...(openaiAppsChallenge() === undefined ? {} : { openaiAppsChallenge: openaiAppsChallenge() }),
   };
 
+  const fetch = createFetch(options);
+  const http = Bun.serve({ hostname: config.bindHost, port: config.port, idleTimeout: 60, fetch });
   let shuttingDown = false;
   const shutdown = (): void => {
     if (shuttingDown) return;
     shuttingDown = true;
-    void Promise.all([handler.close(), events?.stop()])
+    void Promise.all([http.stop(true), handler.close(), events?.stop()])
       .then(closeDefaultNativeExecutionRuntime)
       .catch((error: unknown) => {
         reportError("Standalone MCP HTTP shutdown cleanup", error);
@@ -413,7 +412,7 @@ async function createHostedRuntime(
     : `http://${urlHost(config.bindHost)}:${config.port}/mcp`;
   console.error(`MCP server serving ${endpoint}`);
 
-  return { port: config.port, hostname: config.bindHost, fetch: createFetch(options) };
+
 }
 
 /** The SDK selects the protocol era at the opening exchange of each connection. */
@@ -451,7 +450,7 @@ function isEntryPoint(): boolean {
   return entryPoint !== undefined && toRealEntryHref(entryPoint) === import.meta.url;
 }
 
-async function bootstrap(): Promise<ServeOptions | undefined> {
+async function bootstrap(): Promise<void> {
   if (!isEntryPoint()) return undefined;
 
   // One reading of argv decides both the handshake's retry posture and which
@@ -475,15 +474,6 @@ async function bootstrap(): Promise<ServeOptions | undefined> {
       return undefined;
     }
 
-    if (typeof (globalThis as { Bun?: unknown }).Bun === "undefined") {
-      console.error(
-        "The HTTP entry is a web-standard fetch handler served by its default export; " +
-          "run it with Bun. Node serves the stdio entry only (--stdio).",
-      );
-      process.exitCode = 1;
-      return undefined;
-    }
-
     return await createHostedRuntime(readStreamableHTTPConfig());
   } catch (error) {
     reportError("Standalone MCP startup", error);
@@ -492,4 +482,4 @@ async function bootstrap(): Promise<ServeOptions | undefined> {
   }
 }
 
-export default await bootstrap();
+await bootstrap();

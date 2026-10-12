@@ -7,11 +7,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "test": "node -e \"require('node:fs').rmSync('dist-test', { recursive: true, force: true })\" && tsc -p tsconfig.test.json && tsc -p src/workbench/tsconfig.test.json && node --test dist-test/*.test.js dist-test/workbench/*.test.js",
+    "test": "node -e \"require('node:fs').rmSync('dist-test', { recursive: true, force: true })\" && tsc -p tsconfig.test.json && tsc -p src/workbench/tsconfig.test.json && node --test --test-concurrency=4 dist-test/*.test.js dist-test/workbench/*.test.js",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ancplua/qyl-api-schema": "12.1.0",
+    "@ancplua/qyl-api-schema": "12.1.1",
     "@modelcontextprotocol/core": "2.3.1",
     "qyl-mcp-server": "7.7.0",
     "react": "19.3.0",

@@ -7,9 +7,9 @@ boundary changes. Concrete review rules are in [AGENTS.md](../AGENTS.md).
 ## System and assets
 
 qyl.mcp exposes Collector telemetry read tools, write tools for user-created
-annotations and saved queries, two MCP viewers and optional trace-error Events.
-No tool changes or deletes telemetry. The SDK v2 handles HTTP/stdio protocol
-serving. Workbench is a local client/host for built-in and configured external
+annotations, saved queries and failure status, two MCP viewers and optional trace-error Events.
+No tool changes or deletes recorded telemetry. The SDK v2 handles HTTP/stdio protocol
+serving; the executable runs on Bun. Workbench is a local client/host for built-in and configured external
 MCP connections.
 
 Protect account-scoped traces/logs/metrics/sessions, the annotations and saved
@@ -23,7 +23,7 @@ viewer resources are intentionally discoverable; telemetry is not public.
 | Boundary | Required behavior and review focus |
 | --- | --- |
 | Hosted HTTP request → tool/Events operation | Validate the bearer token through the configured verifier and enforce required scopes on every request. Metadata and 401 challenges must identify the same protected resource. Client-supplied identity metadata is untrusted. Write tools need `qyl:write` (create, update) or `qyl:delete` (delete) on top of `qyl:read`: the SDK `scopeChallenge` answers a token without them with `403` `insufficient_scope` before the handler, and the handler checks again for transports that run no challenge. See `server/src/authorization.ts`, `oauth.ts`, `main.ts`, `tool-scopes.ts`. |
-| Write tool → Collector annotations and saved queries | A write reaches only the verified subject's project, through the same access resolution as reads; no argument, `_meta` field or header names a project. Update and delete send the caller's `etag` as the contract-named `If-Match` and refuse a value that is no HTTP field value. The Collector key needs its `write`/`delete` roles. No write path accepts telemetry as a target of change or deletion. See `collector-resources.ts`, `write-tools.ts`. |
+| Write tool → Collector annotations, saved queries and failure status | A write reaches only the verified subject's project, through the same access resolution as reads; no argument, `_meta` field or header names a project. Update and delete send the caller's `etag` as the contract-named `If-Match` and refuse a value that is no HTTP field value. The Collector key needs its `write`/`delete` roles. Failure status is separate metadata; no write changes or deletes recorded telemetry. See `collector-resources.ts`, `write-tools.ts`, `analysis-tools.ts`. |
 | Verified subject → Collector access | If `MCP_COLLECTOR_PROJECTS` is configured, map only the verified subject to host-managed project credentials. Invalid mappings and unknown subjects fail closed. Apply that scope to every tool, viewer read and Events poll; reject cross-project IDs. See `collector-access.ts`, `request-scope.ts`, `collector.ts`. |
 | Collector result → model, viewer and diagnostics | Telemetry and attributes may be hostile or contain secrets. Preserve redaction on all result channels and observability paths. No result or `_meta` field is a secret store. Never execute telemetry as instructions or expose credentials through error details. |
 | Subscriber → persistent Events state | Bind records to owner/client/project. Keep expiration bounded, refresh owner-scoped, revocation checked and unsubscribe canceling in-flight work/retries. Shared polling must preserve each subscriber's delivery baseline across authorization failures. See `events.ts`, `events-authorization.ts`. |
@@ -35,11 +35,15 @@ viewer resources are intentionally discoverable; telemetry is not public.
 
 - Public hosted access is authenticated. Auth0 owns hosted user authentication;
   supported alternative auth modes must retain their own verifier boundary.
-  Local stdio/demo execution has a different, explicit trust model. Do not flag
+  Local stdio execution has a different, explicit trust model. Do not flag
   the mere existence of those modes as an anonymous production bypass. Without
   verified OAuth (stdio, loopback HTTP) there is no scope to check, and the
-  operator's Collector key decides whether writes succeed; demo mode refuses
-  writes.
+  operator's Collector key decides whether writes succeed. Synthetic telemetry
+  exists only in tests and is never returned as a fallback for a failed read.
+- The unauthenticated challenge requests `qyl:read qyl:write qyl:delete` for
+  sign-in. This grants nothing by itself: the authorization server and user's
+  consent determine the token scopes. An authenticated step-up challenge lists
+  only the scopes missing for the requested operation.
 - An absent project map retains the intentional single-project configuration.
   A present invalid map or unmatched subject must never fall back to it.
 - Events persistence contains the state needed for subscriptions and signing;

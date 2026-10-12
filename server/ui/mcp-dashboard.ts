@@ -11,11 +11,13 @@ import type {
   TelemetryMatcher,
   McpDashboardBucket as McpBucket,
   McpDashboardStats,
-  McpDataMode as Mode,
   McpNameRequestCount as McpNameCount,
   McpToolStats as McpToolRow,
 } from "@ancplua/qyl-api-schema/types";
 import type { CallToolResult } from "@modelcontextprotocol/server";
+import { ATTR_MCP_METHOD_NAME } from "@ancplua/qyl-semantic-conventions/incubating";
+import { computeWaterfall } from "./waterfall.ts";
+import { traceActions } from "./trace-actions.ts";
 import packageMetadata from "../package.json";
 import {
   DisplayTracesOutputSchema,
@@ -37,7 +39,6 @@ interface SortState {
 const WINDOW_PRESETS = [1, 24, 168] as const;
 
 const state = {
-  mode: undefined as Mode | undefined,
   stats: undefined as McpDashboardStats | undefined,
   hours: 24,
   query: {} as DisplayMcpDashboardInput,
@@ -48,7 +49,6 @@ const state = {
 
 
 const mainEl = document.querySelector(".main") as HTMLElement;
-const demoBadgeEl = document.getElementById("demo-badge")!;
 const analyzedLabelEl = document.getElementById("analyzed-label")!;
 const refreshBtn = document.getElementById("refresh-btn") as HTMLButtonElement;
 const emptyRefreshBtn = document.getElementById("empty-refresh-btn") as HTMLButtonElement;
@@ -106,8 +106,7 @@ async function showCalls(matchers: TelemetryMatcher[] = [], start?: string, end?
   callsEl.hidden = false;
   callsEl.textContent = "Loading matching calls…";
   try {
-    const selected = [...matchers, { key: "mcp.method.name", op: "exists" as const }];
-    if (state.query.tool_name) selected.push({ key: "gen_ai.tool.name", op: "eq", value: state.query.tool_name });
+    const selected = [...matchers, { key: ATTR_MCP_METHOD_NAME, op: "exists" as const }];
     const result = await app.callServerTool({ name: "display_traces", arguments: {
       start_time: start ?? stats.window.start, end_time: end ?? stats.window.end,
       ...(state.query.server_name ? { server_name: state.query.server_name } : {}),
@@ -125,7 +124,26 @@ async function showCalls(matchers: TelemetryMatcher[] = [], start?: string, end?
     for (const trace of parsed.traces) {
       const button = document.createElement("button"); button.type = "button";
       button.textContent = `${trace.root_span?.name ?? trace.trace_id} · ${Number(trace.duration_ns) / 1_000_000} ms`;
-      button.addEventListener("click", () => { void app.callServerTool({ name: "display_traces", arguments: { trace_id: trace.trace_id } }); });
+      button.addEventListener("click", () => { void (async () => {
+        button.disabled = true;
+        try {
+          const detail = await app.callServerTool({ name: "display_traces", arguments: { trace_id: trace.trace_id } });
+          if (detail.isError) throw new Error(toolErrorText(detail) ?? "Unable to open call");
+          const selected = DisplayTracesOutputSchema.parse(detail.structuredContent).traces[0];
+          if (!selected) throw new Error("Call is no longer retained");
+          const panel = document.createElement("section");
+          const heading = document.createElement("h3"); heading.textContent = `Trace ${selected.trace_id}`; panel.appendChild(heading);
+          for (const row of computeWaterfall(selected.spans).rows) {
+            const label = document.createElement("p"); label.textContent = row.span.name; label.style.paddingLeft = `${row.depth * 12}px`;
+            const bar = document.createElement("div"); bar.style.marginLeft = `${row.leftPct}%`; bar.style.width = `${Math.max(.5, row.widthPct)}%`;
+            bar.style.height = "6px"; bar.style.background = "currentColor";
+            panel.append(label, bar);
+          }
+          panel.appendChild(traceActions(selected, () => undefined, (request) => app.callServerTool(request)));
+          callsEl.replaceChildren(panel);
+        } catch (error) { callsEl.textContent = error instanceof Error ? error.message : String(error); }
+        finally { button.disabled = false; }
+      })(); });
       callsEl.appendChild(button);
     }
     callsEl.scrollIntoView({ block: "nearest" });
@@ -217,7 +235,6 @@ function showBanner(message: string) {
 }
 
 function renderHeader() {
-  demoBadgeEl.hidden = state.mode !== "demo";
   const stats = state.stats;
   analyzedLabelEl.textContent = stats
     ? `analyzed ${stats.span_count_analyzed.toLocaleString()} span${stats.span_count_analyzed === 1 ? "" : "s"}`
@@ -718,7 +735,7 @@ function renderTable(
     const nameTd = document.createElement("td");
     nameTd.className = "name-cell";
     const open = document.createElement("button"); open.type = "button"; open.textContent = row.name;
-    open.addEventListener("click", () => { void showCalls([{ key: "gen_ai.tool.name", op: "eq", value: row.name }]); });
+    open.addEventListener("click", () => { void showCalls([], undefined, undefined, undefined, { tool_name: row.name }); });
     nameTd.appendChild(open);
     nameTd.title = row.name;
     tr.appendChild(nameTd);
@@ -772,7 +789,6 @@ function renderToolsTable() {
 
 function applyStats(stats: McpDashboardStats) {
   state.stats = stats;
-  state.mode = stats.mode;
   renderHeader();
   renderTotals(stats);
   if (stats.span_count_analyzed === 0) {
