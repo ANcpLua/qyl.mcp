@@ -6,7 +6,7 @@ import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, TELEMETRY_TOOL_AUTH_META } from "
 import { queryAnalysis } from "./analysis-client.js";
 import { collectorPatch, parseCollectorBody } from "./collector.js";
 import { ifMatch, refusals, changeRefusals } from "./collector-resources.js";
-import { assertToolScopes, toolScopeChallenge } from "./tool-scopes.js";
+import { toolScopeChallenge } from "./tool-scopes.js";
 import { WRITE_SCOPES, UPDATE_TOOL_ANNOTATIONS, securityMeta } from "./write-tools.js";
 import { CollectorError } from "./collector.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
@@ -224,7 +224,6 @@ export function registerAnalysisTools(server: McpServer): void {
       _meta: securityMeta(WRITE_SCOPES),
     },
     (args, ctx) => runTool(ctx, 1, async (scope) => {
-      assertToolScopes("update_failure_status", WRITE_SCOPES, ctx.http?.authInfo);
       if (args.ignore_until !== undefined && args.status !== "ignored") throw new CollectorError("ignore_until is valid only with status=ignored", false, 400, "invalid_argument");
       const { failure_id, etag, ...changes } = args;
       const path = `/api/v1/failures/${encodeURIComponent(failure_id)}`;

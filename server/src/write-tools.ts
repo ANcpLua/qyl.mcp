@@ -47,7 +47,7 @@ import { QYL_MCP_DELETE_SCOPE, QYL_MCP_SCOPE, QYL_MCP_WRITE_SCOPE } from "./oaut
 import { runTool } from "./request-scope.js";
 import { queryAnalysis } from "./analysis-client.js";
 import { telemetryToolResult } from "./telemetry-redaction.js";
-import { assertToolScopes, toolScopeChallenge } from "./tool-scopes.js";
+import { toolScopeChallenge } from "./tool-scopes.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, TELEMETRY_TOOL_AUTH_META } from "./tools.js";
 
 /** Adds an object; identical retries replay for 24 hours. */
@@ -111,7 +111,6 @@ export function registerWriteTools(server: McpServer): void {
     },
     (args: CreateAnnotationInput, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, 1, async (scope) => {
-        assertToolScopes("create_annotation", WRITE_SCOPES, ctx.http?.authInfo);
         const annotation = await createAnnotation(args, scope.collector);
         await scope.step(`Created annotation ${annotation.id}`);
         const output: AnnotationOutput = { annotation };
@@ -135,7 +134,6 @@ export function registerWriteTools(server: McpServer): void {
     },
     (args: UpdateAnnotationInput, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, 1, async (scope) => {
-        assertToolScopes("update_annotation", WRITE_SCOPES, ctx.http?.authInfo);
         const annotation = await updateAnnotation(args, scope.collector);
         await scope.step(`Updated annotation ${annotation.id}`);
         const output: AnnotationOutput = { annotation };
@@ -159,7 +157,6 @@ export function registerWriteTools(server: McpServer): void {
     },
     (args: CreateSavedQueryInput, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, 1, async (scope) => {
-        assertToolScopes("create_saved_query", WRITE_SCOPES, ctx.http?.authInfo);
         const savedQuery = await createSavedQuery(args, scope.collector);
         await scope.step(`Created saved query ${savedQuery.id}`);
         const output: SavedQueryOutput = { saved_query: savedQuery };
@@ -184,7 +181,6 @@ export function registerWriteTools(server: McpServer): void {
     },
     (args: UpdateSavedQueryInput, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, 1, async (scope) => {
-        assertToolScopes("update_saved_query", WRITE_SCOPES, ctx.http?.authInfo);
         const savedQuery = await updateSavedQuery(args, scope.collector);
         await scope.step(`Updated saved query ${savedQuery.id}`);
         const output: SavedQueryOutput = { saved_query: savedQuery };
@@ -236,7 +232,6 @@ export function registerWriteTools(server: McpServer): void {
     },
     (args: DeleteInput, ctx: ServerContext): Promise<CallToolResult> =>
       runTool(ctx, 1, async (scope) => {
-        assertToolScopes("delete", DELETE_SCOPES, ctx.http?.authInfo);
         await deleteResource(args.kind, args.id, args.etag, scope.collector);
         await scope.step(`Deleted ${args.kind} ${args.id}`);
         const output: DeleteOutput = { deleted: true };

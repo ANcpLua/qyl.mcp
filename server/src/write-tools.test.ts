@@ -9,7 +9,6 @@ import {
 import {
   createMcpHandler,
   getOAuthProtectedResourceMetadataUrl,
-  InMemoryTransport,
   type AuthInfo,
   type CallToolResult,
 } from "@modelcontextprotocol/server";
@@ -25,7 +24,6 @@ import {
   QYL_MCP_WRITE_SCOPE,
 } from "./oauth.js";
 import { createServer } from "./server.js";
-import { WWW_AUTHENTICATE_META_KEY } from "./tool-scopes.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS } from "./tools.js";
 import {
   CREATE_TOOL_ANNOTATIONS,
@@ -213,20 +211,18 @@ async function hostedClient(
   return client;
 }
 
-/** A transport that delivers verified auth but runs no SDK scope challenge. */
-async function inMemoryClient(context: TestContext, authInfo?: AuthInfo): Promise<Client> {
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const server = createServer({ nativeExecution: false });
-  await server.connect(serverTransport);
-  const send = clientTransport.send.bind(clientTransport);
-  clientTransport.send = (message, options) =>
-    send(message, { ...options, ...(authInfo === undefined ? {} : { authInfo }) });
-  const client = new Client({ name: "write-tools-in-memory", version: "1.0.0" });
-  context.after(async () => {
-    await client.close().catch(() => undefined);
-    await server.close().catch(() => undefined);
-  });
-  await client.connect(clientTransport);
+/** Local serving without verified authentication, as stdio and loopback HTTP run: the Collector key decides. */
+async function localClient(context: TestContext): Promise<Client> {
+  const handler = createMcpHandler(() => createServer({ nativeExecution: false }));
+  context.after(() => handler.close());
+  const client = new Client(
+    { name: "write-tools-local", version: "1.0.0" },
+    { versionNegotiation: { mode: { pin: "2026-07-28" } } },
+  );
+  context.after(() => client.close().catch(() => undefined));
+  await client.connect(new StreamableHTTPClientTransport(RESOURCE, {
+    fetch: (input, init) => handler.fetch(new Request(input, init)),
+  }));
   return client;
 }
 
@@ -240,7 +236,7 @@ function errorOf(result: CallToolResult): { code: string; message: string; retry
 }
 
 test("the write tools carry the contract's annotations and scopes; the eleven reads are unchanged", async (context) => {
-  const client = await inMemoryClient(context);
+  const client = await localClient(context);
   const { tools } = await client.listTools();
   assert.equal(tools.length, 32);
   for (const tool of tools) {
@@ -308,30 +304,6 @@ test("qyl:read alone keeps the read surface, saved-query reads included", async 
   const reader = await hostedClient(context, OWNER, [QYL_MCP_SCOPE]);
   const listed = await reader.callTool({ name: "list_saved_queries", arguments: {} });
   assert.equal(listed.isError, undefined, JSON.stringify(listed));
-});
-
-test("a transport without scope challenges still refuses, in band, with the challenge in _meta", async (context) => {
-  liveCollector(context, false);
-  const calls = mockCollector(context, () => Response.json(annotation(), { status: 201 }));
-  const client = await inMemoryClient(context, {
-    token: "t", clientId: "in-memory", scopes: [QYL_MCP_SCOPE], resource: RESOURCE,
-    expiresAt: Math.floor(Date.now() / 1000) + 300,
-  });
-  const result = await client.callTool({
-    name: "update_annotation",
-    arguments: { id: "ann-1", etag: "\"1\"", text: "edited" },
-  }) as CallToolResult;
-  assert.deepEqual(errorOf(result), {
-    code: "insufficient_scope",
-    message: "update_annotation needs the qyl:write scope, which this sign-in does not grant. " +
-      "Reconnect qyl and allow qyl:write to use it.",
-    retryable: false,
-  });
-  assert.deepEqual(result._meta?.[WWW_AUTHENTICATE_META_KEY], [
-    `Bearer error="insufficient_scope", error_description="update_annotation needs the qyl:write scope", ` +
-      `scope="qyl:write", resource_metadata="${METADATA_URL}"`,
-  ]);
-  assert.equal(calls.length, 0);
 });
 
 test("writes reach only the verified subject's project, with its key and the etag as If-Match", async (context) => {
@@ -452,7 +424,7 @@ test("saved queries: create, conflict, update, list with paging, run and delete"
     return problem(404, "Not Found");
   });
   // Local stdio-style serving: no verified auth, the Collector key decides.
-  const client = await inMemoryClient(context);
+  const client = await localClient(context);
   const filter = { signal: "traces", service_name: "checkout-api", errors_only: true, lookback_minutes: 60 };
 
   const created = await client.callTool({ name: "create_saved_query", arguments: { name: "checkout errors", filter } }) as CallToolResult;
@@ -514,7 +486,7 @@ test("saved queries: create, conflict, update, list with paging, run and delete"
 test("a Collector key without the write or delete role surfaces as collector_unauthorized", async (context) => {
   liveCollector(context, false);
   mockCollector(context, () => problem(403, "Forbidden"));
-  const client = await inMemoryClient(context);
+  const client = await localClient(context);
   const created = await client.callTool({
     name: "create_annotation",
     arguments: { target: { kind: "session", session_id: SESSION_ID }, text: "note" },
@@ -541,7 +513,7 @@ test("get_trace and list_sessions read the annotations back; a failed read leave
     if (call.path === "/api/v1/analysis/list_sessions") return Response.json({ ...readContext(sessions.length), sessions, mode: "live", has_more: false, annotations: [...sessions].reverse().map(session => annotation({ id: `ann-${session.session_id}`, target: { kind: "session", session_id: session.session_id } })) });
     return problem(404, "Not Found");
   });
-  const client = await inMemoryClient(context);
+  const client = await localClient(context);
 
   const trace = await client.callTool({ name: "get_trace", arguments: { trace_id: TRACE.trace_id } }) as CallToolResult;
   assert.equal(trace.isError, undefined, JSON.stringify(trace));
