@@ -18,7 +18,7 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { ATTR_MCP_METHOD_NAME } from "@ancplua/qyl-semantic-conventions/incubating";
 import { computeWaterfall } from "./waterfall.ts";
 import { traceActions } from "./trace-actions.ts";
-import packageMetadata from "../package.json";
+import { version } from "../package.json" with { type: "json" };
 import {
   DisplayTracesOutputSchema,
   DisplayMcpDashboardInputSchema,
@@ -867,7 +867,7 @@ emptyRefreshBtn.addEventListener("click", () => void fetchStats());
 retryBtn.addEventListener("click", () => void fetchStats());
 
 
-const app = new App({ name: "qyl MCP Dashboard", version: packageMetadata.version });
+const app = new App({ name: "qyl MCP Dashboard", version });
 
 app.onteardown = async () => {
   console.info("App is being torn down");

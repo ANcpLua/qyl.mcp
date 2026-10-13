@@ -16,7 +16,7 @@ import type {
   ToolTrace as QylTrace,
 } from "@ancplua/qyl-api-schema/types";
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import packageMetadata from "../package.json";
+import { version } from "../package.json" with { type: "json" };
 import {
   DisplayTracesInputSchema,
   DisplayTracesOutputSchema,
@@ -188,7 +188,7 @@ function stringifyValue(value: unknown): string {
 }
 
 
-const app = new App({ name: "qyl Trace Explorer", version: packageMetadata.version });
+const app = new App({ name: "qyl Trace Explorer", version });
 
 app.onteardown = async () => {
   console.info("App is being torn down");
