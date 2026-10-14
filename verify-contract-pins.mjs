@@ -5,15 +5,10 @@
  * not by a pinned ref, so a skew between them breaks smoke:otlp at the spawned
  * server's startup handshake — on a push that changed nothing here.
  *
- * The check itself is older than this file; it lived as inline bash in
- * CI only, which made it unrunnable before pushing. The
- * documented local gate (install/build/test/smoke/smoke:otlp) was therefore a
- * strict subset of the real one, and the only way to learn you had skewed the
- * pin was to lose a CI run to it. Extracting it is what makes the two gates the
- * same gate: CI now invokes this script instead of carrying a second copy.
+ * `mise run check` runs it first.
  *
- * The qyl checkout is found at $QYL_REPO, ./qyl (CI's checkout path), or ../qyl
- * (the qyl-workspace layout). Absent all three this fails rather than skips: a
+ * The qyl checkout is found at $QYL_REPO or ../qyl (the qyl-workspace
+ * layout). Absent both this fails rather than skips: a
  * pin check that silently passes when it cannot find the other side is worse
  * than no check, because it reports green for the one condition it exists to
  * catch.
@@ -28,7 +23,6 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 const candidates = [
   process.env.QYL_REPO,
-  join(here, "qyl"),
   resolve(here, "..", "qyl"),
 ].filter(Boolean);
 

@@ -317,6 +317,17 @@ publication. `GET /.well-known/openai-apps-challenge` returns the trimmed
 value of the hosted `OPENAI_APPS_CHALLENGE` variable as plain text, and `404`
 while it is blank; on mcp.qyl.at it carries the OpenAI portal's domain token.
 
+The rules in `AGENTS.md` follow the directories' requirements: OpenAI
+[MCP server](https://developers.openai.com/plugins/build/mcp-server),
+[authentication](https://developers.openai.com/plugins/build/auth),
+[Events](https://developers.openai.com/plugins/build/mcp-events),
+[MCP UI](https://developers.openai.com/plugins/build/chatgpt-ui),
+[plugin guidelines](https://developers.openai.com/plugins/plugin-guidelines);
+Anthropic
+[connector checklist](https://claude.com/docs/connectors/building/review-criteria),
+[plugin checklist](https://claude.com/docs/plugins/pre-submission-checklist),
+[directory policy](https://support.claude.com/en/articles/13145358-anthropic-software-directory-policy).
+
 ## Verification and limits
 
 ```sh

@@ -1,144 +1,48 @@
 # qyl.mcp
 
-Release and re-pin: follow [`SKILL.md`](SKILL.md) at this repo root (canonical clone `/Users/alexandernachtmann/RiderProjects/qyl.mcp/SKILL.md`); the one command is `./release.sh`. Published versions come from the registries (`npm view qyl-mcp-server version`) or `server/package.json`.
+qyl's MCP server: compact, intent-driven tools for agents diagnosing a running system.
 
-qyl is observability built for AI agents. The MCP server lets a model measure,
-correlate and diagnose a running system through compact, intent-driven tools
-instead of raw log dumps. We want it to become the Swiss army knife of
-connectors for agents. New capabilities are welcome, including tools that
-change something, as long as they are honest about what they do, how they
-are authorized, and stay inside qyl's own service.
+Push to `main` directly; the push deploys mcp.qyl.at (Railway). Gate before every push: `mise run check`. Releases, re-pins, contract-revision deploy order: [`SKILL.md`](SKILL.md).
 
-## How we judge a change
+## Review
 
-- Look for concrete regressions: what triggers it, which path is affected and
-  what the consequence is. A finding without those three parts is a question
-  for the author, not a blocker.
-- Judge a change against the rules in this file and the requirements it touches,
-  not against requirements we never adopted. When a rule should change, change
-  it here in the same commit and say why.
-- No review gates a push; the gate is `mise run check`.
-- Version bumps and deliberate requirement changes are normal work.
+- A finding names trigger, affected path and consequence; without all three it is a question, not a blocker.
+- Judge against these rules and the requirements touched; bumps and deliberate requirement changes are normal. Change a rule here, in the same commit, saying why.
 
-## What must stay true
+## Invariants
 
-These are the invariants the OpenAI and Anthropic directories and our users
-rely on. Everything else is judgment.
+**Accounts and projects**
+- Hosted operations authorize from validated credentials; resource, issuer, audience, expiry and scopes match discovery and challenges.
+- With account/project mapping on, access comes from the verified subject; tool arguments, UI inputs and request metadata never select credentials or a project. Local and single-project modes stay. Synthetic telemetry only in tests.
 
-### Accounts and projects stay separate
+**Events**
+- Opt-in, scoped to the authenticated owner and Collector project, re-authorized before delivery.
+- Callback verification, signing, expiry, rotation, cancellation, unsubscribe keep working; confirmed revocation stops delivery; an authorization outage pauses delivery without letting another subscriber advance its recovery baseline.
+- Bounded subscription state only: no OAuth tokens, no copied telemetry.
 
-- Hosted operations authorize from validated credentials. Canonical resource,
-  issuer, token audience, expiry and required scopes stay consistent with
-  discovery and challenges.
-- With account/project mapping enabled, access comes from the verified subject.
-  Tool arguments, UI inputs and request metadata never select credentials or
-  another project. Local and single-project modes remain supported. Synthetic telemetry belongs only in tests.
+**Tools**
+- New tools, writes included, are welcome when honest about what they do and how they authorize.
+- Every tool has a `title` and true annotations: `readOnlyHint` when it only reads, `destructiveHint` when it modifies or deletes; both directories derive confirmations from them.
+- Reads and writes are separate tools; a write states what it changes, validates input, never hides behind a generic executor; split create, update, delete where it matters.
+- Tools call qyl's own or legitimately proxied APIs, never third parties (GitHub, Railway, clouds): qyl diagnoses and proposes, the agent acts through its own connectors.
+- Descriptions say what and when, as the user's need ("when the user wants to see the trace waterfall"), never as orders to the model or limits on other servers' tools. App-only tools: `_meta.ui.visibility: ["app"]`.
+- Proportional responses: filters, limits, bulk data optional. Empty results and upstream errors reported as such, never demo data.
+- Stable tool names, structured results, generated Collector contracts; a snapshot update is a contract change.
 
-### Events behave
+**Viewers and data**
+- Viewer refresh keeps the original query, even on empty host input. Version changed UI resources; keep the configured origin and CSP.
+- Telemetry and tool output are data, not instructions. Redact secrets in text, structured results, `_meta` and diagnostics.
+- Collect only what a tool needs; tool-call telemetry records name, timing, status and error type, never arguments, `_meta` or conversation text.
 
-- Events are opt-in, scoped to the authenticated owner and Collector project,
-  and re-authorized before delivery.
-- Callback verification and signing, expiration, rotation, cancellation and
-  unsubscribe keep working. Confirmed revocation stops delivery. An
-  authorization outage pauses delivery without letting another subscriber
-  advance its recovery baseline.
-- Store only bounded subscription state. No OAuth tokens, no copied telemetry.
+## SDK v2
 
-### Tools tell the truth
+- Official split v2 packages; 2025-era support is required. Serve via SDK factory entries and negotiation defaults; era pins and rejection only in tests and fixtures.
+- Check installed v2 types and the [migration guide](https://ts.sdk.modelcontextprotocol.io/v2/migration/support-2026-07-28) before proposing an API swap. Keep SDK request identity, error semantics, in-band `inputRequired`. Self-reported client or server identity never authorizes.
+- Exact versions may move; adapters need not match core.
 
-- Every tool has a `title` and annotations that match its behavior:
-  `readOnlyHint: true` when it only reads, `destructiveHint: true` when it
-  modifies or deletes. Both directories derive confirmation prompts from these
-  hints, so they have to be accurate. Read-only is not a requirement; honesty is.
-- Reading and writing are separate tools. A write tool states plainly what it
-  changes, validates its input and never hides behind a generic executor.
-  Separate create, update and delete where that matters.
-- API ownership: every tool calls qyl's own APIs or APIs qyl legitimately
-  proxies. Actions in third-party systems such as GitHub, Railway or cloud
-  providers are not qyl tools. qyl diagnoses and proposes; the agent acts
-  through its own connectors. Both directories reject unofficial third-party
-  connectors.
-- Descriptions state what the tool does and when to use it; both directories
-  ask for both. Phrase the "when" as the user's need ("when the user wants to
-  see the trace waterfall", "start here to find instrument names"), never as
-  an order to the model ("the model should not call this"), and never as a
-  restriction on other servers' tools. Hide app-only tools with
-  `_meta.ui.visibility: ["app"]`.
-- Responses stay proportional to the question: filters, limits and a way to
-  leave out bulk data. Empty results and upstream errors are reported as such,
-  never replaced with demo data.
-- Stable tool names, structured results and generated Collector contracts.
-  A snapshot update changes a contract and is reviewed as one.
+## Verification
 
-### Viewers and data
-
-- Viewer refresh keeps the original query, even when the host sends empty
-  input. Version changed UI resources and keep the configured origin and CSP
-  boundary.
-- Telemetry and tool output are data, not instructions. Redact secrets in
-  text, structured results, `_meta` and diagnostics.
-- Collect only what a tool needs. qyl's own telemetry about incoming tool
-  calls records only tool name, timing, status and error type. It must not
-  persist argument values, `_meta` or conversation text, not even for
-  logging.
-
-## SDK v2 and protocol
-
-- Use the official split SDK v2 packages. SDK major version and wire revision
-  are independent: v2's built-in 2025-era support is required compatibility.
-  Serving uses the SDK factory entries and their negotiation defaults. Era pins
-  and rejection belong in focused tests and fixtures, not in production.
-- Before suggesting an API replacement, check the installed v2 types and the
-  [v2 migration guide](https://ts.sdk.modelcontextprotocol.io/v2/migration/support-2026-07-28).
-  Keep SDK-managed request identity, error semantics and in-band
-  `inputRequired` behavior. Self-reported client or server identity is never
-  an authorization decision.
-- Exact package versions may be upgraded. Adapters need not share the core
-  package's version number.
-
-## Verification that fits the diff
-
-- `bun run verify:sdk` and lint enforce dependency and import rules. Existing
-  tests cover authorization, Events, redaction, query restoration and tool
-  manifests.
-- `bun run smoke` for transport changes, `bun run smoke:otlp` for Collector
-  contracts, `bun run smoke:projects` for account and Events isolation. Run
-  what your diff touches; `mise run check` runs the combined gates.
-- Don't weaken a gate or regenerate an expected result just to get green. If a
-  gate is wrong, fix the gate and say so in the commit message.
-- A contract bump that changes the revision deploys in order: push qyl `main`,
-  wait until `api.qyl.at/health` serves the new revision, then push here. The
-  hosted server refuses a mismatched Collector and Railway stops the old
-  container first, so the reverse order takes mcp.qyl.at down.
-- For auth, outbound callbacks or storage changes, read
-  [docs/threat-model.md](docs/threat-model.md).
-
-## Publishing across the qyl-dev repos
-
-Push to `main` directly; no pull request, review, approval or CI exists. The only gate is the repo's local command named in SKILL.md, run before the push.
-
-A release is done from the developer's machine with the registry API keys registered in Vitals (`vitals keys`): bump the version source, pack, push the packages to the registry, then tag `v<version>` on the released commit and create the GitHub release. No workflow publishes. Here that is `./release.sh <x.y.z>` (bumps `server/package.json`, publishes `qyl-mcp-server`, pushes `main`, tags, creates the GitHub release from the `### <x.y.z>` entry in `server/README.md`); `./release.sh <x.y.z> --dry-run` rehearses it without publishing.
-
-| Repo | Version source | Publishes |
-|---|---|---|
-| qyl-api-schema | release tag `vX.Y.Z` (one version for npm and NuGet) | `@ancplua/qyl-api-schema` (npm), `Qyl.Api.Contracts` (NuGet) |
-| SemanticConventions | `Directory.Build.props` `VersionPrefix`, `registry/manifest.yaml` `schema_url` and a `CHANGELOG.md` entry; `scripts/generate.sh` must agree; `qyl.at/schemas/<version>` is served first | the three `Qyl.Telemetry.SemanticConventions*` packages (NuGet) and `@ancplua/qyl-semantic-conventions` (npm) |
-| AutoInstrumentation | `Directory.Build.props` `Version` | the six `Qyl.Telemetry.*` packages (NuGet) |
-| qyl | `Version.props` `QylVersion` | `qyl`, `qyl.<rid>` ×6, `Qyl.Api.Sdk` (NuGet) |
-| qyl.mcp | `server/package.json` `version` plus a `server/README.md` release-notes entry | `qyl-mcp-server` (npm) |
-| qyl.at | none | nothing to a registry; `./release.sh` deploys `main` to the `qyl-at` Worker |
-
-Downstream pins move in the change that consumes the publish: qyl-api-schema → qyl (`Version.props` `QylApiContractsVersion`, `services/qyl.dashboard/package.json`, `bun.lock`, the README table) → qyl.mcp (`server`, `workbench` and `dashboard` `package.json`, `bun.lock`); SemanticConventions → AutoInstrumentation (`Directory.Packages.props`, the single source; the registry ref derives from it) and qyl (`QylSemanticConventionsVersion`), plus qyl.mcp (`server/package.json`, `workbench/package.json`, `bun.lock`), with qyl.at serving `public/schemas/<version>`; AutoInstrumentation → qyl (`QylTelemetryVersion`); every producer → qyl.at `src/data/site.ts`. One production rule stays: when the contract revision changes, push the Collector (qyl `main`) first, wait until `api.qyl.at/health` serves the new revision, then push qyl.mcp; `mcp.qyl.at` refuses a Collector on another revision.
-
-Pushing `main` also deploys qyl → `qyl-collector` (`api.qyl.at`, Railway) and qyl.mcp → `qyl-mcp` (`mcp.qyl.at`, Railway). qyl.at deploys nothing on push: its `./release.sh` (the release entry) and `bun run deploy` both run `wrangler deploy` to the `qyl-at` Worker (`qyl.at`, Cloudflare).
-
-References: OpenAI
-[MCP server](https://developers.openai.com/plugins/build/mcp-server),
-[authentication](https://developers.openai.com/plugins/build/auth),
-[Events](https://developers.openai.com/plugins/build/mcp-events),
-[MCP UI](https://developers.openai.com/plugins/build/chatgpt-ui),
-[plugin guidelines](https://developers.openai.com/plugins/plugin-guidelines).
-Anthropic
-[connector checklist](https://claude.com/docs/connectors/building/review-criteria),
-[plugin checklist](https://claude.com/docs/plugins/pre-submission-checklist),
-[directory policy](https://support.claude.com/en/articles/13145358-anthropic-software-directory-policy).
+- Run what the diff touches: `bun run smoke` (transport), `smoke:otlp` (Collector contracts), `smoke:projects` (account and Events isolation).
+- Fix a wrong gate and say so in the commit; regenerate expected results only for a real change.
+- Auth, outbound callbacks, storage: read [docs/threat-model.md](docs/threat-model.md) first.
+- Directory requirements: README "Directory preparation".

@@ -1,64 +1,34 @@
 # qyl.mcp: release and pins
 
-Who reads this: the one agent working on this repository's `main`. Agent, user and owner are
-the same word. There is one agent per repository, six in all (qyl, qyl.mcp, qyl-api-schema,
-Qyl.Telemetry.AutoInstrumentation, Qyl.Telemetry.SemanticConventions, qyl.at), each on its own
-`main`. Commit and push to `main` directly: no pull requests, no CI, no branch rules. The gate
-is `mise run check`; bun is the package manager (workspace lock `bun.lock` at the root).
+One agent per qyl-dev repo (qyl, qyl.mcp, qyl-api-schema, Qyl.Telemetry.AutoInstrumentation, Qyl.Telemetry.SemanticConventions, qyl.at), each on its own `main`; agent, user and owner are one word. No PR, no CI, no publishing workflow: releases run on this machine with the keys in Vitals (`vitals keys`).
 
 ## This repository
 
-- Publishes to npm: `qyl-mcp-server` from `server/`. Pushing `main` also deploys the hosted
-  server (`qyl-mcp`, mcp.qyl.at, Railway).
-- Version source: `server/package.json` `version` plus a `### <x.y.z>` entry under
-  `## Release notes` in `server/README.md`. Write the README entry and commit it first; the
-  release command bumps the server version, both workspace self-pins, and `bun.lock` itself,
-  and uses the entry as the GitHub release notes. It builds a `git archive` snapshot of that
-  commit, publishes the resulting tarball, and tags that exact commit. Concurrent source
-  or remote changes before publishing fail the release; the tarball and SHA-256 record
-  remain available at the printed artifact path if authentication fails.
-- Release command: `./release.sh <x.y.z> --dry-run`, then `./release.sh <x.y.z>`
-  (`bun publish`, push `main`, tag, GitHub release, wait for npm).
-- Key: `vitals keys` entry "qyl-api-schema and qyl.mcp manual publish and release (npm)", file
-  `~/.config/vitals/npm-qyl-manual-publish-token`, used as `NPM_CONFIG_TOKEN` by the script.
-  Never print, paste, commit or log it. If the entry is missing, its note's expiry has passed,
-  or the script says "npm token rejected" or npm asks for a one-time password, stop and tell
-  the owner.
-- Upstream pins this repo must keep fresh: `@ancplua/qyl-api-schema` in `server/package.json`,
-  `workbench/package.json`, `dashboard/package.json`, and the root `bun.lock`.
-- Telemetry definitions: `@ancplua/qyl-semantic-conventions` in `server/package.json` and
-  `workbench/package.json` (test dependency), plus `bun.lock`. Re-pin from the
-  SemanticConventions release notification and run the same local gate.
-- Consumers to notify after this repo's release is indexed: qyl.at (`src/data/site.ts` lists
-  `qyl-mcp-server`).
+- Publishes `qyl-mcp-server` (npm) from `server/`.
+- Version source: `server/package.json` `version` plus a `### <x.y.z>` entry under `## Release notes` in `server/README.md`, which becomes the GitHub release notes. `./release.sh` bumps the version, both workspace self-pins and `bun.lock`; its header says the rest.
+- Key: Vitals entry "qyl-api-schema and qyl.mcp manual publish and release (npm)", `~/.config/vitals/npm-qyl-manual-publish-token`, read by the script. Never print, paste, commit or log it. Entry missing, note expired, "npm token rejected" or an npm one-time-password prompt: stop and tell the owner.
+- Upstream pins: `@ancplua/qyl-api-schema` in `server/`, `workbench/`, `dashboard/` `package.json`; `@ancplua/qyl-semantic-conventions` in `server/` and `workbench/` `package.json`; both in the root `bun.lock`.
 
-## Before any work: the stale-version guard
+## Stale-version guard, before any work
 
-1. `git pull --ff-only origin main`.
-2. `mise install`, then `bun install --frozen-lockfile`.
-3. Compare the pinned `@ancplua/qyl-api-schema` and `@ancplua/qyl-semantic-conventions`
-   with `npm view <package> version` for each package. If a newer version is indexed,
-   re-pin its manifest entries and regenerate `bun.lock` first, then start the actual work.
-   Never build on a pin older than what is indexed.
+1. `git pull --ff-only origin main`, `mise install`, `bun install --frozen-lockfile`.
+2. `npm view <package> version` for both upstream pins; if the index is ahead, re-pin first.
 
-## Releasing
+## Release
 
-1. Commit the `### <x.y.z>` release-notes entry in `server/README.md` on `main`.
-2. `./release.sh <x.y.z> --dry-run` only when a step is new or unsure; otherwise go straight to
-   the release, the script refuses before it publishes when anything is off.
-3. `./release.sh <x.y.z>`.
-4. Watch indexing: the script polls `npm view qyl-mcp-server@<x.y.z> version`. If it ends with
-   "not visible yet", keep polling every 15 s. Until it is indexed, do nothing else about this
-   release.
-5. The moment it is indexed: stop watching and notify qyl.at (section "Notify").
-6. Run
-   `/Users/alexandernachtmann/Downloads/qyl-codex-claude/refresh-published-versions.sh`, which rewrites
-   `qyl-published-versions.yaml` beside it from the registries (the snapshot every agent reads first).
+1. Commit the `### <x.y.z>` entry in `server/README.md` on `main`.
+2. `./release.sh <x.y.z>` (`--dry-run` first only when a step is new or unsure; the script refuses before publishing when anything is off).
+3. If it ends "not visible yet", poll `npm view qyl-mcp-server@<x.y.z> version` every 15 s; nothing else about this release until indexed.
+4. Indexed: notify the consumers.
+5. Run `/Users/alexandernachtmann/Downloads/qyl-codex-claude/refresh-published-versions.sh` (rewrites `qyl-published-versions.yaml`, the snapshot every agent reads first).
 
 ## Notify
 
-One message per consumer repo, to its running agent through the session's agent-messaging
-tool when there is one (Claude Code: `ListAgents`, then `SendMessage`). Text:
+| Consumer | Re-pins |
+|---|---|
+| qyl.at | `src/data/site.ts` |
+
+One message per consumer through the session's agent-messaging tool (Claude Code: `ListAgents`, then `SendMessage`):
 
 ```
 RELEASE qyl-mcp-server <version> indexed <UTC time>
@@ -67,28 +37,15 @@ re-pin: src/data/site.ts
 then: regenerate the lockfile, run the gate, commit, push main
 ```
 
-## When a release lands and you are the consumer
+## Re-pin when an upstream release lands
 
-Act at once, before continuing your own work, so both agents keep moving:
+Act at once, before your own work:
 
-1. Set the new `@ancplua/qyl-api-schema` version in the three `package.json` files.
-2. `bun install` (not frozen: it rewrites `bun.lock` to the new pin). Prefer bun; `npm install`
-   or `pnpm install` only where a package has that lockfile instead.
-3. `mise run check`.
-4. If the contract revision changed, wait until `https://api.qyl.at/health` serves the new
-   revision (qyl pushes first); mcp.qyl.at refuses a Collector on another revision.
-5. Commit `chore: pin @ancplua/qyl-api-schema <version>` and push `main` immediately. The push
-   deploys mcp.qyl.at.
-6. If the pin changes what the server ships, write the release-notes entry and continue with
-   "Releasing": one release per repo per wave.
+1. Set the new version in every manifest under "Upstream pins"; `bun install` (not frozen, it rewrites `bun.lock`); `mise run check`.
+2. Contract revision changed: wait until `https://api.qyl.at/health` serves it. qyl (the Collector) pushes first; mcp.qyl.at refuses a Collector on another revision and Railway stops the old container first, so the reverse order takes mcp.qyl.at down.
+3. Commit `chore: pin <package> <version>`, push `main`.
+4. If the pin changes what the server ships, write the release-notes entry and release: one release per repo per wave.
 
-## Order rules that never change
+## Deployment state
 
-- Contract revision: qyl (Collector) first, then qyl.mcp.
-- Deployment state: `railway deployment list --project <project-id> --service qyl-mcp
-  --environment production --json` (use `qyl-collector` for the Collector). Pass the configured
-  project explicitly; these clones need not have a local Railway link. The newest entry must
-  show `status: SUCCESS` and `meta.commitHash` equal to the pushed commit.
-  `curl -fsSL https://api.qyl.at/health` shows the Collector's contract revision,
-  `https://mcp.qyl.at/healthz` the server's state.
-- qyl.at lists a version only after the index confirms it.
+`railway deployment list --project <project-id> --service qyl-mcp --environment production --json` (`qyl-collector` for the Collector; pass the project, these clones have no Railway link): the newest entry shows `status: SUCCESS` and `meta.commitHash` = the pushed commit. `curl -fsSL https://api.qyl.at/health` shows the Collector's contract revision, `https://mcp.qyl.at/healthz` the server's state.
