@@ -1,6 +1,6 @@
 # qyl.mcp
 
-Release, re-pin and agent hand-offs: follow [`SKILL.md`](SKILL.md) at this repo root (canonical clone `/Users/alexandernachtmann/RiderProjects/qyl.mcp/SKILL.md`); the one command is `./release.sh`. Published versions: `/Users/alexandernachtmann/Downloads/qyl-codex-claude/qyl-published-versions.yaml`.
+Release and re-pin: follow [`SKILL.md`](SKILL.md) at this repo root (canonical clone `/Users/alexandernachtmann/RiderProjects/qyl.mcp/SKILL.md`); the one command is `./release.sh`. Published versions come from the registries (`npm view qyl-mcp-server version`) or `server/package.json`.
 
 qyl is observability built for AI agents. The MCP server lets a model measure,
 correlate and diagnose a running system through compact, intent-driven tools
@@ -8,11 +8,6 @@ instead of raw log dumps. We want it to become the Swiss army knife of
 connectors for agents. New capabilities are welcome, including tools that
 change something, as long as they are honest about what they do, how they
 are authorized, and stay inside qyl's own service.
-
-Before you change a tool, the contract, or a doc in any qyl-dev repo, read
-[the 2026-10-11 audit decisions](docs/decisions/2026-10-11-qyl-dev-audit.md):
-they fix which write tools come next, in which order, and how each known
-finding is resolved.
 
 ## How we judge a change
 
@@ -42,7 +37,7 @@ rely on. Everything else is judgment.
 ### Events behave
 
 - Events are opt-in, scoped to the authenticated owner and Collector project,
-  and re-aut horized before delivery.
+  and re-authorized before delivery.
 - Callback verification and signing, expiration, rotation, cancellation and
   unsubscribe keep working. Confirmed revocation stops delivery. An
   authorization outage pauses delivery without letting another subscriber
@@ -111,10 +106,10 @@ rely on. Everything else is judgment.
   what your diff touches; `mise run check` runs the combined gates.
 - Don't weaken a gate or regenerate an expected result just to get green. If a
   gate is wrong, fix the gate and say so in the commit message.
-- A contract bump that changes the revision deploys in order: merge the
-  Collector side, wait for its Railway deployment to reach `SUCCESS`, then merge
-  here. The hosted server refuses a mismatched Collector and Railway stops the
-  old container first, so the reverse order takes mcp.qyl.at down.
+- A contract bump that changes the revision deploys in order: push qyl `main`,
+  wait until `api.qyl.at/health` serves the new revision, then push here. The
+  hosted server refuses a mismatched Collector and Railway stops the old
+  container first, so the reverse order takes mcp.qyl.at down.
 - For auth, outbound callbacks or storage changes, read
   [docs/threat-model.md](docs/threat-model.md).
 
@@ -131,11 +126,11 @@ A release is done from the developer's machine with the registry API keys regist
 | AutoInstrumentation | `Directory.Build.props` `Version` | the six `Qyl.Telemetry.*` packages (NuGet) |
 | qyl | `Version.props` `QylVersion` | `qyl`, `qyl.<rid>` ×6, `Qyl.Api.Sdk` (NuGet) |
 | qyl.mcp | `server/package.json` `version` plus a `server/README.md` release-notes entry | `qyl-mcp-server` (npm) |
-| qyl.at | none | `./release.sh` manually deploys `qyl.at` |
+| qyl.at | none | nothing to a registry; `./release.sh` deploys `main` to the `qyl-at` Worker |
 
 Downstream pins move in the change that consumes the publish: qyl-api-schema → qyl (`Version.props` `QylApiContractsVersion`, `services/qyl.dashboard/package.json`, `bun.lock`, the README table) → qyl.mcp (`server`, `workbench` and `dashboard` `package.json`, `bun.lock`); SemanticConventions → AutoInstrumentation (`Directory.Packages.props`, `SEMCONV_REF`) and qyl (`QylSemanticConventionsVersion`), plus qyl.mcp (`server/package.json`, `workbench/package.json`, `bun.lock`), with qyl.at serving `public/schemas/<version>`; AutoInstrumentation → qyl (`QylTelemetryVersion`); every producer → qyl.at `src/data/site.ts`. One production rule stays: when the contract revision changes, push the Collector (qyl `main`) first, wait until `api.qyl.at/health` serves the new revision, then push qyl.mcp; `mcp.qyl.at` refuses a Collector on another revision.
 
-Pushing `main` also deploys qyl → `qyl-collector` (`api.qyl.at`, Railway) and qyl.mcp → `qyl-mcp` (`mcp.qyl.at`, Railway). qyl.at deploys the `qyl-at` Worker (`qyl.at`, Cloudflare) only through its manual `./release.sh`.
+Pushing `main` also deploys qyl → `qyl-collector` (`api.qyl.at`, Railway) and qyl.mcp → `qyl-mcp` (`mcp.qyl.at`, Railway). qyl.at deploys nothing on push: its `./release.sh` (the release entry) and `bun run deploy` both run `wrangler deploy` to the `qyl-at` Worker (`qyl.at`, Cloudflare).
 
 References: OpenAI
 [MCP server](https://developers.openai.com/plugins/build/mcp-server),

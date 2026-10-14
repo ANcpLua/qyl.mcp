@@ -1,8 +1,9 @@
-# qyl.mcp review context
+# qyl.mcp threat model
 
-This is repository context for Codex Security Review. Set its repository-relative
-threat-model path to `docs/threat-model.md`. Update this file when a trust
-boundary changes. Concrete review rules are in [AGENTS.md](../AGENTS.md).
+This is the threat model for the qyl.mcp server. A change that touches a trust
+boundary below is reviewed against it before it is pushed to `main`, and updates
+this file in the same commit when the boundary changes. The rules every change
+keeps are in [AGENTS.md](../AGENTS.md).
 
 ## System and assets
 
@@ -64,12 +65,11 @@ wire eras; `smoke:projects` checks two real Collector projects, foreign IDs,
 signed delivery, unsubscribe and assignment revocation. Tests are evidence for
 the behavior they exercise, not proof of unrelated deployment settings.
 
-Prioritize demonstrable unauthorized access, cross-account disclosure,
-callback network bypass, credential leakage and delivery after access removal.
-Follow the actual data flow and applicable deployment mode before reporting;
-do not invent a missing boundary or make an optional product feature a finding.
+When reviewing a push, prioritize demonstrable unauthorized access,
+cross-account disclosure, callback network bypass, credential leakage and
+delivery after access removal. Follow the actual data flow and applicable
+deployment mode before calling something a finding; do not invent a missing
+boundary or make an optional product feature a finding.
 
-Sources: [Codex review rules](https://learn.chatgpt.com/docs/third-party/github),
-[Codex threat-model setting](https://learn.chatgpt.com/docs/security/security-review),
-[OpenAI MCP auth](https://developers.openai.com/plugins/build/auth), and
+Sources: [OpenAI MCP auth](https://developers.openai.com/plugins/build/auth) and
 [OpenAI Events](https://developers.openai.com/plugins/build/mcp-events).

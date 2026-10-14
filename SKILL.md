@@ -1,4 +1,4 @@
-# qyl.mcp: release, pins and agent hand-offs
+# qyl.mcp: release and pins
 
 Who reads this: the one agent working on this repository's `main`. Agent, user and owner are
 the same word. There is one agent per repository, six in all (qyl, qyl.mcp, qyl-api-schema,
@@ -53,15 +53,12 @@ is `mise run check`; bun is the package manager (workspace lock `bun.lock` at th
 5. The moment it is indexed: stop watching and notify qyl.at (section "Notify").
 6. Run
    `/Users/alexandernachtmann/Downloads/qyl-codex-claude/refresh-published-versions.sh`, which rewrites
-   `qyl-published-versions.yaml` beside it from the registries (the snapshot every agent reads first), and update
-   `qyl-mcp-32-tools-both-platforms.md` there when the tool set changed.
+   `qyl-published-versions.yaml` beside it from the registries (the snapshot every agent reads first).
 
 ## Notify
 
 One message per consumer repo, to its running agent through the session's agent-messaging
-tool when there is one (Claude Code: `ListAgents`, then `SendMessage`). If the consumer has
-no running agent, append the same text to the handoff file above under "Pending re-pins";
-the owner relays it. Text:
+tool when there is one (Claude Code: `ListAgents`, then `SendMessage`). Text:
 
 ```
 RELEASE qyl-mcp-server <version> indexed <UTC time>

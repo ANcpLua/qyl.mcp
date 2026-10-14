@@ -7,8 +7,7 @@ metadata:
   version: "1.1.1"
   verified-against: |
     qyl.mcp source and local tests, 2026-10-08: core/server/client 2.3.1,
-    express 2.0.2, node 2.1.1. Package/source commands and actual output:
-    docs/evidence/2026-10-08-followup-01.md (SDK skill and landing-page correction).
+    express 2.0.2, node 2.1.1.
     Re-verified 2026-10-11 against the installed 2.3.1 .d.mts/.mjs: exports, error codes,
     RegisteredTool handle, ServerNotifier, versionNegotiation modes, inputRequired builders,
     and the per-tool scopeChallenge (ScopeChallenge, requireScopes, the 403 it produces in both
@@ -86,8 +85,7 @@ tests and fixtures, not production serving.
 
 qyl.mcp uses none of sampling, roots, logging, tasks or the legacy HTTP+SSE
 transport. `runTool` forwards cancellation and progress only, and `verify:frame`
-fails on a tool registered outside the frame. Source/test evidence, checked
-2026-10-08: [commands and actual output](../../../docs/evidence/2026-10-08-followup-01.md).
+fails on a tool registered outside the frame.
 
 Full era matrix, serving patterns, sessions, notifications: `references/serving-and-eras.md`.
 

@@ -49,8 +49,7 @@ const handle = serveStdio(serverFactory, { onerror: reportError });
 // handle.close() on shutdown
 ```
 
-qyl.mcp uses the SDK stdio default and supports both eras. This repository-specific
-observation was checked on 2026-10-08; see [source/test commands and output](../../../../docs/evidence/2026-10-08-followup-01.md).
+qyl.mcp uses the SDK stdio default and supports both eras.
 `serveStdio` routes the instance's own `send*ListChanged()` /
 `sendResourceUpdated()` onto its open subscription stream — no `notify` facade needed on stdio.
 

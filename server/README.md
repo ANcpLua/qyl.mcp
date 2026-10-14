@@ -182,8 +182,7 @@ this JSON configuration. Keep the map in host secrets and out of the plugin ZIP.
 writes included, viewer query paths and both protocol eras against a
 real local Collector with two temporary projects. It reuses the completed Release
 build; set `QYL_COLLECTOR_DLL` for another build. The script uses local test identities
-and an in-process signed webhook receiver; the hosted reviewer OAuth login and
-real ChatGPT demonstration are separate checks before upload.
+and an in-process signed webhook receiver.
 
 ### Seeded analysis verification
 
@@ -343,7 +342,6 @@ all 32 tools against an isolated collector started by the published CLI.
 
 - Removed deprecated MCP logging capability and per-call log notifications;
   retained requested progress, cancellation and native operation telemetry.
-  [Dated verification, 2026-10-08](https://github.com/ANcpLua/qyl.mcp/blob/main/docs/evidence/2026-10-08-followup-01.md).
 
 - Optional Auth0-account-to-Collector project isolation, also applied to Events.
 - Events share polling for accounts assigned to the same project; independent

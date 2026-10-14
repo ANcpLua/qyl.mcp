@@ -19,8 +19,9 @@ latency and MCP tool behavior from that recorded data.
 
 - An account that may read a qyl Collector project with recorded telemetry.
   Sign-in uses OAuth through qyl's Auth0 tenant. The read tools require the
-  `qyl:read` scope; creating and updating annotations and saved queries also
-  requires `qyl:write`, and deleting them `qyl:delete`. The server decides
+  `qyl:read` scope; creating and updating annotations and saved queries and
+  setting failure status also requires `qyl:write`, and deleting annotations
+  and saved queries `qyl:delete`. The server decides
   which Collector project an account can use; tool arguments never select
   another project.
 - Nothing else: the plugin runs no local code and contains no API keys or
@@ -85,8 +86,8 @@ investigation workflow these tools are designed for.
 ## Limits and troubleshooting
 
 - qyl cannot delete or change telemetry, deploy or roll back services, or
-  search the public web. Its write tools change only the notes and saved
-  queries in your project.
+  search the public web. Its write tools change only the notes, saved
+  queries and failure status in your project.
 - An empty result means nothing matching was recorded in your project. It
   does not show that a system is healthy.
 - Most tools take limits and filters; every input description states its

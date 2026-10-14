@@ -3,29 +3,19 @@
 qyl provides MCP tools for investigating traces, logs, metrics and sessions in
 a qyl Collector. It measures and correlates; the agent reasons and acts.
 
-Each section below names the date of the evidence it cites: the source and
-public observations inspected on **2026-10-08**, with commands and actual
-outputs in the [source evidence](docs/evidence/2026-10-08-step7.md), and the
-toolchain, contract and release records of **2026-10-11** in the
-[release evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md).
-Local test results, CI results, public HTTP observations and pending owner
-checks are distinct in the evidence ledger.
-
-| Component | Source role | Evidence |
-| --- | --- | --- |
-| `server/` | Telemetry MCP server and bundled MCP App viewers | [Package and tool inventory](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory) |
-| `workbench/` | Local client for inspecting and invoking other MCP servers | [Workbench source](docs/evidence/2026-10-08-step7.md#workbench) |
-| `dashboard/` | Browser UI built alongside the Workbench | [Build scripts](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory) |
+| Component | Source role |
+| --- | --- |
+| `server/` | Telemetry MCP server and bundled MCP App viewers |
+| `workbench/` | Local client for inspecting and invoking other MCP servers |
+| `dashboard/` | Browser UI built alongside the Workbench |
 
 ## Use the hosted server
 
-Endpoint: `https://mcp.qyl.at/mcp`. On 2026-10-08, `curl` returned `401` with
-`resource_metadata`; the metadata identified that resource, issuer
-`https://qyl-eu.eu.auth0.com/` and scopes `qyl:read qyl:write qyl:delete`.
-[Exact commands and responses](docs/evidence/2026-10-08-step4.md#endpoint).
-These observations establish discovery, not a successful OAuth login. The
-source's metadata now also lists `qyl:write` and `qyl:delete`, which only the
-[write tools](#write-tools) need; they ask for them through a step-up challenge.
+Endpoint: `https://mcp.qyl.at/mcp`, deployed from `main` on Railway. An
+unauthenticated request is answered `401` with `resource_metadata`; the
+metadata names that resource, issuer `https://qyl-eu.eu.auth0.com/` and scopes
+`qyl:read qyl:write qyl:delete`. Only the [write tools](#write-tools) need
+`qyl:write` and `qyl:delete`; they ask for them through a step-up challenge.
 
 ### Connect
 
@@ -33,17 +23,13 @@ Configure that endpoint in the intended client and authorize an account with
 access to the intended Collector project. Client registration and user/project
 authorization must both be configured by the operator.
 
-The following are connection instructions, not completed connection tests.
-Their CLI/help and official-documentation sources were checked on 2026-10-08
-in the [client setup evidence](docs/evidence/2026-10-08-step7.md#client-setup-and-owner-review-correction).
-
 | Client | Connection setting | Registration path |
 | --- | --- | --- |
 | ChatGPT web | In Plugins, choose **Add custom MCP server**, enter `https://mcp.qyl.at/mcp`, select OAuth and request `qyl:read qyl:write qyl:delete`; create and install the personal plugin. | Choose CIMD, DCR or a provisioned OAuth client as offered. For CIMD, use the metadata document and callback shown by the connection page; stable metadata is `https://chatgpt.com/oauth/client.json` where issuer-bound callbacks are supported. |
 | claude.ai | In **Customize → Connectors**, add a custom connector for `https://mcp.qyl.at/mcp`, select sign-in and complete OAuth. Organization users first need their owner to add the connector under organization settings. | Select Claude's published identity (CIMD), automatic registration (DCR), or a provisioned client. Public CIMD: `https://claude.ai/oauth/mcp-oauth-client-metadata`. |
 | Claude Code | Run `claude mcp add --transport http qyl https://mcp.qyl.at/mcp`, then open `/mcp` to authenticate. | Automatic CIMD/DCR discovery; if a provisioned client is required, use the CLI's `--client-id` and `--client-secret` prompt, with its actual callback registered. |
-| Codex CLI | Add the TOML below to the intended Codex configuration, then run `codex mcp login qyl --scopes "qyl:read qyl:write qyl:delete"`. | Automatic CIMD/DCR selection; for a targeted registration check, the inspected CLI accepts `--oauth-client-registration cimd` or `dcr` on login. A configured client ID takes precedence. |
-| MCP Inspector | Save the JSON below as `inspector-modern.json`; run `bunx @modelcontextprotocol/inspector@2.9.0 --config inspector-modern.json`, complete OAuth with `qyl:read qyl:write qyl:delete`, then invoke `tools/list`. | Use the provisioned client or registration flow offered by Inspector and the issuer. Record which path was used; registration alone does not grant resource access. |
+| Codex CLI | Add the TOML below to the intended Codex configuration, then run `codex mcp login qyl --scopes "qyl:read qyl:write qyl:delete"`. | Automatic CIMD/DCR selection; for a targeted registration check, the CLI accepts `--oauth-client-registration cimd` or `dcr` on login. A configured client ID takes precedence. |
+| MCP Inspector | Save the JSON below as `inspector-modern.json`; run `bunx @modelcontextprotocol/inspector@2.9.0 --config inspector-modern.json`, complete OAuth with `qyl:read qyl:write qyl:delete`, then invoke `tools/list`. | Use the provisioned client or registration flow offered by Inspector and the issuer. Registration alone does not grant resource access. |
 
 Codex configuration:
 
@@ -58,17 +44,10 @@ Inspector configuration (repeat with `"legacy"` for the legacy check):
 {"mcpServers":{"qyl":{"type":"streamable-http","url":"https://mcp.qyl.at/mcp","protocolEra":"modern"}}}
 ```
 
-ChatGPT, Codex, claude.ai, Claude Code and Inspector connections remain
-**owner checks**, with exact procedures in the
-ledger.
-The production modern-era check uses Inspector **2.9.0**, OAuth,
-`protocolEra: "modern"`, `tools/list`, and a captured
-`MCP-Protocol-Version: 2026-07-28` request header. A legacy-only connection
-or an initialize response is not that proof.
-
-Locally, the pinned Inspector passed modern and legacy `tools/list` with all
-11 tools and passed schema portability on 2026-10-08.
-[Black-box evidence](docs/evidence/2026-10-08-step4.md#both-era).
+To check the modern era against production, connect Inspector 2.9.0 with OAuth
+and `protocolEra: "modern"`, call `tools/list` and confirm the request carries
+`MCP-Protocol-Version: 2026-07-28`. A legacy-only connection or an initialize
+response does not show it.
 
 ## Run the server yourself
 
@@ -93,7 +72,6 @@ Configure `QYL_COLLECTOR_URL` and, when
 needed, `QYL_API_KEY`. For local HTTP, run `bun server/dist/main.js`; the source
 defaults to loopback port 3001. `QYL_API_KEY` is an outgoing Collector
 credential, not an incoming MCP login.
-[Configuration and serving source, 2026-10-08](docs/evidence/2026-10-08-step7.md#configuration-and-serving).
 
 `./release.sh <version>` publishes `qyl-mcp-server` from the developer's machine
 (see `SKILL.md`). The executable uses Bun; the exported library subpaths support
@@ -108,8 +86,8 @@ identifies the published version.
 The [generated manifest](server/tool-manifest.snapshot.json) is the tool
 contract. It has 32 tools: 26 read tools annotated `readOnlyHint: true` and the
 six [write tools](#write-tools); `fetch_telemetry` is app-only through
-`_meta.ui.visibility: ["app"]`. The tool matrix maps each
-tool to the user's question and its limits, with dated manifest evidence.
+`_meta.ui.visibility: ["app"]`. `bun run smoke` checks that `tools/list`
+returns exactly these 32 tools on `2026-07-28` and over the 2025-era handshake.
 
 Start with sessions and traces, drill into one trace and its error logs,
 then discover metric instruments and series before querying. `get_trace`
@@ -124,16 +102,15 @@ defaults to `qyl-ci`. The [shared skill](submission/qyl/skills/qyl-investigate/S
 contains the full workflow; the server also serves it through the MCP skills
 extension (`skills/list`, `skills/get`, `skill://qyl/qyl-investigate/SKILL.md`),
 which the OpenAI plugin portal imports when it scans the server, and the build
-copies it into `server/dist/skills`. Description evidence.
+copies it into `server/dist/skills`.
 
 ### Write tools
 
-Five tools change something, and only objects users create in qyl inside the
-caller's Collector project: annotations (plain-text notes of at most 2000
-characters on a trace, span or session) and saved queries (named filters for
-traces, logs or metrics). No tool deletes or edits traces, logs or metrics;
-retention alone removes telemetry. The hints follow the
-[2026-10-11 decision](docs/decisions/2026-10-11-qyl-dev-audit.md#write-tools):
+Six tools change something, and only records inside the caller's Collector
+project: annotations (plain-text notes of at most 2000 characters on a trace,
+span or session), saved queries (named filters for traces, logs or metrics) and
+the status of recorded failures. No tool deletes or edits traces, logs or
+metrics; retention alone removes telemetry.
 
 | Tool | Changes | Annotations | Scope |
 | --- | --- | --- | --- |
@@ -141,6 +118,7 @@ retention alone removes telemetry. The hints follow the
 | `update_annotation` | replaces a note's text | `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true` | `qyl:write` |
 | `create_saved_query` | adds a named filter | `readOnlyHint: false`, `destructiveHint: false`, `idempotentHint: true` | `qyl:write` |
 | `update_saved_query` | renames it or replaces its description or filter | `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true` | `qyl:write` |
+| `update_failure_status` | sets a failure's status (`open`, `resolved` or `ignored`), assignee or ignore-until time | `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true` | `qyl:write` |
 | `delete` | removes one annotation or saved query (`kind` is `annotation` or `saved_query`) | `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true` | `qyl:delete` |
 
 `openWorldHint` is `false` on all of them. `list_saved_queries` and
@@ -156,9 +134,6 @@ in both protocol eras, before any Collector request.
 The two viewers declare versioned resource URIs, a configured hosted origin
 and empty external connection/resource CSP allowlists. Local tests cover
 restoring the original query when refresh input is empty.
-[Viewer source](docs/evidence/2026-10-08-step7.md#viewers) and
-[local test output](docs/evidence/2026-10-08-step4.md#test), both 2026-10-08;
-the viewer versions moved to v6/v4 with release 7.2.2 on 2026-10-11.
 
 ### MCP Events
 
@@ -168,12 +143,6 @@ Auth0 deployments configured with `MCP_EVENTS_STORE`. The optional
 signs deliveries, checks ongoing authorization, expires subscriptions and
 cancels delivery on unsubscribe or confirmed revocation. Subscription state
 is bounded and excludes OAuth tokens and copied telemetry.
-[Events source](docs/evidence/2026-10-08-step7.md#events) and
-[local isolation tests](docs/evidence/2026-10-08-step4.md#projects), 2026-10-08.
-
-These are implementation/local-test results. Production subscription,
-matching/non-matching delivery, persistence, renewal, unsubscribe and
-revocation remain separate owner checks.
 
 ## The workbench
 
@@ -187,8 +156,6 @@ the port. Workbench can connect to HTTP and stdio servers, negotiate the
 protocol automatically, inspect schemas, invoke tools and retain execution
 evidence. It uses a loopback browser session and checks host/origin access.
 Tool annotations guide confirmation; they do not grant permission.
-[Workbench source](docs/evidence/2026-10-08-step7.md#workbench) and
-[local tests](docs/evidence/2026-10-08-step4.md#test), 2026-10-08.
 
 Review an external stdio command before launching it: it executes locally.
 Use environment-variable references for credentials instead of embedding
@@ -204,20 +171,15 @@ status, timestamps, duration and error type. It contains no `arguments`,
 records at `~/.qyl/mcp-native-executions.json`; `QYL_MCP_NATIVE_STATE_PATH`
 overrides the path. Hosted HTTP with `MCP_PUBLIC_URL` disables that local store.
 Known version-1/2 data is projected into the minimized schema; unreadable
-archives require operator review. [Native-record source](docs/evidence/2026-10-08-step7.md#native-records)
-and regression results, 2026-10-08.
+archives require operator review.
 
 OTLP exports include operation timing/status and trace correlation. Native
 incoming calls do not supply argument/result bodies to that telemetry.
 Workbench has a separate optional content-capture setting. Local OTLP tests
 check redaction and matching trace/span IDs; they do not establish a production
-retention policy. [OTLP evidence, 2026-10-08](docs/evidence/2026-10-08-step4.md#fresh-main-collector-otlp-rerun).
+retention policy.
 
 ## Configuration
-
-Source evidence for these settings was captured on 2026-10-08 in
-[configuration and serving](docs/evidence/2026-10-08-step7.md#configuration-and-serving)
-and [Workbench](docs/evidence/2026-10-08-step7.md#workbench).
 
 | Variable | Purpose |
 | --- | --- |
@@ -236,16 +198,12 @@ and [Workbench](docs/evidence/2026-10-08-step7.md#workbench).
 
 ## Deploying your own
 
-These are operator setup instructions, not a record that deployment or provider
-configuration occurred. Source evidence is in
-[deployment/authentication](docs/evidence/2026-10-08-step7.md#deployment-and-authentication).
-The [threat model](docs/threat-model.md) describes the authorization boundary.
+These are operator setup instructions. The [threat model](docs/threat-model.md)
+describes the authorization boundary.
 
 `.railway/railway.ts` declares build `bun run --cwd server build`, start
 `bun server/dist/main.js`, healthcheck `/healthz` and an Events volume at
-`/data`. This proves configuration in source, not that Railway applied it.
-The [dated production observation](docs/evidence/2026-10-08-followup-06.md)
-records Railway's running commit and main-branch trigger on 2026-10-08.
+`/data`. Railway deploys `mcp.qyl.at` from every push to `main`.
 
 For a hosted bind, configure `MCP_PUBLIC_URL`, `MCP_BIND_HOST`, allowed hosts
 and origins, and the intended Collector URL/credential. The public URL sets
@@ -263,10 +221,8 @@ can use a recognized UA, including `Claude-User`, `openai-mcp/1.0.0` or
 `ChatGPT-User`. If neither hint is recognized, qyl omits both domain fields.
 A host that supports MCP Apps can then use its default sandbox; omission alone
 does not disable the viewer or reject the MCP client. Local viewers also omit
-the domain. [Verified requirements and detection policy](docs/evidence/2026-10-08-point-10-ui-domain.md#clarification-and-current-behavior-2026-10-11)
-separate documented formats from client hints. The hints and their precedence
-are qyl's compatibility policy; actual client identifiers and authenticated
-rendering on this deployment still need observation.
+the domain. The hints and their precedence are qyl's compatibility policy, not
+a documented client format.
 
 Keep Collector credentials on the server. With project mapping enabled, only
 the verified subject selects the project; client hints, tool arguments and
@@ -276,17 +232,15 @@ The default Auth0 mode accepts only the qyl production Auth0 issuer
 `https://qyl-eu.eu.auth0.com/`; arbitrary issuer substitution is not an
 available configuration. Non-loopback serving requires a public URL and
 hosted authorization. For Events, configure persistent `MCP_EVENTS_STORE`
-and the dedicated Auth0 authorization-check credentials described in
-[Events source](docs/evidence/2026-10-08-step7.md#events).
+and the dedicated Auth0 authorization-check credentials listed in the
+[server README](server/README.md#configuration).
 
 ### Authentication
 
 The hosted profile is **CIMD or DCR + OAuth 2.1 Authorization Code with
-PKCE S256 + issuer identification**. Public metadata fetched on 2026-10-08
-shows ChatGPT advertising `none` and `private_key_jwt`, with the latter selected;
+PKCE S256 + issuer identification**. ChatGPT's client metadata advertises
+`none` and `private_key_jwt` and uses the latter;
 Claude's CIMD is a public client using `none`.
-[Commands and metadata](docs/evidence/2026-10-08-step7.md#public-oauth-metadata).
-This does not prove a provisioned client or successful token exchange.
 
 Operator setup:
 
@@ -301,17 +255,15 @@ Operator setup:
 4. `qyl:read` exposes traces, logs, metrics, sessions, and CI evidence;
    grant it only to intended clients and users. Verify a real authenticated
    read and project isolation after deployment; discovery alone is insufficient.
-5. `qyl:write` lets a client create and update annotations and saved queries,
-   and `qyl:delete` lets it delete them, in the caller's project only; neither
-   reaches telemetry. Grant them only to users who should change those
-   objects; a token without them keeps the read tools. The Collector key the
-   server uses needs the Collector's `write` and `delete` roles as well.
+5. `qyl:write` lets a client create and update annotations and saved queries
+   and set failure status, and `qyl:delete` lets it delete annotations and
+   saved queries, in the caller's project only; neither reaches telemetry.
+   Grant them only to users who should change those records; a token without
+   them keeps the read tools. The Collector key the server uses needs the
+   Collector's `write` and `delete` roles as well.
 
-These setup requirements are also enforced as documentation requirements by
-`server/verify-deployment-guidance.mjs`; provider configuration is an owner action.
-The verifier source/output is recorded in the evidence file. The provider
-behavior and setting are also documented in the dated
-[Auth0 reference check](docs/evidence/2026-10-08-step7.md#auth0-reference-check).
+`server/verify-deployment-guidance.mjs` holds this section to these
+requirements after every server build; provider configuration is an owner action.
 
 The source validates signatures, issuer, resource audience, expiry and scopes;
 malformed credentials, invalid tokens and insufficient scopes have separate
@@ -322,7 +274,7 @@ can re-authorize for them. Both `/.well-known/oauth-protected-resource/mcp` and
 Auth0 is the OIDC issuer; qyl.mcp does not expose its own OIDC issuer discovery.
 For workspace domain claiming, the owner must verify any `openid`/`email`
 requirements and the provider's verified-email response separately; these do
-not replace `qyl:read`. [Source and metadata evidence](docs/evidence/2026-10-08-step7.md#deployment-and-authentication).
+not replace `qyl:read`.
 
 ### Optional authorization extensions
 
@@ -339,7 +291,7 @@ MCP_AUTH_EXTENSIONS=enterprise-managed-authorization@1.0.0,oauth-client-credenti
 
 These are the installed integration definitions, not proof of a provider grant.
 Unknown versions and conflicting provider requirements are rejected. They do
-not issue tokens or replace the core verifier. [Source, 2026-10-08](docs/evidence/2026-10-08-step7.md#deployment-and-authentication).
+not issue tokens or replace the core verifier.
 
 ### Cloudflare Access Managed OAuth
 
@@ -351,20 +303,19 @@ before selecting this mode. It does not establish that the public endpoint
 uses Access, and Auth0-backed Events cannot be enabled in this mode. Access
 grants the read tools only: its assertion carries no qyl scopes, so the write
 tools answer `insufficient_scope`.
-[Source and local tests, 2026-10-08](docs/evidence/2026-10-08-step7.md#deployment-and-authentication).
 
 ### Directory preparation
 
-Use [submission/README.md](submission/README.md) for the three separate records,
-local package build and remaining owner fields. The owner handles identity,
-public pages, reviewer accounts, recording, attestations, uploads, submission
-and publication. The owner copies the portal's domain token into the hosted
-environment variable `OPENAI_APPS_CHALLENGE`. Until a nonblank token is set,
-`GET /.well-known/openai-apps-challenge` returns 404; with a token, it returns
-the exact trimmed value as plain text. On 2026-10-08, the production GET
-returned `404 Not Found`. [Dated curl output, source and test](docs/evidence/2026-10-08-followup-07.md)
-support these statements. Setting the variable and completing the portal's
-verification are pending owner actions.
+`submission/qyl` is the plugin bundle for both directories: the Anthropic
+files in `.claude-plugin/` and `.mcp.json`, the OpenAI root `plugin.json` and
+`mcp.json`. `python3 submission/build-openai-package.py` builds the OpenAI ZIP
+into `submission/packages/` (ignored by Git), and
+[the connector listing draft](submission/anthropic-connector-listing.md) holds
+the Anthropic connector fields. The owner handles identity, public pages,
+reviewer accounts, recording, attestations, uploads, submission and
+publication. `GET /.well-known/openai-apps-challenge` returns the trimmed
+value of the hosted `OPENAI_APPS_CHALLENGE` variable as plain text, and `404`
+while it is blank; on mcp.qyl.at it carries the OpenAI portal's domain token.
 
 ## Verification and limits
 
@@ -375,25 +326,16 @@ bun run smoke:otlp
 bun run smoke:projects
 ```
 
-The [2026-10-08 transcript](docs/evidence/2026-10-08-step4.md) records actual
-results, including the initial OTLP failure against the adjacent Collector
-feature branch and the successful rerun against a fresh Collector `main`.
 Build the collector once in Release configuration; these checks reuse its output.
-Set `QYL_COLLECTOR_DLL` to use a different completed build. Static `check_v2`
-historically returned 31 error-severity findings; the per-rule assessments
-explain the installed paths without suppressing diagnostics. Both-era runtime
-evidence is recorded separately. The revised point-3 run on 2026-10-08 reports
-zero errors with an unchanged checker after explicit `zod/v4` imports and a
-justified Events JSON-Schema marker; see [command and output](docs/evidence/2026-10-08-followup-03.md#static-checker-before-and-after).
-
-Hosted connections, Events, the deployed commit and a fresh npm consumer
-require separate runtime evidence. Local tests do not establish those results.
+Set `QYL_COLLECTOR_DLL` to use a different completed build. Local checks do not
+cover hosted connections, production Events, the deployed commit or a fresh npm
+consumer.
 
 ## Contracts
 
 The generated contracts come from `@ancplua/qyl-api-schema`; exact dependency
 versions are recorded in [server/package.json](server/package.json) and `bun.lock`.
 SDK major version and wire revision are
-independent. Server HTTP/stdio use SDK factories and negotiation defaults;
-Workbench uses automatic negotiation. [Contract 11.4.0 and 11.5.0 evidence](docs/evidence/2026-10-11-contract-11.4.0-release-7.2.1.md) and
-[package/serving evidence, 2026-10-08](docs/evidence/2026-10-08-step7.md#package-and-tool-inventory).
+independent. The server answers MCP `2026-07-28` and negotiates down for
+2025-era clients that send `initialize`. Server HTTP/stdio use SDK factories
+and negotiation defaults; Workbench uses automatic negotiation.

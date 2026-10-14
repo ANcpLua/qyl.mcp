@@ -147,4 +147,4 @@ if [[ ${v:-} == "$version" ]]; then
 else
   echo "npm: $version not visible yet; check npm view $NPM_PKG version"
 fi
-echo "Railway deploys mcp.qyl.at from main; follow the Release ripple in AGENTS.md for downstream pins."
+echo "Railway deploys mcp.qyl.at from main; follow 'Publishing across the qyl-dev repos' in AGENTS.md for downstream pins."
