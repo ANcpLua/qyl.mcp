@@ -198,6 +198,11 @@ all 32 tools against an isolated collector started by the published CLI.
 
 ## Release notes
 
+### 8.1.1
+
+- Package the corrected qyl-investigate skill: `verify_fix` needs `since` or `release` beside the `failure_id`.
+- Documentation only otherwise: the plugin bundle README, the Anthropic listing draft and both plugin manifests describe the 32-tool surface; the release contract records the OpenAI plugin draft and the verified domain; the threat model states the single scope check. No code change since 8.1.0.
+
 ### 8.1.0
 
 - Serve the qyl-investigate skill from the server through the MCP skills extension (`io.modelcontextprotocol/skills`: `skills/list`, `skills/get` and `resources/read` under `skill://qyl/`), so the OpenAI plugin portal imports it at Scan Tools and the npm package carries it in `dist/skills`. The skill now names the tool to start with for each question, the defaults every tool applies, the accepted `aggregate_telemetry` measures, and the one-call connection rule: no fan-out before one call has returned telemetry, one retry after sign-in, then stop.
