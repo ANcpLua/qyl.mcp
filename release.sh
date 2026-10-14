@@ -2,9 +2,19 @@
 # Publish and release qyl-mcp-server (server/) to npm from this machine with the token
 # registered in Vitals. No workflow publishes.
 #
-#   ./release.sh <x.y.z>            bump server/package.json, publish, push main, tag, GitHub release
+#   ./release.sh <x.y.z>            bump server/package.json, publish, push main, tag, GitHub release;
+#                                   returns once npm accepted the tarball and the tag and the GitHub
+#                                   release exist, and leaves the verification below running detached
 #   ./release.sh <x.y.z> --dry-run  every check plus `bun publish --dry-run` (runs the build);
-#                                   registry and git stay unchanged
+#                                   registry and git stay unchanged; prints what the detached job would do
+#   ./release.sh --wait <x.y.z>     blocks until artifacts/release-<x.y.z>-verify.log ends in VERIFIED
+#                                   (exit 0) or FAILED (exit 1), printing the log as it grows
+#   ./release.sh --verify <x.y.z>   starts the detached verification again for a released version
+#
+# The detached verification (own session, survives the caller's shell) waits until npm serves
+# <x.y.z> (up to 15 min), checks the registry tarball is byte-identical to the packed one, runs
+# qyl.at's scripts/refresh-published-versions.sh and ends its log with VERIFIED or FAILED. npm
+# versions are immutable: a failure after the fact is a patch release, and the log says so.
 #
 # Before the real run: add the `## <x.y.z>` entry at the top of CHANGELOG.md and commit it on
 # main; the script refuses without it and uses it as the release notes.
@@ -14,16 +24,108 @@ cd "$(dirname "$0")"
 NPM_PKG=qyl-mcp-server
 NPM_REGISTRY=https://registry.npmjs.org
 NPM_TOKEN_FILE=$HOME/.config/vitals/npm-qyl-manual-publish-token  # vitals keys: "... manual publish and release (npm)"
+QYL_AT_DIR=${QYL_AT_DIR:-$(cd .. && pwd)/qyl.at}
 
+mode=release
+case ${1:-} in --wait | --verify | __verify) mode=${1#--}; shift ;; esac
 version=${1:-}
-dry=0; [[ ${2:-} == --dry-run ]] && dry=1
-[[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "usage: $0 <x.y.z> [--dry-run]" >&2; exit 2; }
+dry=0; [[ $mode == release && ${2:-} == --dry-run ]] && dry=1
+[[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "usage: $0 <x.y.z> [--dry-run] | --wait <x.y.z> | --verify <x.y.z>" >&2; exit 2; }
 say() { printf '\n== %s\n' "$*"; }
 die() { echo "release: $*" >&2; exit 1; }
+utc() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 # Resolve from the canonical checkout before entering the archive snapshot.
 bun_path=$(mise which bun) || die "install the pinned Bun with mise install"
 node_path=$(mise which node) || die "install the pinned Node.js with mise install"
 export PATH="$(dirname "$bun_path"):$(dirname "$node_path"):$PATH"
+verify_log="$PWD/artifacts/release-$version-verify.log"
+verify_pid() { sed -n '1s/.* pid \([0-9][0-9]*\) .*/\1/p' "$verify_log"; }
+
+# The detached job. Its first log line names its pid, its last line is the verdict.
+verify_published() {
+  local tarball=${1:-} step="start" published
+  tmp=$(mktemp -d)  # global: the EXIT trap removes it after this function returned
+  printf 'verify %s %s pid %s started %s\n' "$NPM_PKG" "$version" "$$" "$(utc)"
+  trap 'rc=$?; rm -rf "$tmp"; (( rc == 0 )) || printf "FAILED %s %s %s: %s stopped (exit %s); fix the cause, then ./release.sh --verify %s\n" "$NPM_PKG" "$version" "$(utc)" "$step" "$rc" "$version"' EXIT
+  fail() { printf 'FAILED %s %s %s: %s\n' "$NPM_PKG" "$version" "$(utc)" "$*"; trap 'rm -rf "$tmp"' EXIT; exit 1; }
+  next_patch="${version%.*}.$(( ${version##*.} + 1 ))"
+
+  step="index wait"
+  say "wait until npm serves $NPM_PKG@$version (up to 15 min)"
+  for _ in $(seq 1 60); do
+    published=$(npm view "$NPM_PKG@$version" version --registry="$NPM_REGISTRY" 2>/dev/null || true)
+    [[ $published == "$version" ]] && break
+    sleep 15
+  done
+  [[ $published == "$version" ]] || fail "npm does not serve $version after 15 min; ./release.sh --verify $version checks again"
+  printf 'INDEXED %s %s %s\n' "$NPM_PKG" "$version" "$(utc)"
+
+  step="release smoke"
+  say "registry tarball against the captured artifact"
+  if [[ -z $tarball ]]; then
+    gh release download "v$version" --pattern "$NPM_PKG-$version.tgz" --dir "$tmp"
+    tarball="$tmp/$NPM_PKG-$version.tgz"
+  fi
+  curl -fsSL "$(npm view "$NPM_PKG@$version" dist.tarball --registry="$NPM_REGISTRY")" -o "$tmp/published.tgz"
+  cmp -s "$tarball" "$tmp/published.tgz" ||
+    fail "the npm tarball differs from the captured artifact $tarball; $version is immutable: fix the cause and ship $next_patch as a patch release"
+  echo "registry tarball is byte-identical to $tarball"
+
+  step="snapshot refresh"
+  say "refresh the published-versions snapshot in qyl.at"
+  "$QYL_AT_DIR/scripts/refresh-published-versions.sh" ||
+    fail "$version is published and verified, but the snapshot refresh failed (above); ./release.sh --verify $version retries it"
+
+  trap 'rm -rf "$tmp"' EXIT
+  printf 'VERIFIED %s %s %s: npm serves it, registry tarball byte-identical, snapshot refreshed\n' "$NPM_PKG" "$version" "$(utc)"
+}
+
+# nohup plus a new session (python3's setsid; macOS has no setsid command): neither the end of the
+# caller's shell nor a signal to its process group reaches the job.
+start_verification() {
+  mkdir -p artifacts
+  if [[ -f $verify_log ]] && ! tail -n 1 "$verify_log" | grep -Eq '^(VERIFIED|FAILED) '; then
+    pid=$(verify_pid)
+    [[ -n $pid ]] && kill -0 "$pid" 2>/dev/null && die "the verification of $version is still running (pid $pid): ./release.sh --wait $version"
+  fi
+  : >"$verify_log"
+  nohup python3 -I -c 'import os, sys; os.setsid(); os.execv(sys.argv[1], sys.argv[1:])' \
+    "$PWD/release.sh" __verify "$version" "$@" </dev/null >>"$verify_log" 2>&1 &
+  disown
+  # Return only once the job has logged its pid, so a --wait right after this finds it.
+  for _ in $(seq 1 50); do [[ -n $(verify_pid) ]] && break; sleep 0.2; done
+  [[ -n $(verify_pid) ]] || die "the detached verification did not start; read $verify_log"
+  say "verification runs detached (pid $!)"
+  echo "log:  $verify_log"
+  echo "wait: ./release.sh --wait $version   (or: tail -f $verify_log)"
+}
+
+wait_for_verification() {
+  local printed=0 lines pid alive
+  [[ -f $verify_log ]] || die "no verification log for $version at $verify_log; ./release.sh --verify $version starts one"
+  while :; do
+    pid=$(verify_pid); alive=0
+    [[ -n $pid ]] && kill -0 "$pid" 2>/dev/null && alive=1
+    lines=$(wc -l <"$verify_log" | tr -d ' ')
+    (( lines > printed )) && { sed -n "$((printed + 1)),${lines}p" "$verify_log"; printed=$lines; }
+    case $(tail -n 1 "$verify_log") in
+      VERIFIED\ *) return 0 ;;
+      FAILED\ *) return 1 ;;
+    esac
+    (( alive )) || die "the verification job (pid ${pid:-unknown}) ended without VERIFIED or FAILED; read $verify_log, then ./release.sh --verify $version"
+    sleep 5
+  done
+}
+
+case $mode in
+  __verify) verify_published "${2:-}"; exit 0 ;;
+  wait) wait_for_verification; exit ;;
+  verify)
+    [[ -n $(git ls-remote --tags origin "refs/tags/v$version") ]] || die "tag v$version is not on origin; release it first"
+    gh release view "v$version" >/dev/null 2>&1 || die "GitHub release v$version does not exist; release it first"
+    start_verification
+    exit 0 ;;
+esac
 
 say "checks"
 [[ -r $NPM_TOKEN_FILE ]] || die "npm token missing: $NPM_TOKEN_FILE (vitals keys)"
@@ -116,6 +218,9 @@ say "publish verified tarball"
 if (( dry )); then
   assert_release_source
   say "dry run finished: nothing published, nothing committed"
+  echo "The real run then starts the detached verification ($verify_log, ./release.sh --wait $version):"
+  echo "  wait until npm serves $NPM_PKG@$version (up to 15 min), compare the registry tarball with $package_tar,"
+  echo "  run $QYL_AT_DIR/scripts/refresh-published-versions.sh, end the log with VERIFIED or FAILED."
   exit 0
 fi
 
@@ -130,21 +235,5 @@ git tag -a "v$version" "$release_commit" -m "v$version"
 git push -q origin "v$version"
 gh release create "v$version" --title "v$version" --notes-file "$notes" "$package_tar" "$pack_root/release.json"
 
-say "verify"
-for _ in $(seq 1 10); do
-  v=$(npm view "$NPM_PKG@$version" version --registry="$NPM_REGISTRY" 2>/dev/null || true)
-  [[ $v == "$version" ]] && {
-    printf 'INDEXED %s %s %s\n' "$NPM_PKG" "$v" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    break
-  }
-  sleep 15
-done
-if [[ ${v:-} == "$version" ]]; then
-  published_url=$(npm view "$NPM_PKG@$version" dist.tarball --registry="$NPM_REGISTRY")
-  curl -fsSL "$published_url" -o "$pack_root/published.tgz"
-  cmp -s "$package_tar" "$pack_root/published.tgz" || die "published tarball differs from the captured artifact"
-  echo "Verified registry tarball is byte-identical to $release_commit"
-else
-  echo "npm: $version not visible yet; check npm view $NPM_PKG version"
-fi
-echo "Railway deploys mcp.qyl.at from main; next (SKILL.md): notify qyl.at once indexed, then refresh the snapshot."
+start_verification "$package_tar"
+echo "Railway deploys mcp.qyl.at from main; next (SKILL.md): ./release.sh --wait $version, then notify qyl.at."
