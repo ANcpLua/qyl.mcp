@@ -18,7 +18,7 @@ One agent per qyl-dev repo (qyl, qyl.mcp, qyl-api-schema, Qyl.Telemetry.AutoInst
 
 1. Commit the `## <x.y.z>` entry at the top of `CHANGELOG.md` on `main` (move the oldest of the four entries to `CHANGELOG.archive.md`).
 2. `./release.sh <x.y.z>` (`--dry-run` first only when a step is new or unsure; the script refuses before publishing when anything is off). It returns before indexing, once npm accepted the tarball and the tag and GitHub release exist; a detached job waits for npm, checks the registry tarball and refreshes the snapshot (`published-versions.yaml` in qyl.at), logging to `artifacts/release-<x.y.z>-verify.log`. Do not run the snapshot refresh by hand.
-3. `./release.sh --wait <x.y.z>` blocks until that log ends in VERIFIED or FAILED; nothing else about this release until then. FAILED after publication is a patch release; `./release.sh --verify <x.y.z>` reruns the job after a transient failure.
+3. `./release.sh --wait <x.y.z>` blocks until that log ends in VERIFIED or FAILED; nothing else about this release until then. A subagent never runs it: it stops after step 2 and reports, and the main session runs `--wait` in a background shell (a subagent's prompt cache lives 5 minutes, so a blocking wait re-reads its whole context cold). FAILED after publication is a patch release; `./release.sh --verify <x.y.z>` reruns the job after a transient failure.
 4. VERIFIED: notify the consumers.
 
 ## Notify
