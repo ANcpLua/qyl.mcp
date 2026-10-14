@@ -6,8 +6,8 @@
 #   ./release.sh <x.y.z> --dry-run  every check plus `bun publish --dry-run` (runs the build);
 #                                   registry and git stay unchanged
 #
-# Before the real run: add the `### <x.y.z>` entry under `## Release notes` in server/README.md
-# and commit it on main; the script refuses without it and uses it as the release notes.
+# Before the real run: add the `## <x.y.z>` entry at the top of CHANGELOG.md and commit it on
+# main; the script refuses without it and uses it as the release notes.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -35,9 +35,9 @@ start_commit=$(git rev-parse HEAD)
 [[ -z $(git ls-remote --tags origin "refs/tags/v$version") ]] || die "tag v$version already on origin"
 git rev-parse -q --verify "refs/tags/v$version" >/dev/null && die "tag v$version already exists locally"
 [[ -z $(npm view "$NPM_PKG@$version" version --registry="$NPM_REGISTRY" 2>/dev/null) ]] || die "$NPM_PKG@$version is already on npm"
-if ! grep -q "^### $version\$" server/README.md; then
-  (( dry )) || die "server/README.md has no '### $version' entry under '## Release notes'"
-  echo "warning: server/README.md has no '### $version' entry yet; the real run refuses without it"
+if ! grep -q "^## $version\$" CHANGELOG.md; then
+  (( dry )) || die "CHANGELOG.md has no '## $version' entry"
+  echo "warning: CHANGELOG.md has no '## $version' entry yet; the real run refuses without it"
 fi
 gh auth status >/dev/null 2>&1 || die "gh is not logged in"
 
@@ -48,7 +48,7 @@ trap 'rm -f "$npmrc" "$notes"' EXIT
 printf '//registry.npmjs.org/:_authToken=%s\n' "$(<"$NPM_TOKEN_FILE")" >"$npmrc"
 who=$(NPM_CONFIG_USERCONFIG=$npmrc npm whoami --registry="$NPM_REGISTRY") || die "npm token rejected (vitals keys)"
 echo "npm token belongs to: $who"
-awk -v v="$version" '$0 == "### " v {on=1; next} on && /^### / {exit} on' server/README.md >"$notes"
+awk -v v="$version" '$0 == "## " v {on=1; next} on && /^## / {exit} on' CHANGELOG.md >"$notes"
 
 say "version"
 if (( dry )); then

@@ -5,7 +5,7 @@ One agent per qyl-dev repo (qyl, qyl.mcp, qyl-api-schema, Qyl.Telemetry.AutoInst
 ## This repository
 
 - Publishes `qyl-mcp-server` (npm) from `server/`.
-- Version source: `server/package.json` `version` plus a `### <x.y.z>` entry under `## Release notes` in `server/README.md`, which becomes the GitHub release notes. `./release.sh` bumps the version, both workspace self-pins and `bun.lock`; its header says the rest.
+- Version source: `server/package.json` `version` plus a `## <x.y.z>` entry at the top of `CHANGELOG.md` (last three entries; older ones in `CHANGELOG.archive.md`), which becomes the GitHub release notes. `./release.sh` bumps the version, both workspace self-pins and `bun.lock`; its header says the rest.
 - Key: Vitals entry "qyl-api-schema and qyl.mcp manual publish and release (npm)", `~/.config/vitals/npm-qyl-manual-publish-token`, read by the script. Never print, paste, commit or log it. Entry missing, note expired, "npm token rejected" or an npm one-time-password prompt: stop and tell the owner.
 - Upstream pins: `@ancplua/qyl-api-schema` in `server/`, `workbench/`, `dashboard/` `package.json`; `@ancplua/qyl-semantic-conventions` in `server/` and `workbench/` `package.json`; both in the root `bun.lock`.
 
