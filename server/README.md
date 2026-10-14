@@ -198,6 +198,12 @@ all 32 tools against an isolated collector started by the published CLI.
 
 ## Release notes
 
+### 8.1.0
+
+- Serve the qyl-investigate skill from the server through the MCP skills extension (`io.modelcontextprotocol/skills`: `skills/list`, `skills/get` and `resources/read` under `skill://qyl/`), so the OpenAI plugin portal imports it at Scan Tools and the npm package carries it in `dist/skills`. The skill now names the tool to start with for each question, the defaults every tool applies, the accepted `aggregate_telemetry` measures, and the one-call connection rule: no fan-out before one call has returned telemetry, one retry after sign-in, then stop.
+- Advertise output schemas inlined rather than hoisted into `$defs`: ChatGPT does not resolve `$ref`, so `verify_fix.verdict` and most of `get_failure_context` reached the model as `unknown`. The redundant date-time regex is dropped from advertised schemas.
+- Use collector contract 12.1.2, whose tool descriptions state the default window, baseline, page sizes, span selection and the accepted measure and ordering values.
+
 ### 8.0.0
 
 - The executable now requires Bun 1.4 or later, including stdio. Library subpaths remain usable on Node 24; TypeScript 7 continues to emit the package.

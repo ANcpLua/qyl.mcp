@@ -121,7 +121,10 @@ are retained; the summary states how many matching spans were returned.
 detail. `ci_log` accepts telemetry from any CI following its emitter convention;
 `service_prefix` selects services in both run lists and phase breakdowns and
 defaults to `qyl-ci`. The [shared skill](submission/qyl/skills/qyl-investigate/SKILL.md)
-contains the full workflow. Description evidence.
+contains the full workflow; the server also serves it through the MCP skills
+extension (`skills/list`, `skills/get`, `skill://qyl/qyl-investigate/SKILL.md`),
+which the OpenAI plugin portal imports when it scans the server, and the build
+copies it into `server/dist/skills`. Description evidence.
 
 ### Write tools
 

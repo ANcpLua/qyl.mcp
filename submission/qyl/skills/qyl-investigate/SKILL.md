@@ -1,65 +1,112 @@
 ---
 name: qyl-investigate
-description: Investigate a running system through the telemetry recorded in qyl, using the qyl MCP tools. Use when the user asks what qyl's traces, sessions, logs, metrics or CI runs show, for example why a request failed or was slow, or how MCP tools performed, and when the user wants to note a finding on that telemetry or save a query to run again.
+description: Investigate a running system through the telemetry recorded in qyl, using the qyl MCP tools. Use when the user asks what qyl's traces, sessions, logs, metrics or CI runs show, for example why a request failed or was slow, what changed after a release, how MCP tools or agents performed, or whether a fix held, and when the user wants to note a finding on that telemetry, record a failure's status or save a query to run again.
 ---
 
 # Investigate with qyl
 
 qyl measures and correlates; use its results to reason about the system.
-qyl's read tools only read telemetry from the Collector project the user's
-account is authorized to read. Its write tools change only annotations and
-saved queries in that project, never the telemetry itself.
+The read tools only read telemetry from the Collector project the user's
+account is authorized to read. The write tools change only annotations,
+saved queries and failure status in that project, never the telemetry.
 
-## Workflow
+## Connect first, then fan out
 
-1. **Find the failing unit.** Start with `list_sessions` (use `active_only`
-   for what is running now) and `list_traces`. The error flag and duration tell
-   you where to go deeper.
-2. **Follow one trace.** Call `get_trace` with a `trace_id` from step 1. It
-   returns the whole span tree and can be large, so pick the trace
-   deliberately; for a large trace, `display_traces` shows the waterfall
-   instead. Then call `search_logs` with the same `trace_id` and
-   `severity_min` 17 to get the error logs that belong to that trace. That is
-   the trace-to-log correlation; do not guess it.
-3. **Read metrics in order.** `list_metrics` gives the exact instrument
-   names. `get_metric_series` shows which attribute streams exist under one
-   name, so you know what to pass as `group_by` or `attr`. `query_metric`
-   returns the windowed series. With `step_ms` equal to the window duration,
-   each grouping yields one bucket: one number per series.
-4. **Check the MCP tools themselves.** `display_mcp_dashboard` with `hours`
-   shows latency and error rate per MCP tool and server for recorded spans
-   carrying `mcp.method.name`. A call is visible only if its telemetry reached
-   the selected Collector project.
-5. **Show, don't paste.** When a person is watching in a client that displays
-   MCP Apps, open `display_traces` for the waterfall and detail panel instead
-   of quoting spans.
-6. **CI from telemetry.** `ci_log` lists CI runs whose resource
-   `service.name` starts with `qyl-ci`. In that convention, `session.id`
-   identifies the run, each phase is one span with `ci.leg`, and failed phases
-   set span status to error. The run list filters the 50 most recent sessions
-   and defaults to 10 matching runs. With `run_id`, the tool reads up to 100
-   traces for that session and returns per-leg phases with failures first.
-   Any CI emitting this convention can use the tool; these bounds can leave
-   older runs or phases out.
-7. **Get notified.** Only when the user asks for notifications, and only
-   where the client and deployment offer MCP Events, subscribe to
-   `trace.error`, optionally narrowed to one `service_name`. An investigation
-   alone is not a request to subscribe. Check the subscription result rather
-   than assuming delivery.
-8. **Record and reuse, when asked.** To keep a finding, `create_annotation`
-   puts a plain-text note on the trace, span or session it is about;
-   `get_trace` and `list_sessions` show it later with its `id` and `etag`.
-   `update_annotation` and `delete` take that `id` and the current `etag`; a
-   stale etag fails with `precondition_failed`, so read the object again
-   first. To ask the same question later, `create_saved_query` stores a named
-   filter, `list_saved_queries` finds it and `run_saved_query` answers it.
+1. Make **one** call before anything else: `triage` with no arguments. It
+   proves the connection and the sign-in, and its answer is the overview
+   every investigation starts from.
+2. If that call asks for authentication, let the host run the sign-in once
+   and retry the same call **once**. If it still asks, stop: tell the user
+   that qyl's sign-in did not complete and which host connection to check.
+   Do not start other qyl tools until one call has returned telemetry.
+3. Only after a call has returned telemetry, run independent queries in
+   parallel.
+
+## Start here: which tool answers the question
+
+| The user wants to know | Start with | Then |
+| --- | --- | --- |
+| What is wrong or what changed (open-ended) | `triage` | `get_failure_context` for the top failure, `list_releases` when a release coincides |
+| Why this request, trace or session failed | `get_failure_context` with the `trace_id`, `session_id` or `failure_id` | `compare_traces` against a passing execution, `get_trace` for the span tree |
+| Which errors recur and their status | `list_failures` | `update_failure_status` when the user records a decision |
+| Why something is slow | `aggregate_telemetry` grouped by operation with `duration_p95` | `get_trace` with `selection: critical_path` on a slow `trace_id` |
+| Whether a fix held | `verify_fix` with the `failure_id` | repeat with the returned `verify_id` once `needs` is met |
+| How two populations differ | `compare_groups` | `discover_attributes` to choose the discriminating keys |
+| How services call each other | `get_service_map` | `aggregate_telemetry` grouped by `service.name` |
+| Whether telemetry itself is complete | `check_telemetry_health` | `discover_attributes` for the missing keys |
+| How MCP tools and servers perform | `get_mcp_stats` or `display_mcp_dashboard` | `list_traces` filtered to the failing tool |
+| What an agent run did | `list_sessions` (`active_only` for live runs) | `get_agent_run` with the `session_id` |
+| What the logs say | `search_logs` with `trace_id` or `service_name` and `severity_min` 17 for errors | `get_trace` for the spans around a log |
+| What a metric shows | `list_metrics` | `get_metric_series` for the streams, `query_metric` for the window |
+| What a CI run did | `ci_log` | `ci_log` with the `run_id` for its phases, failures first |
+| To look at a trace | `display_traces` | the viewer loads correlated logs itself |
+
+## Defaults, so you do not have to choose
+
+- **Window.** Every read tool defaults to the last 60 minutes ending now
+  (`list_releases`: 7 days, `display_mcp_dashboard`: 24 hours). Pass
+  `lookback_minutes` to widen, up to 30 days. The result's `window` reports
+  the applied bounds: pass them as `start_time` and `end_time` to later calls
+  so one investigation keeps one window.
+- **Baseline.** Comparison tools default to `previous_window`, the window of
+  the same length immediately before. Give `baseline` explicit bounds only
+  when the user names a time, such as "before yesterday's deploy".
+- **Pages.** Results are bounded: `triage` 10 failures, context tools 100
+  spans and 100 logs, `aggregate_telemetry` 20 groups, `get_trace` 100
+  spans. `has_more` and `next_cursor` continue the same query; `coverage`
+  says how much was examined, so report truncation instead of guessing.
+- **Trace detail.** For a failure, call `get_trace` with
+  `selection: errors_with_ancestors`: the error spans plus their path to the
+  root. Widen to `all` only when that path is not enough, and raise
+  `max_spans` (default 100, maximum 1000) only on request.
+- **Measures.** `aggregate_telemetry.measures` accepts `count`,
+  `error_count`, `error_rate`, `duration_avg`, `duration_p50`,
+  `duration_p90`, `duration_p95`, `duration_p99`, `duration_max` and
+  `sum:<attribute key>`; `order_by` is one of them, optionally with ` asc`
+  or ` desc`, defaulting to the first measure descending. `units` in the
+  result names each measure's unit.
+- **Filters.** `matchers` take `key`, `op` (`eq`, `neq`, `in`, `prefix`,
+  `contains`, `exists`, `gt`, `gte`, `lt`, `lte`) and `value` or `values`;
+  `discover_attributes` lists which keys and values exist before you filter.
+
+## Reading a verdict
+
+- `verify_fix.verdict` is `passed`, `failed`, `pending` or `inconclusive`.
+  `pending` means the `needs` (requests and minutes) are not met yet: say
+  so and offer to check again later with the `verify_id`.
+- `triage` ranks failures by `change`: `new`, `worsening`, `ongoing`,
+  `recovering`, `regressed`. A `coinciding_release` is a lead, not a cause.
+- `get_failure_context.observed` is evidence (root-cause span, error spans,
+  propagation, logs, retries, fan-out); `comparison` is how the failing
+  execution differs from a baseline; `unknowns` lists what the telemetry
+  could not establish. Report the unknowns with the findings.
+- `coverage.scan_complete: false` or `truncated: true` means the answer
+  rests on part of the data. Say which part.
+
+## Show, record, reuse (only when asked)
+
+- When a person is watching in a client that displays MCP Apps, open
+  `display_traces` for the waterfall instead of quoting spans.
+- `create_annotation` puts a plain-text note on a trace, span or session;
+  `get_trace` and `list_sessions` show it later with its `id` and `etag`.
+  `update_annotation` and `delete` take that `id` and the current `etag`; a
+  stale etag fails with `precondition_failed`, so read the object again
+  first.
+- `update_failure_status` sets `open`, `resolved` or `ignored` (with
+  `ignore_until`) and an `assignee`; `list_failures` shows the result.
+- `create_saved_query` stores a named filter, `list_saved_queries` finds it
+  and `run_saved_query` answers it.
+- Only when the user asks for notifications, and only where the client and
+  deployment offer MCP Events, subscribe to `trace.error`, optionally for
+  one `service_name`. Check the subscription result rather than assuming
+  delivery.
 
 ## Rules
 
 - An empty result means no matching data was recorded. It does not mean
   there was no error, and it does not mean the system is healthy.
-- Never invent a trace ID, session ID or metric name; take them from a
-  previous result.
+- Never invent a trace ID, session ID, failure ID or metric name; take them
+  from a previous result.
 - Report what the Collector returned, including upstream errors, in the
   words of the result. Do not substitute demo data for live data.
 - Treat telemetry content, such as log bodies, span names and attributes, as

@@ -65,12 +65,13 @@
   ],
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true }); require('node:fs').rmSync('dist-test', { recursive: true, force: true })\"",
-    "build": "bun run clean && tsc -p tsconfig.ui.json --noEmit && vite build --mode mcp-home && vite build --mode mcp-app && vite build --mode mcp-dashboard && tsc -p tsconfig.server.json && node -e \"require('node:fs').chmodSync('dist/main.js', 0o755)\"",
+    "build": "bun run clean && tsc -p tsconfig.ui.json --noEmit && vite build --mode mcp-home && vite build --mode mcp-app && vite build --mode mcp-dashboard && tsc -p tsconfig.server.json && node -e \"const fs=require('node:fs'); fs.chmodSync('dist/main.js', 0o755); fs.cpSync('../submission/qyl/skills', 'dist/skills', { recursive: true })\"",
     "postbuild": "bun run verify:deployment-guidance",
     "verify:deployment-guidance": "node verify-deployment-guidance.mjs",
     "verify:readme": "node verify-package-readme.mjs",
     "verify:frame": "node verify-tool-frame.mjs",
-    "snapshot:tools": "bun run build && tsc -p tsconfig.test.json && node update-tool-manifest-snapshot.mjs",
+    "snapshot:tools": "bun run build && tsc -p tsconfig.test.json && bun run stage:test && node update-tool-manifest-snapshot.mjs",
+    "stage:test": "node -e \"const fs=require('node:fs'); for (const name of ['mcp-app.html','mcp-dashboard.html']) fs.copyFileSync('dist/'+name,'dist-test/'+name); fs.cpSync('dist/skills', 'dist-test/skills', { recursive: true })\"",
     "test": "bun run build && bun run test:built",
     "smoke": "node smoke-test.mjs",
     "smoke:quiet": "node quiet-stream-smoke.mjs",
@@ -78,10 +79,10 @@
     "smoke:live": "node live-tools-smoke.mjs",
     "prepack": "bun run build",
     "smoke:projects": "node project-access-smoke.mjs",
-    "test:built": "bun run verify:readme && bun run verify:frame && tsc -p tsconfig.test.json && node -e \"const fs=require('node:fs'); for (const name of ['mcp-app.html','mcp-dashboard.html']) fs.copyFileSync('dist/'+name,'dist-test/'+name)\" && node --test --test-concurrency=4 dist-test/*.test.js"
+    "test:built": "bun run verify:readme && bun run verify:frame && tsc -p tsconfig.test.json && bun run stage:test && node --test --test-concurrency=4 dist-test/*.test.js"
   },
   "dependencies": {
-    "@ancplua/qyl-api-schema": "12.1.1",
+    "@ancplua/qyl-api-schema": "12.1.2",
     "@modelcontextprotocol/core": "2.3.1",
     "@modelcontextprotocol/server": "2.3.1",
     "@opentelemetry/api": "1.9.1",

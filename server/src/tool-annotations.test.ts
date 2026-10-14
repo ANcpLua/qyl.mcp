@@ -132,7 +132,7 @@ test("qyl server factory serves protocol revision 2026-07-28 over the fetch entr
       Awaited<ReturnType<Client["readResource"]>> & { ttlMs: number; cacheScope: string };
     assert.equal(appResult.ttlMs, 86_400_000);
     assert.equal(appResult.cacheScope, "public");
-    for (const resource of resources) {
+    for (const resource of resources.filter((candidate) => candidate.uri.startsWith("ui://"))) {
       const result = await client.readResource({ uri: resource.uri });
       assert.deepEqual(result.contents[0]?._meta?.ui, {
         domain: "https://mcp.qyl.test",

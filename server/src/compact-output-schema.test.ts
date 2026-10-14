@@ -55,20 +55,24 @@ test("compact output spells nullable type arrays as anyOf without changing valid
   assert.equal(wrapped["~standard"].jsonSchema.input({ target }), emitted);
 });
 
-test("compact output normalizes hoisted definitions and retains their references", () => {
+test("compact output inlines repeated subschemas and drops the date-time regex", () => {
   const leaf = z.object({
     attributes: z.record(z.string(), z.unknown()),
     value: z.number().nullable(),
-    note: z.string().describe("Repeated measurement metadata should remain in one shared definition."),
+    verdict: z.enum(["passed", "failed"]),
+    at: z.iso.datetime(),
   });
   const emitted = output(z.object({ first: leaf, second: leaf, third: leaf }));
-  assert.ok(emitted.$defs);
-  const properties = emitted.properties as Record<string, unknown>;
+  // ChatGPT reads a `$ref` as `unknown`; every mention carries its own shape.
+  assert.equal(emitted.$defs, undefined);
+  assert.doesNotMatch(JSON.stringify(emitted), /"\$ref"/u);
+  const properties = emitted.properties as Record<string, { properties: Record<string, unknown> }>;
   assert.deepEqual(properties.first, properties.second);
   assert.deepEqual(properties.first, properties.third);
-  assert.match(JSON.stringify(properties.first), /"\$ref":"#\/\$defs\//u);
+  assert.deepEqual(properties.first.properties.verdict, { type: "string", enum: ["passed", "failed"] });
+  assert.deepEqual(properties.first.properties.at, { type: "string", format: "date-time" });
+  assert.deepEqual(properties.first.properties.value, { anyOf: [{ type: "number" }, { type: "null" }] });
   assert.doesNotMatch(JSON.stringify(emitted), /"additionalProperties":\{\}|"type":\[/u);
-  assert.match(JSON.stringify(emitted.$defs), /"anyOf":\[\{"type":"number"\},\{"type":"null"\}\]/u);
 });
 
 test("compact output preserves literal data and an existing anyOf conjunction", () => {

@@ -20,9 +20,9 @@
       "name": "qyl-mcp-dashboard",
       "version": "1.1.1",
       "dependencies": {
-        "@ancplua/qyl-api-schema": "12.1.1",
+        "@ancplua/qyl-api-schema": "12.1.2",
         "@modelcontextprotocol/core": "2.3.1",
-        "qyl-mcp-server": "7.7.0",
+        "qyl-mcp-server": "8.0.0",
         "react": "19.3.0",
         "react-dom": "19.3.0",
         "zod": "4.6.5",
@@ -44,7 +44,7 @@
         "qyl-mcp-server": "dist/main.js",
       },
       "dependencies": {
-        "@ancplua/qyl-api-schema": "12.1.1",
+        "@ancplua/qyl-api-schema": "12.1.2",
         "@ancplua/qyl-semantic-conventions": "9.9.1",
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
@@ -75,12 +75,12 @@
       "name": "qyl-mcp-workbench",
       "version": "1.1.1",
       "dependencies": {
-        "@ancplua/qyl-api-schema": "12.1.1",
+        "@ancplua/qyl-api-schema": "12.1.2",
         "@modelcontextprotocol/client": "2.3.1",
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
         "express": "5.3.0",
-        "qyl-mcp-server": "7.7.0",
+        "qyl-mcp-server": "8.0.0",
         "zod": "4.6.5",
       },
       "devDependencies": {
@@ -98,7 +98,7 @@
     },
   },
   "packages": {
-    "@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@12.1.1", "", { "peerDependencies": { "@typespec/compiler": "~1.17.0", "@typespec/events": "^0.87.0", "@typespec/http": "~1.17.0", "@typespec/openapi": "~1.17.0", "@typespec/openapi3": "~1.17.0", "@typespec/sse": "^0.87.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-kdZe92NAOqjvnVnD4lQAJILW3EIWOKZe6OMAcZJcBO90GsqpXXktD9eIhNNUXAYtj6AaBgTOLsY3pZ8Hts1rzw=="],
+    "@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@12.1.2", "", { "peerDependencies": { "@typespec/compiler": "~1.17.0", "@typespec/events": "^0.87.0", "@typespec/http": "~1.17.0", "@typespec/openapi": "~1.17.0", "@typespec/openapi3": "~1.17.0", "@typespec/sse": "^0.87.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-xC7Rwwtno+9DSoRhg06qxBCDNJFo9n/ZmxiYuhaGwiIFeZvUcrYKe1nuWDL98uOc+e0lMA4qV6nm+6ngz2RylQ=="],
 
     "@ancplua/qyl-semantic-conventions": ["@ancplua/qyl-semantic-conventions@9.9.1", "", {}, "sha512-ETdD+Rp5KcO85ansG0o1Vy0zZ0siRx/0HNG74XiFJfeZE/iwG4JLhcgAKA1MG796PXM+a5VFbV/UWomHMuON8A=="],
 

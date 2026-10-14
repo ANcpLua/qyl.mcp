@@ -18,6 +18,9 @@ const compacted = new WeakMap<object, StandardSchemaWithJSON<never, never>>();
 function normalizeOutputSpelling(value: unknown): void {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return;
   const schema = value as Record<string, unknown>;
+  // zod spells `z.iso.datetime()` as `format: "date-time"` plus a 300-character
+  // regex that says the same thing; the format alone is the portable spelling.
+  if (schema.format === "date-time" && typeof schema.pattern === "string") delete schema.pattern;
   const additional = schema.additionalProperties;
   if (additional !== null && typeof additional === "object" &&
       !Array.isArray(additional) && Object.keys(additional).length === 0) {
@@ -51,22 +54,18 @@ function normalizeOutputSpelling(value: unknown): void {
 }
 
 /**
- * Emits a tool's output JSON Schema with repeated subschemas hoisted into
- * `$defs`, when that spelling is actually smaller than the inlined one.
+ * Emits a tool's output JSON Schema in the spelling every host reads: every
+ * subschema inlined where it is used, and no redundant date-time regex.
  *
- * The contract's telemetry models nest: a Trace carries Spans, a Span carries
- * attribute values, and the same leaf shapes recur dozens of times inside one
- * response body. The SDK asks a schema for its JSON Schema through
- * `~standard.jsonSchema`, and zod's default there inlines every occurrence, so
- * `tools/list` shipped the Span tree once per mention — 232 KB for the fourteen
- * tools that existed when this was written, most of it the same object repeated. Every byte of that is context an
- * agent pays for on connect.
- *
- * The choice is per schema and measured, not assumed: `reused: "ref"` hoists
- * anything seen twice, which is a loss on a flat shape whose repeats are single
- * keywords ("#/$defs/__schema12" costs more than {"type":"string"}). Taking the
- * smaller of the two keeps the win where the nesting is real and changes
- * nothing where it is not, so no tool pays for the mechanism.
+ * Until 8.1.0 this hoisted repeated subschemas into `$defs` whenever that was
+ * smaller, which it was for the nested telemetry shapes. ChatGPT's tool
+ * conversion does not resolve `$ref`, so a hoisted field reached the model as
+ * `unknown`: `verify_fix.verdict`, a four-value enum, and most of
+ * `get_failure_context` lost their types in the one directory the hoisting
+ * was meant to serve. Inlining costs about six percent more catalog bytes
+ * than the hoisted form once the date-time patterns are gone; the types are
+ * worth it. zod still emits `$defs` for the two genuinely recursive attribute
+ * shapes, which no inlining can remove.
  *
  * Validation is unchanged — `validate` still runs the generated zod schema, so
  * structured content is checked against the contract exactly as before. Only
@@ -84,17 +83,9 @@ export function compactOutputSchema<T>(schema: z.ZodType<T>): StandardSchemaWith
   let emitted: Record<string, unknown> | undefined;
   const jsonSchema = (): Record<string, unknown> => {
     if (emitted === undefined) {
-      const inlined = z.toJSONSchema(schema, { target: JSON_SCHEMA_TARGET, io: "output" });
-      const hoisted = z.toJSONSchema(schema, {
-        target: JSON_SCHEMA_TARGET,
-        io: "output",
-        reused: "ref",
-      });
-      // Zod compacts unions after its override hook. Normalize its finished,
-      // independent JSON objects, then compare the actual advertised sizes.
-      normalizeOutputSpelling(inlined);
-      normalizeOutputSpelling(hoisted);
-      emitted = JSON.stringify(hoisted).length < JSON.stringify(inlined).length ? hoisted : inlined;
+      // Zod compacts unions after its override hook; normalize its finished JSON object.
+      emitted = z.toJSONSchema(schema, { target: JSON_SCHEMA_TARGET, io: "output" });
+      normalizeOutputSpelling(emitted);
     }
     return emitted;
   };
