@@ -22,3 +22,6 @@ tools/hosted-eval/node_modules
 
 # Local draft packages are rebuilt from submission/qyl; never commit upload ZIPs.
 /submission/packages/*.zip
+
+# Gate logs written by scripts/quiet.sh.
+artifacts/

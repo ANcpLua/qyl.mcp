@@ -8,24 +8,25 @@
 "node" = "24.21.0"
 
 [tasks.check]
-description = "Local release gate, running one check at a time"
-run = [
-  "node verify-contract-pins.mjs",
-  "bun install --frozen-lockfile",
-  "bun run build",
-  "bun run lint",
-  "bun run test:built",
-  "python3 -m unittest discover -s tools/auth0 -p 'test_*.py'",
-  "bun run smoke",
-  "bun run --cwd server smoke:quiet",
-  "bun run --cwd server test:answer-key",
-]
+description = "Local release gate, one check at a time; a line per step, full log in artifacts/logs, QYL_VERBOSE=1 prints everything"
+quiet = true
+run = '''
+scripts/quiet.sh check \
+  'node verify-contract-pins.mjs' \
+  'bun install --frozen-lockfile' \
+  'bun run build' \
+  'bun run lint' \
+  'bun run test:built' \
+  "python3 -m unittest discover -s tools/auth0 -p 'test_*.py'" \
+  'bun run smoke' \
+  'bun run --cwd server smoke:quiet' \
+  'bun run --cwd server test:answer-key'
+'''
 
 [tasks.smoke-otlp]
 description = "Live OTLP and MCP surface against a built collector; override with QYL_COLLECTOR_DLL"
-run = [
-  "bun run smoke:otlp",
-]
+quiet = true
+run = "scripts/quiet.sh smoke-otlp 'bun run smoke:otlp'"
 
 [tasks.hosted-eval]
 description = "Every tool against mcp.qyl.at with a token from the Keychain"
