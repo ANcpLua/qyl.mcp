@@ -93,8 +93,11 @@ verify_published() {
   printf 'VERIFIED %s %s %s: indexed after %s, registry tarball byte-identical, snapshot refreshed\n' "$NPM_PKG" "$version" "$(utc)" "$(index_elapsed)"
 }
 
-# nohup plus a new session (python3's setsid; macOS has no setsid command): neither the end of the
-# caller's shell nor a signal to its process group reaches the job. It needs no registry credential.
+# A new session (python3's setsid; macOS has no setsid command) without a controlling terminal: neither
+# the end of the caller's shell nor a signal to its process group reaches the job. SIGINT, SIGQUIT and
+# SIGHUP go back to their defaults first: `&` ignores SIGINT and SIGQUIT for the child, an ignored
+# signal stays ignored across exec, and a smoke that stops its tool with Ctrl-C (qyl's) would hang.
+# The job needs no registry credential.
 start_verification() {
   local pid
   mkdir -p artifacts
@@ -103,7 +106,10 @@ start_verification() {
     [[ -n $pid ]] && kill -0 "$pid" 2>/dev/null && die "the verification of $version is still running (pid $pid): ./release.sh --wait $version"
   fi
   : >"$verify_log"
-  env -u NPM_CONFIG_USERCONFIG -u NPM_CONFIG_TOKEN nohup python3 -I -c 'import os, sys; os.setsid(); os.execv(sys.argv[1], sys.argv[1:])' \
+  env -u NPM_CONFIG_USERCONFIG -u NPM_CONFIG_TOKEN python3 -I -c 'import os, signal, sys
+os.setsid()
+for number in (signal.SIGINT, signal.SIGQUIT, signal.SIGHUP): signal.signal(number, signal.SIG_DFL)
+os.execv(sys.argv[1], sys.argv[1:])' \
     "$PWD/release.sh" __verify "$version" "$@" </dev/null >>"$verify_log" 2>&1 &
   disown
   # Return only once the job has logged its pid, so a --wait right after this finds it.
