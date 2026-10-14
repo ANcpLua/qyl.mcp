@@ -16,7 +16,8 @@ export default defineRailway(() => {
   });
 
   const mcp = service("qyl-mcp", {
-    source: github("ANcpLua/qyl.mcp", { checkSuites: true }),
+    // CI only reports: a push deploys at once and never waits for the GitHub checks on its commit.
+    source: github("ANcpLua/qyl.mcp", { checkSuites: false }),
     build: {
       builder: "RAILPACK",
       buildCommand: "bun run --cwd server build",
