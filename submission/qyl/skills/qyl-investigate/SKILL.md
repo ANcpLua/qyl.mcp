@@ -30,7 +30,7 @@ saved queries and failure status in that project, never the telemetry.
 | Why this request, trace or session failed | `get_failure_context` with the `trace_id`, `session_id` or `failure_id` | `compare_traces` against a passing execution, `get_trace` for the span tree |
 | Which errors recur and their status | `list_failures` | `update_failure_status` when the user records a decision |
 | Why something is slow | `aggregate_telemetry` grouped by operation with `duration_p95` | `get_trace` with `selection: critical_path` on a slow `trace_id` |
-| Whether a fix held | `verify_fix` with the `failure_id` | repeat with the returned `verify_id` once `needs` is met |
+| Whether a fix held | `verify_fix` with the `failure_id` and `since` (when the fix shipped) or `release` | repeat with the returned `verify_id` once `needs` is met |
 | How two populations differ | `compare_groups` | `discover_attributes` to choose the discriminating keys |
 | How services call each other | `get_service_map` | `aggregate_telemetry` grouped by `service.name` |
 | Whether telemetry itself is complete | `check_telemetry_health` | `discover_attributes` for the missing keys |

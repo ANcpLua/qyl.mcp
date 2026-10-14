@@ -47,15 +47,21 @@ removed. It holds no OAuth tokens and no copied telemetry.
 
 ## Tools
 
-Most tools only read data and are annotated as read-only. Five tools change
-something, and only notes and saved queries you create: they are annotated as
-not read-only, and the ones that replace or remove an existing object as
-destructive. Your client decides when to ask for confirmation.
+Most tools only read data and are annotated as read-only. Six tools change
+something, and only objects you create in qyl: notes, saved queries and the
+recorded status of a failure. They are annotated as not read-only, and the
+ones that replace or remove an existing object as destructive. Your client
+decides when to ask for confirmation.
 
 | Tool | Use it to |
 | --- | --- |
+| `triage` | Start an open-ended investigation: new or worsening failures, regressions, releases and silent services, ranked. |
+| `list_failures`, `get_failure_context`, `update_failure_status` | Group recurring errors by fingerprint, read one failure's path with its logs and comparison, and record its status or assignee. |
+| `compare_groups`, `compare_traces`, `verify_fix` | Compare two populations or two executions, and measure whether a fix held. |
+| `aggregate_telemetry`, `discover_attributes` | Count, error rates and duration percentiles by any attribute; the keys and values that are recorded. |
+| `list_releases`, `get_service_map`, `check_telemetry_health`, `get_mcp_stats`, `get_agent_run` | Releases and their impact, service dependencies, telemetry coverage, MCP tool health, one agent run step by step. |
 | `list_sessions`, `list_traces` | Find active, failing or slow work. |
-| `get_trace` | Inspect one trace's complete span tree. |
+| `get_trace` | Inspect one trace's spans: all of them, the error path, or the critical path, 100 per page. |
 | `search_logs` | Find error logs, including the logs that belong to one trace. |
 | `list_metrics`, `get_metric_series`, `query_metric` | Discover metric instruments and their attribute streams, then compare a metric over time or across groups. |
 | `ci_log` | Read CI runs that follow qyl's CI telemetry convention, failed phases first. |
@@ -83,8 +89,9 @@ investigation workflow these tools are designed for.
   queries in your project.
 - An empty result means nothing matching was recorded in your project. It
   does not show that a system is healthy.
-- Most tools take limits and filters. `get_trace` returns the full span
-  tree, which can be large; `display_traces` shows it as a waterfall, and
+- Most tools take limits and filters; every input description states its
+  default. `get_trace` returns up to 100 spans per page and continues with
+  `next_cursor`; `display_traces` shows a trace as a waterfall, and
   `search_logs` narrows logs by trace, service, severity or text.
 - If sign-in fails or requests are rejected, reconnect qyl in your client and
   sign in with an account that has the `qyl:read` scope. A write that is

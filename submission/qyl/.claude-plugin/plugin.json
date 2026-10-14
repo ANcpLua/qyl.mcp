@@ -2,7 +2,7 @@
   "name": "qyl",
   "displayName": "qyl",
   "version": "1.0.0",
-  "description": "Investigate the traces, logs, metrics, sessions and CI runs in your authorized qyl Collector project with the hosted qyl MCP server, and keep annotations and saved queries beside them; no tool changes telemetry.",
+  "description": "Investigate the traces, logs, metrics, sessions and CI runs in your authorized qyl Collector project with the hosted qyl MCP server: triage what changed, read a failure's context, compare groups and executions, verify a fix, and keep annotations, saved queries and failure status beside the telemetry; no tool changes telemetry.",
   "author": {
     "name": "Alexander Nachtmann",
     "url": "https://qyl.at/"
@@ -15,5 +15,16 @@
   "termsOfServiceUrl": "https://qyl.at/terms/",
   "icon": "./assets/qyl-icon.png",
   "license": "MIT",
-  "keywords": ["observability", "opentelemetry", "telemetry", "traces", "logs", "metrics", "sessions", "ci", "diagnostics", "mcp"]
+  "keywords": [
+    "observability",
+    "opentelemetry",
+    "telemetry",
+    "traces",
+    "logs",
+    "metrics",
+    "sessions",
+    "ci",
+    "diagnostics",
+    "mcp"
+  ]
 }
