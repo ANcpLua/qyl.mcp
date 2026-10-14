@@ -35,7 +35,9 @@ trace ID, service name or time window) and your OAuth access token to
 `https://mcp.qyl.at/mcp`. The server reads the matching records from your
 Collector project and returns them to your client. When you ask for a note or
 a saved query, the server stores its text, target or filter in your Collector
-project, where you can change or delete it again. The server's own records of
+project, where you can change or delete it again. When you record a failure's
+status or assignee, the server stores it on that failure in your Collector
+project, where you can change it again. The server's own records of
 incoming tool calls keep only the tool name, timing, status and error type,
 not arguments or conversation text.
 

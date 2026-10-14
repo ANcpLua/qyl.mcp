@@ -2,6 +2,16 @@
 
 Entries older than the three in [CHANGELOG.md](CHANGELOG.md), verbatim.
 
+## 8.0.0
+
+- The executable now requires Bun 1.4 or later, including stdio. Library subpaths remain usable on Node 24; TypeScript 7 continues to emit the package.
+- Start HTTP explicitly with a 60-second idle timeout so quiet SSE responses survive the SDK keep-alive. Stop the HTTP server during shutdown.
+- Request read, write and delete scopes at initial sign-in; step-up challenges name only missing scopes.
+- Return useful text summaries, bounded evidence and continuations; validate failure updates and make create retries idempotent by default.
+- Use collector contract 12.1.1 for corrected analysis paging, coverage and failure timestamps. Remove the obsolete demo runtime and duplicate read implementations.
+- Pin SemanticConventions 9.9.1, including the canonical `qyl.gen_ai.tool.call.arguments_hash` definition used by collector 12.1.1 for repeated-call analysis.
+- Preserve note drafts, render trace drill-down results and use consistent dashboard filters. Gate the real OTLP answer-key and Bun quiet-stream regressions.
+
 ## 7.7.0
 
 - Expand to 32 tools: failure triage and lifecycle, trace/group comparisons, fix verification, telemetry aggregation and discovery, agent runs, releases, service maps, telemetry health and MCP statistics.

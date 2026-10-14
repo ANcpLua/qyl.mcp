@@ -138,7 +138,7 @@ h2 { margin-bottom: 1.15rem; font-size: clamp(2rem, 4vw, 3.7rem); line-height: 1
 .tool-list { margin: 0; padding: 0; list-style: none; counter-reset: tools; }
 .tool-list li { min-height: 68px; display: grid; grid-template-columns: 28px 1.15fr 1.6fr auto; align-items: center; gap: 1.2rem; border-bottom: 1px solid var(--line); counter-increment: tools; }
 .tool-list li:first-child { border-top: 1px solid var(--line); }
-.tool-list li::before { content: "0" counter(tools); color: var(--faint); font: .55rem var(--mono); }
+.tool-list li::before { content: counter(tools, decimal-leading-zero); color: var(--faint); font: .55rem var(--mono); }
 .tool-list code { color: var(--ink); font: .7rem var(--mono); }
 .tool-list span { color: var(--muted); font-size: .75rem; }
 .tool-list b { color: var(--cyan); font: 600 .53rem var(--mono); letter-spacing: .05em; text-transform: uppercase; }

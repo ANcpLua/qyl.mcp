@@ -87,11 +87,24 @@
       <div class="section-intro">
         <p class="section-index">01 / TOOL SURFACE</p>
         <h2 id="tools-title">Ask from the place you’re already fixing.</h2>
-        <p>Eighteen tools. <code>qyl:read</code> covers evidence and views; <code>qyl:write</code> and <code>qyl:delete</code> add notes and saved queries in your project. No tool changes telemetry.</p>
+        <p>Thirty-two tools. <code>qyl:read</code> covers evidence and views; <code>qyl:write</code> adds notes and saved queries and records failure status, <code>qyl:delete</code> removes notes and saved queries in your project. No tool changes telemetry.</p>
       </div>
       <ol class="tool-list">
         <li><code>display_traces</code><span>Open a correlated waterfall and its logs.</span><b>MCP App</b></li>
         <li><code>display_mcp_dashboard</code><span>See tool traffic, latency, and failures.</span><b>MCP App</b></li>
+        <li><code>triage</code><span>Rank new or worsening failures, regressions, releases and silent services.</span><b>Read</b></li>
+        <li><code>list_failures</code><span>Recurring errors grouped by fingerprint.</span><b>Read</b></li>
+        <li><code>get_failure_context</code><span>One failure's path with its logs and comparison.</span><b>Read</b></li>
+        <li><code>compare_groups</code><span>Compare two populations of telemetry.</span><b>Read</b></li>
+        <li><code>compare_traces</code><span>Compare two executions of the same work.</span><b>Read</b></li>
+        <li><code>verify_fix</code><span>Measure whether a fix held.</span><b>Read</b></li>
+        <li><code>aggregate_telemetry</code><span>Counts, error rates and duration percentiles by any attribute.</span><b>Read</b></li>
+        <li><code>discover_attributes</code><span>The attribute keys and values that are recorded.</span><b>Read</b></li>
+        <li><code>list_releases</code><span>Releases and their impact.</span><b>Read</b></li>
+        <li><code>get_service_map</code><span>Service dependencies.</span><b>Read</b></li>
+        <li><code>check_telemetry_health</code><span>How complete the recorded telemetry is.</span><b>Read</b></li>
+        <li><code>get_mcp_stats</code><span>MCP request totals, failure classes and latency.</span><b>Read</b></li>
+        <li><code>get_agent_run</code><span>One agent run, step by step.</span><b>Read</b></li>
         <li><code>list_traces</code><span>Recent traces with root span, services, duration, errors.</span><b>Read</b></li>
         <li><code>get_trace</code><span>Inspect the complete span tree for one trace.</span><b>Read</b></li>
         <li><code>list_sessions</code><span>Sessions with counts, state, and GenAI token usage.</span><b>Read</b></li>
@@ -106,6 +119,7 @@
         <li><code>update_annotation</code><span>Correct a note; a stale etag is refused.</span><b>Write</b></li>
         <li><code>create_saved_query</code><span>Name a filter to ask again later.</span><b>Write</b></li>
         <li><code>update_saved_query</code><span>Rename or refine a saved query.</span><b>Write</b></li>
+        <li><code>update_failure_status</code><span>Record a failure's status or assignee.</span><b>Write</b></li>
         <li><code>delete</code><span>Remove one note or saved query, never telemetry.</span><b>Delete</b></li>
         <li><code>fetch_telemetry</code><span>Feeds the views above; not for the model.</span><b>App only</b></li>
       </ol>

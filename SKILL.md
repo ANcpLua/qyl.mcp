@@ -16,7 +16,7 @@ One agent per qyl-dev repo (qyl, qyl.mcp, qyl-api-schema, Qyl.Telemetry.AutoInst
 
 ## Release
 
-1. Commit the `### <x.y.z>` entry in `server/README.md` on `main`.
+1. Commit the `## <x.y.z>` entry at the top of `CHANGELOG.md` on `main` (move the oldest of the four entries to `CHANGELOG.archive.md`).
 2. `./release.sh <x.y.z>` (`--dry-run` first only when a step is new or unsure; the script refuses before publishing when anything is off).
 3. If it ends "not visible yet", poll `npm view qyl-mcp-server@<x.y.z> version` every 15 s; nothing else about this release until indexed.
 4. Indexed: notify the consumers.
