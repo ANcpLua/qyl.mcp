@@ -8,13 +8,15 @@
 #   ./release.sh <x.y.z> --dry-run  every check plus `bun publish --dry-run` (runs the build);
 #                                   registry and git stay unchanged; prints what the detached job would do
 #   ./release.sh --wait <x.y.z>     blocks until artifacts/release-<x.y.z>-verify.log ends in VERIFIED
-#                                   (exit 0) or FAILED (exit 1), printing the log as it grows
+#                                   (exit 0) or FAILED (exit 1; exit 3 when not indexed in time),
+#                                   printing the log as it grows
 #   ./release.sh --verify <x.y.z>   starts the detached verification again for a released version
 #
 # The detached verification (own session, survives the caller's shell) waits until npm serves
-# <x.y.z> (up to 15 min), checks the registry tarball is byte-identical to the packed one, runs
-# qyl.at's scripts/refresh-published-versions.sh and ends its log with VERIFIED or FAILED. npm
-# versions are immutable: a failure after the fact is a patch release, and the log says so.
+# <x.y.z> (up to 15 min; artifacts/release-<x.y.z>-index.status says indexed or timed-out), checks
+# the registry tarball is byte-identical to the packed one, then runs qyl.at's
+# scripts/refresh-published-versions.sh and ends its log with VERIFIED or FAILED. npm versions are
+# immutable: a failure after the fact is a patch release, and the log says so.
 #
 # Before the real run: add the `## <x.y.z>` entry at the top of CHANGELOG.md and commit it on
 # main; the script refuses without it and uses it as the release notes.
@@ -39,26 +41,36 @@ bun_path=$(mise which bun) || die "install the pinned Bun with mise install"
 node_path=$(mise which node) || die "install the pinned Node.js with mise install"
 export PATH="$(dirname "$bun_path"):$(dirname "$node_path"):$PATH"
 verify_log="$PWD/artifacts/release-$version-verify.log"
+index_status="$PWD/artifacts/release-$version-index.status"  # "waiting|indexed|timed-out elapsed=<s>s at=<utc>"
 verify_pid() { sed -n '1s/.* pid \([0-9][0-9]*\) .*/\1/p' "$verify_log"; }
+index_state() { [[ -f $index_status ]] && cut -d' ' -f1 "$index_status"; }
+index_elapsed() { sed -n 's/.* elapsed=\([^ ]*\) .*/\1/p' "$index_status" 2>/dev/null; }
 
-# The detached job. Its first log line names its pid, its last line is the verdict.
+# The detached job: index wait, registry tarball against the captured one, snapshot refresh. Its
+# first log line names its pid, its last line is the verdict; exit 3 = not indexed in time.
 verify_published() {
-  local tarball=${1:-} step="start" published
+  local tarball=${1:-} step="start" published started=$SECONDS delay=5
+  local next_patch="${version%.*}.$(( ${version##*.} + 1 ))"
   tmp=$(mktemp -d)  # global: the EXIT trap removes it after this function returned
   printf 'verify %s %s pid %s started %s\n' "$NPM_PKG" "$version" "$$" "$(utc)"
   trap 'rc=$?; rm -rf "$tmp"; (( rc == 0 )) || printf "FAILED %s %s %s: %s stopped (exit %s); fix the cause, then ./release.sh --verify %s\n" "$NPM_PKG" "$version" "$(utc)" "$step" "$rc" "$version"' EXIT
-  fail() { printf 'FAILED %s %s %s: %s\n' "$NPM_PKG" "$version" "$(utc)" "$*"; trap 'rm -rf "$tmp"' EXIT; exit 1; }
-  next_patch="${version%.*}.$(( ${version##*.} + 1 ))"
+  fail() { local code=$1; shift; printf 'FAILED %s %s %s: %s\n' "$NPM_PKG" "$version" "$(utc)" "$*"; trap 'rm -rf "$tmp"' EXIT; exit "$code"; }
+  status() { printf '%s elapsed=%ss at=%s\n' "$1" "$(( SECONDS - started ))" "$(utc)" >"$index_status"; }
 
   step="index wait"
-  say "wait until npm serves $NPM_PKG@$version (up to 15 min)"
-  for _ in $(seq 1 60); do
+  say "wait until npm serves $NPM_PKG@$version (up to 15 min, polls back off from 5 s to 60 s)"
+  status waiting
+  while :; do
     published=$(npm view "$NPM_PKG@$version" version --registry="$NPM_REGISTRY" 2>/dev/null || true)
     [[ $published == "$version" ]] && break
-    sleep 15
+    if (( SECONDS - started + delay > 900 )); then
+      status timed-out
+      fail 3 "npm does not serve $version after $(index_elapsed); nothing is wrong with the release yet: ./release.sh --verify $version checks again"
+    fi
+    sleep "$delay"; delay=$(( delay * 2 > 60 ? 60 : delay * 2 ))
   done
-  [[ $published == "$version" ]] || fail "npm does not serve $version after 15 min; ./release.sh --verify $version checks again"
-  printf 'INDEXED %s %s %s\n' "$NPM_PKG" "$version" "$(utc)"
+  status indexed
+  printf 'INDEXED %s %s %s after %s\n' "$NPM_PKG" "$version" "$(utc)" "$(index_elapsed)"
 
   step="release smoke"
   say "registry tarball against the captured artifact"
@@ -68,28 +80,30 @@ verify_published() {
   fi
   curl -fsSL "$(npm view "$NPM_PKG@$version" dist.tarball --registry="$NPM_REGISTRY")" -o "$tmp/published.tgz"
   cmp -s "$tarball" "$tmp/published.tgz" ||
-    fail "the npm tarball differs from the captured artifact $tarball; $version is immutable: fix the cause and ship $next_patch as a patch release"
+    fail 1 "the npm tarball differs from the captured artifact $tarball; $version is immutable: fix the cause and ship $next_patch as a patch release"
   echo "registry tarball is byte-identical to $tarball"
 
   step="snapshot refresh"
+  [[ $(index_state) == indexed ]] || fail 1 "$index_status does not say indexed; the snapshot stays as it is"
   say "refresh the published-versions snapshot in qyl.at"
   "$QYL_AT_DIR/scripts/refresh-published-versions.sh" ||
-    fail "$version is published and verified, but the snapshot refresh failed (above); ./release.sh --verify $version retries it"
+    fail 1 "$version is published and verified, but the snapshot refresh failed (above); ./release.sh --verify $version retries it"
 
   trap 'rm -rf "$tmp"' EXIT
-  printf 'VERIFIED %s %s %s: npm serves it, registry tarball byte-identical, snapshot refreshed\n' "$NPM_PKG" "$version" "$(utc)"
+  printf 'VERIFIED %s %s %s: indexed after %s, registry tarball byte-identical, snapshot refreshed\n' "$NPM_PKG" "$version" "$(utc)" "$(index_elapsed)"
 }
 
 # nohup plus a new session (python3's setsid; macOS has no setsid command): neither the end of the
-# caller's shell nor a signal to its process group reaches the job.
+# caller's shell nor a signal to its process group reaches the job. It needs no registry credential.
 start_verification() {
+  local pid
   mkdir -p artifacts
   if [[ -f $verify_log ]] && ! tail -n 1 "$verify_log" | grep -Eq '^(VERIFIED|FAILED) '; then
     pid=$(verify_pid)
     [[ -n $pid ]] && kill -0 "$pid" 2>/dev/null && die "the verification of $version is still running (pid $pid): ./release.sh --wait $version"
   fi
   : >"$verify_log"
-  nohup python3 -I -c 'import os, sys; os.setsid(); os.execv(sys.argv[1], sys.argv[1:])' \
+  env -u NPM_CONFIG_USERCONFIG -u NPM_CONFIG_TOKEN nohup python3 -I -c 'import os, sys; os.setsid(); os.execv(sys.argv[1], sys.argv[1:])' \
     "$PWD/release.sh" __verify "$version" "$@" </dev/null >>"$verify_log" 2>&1 &
   disown
   # Return only once the job has logged its pid, so a --wait right after this finds it.
@@ -110,7 +124,7 @@ wait_for_verification() {
     (( lines > printed )) && { sed -n "$((printed + 1)),${lines}p" "$verify_log"; printed=$lines; }
     case $(tail -n 1 "$verify_log") in
       VERIFIED\ *) return 0 ;;
-      FAILED\ *) return 1 ;;
+      FAILED\ *) [[ $(index_state) == timed-out ]] && return 3; return 1 ;;
     esac
     (( alive )) || die "the verification job (pid ${pid:-unknown}) ended without VERIFIED or FAILED; read $verify_log, then ./release.sh --verify $version"
     sleep 5
