@@ -22,7 +22,7 @@
       "dependencies": {
         "@ancplua/qyl-api-schema": "12.1.2",
         "@modelcontextprotocol/core": "2.3.1",
-        "qyl-mcp-server": "8.1.1",
+        "qyl-mcp-server": "8.1.2",
         "react": "19.3.0",
         "react-dom": "19.3.0",
         "zod": "4.6.5",
@@ -45,7 +45,7 @@
       },
       "dependencies": {
         "@ancplua/qyl-api-schema": "12.1.2",
-        "@ancplua/qyl-semantic-conventions": "9.9.2",
+        "@ancplua/qyl-semantic-conventions": "10.0.0",
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
         "@opentelemetry/api": "1.9.1",
@@ -80,11 +80,11 @@
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
         "express": "5.3.0",
-        "qyl-mcp-server": "8.1.1",
+        "qyl-mcp-server": "8.1.2",
         "zod": "4.6.5",
       },
       "devDependencies": {
-        "@ancplua/qyl-semantic-conventions": "9.9.2",
+        "@ancplua/qyl-semantic-conventions": "10.0.0",
         "@modelcontextprotocol/express": "2.0.2",
         "@modelcontextprotocol/node": "2.1.1",
         "@opentelemetry/api": "1.9.1",
@@ -100,7 +100,7 @@
   "packages": {
     "@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@12.1.2", "", { "peerDependencies": { "@typespec/compiler": "~1.17.0", "@typespec/events": "^0.87.0", "@typespec/http": "~1.17.0", "@typespec/openapi": "~1.17.0", "@typespec/openapi3": "~1.17.0", "@typespec/sse": "^0.87.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-xC7Rwwtno+9DSoRhg06qxBCDNJFo9n/ZmxiYuhaGwiIFeZvUcrYKe1nuWDL98uOc+e0lMA4qV6nm+6ngz2RylQ=="],
 
-    "@ancplua/qyl-semantic-conventions": ["@ancplua/qyl-semantic-conventions@9.9.2", "", {}, "sha512-tY5B0icGS2OGXTAj7XqBD96kLaVFEgPHaTBN/O+YdPmMDTtVIfnaL+fEj9uNH9AjGmb/riuMn4AFV768ZCpL6A=="],
+    "@ancplua/qyl-semantic-conventions": ["@ancplua/qyl-semantic-conventions@10.0.0", "", {}, "sha512-v9MmTzxBZZpvkiKg2CTZxRnCqtR+Hfq7EjqTuMA2foqDO4VFFvILAnIZviBJTJx1BmDVO9fZTD1DgUejWefKuA=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.17", "", { "peerDependencies": { "hono": "^4" } }, "sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ=="],
 
