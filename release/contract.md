@@ -389,6 +389,26 @@ the resource metadata names resource `https://mcp.qyl.at/mcp`, issuer
 `OPENAI_APPS_CHALLENGE`. Railway deploys every `main` merge automatically;
 the running build has contained PR #91 since the first observation.
 
+2026-10-14: `OPENAI_APPS_CHALLENGE` is set on the Railway service `qyl-mcp`
+(Vitals entry "qyl OpenAI plugin domain verification (qyl / qyl-mcp)") and
+`GET https://mcp.qyl.at/.well-known/openai-apps-challenge` serves the token.
+The OpenAI plugin ZIP (`submission/packages/qyl-openai-1.0.0-draft.zip`,
+SHA-256 `2a78bf39307a6d2345a23c8aa9847187cc600ae278d81db42370cebb1fc2fc6b`,
+built from the 8.1.0 sources) was uploaded to the OpenAI Platform as draft
+`plugin_asdk_app_6acf4a9531888191af07c032f362f95d`, version 1.0.0, developer
+identity "Individual — Alexander Robert Nachtmann" (the only identity the
+portal offered; `developerName` in the manifest stays `ancplua`). In the
+draft's MCPs tab the domain is verified, the server connection is authorized
+through the Auth0 OAuth flow (Auth0 logs show the ChatGPT client's login and
+code exchange for `openai-reviewer@qyl.at` at 09:30Z), all 32 tools were
+scanned with no findings, and the Metadata & Skills tab lists
+`qyl-investigate` as "Checks passed" (imported from the ZIP; the server also
+serves it through the skills extension since 8.1.0). The unauthenticated
+`POST /mcp` challenge now lists `scope="qyl:read qyl:write qyl:delete"`.
+Still owner actions: "Add review information" (reviewer account, five
+positive and three negative cases, `review.demo_recording_url`) and
+"Submit for review".
+
 Open prerequisite found 2026-10-08T06:57Z: Auth0 dynamic client registration
 at `https://qyl-eu.eu.auth0.com/oidc/register` answers `403`
 `too_many_entities` (tenant application limit). Clients that register
@@ -416,7 +436,7 @@ The ledger retains historical and superseding rows.
 | 4 | HTTP mismatch/missing-capabilities codes, cache hints and stable catalog order. | [Point 4](../docs/evidence/2026-10-08-followup-04.md): three direct factory-fetch tests. |
 | 5 | Wrong audience, missing scope, expiry and cross-subject isolation pass CI. | [Point 5](../docs/evidence/2026-10-08-followup-05.md): exact test names, timestamps and successful CI run, including point 4. |
 | 6 | Railway trigger, active deployment ID and commit recorded; compare with PR #91. | [Point 6](../docs/evidence/2026-10-08-followup-06.md): read-only live snapshot; running commit contains #91. It is not a perpetual production-state guarantee. |
-| 7 | Challenge route observed as 404; environment name documented. | [Point 7](../docs/evidence/2026-10-08-followup-07.md): production response and token-present/absent fixture; setting `OPENAI_APPS_CHALLENGE` remains an owner action. |
+| 7 | Challenge route observed as 404; environment name documented. | [Point 7](../docs/evidence/2026-10-08-followup-07.md): production response and token-present/absent fixture. `OPENAI_APPS_CHALLENGE` was set on 2026-10-14 and the portal verified the domain (see the production observations above). |
 | 8 | Collector 11.3.0 prerequisite merged; consumer dependency and four input options implemented. | [Option-A continuation](../docs/evidence/2026-10-08-point-8-options.md) records qyl PR #642, actual `verify:pins` output, tests and manifest comparison. The consumer PR must pass its own four gates; a production handshake requires a successful Collector deploy first. |
 | 9 | Separate Anthropic connector listing with acknowledgement/access owner fields. | [Point 9](../docs/evidence/2026-10-08-followup-09.md); [listing draft](../submission/anthropic-connector-listing.md). |
 | 10 | Anthropic icon and rebuilt, validated OpenAI ZIP; unresolved manifest fields named. | [Point 10](../docs/evidence/2026-10-08-followup-10.md); [owner field mapping](../submission/README.md#owner-fields-still-required). |
