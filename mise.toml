@@ -14,6 +14,7 @@ run = '''
 scripts/quiet.sh check \
   'node verify-contract-pins.mjs' \
   'bun install --frozen-lockfile' \
+  'bun run verify:sdk' \
   'bun run build' \
   'bun run lint' \
   'bun run test:built' \

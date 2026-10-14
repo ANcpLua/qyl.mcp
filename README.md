@@ -332,7 +332,6 @@ Anthropic
 
 ```sh
 mise run check
-bun run verify:sdk
 bun run smoke:otlp
 bun run smoke:projects
 ```

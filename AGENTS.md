@@ -2,7 +2,7 @@
 
 qyl's MCP server: compact, intent-driven tools for agents diagnosing a running system.
 
-Push to `main` directly; the push deploys mcp.qyl.at (Railway). Gate before every push: `mise run check`; it prints a summary (a line per step, the failing tail, the log path under `artifacts/logs/`), `QYL_VERBOSE=1` prints everything. Releases, re-pins, contract-revision deploy order: [`SKILL.md`](SKILL.md).
+Push to `main` directly; the push deploys mcp.qyl.at (Railway). Gate before every push: `mise run check`; it prints a summary (a line per step, the failing tail, the log path under `artifacts/logs/`), `QYL_VERBOSE=1` prints everything. CI (`.github/workflows/check.yml`, push and pull request) runs the same gate beside a qyl checkout and only reports. Releases, re-pins, contract-revision deploy order: [`SKILL.md`](SKILL.md).
 
 ## Review
 
