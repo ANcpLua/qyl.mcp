@@ -32,7 +32,7 @@
     "@types/node": "26.6.5",
     "hono": "4.13.13",
     "typescript": "7.0.2",
-    "@ancplua/qyl-semantic-conventions": "10.0.0"
+    "@ancplua/qyl-semantic-conventions": "10.0.1"
   },
   "engines": {
     "node": ">=22"
