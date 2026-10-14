@@ -41,12 +41,13 @@ jobs:
         with:
           working_directory: qyl.mcp
 
-      # The runner's .NET SDK satisfies qyl's global.json (latestFeature).
+      # The runner's .NET SDK satisfies qyl's global.json (latestFeature). The collector is only a
+      # fixture here: analyzers are qyl's own gate, so they are skipped (source generators still run).
       - name: Release collector for the answer key
         working-directory: qyl
         run: |
           dotnet restore services/qyl.collector/qyl.collector.csproj -p:TreatWarningsAsErrors=false
-          dotnet build services/qyl.collector/qyl.collector.csproj --configuration Release --no-restore -p:QylEmbedDashboard=false -nologo -clp:NoSummary -v quiet
+          dotnet build services/qyl.collector/qyl.collector.csproj --configuration Release --no-restore -p:QylEmbedDashboard=false -p:RunAnalyzers=false -nologo -clp:NoSummary -v quiet
 
       - name: Gate
         run: mise run check
