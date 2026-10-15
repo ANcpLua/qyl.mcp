@@ -196,8 +196,10 @@ NODE
       *) die "unexpected tracked change during the version bump: $changed" ;;
     esac
   done < <(git diff --name-only)
-  git commit -q --only -m "release: $NPM_PKG $version" -- \
-    server/package.json workbench/package.json dashboard/package.json bun.lock
+  if ! git diff --quiet -- server/package.json workbench/package.json dashboard/package.json bun.lock; then
+    git commit -q --only -m "release: $NPM_PKG $version" -- \
+      server/package.json workbench/package.json dashboard/package.json bun.lock
+  fi
 fi
 
 release_commit=$(git rev-parse HEAD)

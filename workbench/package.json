@@ -19,7 +19,7 @@
     "@modelcontextprotocol/core": "2.3.1",
     "@modelcontextprotocol/server": "2.3.1",
     "express": "5.3.0",
-    "qyl-mcp-server": "8.1.4",
+    "qyl-mcp-server": "8.2.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
@@ -32,7 +32,7 @@
     "@types/node": "26.6.5",
     "hono": "4.13.13",
     "typescript": "7.0.2",
-    "@ancplua/qyl-semantic-conventions": "10.0.1"
+    "@ancplua/qyl-semantic-conventions": "10.1.0"
   },
   "engines": {
     "node": ">=22"

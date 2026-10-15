@@ -2,6 +2,11 @@
 
 Entries older than the three in [CHANGELOG.md](CHANGELOG.md), verbatim.
 
+## 8.1.2
+
+- Pin SemanticConventions 9.9.2 (no attribute changes over 9.9.1).
+- The plugin bundle README says the write tools also record failure status. The mcp.qyl.at landing page lists all 32 tools, `update_failure_status` among the writes, and numbers them 01 to 32. No server code change since 8.1.1.
+
 ## 8.1.1
 
 - Package the corrected qyl-investigate skill: `verify_fix` needs `since` or `release` beside the `failure_id`.
