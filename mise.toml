@@ -12,6 +12,7 @@ description = "Local release gate, one check at a time; a line per step, full lo
 quiet = true
 run = '''
 scripts/quiet.sh check \
+  'node --test scripts/verify-contract-pins.test.mjs' \
   'node verify-contract-pins.mjs' \
   'bun install --frozen-lockfile' \
   'bun run verify:sdk' \

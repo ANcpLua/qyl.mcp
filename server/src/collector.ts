@@ -129,7 +129,7 @@ function parseProblemDetails(value: unknown): ProblemDetails | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-// A Contract 12.0.0 problem names its type by a stable `code`, so the tool error code comes from
+// A Collector problem names its type by a stable `code`, so the tool error code comes from
 // the body first and from the status only for a code this server does not map.
 function codeForProblem(problem: ProblemDetails, status: number): ToolErrorCode {
   switch (problem.code) {

@@ -77,7 +77,11 @@ for (const workspace of ["workbench", "dashboard"]) {
   }
 }
 const workbench = JSON.parse(readFileSync(join(here, "workbench", "package.json"), "utf8"));
-if (workbench.devDependencies?.["@ancplua/qyl-semantic-conventions"]
-    !== server.dependencies?.["@ancplua/qyl-semantic-conventions"]) {
-  throw new Error("Workbench tests and server must use the same generated conventions package");
+const conventionsPackage = "@ancplua/qyl-semantic-conventions";
+const serverConventions = server.dependencies?.[conventionsPackage];
+const workbenchConventions = workbench.dependencies?.[conventionsPackage];
+const developmentConventions = workbench.devDependencies?.[conventionsPackage];
+if (!serverConventions || workbenchConventions !== serverConventions
+    || (developmentConventions !== undefined && developmentConventions !== workbenchConventions)) {
+  throw new Error("Workbench runtime and server must use the same generated conventions package; an optional development pin must also agree");
 }

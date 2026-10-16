@@ -101,7 +101,7 @@ function savedQuery(overrides: Partial<SavedQuery> = {}): SavedQuery {
   } as SavedQuery;
 }
 
-// Contract 12.0.0 problems name their type URI and stable code; the collector picks both by status.
+// Collector problems name their type URI and stable code; the collector picks both by status.
 const PROBLEM_TYPES: Record<number, [string, string]> = {
   400: ["validation-failed", "validation_failed"],
   401: ["unauthorized", "unauthorized"],

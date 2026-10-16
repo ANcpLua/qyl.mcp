@@ -22,7 +22,7 @@ const LOG_DEFINITION = "OTel.Logs.LogRecord";
 const TRACE_ID_PATTERN = /^[0-9a-f]{32}$/iu;
 const SPAN_ID_PATTERN = /^[0-9a-f]{16}$/iu;
 const DEFAULT_READ_TIMEOUT_MS = 5_000;
-// Contract 12.0.0 caps every page at 1000 rows; the earlier single 10 000-row read becomes up to
+// The Collector caps every page at 1000 rows; the earlier single 10 000-row read becomes up to
 // ten pages followed through next_cursor, so the evidence bound stays where it was.
 const LOG_PAGE_SIZE = 1_000;
 const LOG_MAX_PAGES = 10;
