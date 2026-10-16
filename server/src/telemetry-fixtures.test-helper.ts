@@ -7,7 +7,6 @@ import type {
   Resource,
   SessionState,
   SeverityNumber,
-  SeverityText,
   UserId,
 } from "@ancplua/qyl-api-schema/types";
 import { parseSessionId, parseSpanId, parseTraceId } from "@ancplua/qyl-api-schema/types";
@@ -37,19 +36,25 @@ const intAttribute = (value: number): AttributeValue => ({
 const FIXTURE_RESOURCES: Record<string, Resource> = {
   "qyl-collector": {
     "service_name": "qyl-collector",
-    "service_version": "0.4.2",
-    "telemetry_sdk_language": "dotnet",
+    attributes: [
+      { key: "service.version", value: "0.4.2" },
+      { key: "telemetry.sdk.language", value: "dotnet" },
+    ],
   },
   "checkout-api": {
     "service_name": "checkout-api",
-    "service_version": "2.11.0",
-    "telemetry_sdk_language": "dotnet",
-    "deployment_environment": "staging",
+    attributes: [
+      { key: "service.version", value: "2.11.0" },
+      { key: "telemetry.sdk.language", value: "dotnet" },
+      { key: "deployment.environment.name", value: "staging" },
+    ],
   },
   "agent-worker": {
     "service_name": "agent-worker",
-    "service_version": "1.3.7",
-    "telemetry_sdk_language": "python",
+    attributes: [
+      { key: "service.version", value: "1.3.7" },
+      { key: "telemetry.sdk.language", value: "python" },
+    ],
   },
 };
 
@@ -641,10 +646,10 @@ function buildTelemetryFixture(): TelemetryFixture {
     spanIndex: number,
     offsetMs: number,
     severity: SeverityNumber,
-    severityText: SeverityText,
+    severityText: string,
     body: string,
     attrs?: Record<string, AttributeValue>,
-  ): QylLogRecord => {
+  ) => {
     const span = trace.spans[spanIndex];
     const timeUnixNano = (
       BigInt(span.start_time_unix_nano) + BigInt(Math.round(offsetMs)) * 1_000_000n
@@ -666,7 +671,7 @@ function buildTelemetryFixture(): TelemetryFixture {
             })),
           }
         : {}),
-    };
+    } satisfies QylLogRecord;
   };
 
   const logs: QylLogRecord[] = [

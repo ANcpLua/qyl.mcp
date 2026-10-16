@@ -33,13 +33,15 @@ export async function queryAnalysis<Input extends object, Output extends object>
     // smaller page. Never slice a response and leave its paging metadata stale.
     const args = query as Record<string, unknown>;
     const page = output as Record<string, unknown>;
+    const originalPoints = operation === "get_metric_series" && typeof args.series_id === "string";
+    const points = page.points as { items: unknown[] } | undefined;
     const traceView = operation === "get_trace" || operation === "fetch_telemetry" && args.view === "trace";
-    const sizeKey = traceView ? "max_spans" : operation === "query_metric" ? "series_limit" : operation === "get_agent_run" ? "max_steps" : "limit";
+    const sizeKey = originalPoints ? "points_limit" : traceView ? "max_spans" : operation === "query_metric" ? "series_limit" : operation === "get_agent_run" ? "max_steps" : "limit";
     const trace = page.trace as { spans?: unknown[] } | undefined;
     const observed = page.observed as { error_spans?: unknown[]; logs?: unknown[] } | undefined;
     const sizes = [trace?.spans?.length, observed?.error_spans?.length, observed?.logs?.length,
       ...Object.values(page).filter(Array.isArray).map((items) => items.length)].filter((size): size is number => size !== undefined);
-    const pageSize = Math.max(0, ...sizes);
+    const pageSize = originalPoints ? points?.items.length ?? 0 : Math.max(0, ...sizes);
     if (pageSize > 1 && pageSize < previousPageSize) {
       previousPageSize = pageSize;
       const limit = Math.max(1, Math.floor(pageSize * ANALYSIS_RESPONSE_BYTES / bytes * 0.8));
@@ -47,6 +49,15 @@ export async function queryAnalysis<Input extends object, Output extends object>
       query = { ...args, ...(page.window as object), [sizeKey]: limit,
         ...(operation === "get_failure_context" ? { max_spans: limit, max_logs: limit } : {}) };
       continue;
+    }
+    // Original numeric oneofs, buckets and exemplars must remain complete.
+    // A smaller page must come from the Collector with its signed continuation.
+    if (originalPoints) {
+      const route = `/api/v1/metrics/${encodeURIComponent(String(args.metric_name))}/series/${encodeURIComponent(String(args.series_id))}/points`;
+      throw new CollectorError(
+        `The complete original metric point page exceeds the MCP response budget. Read it through GET ${route} using the same time window and point cursor.`,
+        false, undefined, "response_too_large",
+      );
     }
     await scope.step(`Queried ${operation}; large evidence compacted`);
     return compactAnalysisResult(operation, output);

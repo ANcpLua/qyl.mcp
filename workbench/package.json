@@ -14,13 +14,14 @@
     "test:built": "node --test --test-concurrency=4 dist/src/*.test.js"
   },
   "dependencies": {
-    "@ancplua/qyl-api-schema": "12.1.2",
+    "@ancplua/qyl-api-schema": "14.0.0",
     "@modelcontextprotocol/client": "2.3.1",
     "@modelcontextprotocol/core": "2.3.1",
     "@modelcontextprotocol/server": "2.3.1",
     "express": "5.3.0",
-    "qyl-mcp-server": "8.2.0",
-    "zod": "4.6.5"
+    "qyl-mcp-server": "9.0.0",
+    "zod": "4.6.5",
+    "@ancplua/qyl-semantic-conventions": "12.0.0"
   },
   "devDependencies": {
     "@modelcontextprotocol/express": "2.0.2",
@@ -32,7 +33,7 @@
     "@types/node": "26.6.5",
     "hono": "4.13.13",
     "typescript": "7.0.2",
-    "@ancplua/qyl-semantic-conventions": "10.1.0"
+    "@ancplua/qyl-semantic-conventions": "12.0.0"
   },
   "engines": {
     "node": ">=22"

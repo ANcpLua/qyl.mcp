@@ -12,9 +12,11 @@ import type {
   McpTelemetryTransport,
 } from "./mcp-semconv.js";
 import { SecretRedactor } from "./secret-redactor.js";
+import { readCollectorProjects, type CollectorAccess } from "./collector-access.js";
 import {
   McpTelemetry,
   type ActiveMcpOperation,
+  type McpOperationStartInput,
 } from "./telemetry.js";
 
 // 3: operation metadata only. Known older layouts are projected into this
@@ -189,7 +191,8 @@ export class FileNativeExecutionRepository implements NativeExecutionRepository 
 }
 
 export interface NativeExecutionTelemetry {
-  startOperation: McpTelemetry["startOperation"];
+  startOperation(input: McpOperationStartInput, verifiedSubject?: unknown): ActiveMcpOperation | undefined;
+  readonly operationTracingEnabled?: boolean;
   close?(): Promise<void>;
 }
 
@@ -206,7 +209,7 @@ export interface NativeToolCallInput {
   transport: McpTelemetryTransport;
 }
 
-/** Owns the automatic inbound tools/call lifecycle and evidence transaction. */
+/** Owns inbound tools/call telemetry and, for local processes, durable evidence. */
 export class NativeExecutionRuntime {
   private readonly telemetry?: NativeExecutionTelemetry;
   private readonly redactor: SecretRedactor;
@@ -214,7 +217,7 @@ export class NativeExecutionRuntime {
   private readonly id: () => string;
 
   constructor(
-    private readonly repository: NativeExecutionRepository,
+    private readonly repository?: NativeExecutionRepository,
     options: NativeExecutionRuntimeOptions = {},
   ) {
     this.telemetry = options.telemetry;
@@ -243,7 +246,7 @@ export class NativeExecutionRuntime {
     });
 
     try {
-      await this.repository.save(running);
+      await this.repository?.save(running);
     } catch (error) {
       operation?.end({
         endTimeMs: this.now(),
@@ -267,7 +270,7 @@ export class NativeExecutionRuntime {
         errorType: errorType(error),
       });
       try {
-        await this.repository.save(failedRecord);
+        await this.repository?.save(failedRecord);
       } catch (persistenceError) {
         operation?.end({
           endTimeMs: this.now(),
@@ -296,7 +299,7 @@ export class NativeExecutionRuntime {
       ...(toolFailed ? { errorType: "tool_result_error" } : {}),
     });
     try {
-      await this.repository.save(completedRecord);
+      await this.repository?.save(completedRecord);
     } catch (error) {
       operation?.end({
         endTimeMs: this.now(),
@@ -316,7 +319,7 @@ export class NativeExecutionRuntime {
   }
 
   get telemetryEnabled(): boolean {
-    return this.telemetry !== undefined;
+    return this.telemetry?.operationTracingEnabled ?? this.telemetry !== undefined;
   }
 
   private startTelemetry(
@@ -335,8 +338,9 @@ export class NativeExecutionRuntime {
         executionId,
         remotePropagation: propagationCarrier(input.request.params._meta),
         startTimeMs: startedMs,
-      });
-    } catch {
+      }, input.ctx.http?.authInfo?.extra?.["subject"]);
+    } catch (error) {
+      reportTelemetryFailure(error, this.redactor);
       return undefined;
     }
   }
@@ -448,35 +452,101 @@ export function hasNativeExecutionTelemetry(server: unknown): boolean {
     nativeTelemetryServers.has(server as McpServer);
 }
 
-let defaultRuntime: NativeExecutionRuntime | undefined;
+// There are at most two process-owned runtimes: local evidence and hosted
+// telemetry. Hosted callers never share a filesystem evidence repository.
+const defaultRuntimes = new Map<boolean, NativeExecutionRuntime>();
 
 export function defaultNativeExecutionRuntime(
   environment: Readonly<Record<string, string | undefined>> = process.env,
+  persistLocalEvidence = true,
 ): NativeExecutionRuntime {
-  defaultRuntime ??= createDefaultRuntime(environment);
-  return defaultRuntime;
+  let runtime = defaultRuntimes.get(persistLocalEvidence);
+  if (runtime === undefined) {
+    runtime = createDefaultRuntime(environment, persistLocalEvidence);
+    defaultRuntimes.set(persistLocalEvidence, runtime);
+  }
+  return runtime;
 }
 
 export async function closeDefaultNativeExecutionRuntime(): Promise<void> {
-  const runtime = defaultRuntime;
-  defaultRuntime = undefined;
-  await runtime?.close();
+  const runtimes = [...defaultRuntimes.values()];
+  defaultRuntimes.clear();
+  await Promise.all(runtimes.map(runtime => runtime.close()));
 }
 
 function createDefaultRuntime(
   environment: Readonly<Record<string, string | undefined>>,
+  persistLocalEvidence: boolean,
 ): NativeExecutionRuntime {
   const redactor = new SecretRedactor({
     environment,
   });
-  const repository = new FileNativeExecutionRepository({ environment, redactor });
-  let telemetry: McpTelemetry | undefined;
+  const repository = persistLocalEvidence
+    ? new FileNativeExecutionRepository({ environment, redactor })
+    : undefined;
+  let telemetry: NativeExecutionTelemetry | undefined;
   try {
-    telemetry = new McpTelemetry(environment, redactor);
-  } catch {
+    telemetry = new NativeProjectTelemetry(environment, redactor);
+  } catch (error) {
+    reportTelemetryFailure(error, redactor);
     telemetry = undefined;
   }
   return new NativeExecutionRuntime(repository, { redactor, telemetry });
+}
+
+/** Finite exporter ownership follows host configuration, never caller metadata. */
+class NativeProjectTelemetry implements NativeExecutionTelemetry {
+  private readonly subjects: ReadonlyMap<string, CollectorAccess> | undefined;
+  private readonly projects = new Map<string, McpTelemetry>();
+  private readonly singleProject: McpTelemetry | undefined;
+
+  constructor(
+    environment: Readonly<Record<string, string | undefined>>,
+    private readonly redactor: SecretRedactor,
+  ) {
+    this.subjects = readCollectorProjects(environment);
+    if (this.subjects === undefined) {
+      this.singleProject = this.create(environment);
+      return;
+    }
+    const accessByProject = new Map([...this.subjects.values()].map(access => [access.project, access]));
+    this.redactor.registerSecretValues([...accessByProject.values()].map(access => access.apiKey));
+    for (const access of accessByProject.values()) {
+      const telemetry = this.create({ ...environment, QYL_API_KEY: access.apiKey, QYL_PROJECT: access.project });
+      if (telemetry !== undefined) this.projects.set(access.project, telemetry);
+    }
+  }
+
+  get operationTracingEnabled(): boolean {
+    return this.singleProject?.operationTracingEnabled
+      ?? [...this.projects.values()].some(telemetry => telemetry.operationTracingEnabled);
+  }
+
+  startOperation(input: McpOperationStartInput, verifiedSubject?: unknown): ActiveMcpOperation | undefined {
+    if (this.subjects === undefined) return this.singleProject?.startOperation(input);
+    const access = typeof verifiedSubject === "string" ? this.subjects.get(verifiedSubject) : undefined;
+    // An unassigned caller has no export destination, including the fallback.
+    return access === undefined ? undefined : this.projects.get(access.project)?.startOperation(input);
+  }
+
+  async close(): Promise<void> {
+    await Promise.all([this.singleProject?.close(), ...[...this.projects.values()].map(telemetry => telemetry.close())]);
+  }
+
+  private create(environment: Readonly<Record<string, string | undefined>>): McpTelemetry | undefined {
+    try {
+      return new McpTelemetry(environment, this.redactor);
+    } catch (error) {
+      reportTelemetryFailure(error, this.redactor);
+      return undefined;
+    }
+  }
+}
+
+function reportTelemetryFailure(error: unknown, redactor: SecretRedactor): void {
+  const type = error instanceof Error && /^[A-Za-z][A-Za-z0-9]*$/u.test(error.name) ? error.name : "Error";
+  const detail = error instanceof Error ? error.message : "Unknown telemetry failure";
+  console.error(`qyl.mcp telemetry setup or recording failed (${type}): ${redactor.redactText(detail)}`);
 }
 
 function nativeStatePath(environment: Readonly<Record<string, string | undefined>>): string {

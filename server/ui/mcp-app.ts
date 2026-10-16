@@ -165,9 +165,9 @@ function shortId(id: string): string {
   return id.length > 8 ? id.slice(0, 8) : id;
 }
 
-function formatLogTime(ns: string): string {
+function formatLogTime(ns: string | undefined): string {
+  if (ns === undefined) return "unknown";
   const value = BigInt(ns);
-  if (value <= 0n) return "—";
   const date = new Date(Number(value / 1_000_000n));
   const hh = String(date.getHours()).padStart(2, "0");
   const mm = String(date.getMinutes()).padStart(2, "0");
@@ -767,16 +767,22 @@ function renderLogs(logs: QylLogRecord[]) {
     logsStateEl.textContent = "No logs recorded for this trace.";
   }
   const fragment = document.createDocumentFragment();
-  const sorted = [...logs].sort((a, b) =>
-    nsDelta(b.time_unix_nano, a.time_unix_nano),
-  );
+  const effectiveTime = (log: QylLogRecord) =>
+    [log.time_unix_nano, log.observed_time_unix_nano].find(value => value !== undefined && BigInt(value) !== 0n);
+  const sorted = [...logs].sort((a, b) => {
+    const first = effectiveTime(a);
+    const second = effectiveTime(b);
+    if (first === undefined) return second === undefined ? 0 : 1;
+    if (second === undefined) return -1;
+    return nsDelta(second, first);
+  });
   for (const log of sorted) {
     const { label, cls } = severityInfo(log);
     const row = document.createElement("div");
     row.className = `log-row severity-${cls}`;
     const time = document.createElement("span");
     time.className = "log-time mono dim";
-    time.textContent = formatLogTime(log.time_unix_nano);
+    time.textContent = formatLogTime(effectiveTime(log));
     row.appendChild(time);
     const badge = document.createElement("span");
     badge.className = "log-severity";

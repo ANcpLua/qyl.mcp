@@ -173,8 +173,10 @@ Access deployments cannot enable this map. When the variable is absent, the
 existing deployment-wide credential behavior is retained.
 
 Only the verified SDK `AuthInfo.extra.subject` selects the project. Tool inputs
-and request metadata cannot override it. All telemetry tools, viewer refreshes
-use that account's project credential. Project
+and request metadata cannot override it. Telemetry tools, viewer refreshes and
+tool-call OTLP exports use that account's project credential. Export pipelines
+are bounded by the configured projects; an unassigned caller gets no fallback
+export destination. Project
 keys are redacted from text and structured results, including keys nested in
 this JSON configuration. Keep the map in host secrets and out of the plugin ZIP.
 

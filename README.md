@@ -175,6 +175,9 @@ archives require operator review.
 
 OTLP exports include operation timing/status and trace correlation. Native
 incoming calls do not supply argument/result bodies to that telemetry.
+Hosted calls export traces, duration metrics and named logs using the verified
+caller’s Collector project. Disabling the local record store does not disable
+these exports. Exporter setup failures are reported without blocking tools.
 Workbench has a separate optional content-capture setting. Local OTLP tests
 check redaction and matching trace/span IDs; they do not establish a production
 retention policy.

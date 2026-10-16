@@ -20,7 +20,7 @@ import { loadHostedOAuth, QYL_MCP_ISSUER } from "./oauth.js";
 import { createResourceAuthorization } from "./authorization.js";
 import { readAuthorizationExtensions } from "./auth-extensions.js";
 import { createCloudflareAccessAuth, readAccessConfig } from "./cloudflare-access.js";
-import { closeDefaultNativeExecutionRuntime } from "./native-execution.js";
+import { closeDefaultNativeExecutionRuntime, defaultNativeExecutionRuntime } from "./native-execution.js";
 import { EventsRuntime, createEventStore } from "./events.js";
 import { hostedEventsAuthorization } from "./events-authorization.js";
 import { readCollectorProjects } from "./collector-access.js";
@@ -363,22 +363,28 @@ export async function hostedEvents(
   return events;
 }
 
+export function createHttpMcpServer(
+  config: StreamableHTTPServerConfig,
+  events?: EventsRuntime,
+): McpServer {
+  const uiDomain = config.publicUrl === undefined
+    ? undefined
+    : hostedUiDomain(new URL("/mcp", config.publicUrl).href);
+  return createServer({
+    transport: "streamable_http",
+    ...(uiDomain === undefined ? {} : { uiDomain }),
+    nativeExecution: defaultNativeExecutionRuntime(process.env, recordsNativeExecutionEvidence(config)),
+    ...(events === undefined ? {} : { events }),
+  });
+}
+
 async function createHostedRuntime(
   config: StreamableHTTPServerConfig,
 ): Promise<void> {
   const auth = await hostedAuth(config);
   const events = await hostedEvents(auth);
-  const uiDomain = config.publicUrl === undefined
-    ? undefined
-    : hostedUiDomain(new URL("/mcp", config.publicUrl).href);
   const handler = createHostedHandler(
-    () =>
-      createServer({
-        transport: "streamable_http",
-        ...(uiDomain === undefined ? {} : { uiDomain }),
-        ...(recordsNativeExecutionEvidence(config) ? {} : { nativeExecution: false }),
-        ...(events === undefined ? {} : { events }),
-      }),
+    () => createHttpMcpServer(config, events),
     (error) => reportError("Standalone MCP request", error),
   );
 

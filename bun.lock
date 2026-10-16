@@ -20,7 +20,7 @@
       "name": "qyl-mcp-dashboard",
       "version": "1.1.1",
       "dependencies": {
-        "@ancplua/qyl-api-schema": "12.1.2",
+        "@ancplua/qyl-api-schema": "14.0.0",
         "@modelcontextprotocol/core": "2.3.1",
         "qyl-mcp-server": "8.2.0",
         "react": "19.3.0",
@@ -39,13 +39,13 @@
     },
     "server": {
       "name": "qyl-mcp-server",
-      "version": "8.2.0",
+      "version": "9.0.0",
       "bin": {
         "qyl-mcp-server": "dist/main.js",
       },
       "dependencies": {
-        "@ancplua/qyl-api-schema": "12.1.2",
-        "@ancplua/qyl-semantic-conventions": "10.1.0",
+        "@ancplua/qyl-api-schema": "14.0.0",
+        "@ancplua/qyl-semantic-conventions": "12.0.0",
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
         "@opentelemetry/api": "1.9.1",
@@ -66,6 +66,7 @@
         "@modelcontextprotocol/client": "2.3.1",
         "@types/bun": "1.4.3",
         "@types/node": "26.6.5",
+        "protobufjs": "8.8.1",
         "typescript": "7.0.2",
         "vite": "8.3.4",
         "vite-plugin-singlefile": "2.3.3",
@@ -75,16 +76,17 @@
       "name": "qyl-mcp-workbench",
       "version": "1.1.1",
       "dependencies": {
-        "@ancplua/qyl-api-schema": "12.1.2",
+        "@ancplua/qyl-api-schema": "14.0.0",
+        "@ancplua/qyl-semantic-conventions": "12.0.0",
         "@modelcontextprotocol/client": "2.3.1",
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
         "express": "5.3.0",
-        "qyl-mcp-server": "8.2.0",
+        "qyl-mcp-server": "9.0.0",
         "zod": "4.6.5",
       },
       "devDependencies": {
-        "@ancplua/qyl-semantic-conventions": "10.1.0",
+        "@ancplua/qyl-semantic-conventions": "12.0.0",
         "@modelcontextprotocol/express": "2.0.2",
         "@modelcontextprotocol/node": "2.1.1",
         "@opentelemetry/api": "1.9.1",
@@ -98,9 +100,9 @@
     },
   },
   "packages": {
-    "@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@12.1.2", "", { "peerDependencies": { "@typespec/compiler": "~1.17.0", "@typespec/events": "^0.87.0", "@typespec/http": "~1.17.0", "@typespec/openapi": "~1.17.0", "@typespec/openapi3": "~1.17.0", "@typespec/sse": "^0.87.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-xC7Rwwtno+9DSoRhg06qxBCDNJFo9n/ZmxiYuhaGwiIFeZvUcrYKe1nuWDL98uOc+e0lMA4qV6nm+6ngz2RylQ=="],
+    "@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@14.0.0", "", { "peerDependencies": { "@typespec/compiler": "~1.17.0", "@typespec/events": "^0.87.0", "@typespec/http": "~1.17.0", "@typespec/openapi": "~1.17.0", "@typespec/openapi3": "~1.17.0", "@typespec/sse": "^0.87.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-X8qTVS434dF4zwunBNzDbAuL+GnS3L+xR4zGK2MuGQSNNHNcQkPuwqEBXsegu45hb++4Zvl4nhVkszddiR4f7g=="],
 
-    "@ancplua/qyl-semantic-conventions": ["@ancplua/qyl-semantic-conventions@10.1.0", "", {}, "sha512-vxeh5plYX5vZ9K1SUyyxsdf1ucGAdE2vS6qYQDAFs+27NOec77XSmnsEMVii18L81I+G2HYFhgmMIYqgkdrtOw=="],
+    "@ancplua/qyl-semantic-conventions": ["@ancplua/qyl-semantic-conventions@12.0.0", "", {}, "sha512-/QGj7ktNEGqKQXMRxMRd0X3gq2mSdOiuB5OARGlgiaXUcfjVtC5BMujnKJvCJkz5ZpKzeHhPx0xhCdQoZ1oSiw=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.17", "", { "peerDependencies": { "hono": "^4" } }, "sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ=="],
 
@@ -422,6 +424,8 @@
 
     "lightningcss-win32-x64-msvc": ["lightningcss-win32-x64-msvc@1.33.0", "", { "os": "win32", "cpu": "x64" }, "sha512-OlEICDx/Xl0FqSp4bry8zFnCvGpig3Gl4gCquvYwHuqJKEC1+n9NgDniFvqHGmMv1ZkqDJrDqKKSykTDX+ehuA=="],
 
+    "long": ["long@5.3.2", "", {}, "sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA=="],
+
     "math-intrinsics": ["math-intrinsics@1.1.0", "", {}, "sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g=="],
 
     "media-typer": ["media-typer@1.1.1", "", {}, "sha512-yz3xRaG20c6/BOzvYoDaGtPmGscs7YivItZEEqe6GbwNfHuxu9YNmvnEkMzKldAGY4/80pRcQRZSEnhquk9XuQ=="],
@@ -465,6 +469,8 @@
     "pkce-challenge": ["pkce-challenge@5.0.1", "", {}, "sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ=="],
 
     "postcss": ["postcss@8.5.29", "", { "dependencies": { "nanoid": "^3.3.19", "picocolors": "^1.1.1", "source-map-js": "^1.2.2" } }, "sha512-49cGhUbXj8Qenv0iTMxA1cFBzxXoctpC9Ujd77t1WcbJIr6nF/eI7g/8MgxrYldFRuAXvja7xQRwavoW7kgrxQ=="],
+
+    "protobufjs": ["protobufjs@8.8.1", "", { "dependencies": { "long": "^5.3.2" } }, "sha512-d9e9179bjXSJdpJ3+R9fP8hzXsnKLyxTjHLG1dUzje8a27pPyXCe6PrcRtgx2rjoM3IZzHd2vAs+6J/BsO1k7Q=="],
 
     "proxy-addr": ["proxy-addr@2.0.8", "", { "dependencies": { "forwarded": "0.2.0", "ipaddr.js": "1.9.1" } }, "sha512-5nnx0yGyVUcY6t9RnWcARWtwT9F1D8O9rt08htPvnd49W1IgZtmLkhu9WfMzQj1cFxjHIO6connUNVW5k7AVyQ=="],
 

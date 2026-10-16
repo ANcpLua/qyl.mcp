@@ -6,6 +6,14 @@ export function analysisSummary(operation: string, output: object): string {
   const lines = [operation.replaceAll("_", " ")];
   const coverage = record(data.coverage);
   if (Object.keys(coverage).length) lines.push(`Matched ${short(coverage.matched)}; returned ${short(coverage.returned)}. ${coverage.scan_complete === true ? "Scan complete." : "Scan incomplete; totals may be unknown."}`);
+  const points = record(data.points);
+  if (Array.isArray(points.items)) {
+    const unknown = points.items.filter(point => record(point).data === null).length;
+    lines.push(`original points: ${points.items.length} on this page${unknown ? `; ${unknown} original representation unknown` : ""}.`);
+    if (points.has_more === true && typeof points.next_cursor === "string") {
+      lines.push("More original points: repeat with points.next_cursor as points_cursor, the same series_id and filters.");
+    }
+  }
   for (const key of ["verdict", "reason", "settled", "method", "unit", "approximate"]) {
     if (data[key] !== undefined) lines.push(`${key}: ${short(data[key])}`);
   }

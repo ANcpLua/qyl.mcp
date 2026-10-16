@@ -21,7 +21,7 @@ export function registerMetricsTools(server: McpServer): void {
     "get_metric_series",
     {
       title: "Get Metric Series",
-      description: "Discover metric streams and attribute cardinality when choosing filters or grouping keys.",
+      description: "Discover metric streams and attribute cardinality when choosing filters, or select series_id to page complete original points with points_cursor. Oversized individual points remain available through the HTTP points API.",
       inputSchema: contractSchema("Mcp.Tools.GetMetricSeriesInput"),
       outputSchema: compactOutputSchema(contractSchema("Mcp.Tools.GetMetricSeriesOutput")),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,
@@ -34,7 +34,7 @@ export function registerMetricsTools(server: McpServer): void {
     "query_metric",
     {
       title: "Query Metric",
-      description: "Query metric buckets, counter changes or ratios when measuring trends across a time window.",
+      description: "Query float64 metric projections, counter changes or ratios when measuring trends across a time window. Use get_metric_series with series_id for original numeric values, buckets and exemplars.",
       inputSchema: contractSchema("Mcp.Tools.QueryMetricInput"),
       outputSchema: compactOutputSchema(contractSchema("Mcp.Tools.QueryMetricOutput")),
       annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS,

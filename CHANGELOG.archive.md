@@ -2,6 +2,10 @@
 
 Entries older than the three in [CHANGELOG.md](CHANGELOG.md), verbatim.
 
+## 8.1.3
+
+- Pin SemanticConventions 10.0.0 (`@ancplua/qyl-semantic-conventions`, server and workbench): the `qyl.app` key and the `qyl.instrumentation.domain` values `app`, `messaging.process`, `gen_ai.invoke_agent`, `gen_ai.execute_tool`. Pairs with qyl 13.0.0. No server code change.
+
 ## 8.1.2
 
 - Pin SemanticConventions 9.9.2 (no attribute changes over 9.9.1).

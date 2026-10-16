@@ -1,6 +1,6 @@
 {
   "name": "qyl-mcp-server",
-  "version": "8.2.0",
+  "version": "9.0.0",
   "type": "module",
   "description": "qyl telemetry MCP server: analysis tools and viewers for a live collector; Bun 1.4 runtime",
   "repository": {
@@ -82,7 +82,7 @@
     "test:built": "bun run verify:readme && bun run verify:frame && tsc -p tsconfig.test.json && bun run stage:test && node --test --test-concurrency=4 dist-test/*.test.js"
   },
   "dependencies": {
-    "@ancplua/qyl-api-schema": "12.1.2",
+    "@ancplua/qyl-api-schema": "14.0.0",
     "@modelcontextprotocol/core": "2.3.1",
     "@modelcontextprotocol/server": "2.3.1",
     "@opentelemetry/api": "1.9.1",
@@ -98,15 +98,16 @@
     "@opentelemetry/sdk-trace-node": "2.12.0",
     "jose": "6.2.12",
     "zod": "4.6.5",
-    "@ancplua/qyl-semantic-conventions": "10.1.0"
+    "@ancplua/qyl-semantic-conventions": "12.0.0"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "2.3.1",
+    "@types/bun": "1.4.3",
     "@types/node": "26.6.5",
+    "protobufjs": "8.8.1",
     "typescript": "7.0.2",
     "vite": "8.3.4",
-    "vite-plugin-singlefile": "2.3.3",
-    "@types/bun": "1.4.3"
+    "vite-plugin-singlefile": "2.3.3"
   },
   "engines": {
     "node": "24.x",

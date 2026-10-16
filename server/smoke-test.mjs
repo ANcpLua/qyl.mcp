@@ -9,6 +9,7 @@
  */
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { Client } from "@modelcontextprotocol/client";
+import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -53,7 +54,7 @@ const fixtureCollector = createServer((request, response) => {
     case "display_traces": data = {traces:fixture.traces.slice(0,args.limit ?? fixture.traces.length).map(fullTrace)}; break;
     case "search_logs": data={logs:fixture.logs.filter(l=>args.severity_min===undefined || l.severity_number>=args.severity_min)}; break;
     case "ci_log": data={runs:[]}; break;
-    case "list_metrics": data={items:[0,1,2].map(i=>({name:`fixture.metric.${i}`,kind:"gauge",unit:"1",series_count:1,temporality:"unspecified",monotonic:false,last_seen:new Date().toISOString()}))}; break;
+    case "list_metrics": data={items:[0,1,2].map(i=>({instrument_id:`fixture-instrument-${i}`,has_conflict:false,name:`fixture.metric.${i}`,kind:"gauge",unit:"1",series_count:1,temporality:"unspecified",monotonic:false,last_seen:new Date().toISOString()}))}; break;
     case "display_mcp_dashboard": data={stats:{...fixtureStats,mode:"live"}}; break;
     case "fetch_telemetry":
       if(args.view==="mcp_stats") data={stats:{...fixtureStats,mode:"live"}};
@@ -259,8 +260,18 @@ for (const trace of sc.traces) {
   });
   check(`span containment valid in ${trace.trace_id.slice(0, 8)}…`, contained);
 }
-const errorTrace = sc.traces.find((t) => t.has_error);
-check("one trace has has_error", sc.traces.filter((t) => t.has_error).length === 1);
+// The response budget may place a special case outside this bounded page.
+// Fetch each known case explicitly so its transport assertions always run.
+async function requiredFixtureTrace(predicate, label) {
+  const expected = fixture.traces.find(predicate);
+  assert(expected, `fixture must contain ${label}`);
+  const result = await callTool(client, "get_trace", { trace_id: expected.trace_id });
+  check(`${label}: not isError`, !result.isError, result.content?.[0]?.text);
+  assert(result.structuredContent?.trace, `${label}: get_trace must return its typed trace`);
+  return result.structuredContent.trace;
+}
+const errorTrace = await requiredFixtureTrace(t => t.has_error, "error trace");
+check("the error trace has has_error", errorTrace.has_error === true);
 check(
   "error trace has an exception event with stacktrace",
   errorTrace?.spans.some((s) =>
@@ -271,15 +282,15 @@ check(
     ),
   ),
 );
+const deepTrace = await requiredFixtureTrace(t => t.span_count >= 10, "deep trace");
 check(
   "a deep trace with 10+ spans exists",
-  sc.traces.some((t) => t.span_count >= 10),
+  deepTrace.span_count >= 10 && deepTrace.spans.length === deepTrace.span_count,
 );
+const genAiTrace = await requiredFixtureTrace(t => t.spans.some(s => s.attributes?.some(a => a.key === "gen_ai.system")), "gen_ai trace");
 check(
   "gen_ai spans present",
-  sc.traces.some((t) =>
-    t.spans.some((s) => s.attributes?.some((a) => a.key === "gen_ai.system")),
-  ),
+  genAiTrace.spans.some((s) => s.attributes?.some((a) => a.key === "gen_ai.system")),
 );
 
 // --- 4. get_trace ------------------------------------------------------------

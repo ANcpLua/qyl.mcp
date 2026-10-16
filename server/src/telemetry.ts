@@ -47,7 +47,7 @@ import {
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import packageMetadata from "../package.json" with { type: "json" };
-import { API_KEY_HEADER } from "./contract-headers.js";
+import { API_KEY_HEADER, PROJECT_HEADER } from "./contract-headers.js";
 import {
     describeMcpOperationLog,
     describeMcpOperationMetric,
@@ -188,17 +188,37 @@ export class McpTelemetry {
         this.logger = options.logger;
         if (env.QYL_MCP_TELEMETRY === "0") return;
 
+        // Validate every destination before allocating SDK providers/timers, so
+        // a bad signal endpoint cannot leave a partially constructed pipeline.
+        const endpoints = {
+            traces: signalEndpoint(env, "traces"),
+            metrics: signalEndpoint(env, "metrics"),
+            logs: signalEndpoint(env, "logs"),
+        };
+        for (const [signal, endpoint] of Object.entries(endpoints)) {
+            let url: URL;
+            try {
+                url = new URL(endpoint);
+            } catch {
+                throw new Error(`OTLP ${signal} endpoint must be an absolute HTTP(S) URL`);
+            }
+            if (url.protocol !== "http:" && url.protocol !== "https:") {
+                throw new Error(`OTLP ${signal} endpoint must use HTTP or HTTPS`);
+            }
+        }
+
         const resource = resourceFromAttributes({
             [ATTR_SERVICE_NAME]: Product.name,
             [ATTR_SERVICE_VERSION]: Product.version,
             [ATTR_SERVICE_INSTANCE_ID]: randomUUID(),
         });
-        const headers = env.QYL_API_KEY?.trim()
-            ? { [API_KEY_HEADER]: env.QYL_API_KEY.trim() }
-            : undefined;
+        const headers = {
+            ...(env.QYL_API_KEY?.trim() ? { [API_KEY_HEADER]: env.QYL_API_KEY.trim() } : {}),
+            ...(env.QYL_PROJECT?.trim() ? { [PROJECT_HEADER]: env.QYL_PROJECT.trim() } : {}),
+        };
 
         const traceExporter = new OTLPTraceExporter({
-            url: signalEndpoint(env, "traces"),
+            url: endpoints.traces,
             timeoutMillis: EXPORT_TIMEOUT_MS,
             headers,
         });
@@ -221,7 +241,7 @@ export class McpTelemetry {
         this.tracer ??= this.traceProvider.getTracer(INSTRUMENTATION_SCOPE, Product.version);
 
         const metricExporter = new OTLPMetricExporter({
-            url: signalEndpoint(env, "metrics"),
+            url: endpoints.metrics,
             timeoutMillis: EXPORT_TIMEOUT_MS,
             headers,
         });
@@ -254,7 +274,7 @@ export class McpTelemetry {
         }
 
         const logExporter = new OTLPLogExporter({
-            url: signalEndpoint(env, "logs"),
+            url: endpoints.logs,
             timeoutMillis: EXPORT_TIMEOUT_MS,
             headers,
         });
