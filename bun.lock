@@ -22,7 +22,7 @@
       "dependencies": {
         "@ancplua/qyl-api-schema": "14.0.0",
         "@modelcontextprotocol/core": "2.3.1",
-        "qyl-mcp-server": "9.0.0",
+        "qyl-mcp-server": "10.0.0",
         "react": "19.3.0",
         "react-dom": "19.3.0",
         "zod": "4.6.5",
