@@ -2,7 +2,7 @@
 // client SDK pinned to protocol revision 2026-07-28 for this modern-path check,
 // using the bearer token hosted-mcp-login.py obtained. One line per
 // expectation; exit 0 when every expectation holds. Never prints the token.
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
@@ -11,6 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const token = JSON.parse(readFileSync(join(here, "out", "hosted-token.json"), "utf8")).access_token;
 const MCP = new URL("https://mcp.qyl.at/mcp");
 let failures = 0;
+const evidence = { started_at: new Date().toISOString(), calls: [] };
 const check = (ok, label, detail = "") => {
   if (!ok) failures++;
   console.log(`${ok ? "pass" : "FAIL"}\t${label}${detail ? "\t" + String(detail).replace(/\s+/g, " ").slice(0, 160) : ""}`);
@@ -32,8 +33,10 @@ const text = (res) => (res?.content ?? []).filter((c) => c.type === "text").map(
 async function call(name, args) {
   try {
     const res = await client.callTool({ name, arguments: args });
+    evidence.calls.push({ name, arguments: args, result: res });
     return { res, text: text(res), err: null };
   } catch (e) {
+    evidence.calls.push({ name, arguments: args, error: { code: e?.code, message: e?.message ?? String(e) } });
     return { res: null, text: "", err: e?.message ?? String(e) };
   }
 }
@@ -94,25 +97,35 @@ try {
     }
   }
 
+  const dependent = new Set();
   if (firstTrace) {
     for (const name of ["get_trace", "display_traces", "get_failure_context", "get_agent_run"].filter((n) => tools.includes(n))) {
       const { res, text: t, err } = await call(name, { trace_id: firstTrace });
       check(res !== null && !res.isError, `${name} answers for ${firstTrace.slice(0, 12)}…`, err ?? t);
+      dependent.add(name);
     }
   } else {
     console.log("info\tno trace on the hosted collector; get_trace and display_traces not exercised");
   }
 
   check(!client.getServerCapabilities()?.events, "shared deployment does not advertise MCP Events");
-  const covered = new Set([...plan.map(([n]) => n), "get_trace", "display_traces", "create_annotation"]);
+  const covered = new Set([...plan.map(([n]) => n), ...dependent, "create_annotation"]);
   for (const name of tools.filter((n) => !covered.has(n)).sort()) {
     const { res, text: t, err } = await call(name, {});
-    check(res !== null || err !== null, `${name} answers to empty arguments (a validation error is a correct answer)`, err ?? t);
+    const requiredScope = name === "delete" ? "qyl:delete" : writes.includes(name) ? "qyl:write" : null;
+    if (requiredScope && !granted.includes(requiredScope)) {
+      check(err?.includes(`required "${requiredScope}"`), `${name} requires ${requiredScope}`, err ?? t);
+    } else {
+      // An unreachable server, expired login or timeout must not count as input validation.
+      const validation = (res?.isError || err !== null) && /^(?:Input validation error:|MCP error -32602:|trace_id:|target:|failure_id:)/u.test(err ?? t);
+      check(validation, `${name} rejects missing arguments with an input diagnostic`, err ?? t);
+    }
   }
 } catch (e) {
   check(false, "session", e?.message ?? String(e));
 } finally {
   await client.close().catch(() => {});
+  writeFileSync(join(here, "out", "results.json"), JSON.stringify({ ...evidence, finished_at: new Date().toISOString(), failures }, null, 2) + "\n");
 }
 console.log(`${failures === 0 ? "ok" : "FAILED"}: ${failures} failing expectation(s)`);
 process.exit(failures === 0 ? 0 : 1);

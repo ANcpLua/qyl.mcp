@@ -344,6 +344,15 @@ Set `QYL_COLLECTOR_DLL` to use a different completed build. Local checks do not
 cover hosted connections, production Events, the deployed commit or a fresh npm
 consumer.
 
+`mise run hosted-eval` checks the deployed server with a real user login. Configure
+the existing public OAuth client with `QYL_MCP_OAUTH_CLIENT_ID` or the
+`qyl-mcp-hosted-client-id` Keychain entry; its registered callback must be
+`http://127.0.0.1:48731/callback`. Subsequent runs refresh the Keychain login.
+The check distinguishes successful reads, input diagnostics and scope challenges;
+transport failures fail the run. Complete responses are retained in
+`tools/hosted-eval/out/results.json`. Empty-project results do not prove that
+trace-dependent reads or writes succeeded.
+
 ## Contracts
 
 The generated contracts come from `@ancplua/qyl-api-schema`; exact dependency

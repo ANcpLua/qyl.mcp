@@ -4,12 +4,12 @@
 Order of preference, so the browser is needed once and then never:
   1. A refresh token in the login Keychain (service qyl-mcp-hosted-refresh) is
      exchanged for a fresh access token. No browser, no prompt.
-  2. Otherwise: register a public client on the pinned Auth0 tenant (DCR is
-     open), start a loopback listener, write the authorize URL to
-     authorize-url.txt, wait for the browser to come back, and store the
-     refresh token in the Keychain for next time.
+  2. Otherwise: reuse the registered public client from the Keychain (or
+     QYL_MCP_OAUTH_CLIENT_ID), start a loopback listener, write the authorize
+     URL to authorize-url.txt, and store the refreshed login in the Keychain.
+     Anonymous dynamic registration is not required or enabled by this tool.
 
-The access token goes to hosted-token.json (mode 600) beside this script, or to
+The access token goes to out/hosted-token.json (mode 600) beside this script, or to
 --out. Nothing secret is printed. Prints one `ok:` line on success.
 """
 import base64, hashlib, http.server, json, os, secrets, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
@@ -24,7 +24,7 @@ PORT = 48731
 REDIRECT = f"http://127.0.0.1:{PORT}/callback"
 KC_ACCOUNT = "qyl"
 KC_REFRESH = "qyl-mcp-hosted-refresh"     # value: refresh token
-KC_CLIENT = "qyl-mcp-hosted-client-id"    # value: the DCR client id (public, but kept beside the token)
+KC_CLIENT = "qyl-mcp-hosted-client-id"    # registered public client id, kept beside the token
 out_file = sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv else os.path.join(HERE, "out", "hosted-token.json")
 force_browser = "--browser" in sys.argv
 
@@ -34,11 +34,6 @@ def kc_get(service):
 
 def kc_set(service, value):
     subprocess.run(["security", "add-generic-password", "-a", KC_ACCOUNT, "-s", service, "-w", value, "-U"], check=True, capture_output=True)
-
-def post_json(url, payload):
-    req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={"content-type": "application/json", "accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.load(r)
 
 def post_form(url, form):
     req = urllib.request.Request(url, data=urllib.parse.urlencode(form).encode(), headers={"content-type": "application/x-www-form-urlencoded", "accept": "application/json"})
@@ -56,7 +51,8 @@ def save(token):
 meta = json.load(urllib.request.urlopen(ISSUER + ".well-known/oauth-authorization-server", timeout=30))
 
 # 1. refresh without a browser
-refresh, client_id = kc_get(KC_REFRESH), kc_get(KC_CLIENT)
+refresh = kc_get(KC_REFRESH)
+client_id = os.environ.get("QYL_MCP_OAUTH_CLIENT_ID") or kc_get(KC_CLIENT)
 if refresh and client_id and not force_browser:
     try:
         token = post_form(meta["token_endpoint"], {"grant_type": "refresh_token", "client_id": client_id, "refresh_token": refresh, "resource": RESOURCE})
@@ -66,16 +62,10 @@ if refresh and client_id and not force_browser:
     except urllib.error.HTTPError as e:
         print(f"refresh failed ({e.code}); falling back to the browser", flush=True)
 
-# 2. browser flow
-client = post_json(meta["registration_endpoint"], {
-    "client_name": "qyl.mcp hosted eval",
-    "redirect_uris": [REDIRECT],
-    "token_endpoint_auth_method": "none",
-    "grant_types": ["authorization_code", "refresh_token"],
-    "response_types": ["code"],
-})
-client_id = client["client_id"]
-print(f"registered client (auth method {client.get('token_endpoint_auth_method')})", flush=True)
+# 2. browser flow: the tenant's existing managed client already has the intended grants.
+if not client_id:
+    sys.exit("Configure the existing public hosted-eval client in QYL_MCP_OAUTH_CLIENT_ID or the qyl-mcp-hosted-client-id Keychain entry; no anonymous registration was attempted.")
+print("using the configured registered public client", flush=True)
 
 verifier = base64.urlsafe_b64encode(secrets.token_bytes(48)).rstrip(b"=").decode()
 challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
@@ -87,7 +77,7 @@ authorize = meta["authorization_endpoint"] + "?" + urllib.parse.urlencode({
 })
 with open(os.path.join(HERE, "out", "authorize-url.txt"), "w") as f:
     f.write(authorize + "\n")
-print(f"authorize url written to {os.path.join(HERE, 'authorize-url.txt')}", flush=True)
+print(f"authorize url written to {os.path.join(HERE, 'out', 'authorize-url.txt')}", flush=True)
 
 result, done = {}, threading.Event()
 
