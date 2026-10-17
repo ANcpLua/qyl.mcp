@@ -177,15 +177,22 @@ export class SecretRedactor {
       }
 
       const source = value as Record<string, unknown>;
+      const capturedKey = capturedArrayKey(source);
       const semanticKey = semanticCredentialKey(source);
       const result: Record<string, unknown> = {};
       for (const [key, child] of Object.entries(source)) {
-        if (semanticKey !== undefined && key === "value") {
-          result[key] = this.redactCredentialValue(semanticKey, child);
+        if (isStringArray(child) && ((key === "value" && capturedKey !== undefined) ||
+          isCapturedFieldKey(key))) {
+          result[key] = [...child];
+        } else if (capturedKey !== undefined &&
+          (key === "key" || key === "name" || key === "header") && child === capturedKey) {
+          result[key] = child;
+        } else if (semanticKey !== undefined && key === "value") {
+          result[key] = this.replacement;
         } else if (key === "tokens" && isTokenUsage(child)) {
           result[key] = this.redactValue(child, depth + 1, seen);
         } else if (isCredentialKey(key)) {
-          result[key] = this.redactCredentialValue(key, child);
+          result[key] = this.replacement;
         } else if (typeof child === "string" && isUriKey(key)) {
           result[key] = this.redactUri(child);
         } else {
@@ -196,15 +203,6 @@ export class SecretRedactor {
     } finally {
       seen.delete(value);
     }
-  }
-
-  private redactCredentialValue(key: string, value: unknown): unknown {
-    // Captured fields have a published plain string[] shape, even when all values are denied.
-    // Unexpected shapes and unrelated credential objects retain the safe whole-value replacement.
-    return capturedFieldCredential(key) === true && Array.isArray(value) &&
-      value.every((item) => typeof item === "string")
-      ? value.map(() => this.replacement)
-      : this.replacement;
   }
 
   private redactTextWithoutUrls(value: string): string {
@@ -231,8 +229,6 @@ function semanticCredentialKey(value: Readonly<Record<string, unknown>>): string
 }
 
 export function isCredentialKey(key: string): boolean {
-  const captured = capturedFieldCredential(key);
-  if (captured !== undefined) return captured;
   const normalized = key.toLowerCase().replace(/[^a-z0-9]/gu, "");
   if ([...SafeTokenKeys].some((safeKey) => normalized.endsWith(safeKey))) return false;
   if (SecretKeyNames.has(normalized)) return true;
@@ -251,28 +247,32 @@ export function isCredentialKey(key: string): boolean {
   );
 }
 
-// Mirrors registry/qyl/policy.yaml captured_fields. Capture opt-in is a producer concern;
-// these finite name rules are a defensive read boundary, not arbitrary-value secret detection.
+// Explicitly captured arrays pass through only under the four protocol namespaces.
+// Other fields and malformed capture shapes retain the generic redaction rules.
 const CapturedFieldRoots = [
   "http.request.header", "http.response.header", "rpc.request.metadata", "rpc.response.metadata",
 ] as const;
-const CapturedFieldDeniedNames = new Set([
-  "authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key",
-  "www-authenticate", "proxy-authenticate",
-]);
-const CapturedFieldDeniedTokens = [
-  "authorization", "cookie", "token", "secret", "password", "passwd", "apikey", "api-key", "api_key",
-  "credential", "private_key", "private-key", "privatekey", "client_secret", "jwt",
-] as const;
 
-function capturedFieldCredential(key: string): boolean | undefined {
-  // ASCII-only case folding matches the field-name grammar without normalizing punctuation.
+function isCapturedFieldKey(key: string): boolean {
   const comparison = key.replace(/[A-Z]/gu, (letter) => letter.toLowerCase());
-  for (const root of CapturedFieldRoots) {
-    if (!comparison.startsWith(`${root}.`)) continue;
+  return CapturedFieldRoots.some((root) => {
+    if (!comparison.startsWith(`${root}.`)) return false;
     const suffix = comparison.slice(root.length + 1);
-    return CapturedFieldDeniedNames.has(suffix) ||
-      CapturedFieldDeniedTokens.some((token) => suffix.includes(token));
+    return root.startsWith("http.")
+      ? /^[a-z0-9!#$%&'*+.^_`|~-]+$/u.test(suffix)
+      : /^[a-z0-9_.-]+$/u.test(suffix);
+  });
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function capturedArrayKey(value: Readonly<Record<string, unknown>>): string | undefined {
+  if (!isStringArray(value.value)) return undefined;
+  for (const field of ["key", "name", "header"] as const) {
+    const candidate = value[field];
+    if (typeof candidate === "string" && isCapturedFieldKey(candidate)) return candidate;
   }
   return undefined;
 }

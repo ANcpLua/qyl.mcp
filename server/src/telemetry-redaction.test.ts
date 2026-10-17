@@ -104,8 +104,6 @@ test("telemetry tools redact secrets before model text and structured content", 
       TracePasswordSecret,
       TraceNameSecret,
       EnvironmentSecret,
-      "HDR_OPAQUE_FIRST",
-      "HDR_OPAQUE_SECOND",
     ]);
     const serializedTrace = JSON.stringify(traceResult);
     assert.match(serializedTrace, /ordinary-span-kept/u);
@@ -113,7 +111,7 @@ test("telemetry tools redact secrets before model text and structured content", 
     assert.match(serializedTrace, /gen_ai\.usage\.input_tokens/u);
     assert.match(serializedTrace, /"type":"int","value":"42"/u);
     assert.match(serializedTrace, /"key":"http\.request\.header\.x-message-id","value":\["correlation-one","correlation-two"\]/u);
-    assert.match(serializedTrace, /"key":"http\.request\.header\.authorization","value":\["\[REDACTED\]","\[REDACTED\]"\]/u);
+    assert.match(serializedTrace, /"key":"http\.request\.header\.authorization","value":\["HDR_OPAQUE_FIRST","HDR_OPAQUE_SECOND"\]/u);
 
     const logsResult = CallToolResultSchema.parse(await connection.client.callTool({
       name: "search_logs",

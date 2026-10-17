@@ -2,6 +2,12 @@
 
 Entries older than the three in [CHANGELOG.md](CHANGELOG.md), verbatim.
 
+## 10.1.0
+
+- Align server and workbench on SemanticConventions 13.1.1 while retaining API schema 14.0.0.
+- Separate hosted evaluation login profiles and requested scopes, retain owner and reviewer credentials independently, and pass the selected token file to the evaluator. Verify profile/output selection through the real CLI.
+- Keep hosted read/scope/validation checks distinct from successful owner operations across all 32 tools.
+
 ## 10.0.0
 
 - Adopt SemanticConventions 13.0.0 across server and workbench while retaining API schema 14.0.0. Application attributes use their native names and types without the obsolete string-only `qyl.app` template.

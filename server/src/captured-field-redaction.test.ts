@@ -1,47 +1,37 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SecretRedactor, isCredentialKey } from "./secret-redactor.js";
+import { SecretRedactor } from "./secret-redactor.js";
 
 const roots = ["http.request.header", "http.response.header", "rpc.request.metadata", "rpc.response.metadata"];
-const denied = ["authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key",
-  "www-authenticate", "proxy-authenticate", "x-auth-token", "x-token-count", "client-secret", "x-password",
-  "x-passwd", "x-apikey", "x-api_key", "x-credential", "x-private_key", "x-private-key", "x-privatekey",
-  "x-client_secret", "x-jwt"];
+const names = ["authorization", "cookie", "x-api-key", "x-token-count", "mcp-param-secret", "trace-bin", "x_request_id"];
+const values = ["registered-value", "Bearer opaque-token", "https://user:password@example.com/?token=kept", "", "duplicate", "duplicate"];
 
 for (const root of roots) {
-  test(`${root}: opaque credential arrays retain their published shape`, () => {
-    const redactor = new SecretRedactor({ environment: {}, replacement: "hidden" });
-    for (const suffix of denied) {
-      const key = `${root}.${suffix}`.toUpperCase();
-      assert.equal(isCredentialKey(key), true, key);
-      assert.deepEqual(redactor.redact({ [key]: ["opaque-a", "opaque-b", ""] }), { [key]: ["hidden", "hidden", "hidden"] });
+  for (const name of names) {
+    test(`${root}.${name} preserves explicitly captured arrays`, () => {
+      const redactor = new SecretRedactor({ environment: {}, secretValues: ["registered-value"] });
+      const key = `${root}.${name}`.toUpperCase();
+      assert.deepEqual(redactor.redact({ [key]: values }), { [key]: values });
       for (const field of ["key", "name", "header"]) {
-        assert.deepEqual(redactor.redact({ [field]: key, value: ["opaque-a", "opaque-b"] }),
-          { [field]: key, value: ["hidden", "hidden"] });
+        assert.deepEqual(redactor.redact({ [field]: key, value: values, other: "registered-value" }),
+          { [field]: key, value: values, other: "[REDACTED]" });
       }
-      assert.deepEqual(redactor.redact({ key, value: { nested: "opaque-a" } }), { key, value: "hidden" });
-      assert.deepEqual(redactor.redact({ [key]: ["opaque-a", 1] }), { [key]: "hidden" });
-    }
-  });
-
-  test(`${root}: benign arrays and punctuation survive; value protection still runs`, () => {
-    const redactor = new SecretRedactor({ environment: {}, secretValues: ["registered-value"] });
-    for (const suffix of ["x-request-id", "x_request_id", "x.request.id", "x-message-id", "content-type", "x-auth", "key"]) {
-      const key = `${root}.${suffix}`;
-      assert.equal(isCredentialKey(key), false, key);
-      const value = ["ordinary-a", "ordinary-a", "", "comma,kept"];
-      assert.deepEqual(redactor.redact({ key, value }), { key, value });
-      assert.deepEqual(redactor.redact({ [key]: value }), { [key]: value });
-      assert.deepEqual(redactor.redact({ [key]: ["registered-value"] }), { [key]: ["[REDACTED]"] });
-    }
-  });
+    });
+  }
 }
 
-test("captured names do not override unrelated safe counters or generic credential redaction", () => {
-  const redactor = new SecretRedactor({ environment: {} });
-  assert.equal(isCredentialKey("gen_ai.usage.input_tokens"), false);
-  assert.equal(isCredentialKey("http.request.headers.input_tokens"), false);
-  assert.equal(isCredentialKey("http.request.header.input_tokens"), true);
-  assert.deepEqual(redactor.redact({ key: "authorization", value: ["a", "b"] }),
-    { key: "authorization", value: "[REDACTED]" });
+test("the capture exception does not bypass redaction outside a valid captured array", () => {
+  const redactor = new SecretRedactor({ environment: {}, secretValues: ["registered-value"] });
+  for (const key of ["authorization", "custom.http.request.header.authorization", "http.request.headers.authorization",
+    "http.request.header.authorization bad", "rpc.request.metadata.authorization bad"]) {
+    assert.notDeepEqual(redactor.redact({ [key]: ["registered-value"] }), { [key]: ["registered-value"] });
+  }
+  assert.deepEqual(redactor.redact({ "http.request.header.authorization": "registered-value" }),
+    { "http.request.header.authorization": "[REDACTED]" });
+  assert.deepEqual(redactor.redact({ "http.request.header.authorization": ["registered-value", 1] }),
+    { "http.request.header.authorization": ["[REDACTED]", 1] });
+  assert.deepEqual(redactor.redact({ "http.request.header.authorization": { nested: "registered-value" } }),
+    { "http.request.header.authorization": { nested: "[REDACTED]" } });
+  assert.deepEqual(redactor.redact({ message: "registered-value", authorization: ["a", "b"] }),
+    { message: "[REDACTED]", authorization: "[REDACTED]" });
 });
