@@ -39,13 +39,13 @@
     },
     "server": {
       "name": "qyl-mcp-server",
-      "version": "10.1.1",
+      "version": "10.1.2",
       "bin": {
         "qyl-mcp-server": "dist/main.js",
       },
       "dependencies": {
         "@ancplua/qyl-api-schema": "14.0.1",
-        "@ancplua/qyl-semantic-conventions": "13.1.2",
+        "@ancplua/qyl-semantic-conventions": "13.2.0",
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
         "@opentelemetry/api": "1.9.1",
@@ -77,12 +77,12 @@
       "version": "1.1.1",
       "dependencies": {
         "@ancplua/qyl-api-schema": "14.0.1",
-        "@ancplua/qyl-semantic-conventions": "13.1.2",
+        "@ancplua/qyl-semantic-conventions": "13.2.0",
         "@modelcontextprotocol/client": "2.3.1",
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
         "express": "5.3.0",
-        "qyl-mcp-server": "10.1.1",
+        "qyl-mcp-server": "10.1.2",
         "zod": "4.6.5",
       },
       "devDependencies": {
@@ -101,7 +101,7 @@
   "packages": {
     "@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@14.0.1", "", { "peerDependencies": { "@typespec/compiler": "~1.17.0", "@typespec/events": "^0.87.0", "@typespec/http": "~1.17.0", "@typespec/openapi": "~1.17.0", "@typespec/openapi3": "~1.17.0", "@typespec/sse": "^0.87.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-mEHLCv/kOcnrvkQQtOoPy0P0wXJkQxaUKWC7gmd8oEwV1Qm+gqgfsUF9wpvXrBpVLGFbOHkl+VujJ2AbG9q4Tg=="],
 
-    "@ancplua/qyl-semantic-conventions": ["@ancplua/qyl-semantic-conventions@13.1.2", "", {}, "sha512-f6kbR0WKCstmNN0Ob6ujDgHWjETPvwEfDZA5my6jPVIY4GaB+1VnStHFQf5DrVKZWlvbe/DWqsxiv8JQj4gd5Q=="],
+    "@ancplua/qyl-semantic-conventions": ["@ancplua/qyl-semantic-conventions@13.2.0", "", {}, "sha512-IKW4ftC1HoY9prygYn3zP/tvtCroFPgAnch4sb3WL00+Mxaa22v7BM2Rbtz8+qW4yQrE2C5IX35DLGJ04bsi8Q=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.17", "", { "peerDependencies": { "hono": "^4" } }, "sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ=="],
 

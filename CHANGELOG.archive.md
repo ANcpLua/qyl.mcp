@@ -2,6 +2,13 @@
 
 Entries older than the three in [CHANGELOG.md](CHANGELOG.md), verbatim.
 
+## 10.0.0
+
+- Adopt SemanticConventions 13.0.0 across server and workbench while retaining API schema 14.0.0. Application attributes use their native names and types without the obsolete string-only `qyl.app` template.
+- Remove the workbench's duplicate SemanticConventions development dependency; its runtime dependency supplies the same package for compilation.
+- Check the workbench's runtime conventions pin rather than its development pin. Real CLI tests reject stale or missing runtime pins and preserve the Collector contract check.
+
+
 ## 9.0.0
 
 - Align server and workbench SemanticConventions dependencies on 12.0.0.

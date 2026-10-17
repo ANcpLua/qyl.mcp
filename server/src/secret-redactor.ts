@@ -181,11 +181,11 @@ export class SecretRedactor {
       const result: Record<string, unknown> = {};
       for (const [key, child] of Object.entries(source)) {
         if (semanticKey !== undefined && key === "value") {
-          result[key] = this.replacement;
+          result[key] = this.redactCredentialValue(semanticKey, child);
         } else if (key === "tokens" && isTokenUsage(child)) {
           result[key] = this.redactValue(child, depth + 1, seen);
         } else if (isCredentialKey(key)) {
-          result[key] = this.replacement;
+          result[key] = this.redactCredentialValue(key, child);
         } else if (typeof child === "string" && isUriKey(key)) {
           result[key] = this.redactUri(child);
         } else {
@@ -196,6 +196,15 @@ export class SecretRedactor {
     } finally {
       seen.delete(value);
     }
+  }
+
+  private redactCredentialValue(key: string, value: unknown): unknown {
+    // Captured fields have a published plain string[] shape, even when all values are denied.
+    // Unexpected shapes and unrelated credential objects retain the safe whole-value replacement.
+    return capturedFieldCredential(key) === true && Array.isArray(value) &&
+      value.every((item) => typeof item === "string")
+      ? value.map(() => this.replacement)
+      : this.replacement;
   }
 
   private redactTextWithoutUrls(value: string): string {
@@ -222,6 +231,8 @@ function semanticCredentialKey(value: Readonly<Record<string, unknown>>): string
 }
 
 export function isCredentialKey(key: string): boolean {
+  const captured = capturedFieldCredential(key);
+  if (captured !== undefined) return captured;
   const normalized = key.toLowerCase().replace(/[^a-z0-9]/gu, "");
   if ([...SafeTokenKeys].some((safeKey) => normalized.endsWith(safeKey))) return false;
   if (SecretKeyNames.has(normalized)) return true;
@@ -238,6 +249,32 @@ export function isCredentialKey(key: string): boolean {
     normalized.endsWith("clientsecret") ||
     normalized.endsWith("privatekey")
   );
+}
+
+// Mirrors registry/qyl/policy.yaml captured_fields. Capture opt-in is a producer concern;
+// these finite name rules are a defensive read boundary, not arbitrary-value secret detection.
+const CapturedFieldRoots = [
+  "http.request.header", "http.response.header", "rpc.request.metadata", "rpc.response.metadata",
+] as const;
+const CapturedFieldDeniedNames = new Set([
+  "authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key",
+  "www-authenticate", "proxy-authenticate",
+]);
+const CapturedFieldDeniedTokens = [
+  "authorization", "cookie", "token", "secret", "password", "passwd", "apikey", "api-key", "api_key",
+  "credential", "private_key", "private-key", "privatekey", "client_secret", "jwt",
+] as const;
+
+function capturedFieldCredential(key: string): boolean | undefined {
+  // ASCII-only case folding matches the field-name grammar without normalizing punctuation.
+  const comparison = key.replace(/[A-Z]/gu, (letter) => letter.toLowerCase());
+  for (const root of CapturedFieldRoots) {
+    if (!comparison.startsWith(`${root}.`)) continue;
+    const suffix = comparison.slice(root.length + 1);
+    return CapturedFieldDeniedNames.has(suffix) ||
+      CapturedFieldDeniedTokens.some((token) => suffix.includes(token));
+  }
+  return undefined;
 }
 
 export function validateEnvironmentVariableName(name: string): void {
