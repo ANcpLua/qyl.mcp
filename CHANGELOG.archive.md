@@ -2,6 +2,11 @@
 
 Entries older than the three in [CHANGELOG.md](CHANGELOG.md), verbatim.
 
+## 8.2.0
+
+- Pin SemanticConventions 10.1.0 (`@ancplua/qyl-semantic-conventions`, server and workbench), including the generator compatibility fix and inspection cleanup. The telemetry attribute contract is unchanged.
+- Allow a release whose version and workspace pins were committed before the gate, so publication uses the exact checked inputs.
+
 ## 8.1.4
 
 - Pin SemanticConventions 10.0.1 (`@ancplua/qyl-semantic-conventions`, server and workbench): a `qyl.app.` key now follows the registry's denied keys and prefixes, plain token counts are token-exempt, four vendor keys are not persisted. No server code change.

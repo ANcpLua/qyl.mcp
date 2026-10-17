@@ -2,6 +2,12 @@
 
 qyl-mcp-server (`server/`). Each entry becomes the GitHub release notes of its tag. Older entries: [CHANGELOG.archive.md](CHANGELOG.archive.md).
 
+## 10.1.0
+
+- Align server and workbench on SemanticConventions 13.1.1 while retaining API schema 14.0.0.
+- Separate hosted evaluation login profiles and requested scopes, retain owner and reviewer credentials independently, and pass the selected token file to the evaluator. Verify profile/output selection through the real CLI.
+- Keep hosted read/scope/validation checks distinct from successful owner operations across all 32 tools.
+
 ## 10.0.0
 
 - Adopt SemanticConventions 13.0.0 across server and workbench while retaining API schema 14.0.0. Application attributes use their native names and types without the obsolete string-only `qyl.app` template.
@@ -16,8 +22,3 @@ qyl-mcp-server (`server/`). Each entry becomes the GitHub release notes of its t
 - Use API schema 14.0.0 for canonical resource/scope metadata, metric descriptor conflicts and original point pages. Re-query oversized point pages with points_limit; a single point over the MCP budget returns response_too_large and its HTTP points route without truncating numeric values, buckets or exemplars.
 - Display log observation time when event time is absent, and unknown when both are absent.
 - Verify hosted project routing, errors and correlation using decoded official OTLP 1.11.1 protobuf payloads.
-
-## 8.2.0
-
-- Pin SemanticConventions 10.1.0 (`@ancplua/qyl-semantic-conventions`, server and workbench), including the generator compatibility fix and inspection cleanup. The telemetry attribute contract is unchanged.
-- Allow a release whose version and workspace pins were committed before the gate, so publication uses the exact checked inputs.

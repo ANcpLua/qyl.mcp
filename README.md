@@ -353,6 +353,18 @@ transport failures fail the run. Complete responses are retained in
 `tools/hosted-eval/out/results.json`. Empty-project results do not prove that
 trace-dependent reads or writes succeeded.
 
+Use a separate owner login for successful write and isolation checks:
+`python3 tools/hosted-eval/login.py --profile owner --scope "qyl:read qyl:write qyl:delete offline_access"`.
+Profiles keep distinct Keychain credentials and token files; `--out` overrides the file path, and the evaluator uses the
+selected file. The default reviewer login remains available.
+
+`node tools/hosted-eval/verify-owner.mjs --fixture <owner.json> --foreign-fixture <reviewer.json>` requires fresh OTLP
+fixtures in two configured projects, seeded with distinct `QYL_ANSWER_KEY_RUN_ID` values through the Collector's maintained
+`seed-answer-key.py`. Supply each existing ingest credential through `QYL_API_KEY`, never a command argument. The verifier
+requires a successful operation for every published tool, checks persisted writes and two-way project isolation, restores
+the fixture's failure status and deletes only metadata it created. It retains full responses, including expected isolation
+refusals, in a mode-600 evidence file. Failed operations or cleanup fail the run.
+
 ## Contracts
 
 The generated contracts come from `@ancplua/qyl-api-schema`; exact dependency

@@ -20,6 +20,7 @@ scripts/quiet.sh check \
   'bun run lint' \
   'bun run test:built' \
   "python3 -m unittest discover -s tools/auth0 -p 'test_*.py'" \
+  "python3 -m unittest discover -s tools/hosted-eval -p 'test_*.py'" \
   'bun run smoke' \
   'bun run --cwd server smoke:quiet' \
   'bun run --cwd server test:answer-key'
@@ -31,7 +32,7 @@ quiet = true
 run = "scripts/quiet.sh smoke-otlp 'bun run smoke:otlp'"
 
 [tasks.hosted-eval]
-description = "Every tool against mcp.qyl.at with a token from the Keychain"
+description = "Hosted reads, scope challenges and input validation with a token from the Keychain"
 run = [
   "tools/hosted-eval/run.sh",
 ]

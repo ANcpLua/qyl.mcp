@@ -12,24 +12,39 @@ Order of preference, so the browser is needed once and then never:
 The access token goes to out/hosted-token.json (mode 600) beside this script, or to
 --out. Nothing secret is printed. Prints one `ok:` line on success.
 """
-import base64, hashlib, http.server, json, os, secrets, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
+import argparse, base64, hashlib, http.server, json, os, re, secrets, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
 
 os.makedirs(os.path.join(os.path.dirname(os.path.abspath(__file__)), "out"), exist_ok=True)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ISSUER = "https://qyl-eu.eu.auth0.com/"
 RESOURCE = "https://mcp.qyl.at/mcp"
-SCOPE = "qyl:read offline_access"
 PORT = 48731
 REDIRECT = f"http://127.0.0.1:{PORT}/callback"
-KC_ACCOUNT = "qyl"
 KC_REFRESH = "qyl-mcp-hosted-refresh"     # value: refresh token
 KC_CLIENT = "qyl-mcp-hosted-client-id"    # registered public client id, kept beside the token
-out_file = sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv else os.path.join(HERE, "out", "hosted-token.json")
-force_browser = "--browser" in sys.argv
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--browser", action="store_true", help="Request a fresh browser authorization instead of refreshing")
+parser.add_argument("--scope", default="qyl:read offline_access", help="Space-separated OAuth scopes to request")
+parser.add_argument("--profile", default="default", help="Separate Keychain account for this login; the registered public client may be shared")
+parser.add_argument("--out", help="Token output path (mode 600)")
+parser.add_argument("--print-token-path", action="store_true", help="Print the resolved output path without authentication")
+args = parser.parse_args()
+if not re.fullmatch(r"[A-Za-z0-9_-]+", args.profile):
+    parser.error("--profile must be a single name containing letters, digits, underscores or hyphens")
+SCOPE = " ".join(dict.fromkeys(args.scope.split()))
+if not SCOPE:
+    parser.error("--scope must contain at least one scope")
+KC_ACCOUNT = "qyl" if args.profile == "default" else f"qyl-{args.profile}"
+token_name = "hosted-token.json" if args.profile == "default" else f"hosted-{args.profile}-token.json"
+out_file = args.out or os.path.join(HERE, "out", token_name)
+if args.print_token_path:
+    print(out_file)
+    sys.exit(0)
+force_browser = args.browser
 
-def kc_get(service):
-    r = subprocess.run(["security", "find-generic-password", "-a", KC_ACCOUNT, "-s", service, "-w"], capture_output=True, text=True)
+def kc_get(service, account=KC_ACCOUNT):
+    r = subprocess.run(["security", "find-generic-password", "-a", account, "-s", service, "-w"], capture_output=True, text=True)
     return r.stdout.strip() if r.returncode == 0 else None
 
 def kc_set(service, value):
@@ -43,6 +58,7 @@ def post_form(url, form):
 def save(token):
     fd = os.open(out_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
+        os.fchmod(f.fileno(), 0o600)
         json.dump({"access_token": token["access_token"], "token_type": token.get("token_type"),
                    "expires_in": token.get("expires_in"), "scope": token.get("scope"), "obtained_at": int(time.time())}, f)
     if token.get("refresh_token"):
@@ -52,13 +68,18 @@ meta = json.load(urllib.request.urlopen(ISSUER + ".well-known/oauth-authorizatio
 
 # 1. refresh without a browser
 refresh = kc_get(KC_REFRESH)
-client_id = os.environ.get("QYL_MCP_OAUTH_CLIENT_ID") or kc_get(KC_CLIENT)
+client_id = os.environ.get("QYL_MCP_OAUTH_CLIENT_ID") or kc_get(KC_CLIENT) or kc_get(KC_CLIENT, "qyl")
 if refresh and client_id and not force_browser:
     try:
-        token = post_form(meta["token_endpoint"], {"grant_type": "refresh_token", "client_id": client_id, "refresh_token": refresh, "resource": RESOURCE})
-        save(token)
-        print(f"ok: token refreshed from Keychain, scope={token.get('scope')!r} expires_in={token.get('expires_in')}s -> {out_file}", flush=True)
-        sys.exit(0)
+        token = post_form(meta["token_endpoint"], {"grant_type": "refresh_token", "client_id": client_id, "refresh_token": refresh, "resource": RESOURCE, "scope": SCOPE})
+        # Preserve a rotated refresh credential even if broader consent is still needed.
+        if token.get("refresh_token"):
+            kc_set(KC_REFRESH, token["refresh_token"])
+        if set(SCOPE.split()).issubset(token.get("scope", SCOPE).split()):
+            save(token)
+            print(f"ok: token refreshed from Keychain, scope={token.get('scope')!r} expires_in={token.get('expires_in')}s -> {out_file}", flush=True)
+            sys.exit(0)
+        print("refreshed token lacks requested scopes; requesting browser consent", flush=True)
     except urllib.error.HTTPError as e:
         print(f"refresh failed ({e.code}); falling back to the browser", flush=True)
 

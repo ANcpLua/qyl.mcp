@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const token = JSON.parse(readFileSync(join(here, "out", "hosted-token.json"), "utf8")).access_token;
+const token = JSON.parse(readFileSync(process.env.QYL_HOSTED_TOKEN_FILE ?? join(here, "out", "hosted-token.json"), "utf8")).access_token;
 const MCP = new URL("https://mcp.qyl.at/mcp");
 let failures = 0;
 const evidence = { started_at: new Date().toISOString(), calls: [] };
