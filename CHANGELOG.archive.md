@@ -2,6 +2,12 @@
 
 Entries older than the three in [CHANGELOG.md](CHANGELOG.md), verbatim.
 
+## 10.1.1
+
+- Align server, workbench and dashboard on API schema 14.0.1, which retains the existing Collector contract revision.
+- Consume SemanticConventions 13.1.2 in server and workbench.
+- Refresh the workspace install during a version bump so frozen installs see matching server self-pins.
+
 ## 10.1.0
 
 - Align server and workbench on SemanticConventions 13.1.1 while retaining API schema 14.0.0.
