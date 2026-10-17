@@ -186,7 +186,7 @@ for (const name of ["server", "workbench", "dashboard"]) {
   writeFileSync(path, JSON.stringify(metadata, null, 2) + "\n");
 }
 NODE
-  bun install --lockfile-only
+  bun install
   node verify-contract-pins.mjs
   [[ $(git rev-parse HEAD) == "$start_commit" ]] || die "HEAD changed during the version bump"
   git diff --cached --quiet || die "index changed during the version bump"

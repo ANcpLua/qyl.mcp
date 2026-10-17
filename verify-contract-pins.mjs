@@ -1,9 +1,7 @@
 /**
- * Verifier for the cross-repo contract pin.
- *
- * This repo and ANcpLua/qyl ride the same generated contract by lockstep bumps,
- * not by a pinned ref, so a skew between them breaks smoke:otlp at the spawned
- * server's startup handshake — on a push that changed nothing here.
+ * Keep this repository's API package pin aligned with ANcpLua/qyl.
+ * The runtime startup handshake compares contract revisions. Patch releases can
+ * share a revision, so a version mismatch alone does not prove wire incompatibility.
  *
  * `mise run check` runs it first.
  *
@@ -59,8 +57,8 @@ const mcpVersion = mcpPin.replace(/^[\^~>=<\s]+/u, "").trim();
 if (mcpVersion !== qylPin) {
   throw new Error(
     `cross-repo contract skew: this repo pins @ancplua/qyl-api-schema ${mcpPin}, ` +
-      `ANcpLua/qyl pins Qyl.Api.Contracts ${qylPin} — smoke:otlp would fail its startup handshake. ` +
-      "Land the lockstep bump on the lagging side first; when the revision changes, merge here only after the collector deployment serves it.",
+      `ANcpLua/qyl pins Qyl.Api.Contracts ${qylPin}. Align the package pins. ` +
+      "When the contract revision changes, update this deployment only after the Collector serves it; patch releases may retain the same revision.",
   );
 }
 
