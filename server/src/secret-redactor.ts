@@ -1,3 +1,5 @@
+import { getCapturedFieldPersistence } from "@ancplua/qyl-semantic-conventions/policy";
+
 const DEFAULT_REPLACEMENT = "[REDACTED]";
 const DEFAULT_MAX_DEPTH = 32;
 const DEFAULT_MAX_STRING_LENGTH = 16_384;
@@ -182,7 +184,7 @@ export class SecretRedactor {
       const result: Record<string, unknown> = {};
       for (const [key, child] of Object.entries(source)) {
         if (isStringArray(child) && ((key === "value" && capturedKey !== undefined) ||
-          isCapturedFieldKey(key))) {
+          getCapturedFieldPersistence(key) === true)) {
           result[key] = [...child];
         } else if (capturedKey !== undefined &&
           (key === "key" || key === "name" || key === "header") && child === capturedKey) {
@@ -247,23 +249,6 @@ export function isCredentialKey(key: string): boolean {
   );
 }
 
-// Explicitly captured arrays pass through only under the four protocol namespaces.
-// Other fields and malformed capture shapes retain the generic redaction rules.
-const CapturedFieldRoots = [
-  "http.request.header", "http.response.header", "rpc.request.metadata", "rpc.response.metadata",
-] as const;
-
-function isCapturedFieldKey(key: string): boolean {
-  const comparison = key.replace(/[A-Z]/gu, (letter) => letter.toLowerCase());
-  return CapturedFieldRoots.some((root) => {
-    if (!comparison.startsWith(`${root}.`)) return false;
-    const suffix = comparison.slice(root.length + 1);
-    return root.startsWith("http.")
-      ? /^[a-z0-9!#$%&'*+.^_`|~-]+$/u.test(suffix)
-      : /^[a-z0-9_.-]+$/u.test(suffix);
-  });
-}
-
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
@@ -272,7 +257,7 @@ function capturedArrayKey(value: Readonly<Record<string, unknown>>): string | un
   if (!isStringArray(value.value)) return undefined;
   for (const field of ["key", "name", "header"] as const) {
     const candidate = value[field];
-    if (typeof candidate === "string" && isCapturedFieldKey(candidate)) return candidate;
+    if (typeof candidate === "string" && getCapturedFieldPersistence(candidate) === true) return candidate;
   }
   return undefined;
 }

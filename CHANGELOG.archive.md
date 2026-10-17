@@ -2,6 +2,11 @@
 
 Entries older than the three in [CHANGELOG.md](CHANGELOG.md), verbatim.
 
+## 10.1.2
+
+- Consume SemanticConventions 13.2.0, aligned with the Collector captured-field retention policy.
+- Recognize credential suffixes within captured HTTP-header and RPC-metadata keys. Redact each element of supported string arrays while preserving attribute names and array shape; keep generic credential and value protections.
+
 ## 10.1.1
 
 - Align server, workbench and dashboard on API schema 14.0.1, which retains the existing Collector contract revision.

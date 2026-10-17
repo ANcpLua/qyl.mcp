@@ -35,3 +35,23 @@ test("the capture exception does not bypass redaction outside a valid captured a
   assert.deepEqual(redactor.redact({ message: "registered-value", authorization: ["a", "b"] }),
     { message: "[REDACTED]", authorization: "[REDACTED]" });
 });
+
+test("registry classification retains MCP array and attribute-record shape checks", () => {
+  const redactor = new SecretRedactor({ environment: {}, secretValues: ["registered-value"] });
+  for (const key of ["http.request.header", "http.request.header.", "rpc.request.metadata.x+feature",
+    "http.request.header.Key", "http.requeſt.header.key"]) {
+    assert.notDeepEqual(redactor.redact({ [key]: values }), { [key]: values });
+    for (const field of ["key", "name", "header"]) {
+      assert.notDeepEqual(redactor.redact({ [field]: key, value: values }), { [field]: key, value: values });
+    }
+  }
+  assert.deepEqual(redactor.redact({ "http.request.header.x+feature": values }), { "http.request.header.x+feature": values });
+  for (const field of ["key", "name", "header"]) {
+    const key = "rpc.request.metadata.authorization";
+    assert.deepEqual(redactor.redact({ [field]: key, value: ["registered-value", 1] }),
+      { [field]: key, value: ["[REDACTED]", 1] });
+    assert.deepEqual(redactor.redact({ [field]: key, value: "registered-value" }),
+      { [field]: key, value: "[REDACTED]" });
+    assert.deepEqual(redactor.redact({ [field]: key, value: [] }), { [field]: key, value: [] });
+  }
+});
