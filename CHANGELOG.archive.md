@@ -2,6 +2,11 @@
 
 Entries older than the three in [CHANGELOG.md](CHANGELOG.md), verbatim.
 
+## 11.0.0
+
+- Preserve explicitly captured HTTP-header and RPC-metadata string arrays unchanged, including credential-like names and values. Retain normal redaction for unrelated fields and malformed capture shapes.
+- Remove duplicated captured-field deny lists and verify raw values through the MCP tool result boundary. Consume SemanticConventions 14.0.0.
+
 ## 10.1.2
 
 - Consume SemanticConventions 13.2.0, aligned with the Collector captured-field retention policy.
