@@ -2,6 +2,11 @@
 
 Entries older than the three in [CHANGELOG.md](CHANGELOG.md), verbatim.
 
+## 11.1.1
+
+- Consume SemanticConventions 14.1.0 and use its registry-generated captured-field classifier in MCP.
+- Remove MCP's local captured-field roots and regex classifier while retaining string-array checks and attribute-record handling.
+
 ## 11.1.0
 
 - Release the current MCP server as 11.1.0 with unchanged runtime behavior from 11.0.0.

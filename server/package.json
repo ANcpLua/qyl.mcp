@@ -1,6 +1,6 @@
 {
   "name": "qyl-mcp-server",
-  "version": "11.1.3",
+  "version": "11.1.4",
   "type": "module",
   "description": "qyl telemetry MCP server: analysis tools and viewers for a live collector; Bun 1.4 runtime",
   "repository": {
@@ -98,7 +98,7 @@
     "@opentelemetry/sdk-trace-node": "2.12.0",
     "jose": "6.2.12",
     "zod": "4.6.5",
-    "@ancplua/qyl-semantic-conventions": "15.0.1"
+    "@ancplua/qyl-semantic-conventions": "15.0.2"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "2.3.1",

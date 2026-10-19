@@ -22,7 +22,7 @@
       "dependencies": {
         "@ancplua/qyl-api-schema": "14.0.1",
         "@modelcontextprotocol/core": "2.3.1",
-        "qyl-mcp-server": "11.1.3",
+        "qyl-mcp-server": "11.1.4",
         "react": "19.3.0",
         "react-dom": "19.3.0",
         "zod": "4.6.5",
@@ -39,13 +39,13 @@
     },
     "server": {
       "name": "qyl-mcp-server",
-      "version": "11.1.3",
+      "version": "11.1.4",
       "bin": {
         "qyl-mcp-server": "dist/main.js",
       },
       "dependencies": {
         "@ancplua/qyl-api-schema": "14.0.1",
-        "@ancplua/qyl-semantic-conventions": "15.0.1",
+        "@ancplua/qyl-semantic-conventions": "15.0.2",
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
         "@opentelemetry/api": "1.9.1",
@@ -77,12 +77,12 @@
       "version": "1.1.1",
       "dependencies": {
         "@ancplua/qyl-api-schema": "14.0.1",
-        "@ancplua/qyl-semantic-conventions": "15.0.1",
+        "@ancplua/qyl-semantic-conventions": "15.0.2",
         "@modelcontextprotocol/client": "2.3.1",
         "@modelcontextprotocol/core": "2.3.1",
         "@modelcontextprotocol/server": "2.3.1",
         "express": "5.3.0",
-        "qyl-mcp-server": "11.1.3",
+        "qyl-mcp-server": "11.1.4",
         "zod": "4.6.5",
       },
       "devDependencies": {
@@ -101,7 +101,7 @@
   "packages": {
     "@ancplua/qyl-api-schema": ["@ancplua/qyl-api-schema@14.0.1", "", { "peerDependencies": { "@typespec/compiler": "~1.17.0", "@typespec/events": "^0.87.0", "@typespec/http": "~1.17.0", "@typespec/openapi": "~1.17.0", "@typespec/openapi3": "~1.17.0", "@typespec/sse": "^0.87.0", "zod": ">=4.5.0 <5" }, "optionalPeers": ["@typespec/compiler", "@typespec/events", "@typespec/http", "@typespec/openapi", "@typespec/openapi3", "@typespec/sse", "zod"] }, "sha512-mEHLCv/kOcnrvkQQtOoPy0P0wXJkQxaUKWC7gmd8oEwV1Qm+gqgfsUF9wpvXrBpVLGFbOHkl+VujJ2AbG9q4Tg=="],
 
-    "@ancplua/qyl-semantic-conventions": ["@ancplua/qyl-semantic-conventions@15.0.1", "", {}, "sha512-73ZmY/G8Y5M5vG5N9o2SLtNjXXd3i8O2K0Ng+y111Qjf0pUf0v5Z3CO0BXOv4VRY8Id2HWI5plXanv4yTTmtBw=="],
+    "@ancplua/qyl-semantic-conventions": ["@ancplua/qyl-semantic-conventions@15.0.2", "", {}, "sha512-trXS9+vuTx0MYHW/IUW5hTiPeYAB5gao36mgmd1F/7iEBtUN930waUKWo4ZkrEy7sgdSeAGX3PluIh4GeSGMqA=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.17", "", { "peerDependencies": { "hono": "^4" } }, "sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ=="],
 
