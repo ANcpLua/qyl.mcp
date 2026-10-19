@@ -238,53 +238,110 @@ test("native evidence records validation failure without persisting results of a
   }
 });
 
-test("native telemetry reports terminal evidence persistence failures", async () => {
-  let writes = 0;
+/** Collects this process's stderr lines until the returned function restores the stream. */
+function captureStderr(lines: string[]): () => void {
+  const write = process.stderr.write.bind(process.stderr);
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    lines.push(...String(chunk).split("\n").filter(Boolean));
+    return true;
+  }) as typeof process.stderr.write;
+  return () => {
+    process.stderr.write = write;
+  };
+}
+
+test("a failed terminal record never changes the tool's outcome and marks the span", async () => {
+  // The running record is written; every completed or failed record is refused.
+  const saved: NativeExecutionRecord["status"][] = [];
   const repository: NativeExecutionRepository = {
-    save() {
-      writes += 1;
-      return writes === 2
-        ? Promise.reject(new Error("injected native persistence failure"))
-        : Promise.resolve();
+    save(record) {
+      saved.push(record.status);
+      return record.status === "running"
+        ? Promise.resolve()
+        : Promise.reject(new Error("injected native persistence failure"));
     },
   };
   const starts: unknown[] = [];
   const completions: Array<{ errorType?: string }> = [];
+  let sequence = 0;
   const runtime = new NativeExecutionRuntime(repository, {
     telemetry: capturingTelemetry(starts, completions),
     now: () => Date.parse("2026-07-17T13:30:00.000Z"),
-    id: () => "native-persistence-failure",
+    id: () => `native-persistence-failure-${sequence++}`,
   });
   const connection = await connectModernTestClient(
     { name: "native-persistence-test", version: "1.0.0" },
     () => {
       const server = createServer({ nativeExecution: runtime, transport: "inproc" });
       server.registerTool(
-        "fixture.persistence-failure",
+        "fixture.succeeds",
+        {},
+        async (): Promise<CallToolResult> => ({ content: [{ type: "text", text: "valid" }] }),
+      );
+      server.registerTool(
+        "fixture.tool-error",
         {},
         async (): Promise<CallToolResult> => ({
-          content: [{ type: "text", text: "valid" }],
+          content: [{ type: "text", text: "the tool refused" }],
+          isError: true,
         }),
+      );
+      server.registerTool(
+        "fixture.malformed",
+        {},
+        async () => ({ content: "not-an-array" }) as unknown as CallToolResult,
       );
       return server;
     },
   );
+  const stderr: string[] = [];
+  const restoreStderr = captureStderr(stderr);
 
   try {
-    // The subject here is the telemetry below. The call itself comes back as an
-    // isError result rather than rejecting: tools/call has no protocol-error
-    // channel (errors.md), so a persistence fault has to be reported in-band.
-    const result = await connection.client.callTool({
-      name: "fixture.persistence-failure",
-      arguments: {},
-    });
-    assert.equal(result.isError, true);
-    assert.equal(writes, 2);
-    assert.equal(starts.length, 1);
-    assert.equal(completions.length, 1);
-    assert.equal(completions[0]?.errorType, "evidence_persistence_failed");
+    const succeeded = await connection.client.callTool({ name: "fixture.succeeds", arguments: {} });
+    assert.equal(succeeded.isError, undefined, "success stays success");
+    assert.deepEqual(succeeded.content, [{ type: "text", text: "valid" }]);
+
+    const toolError = await connection.client.callTool({ name: "fixture.tool-error", arguments: {} });
+    assert.equal(toolError.isError, true, "a tool error stays the tool's error");
+    assert.deepEqual(toolError.content, [{ type: "text", text: "the tool refused" }]);
+
+    await assert.rejects(
+      connection.client.callTool({ name: "fixture.malformed", arguments: {} }),
+      /expected array|invalid_type/u,
+      "a thrown error stays the original error",
+    );
   } finally {
+    restoreStderr();
     await connection.close();
+  }
+
+  assert.deepEqual(saved, ["running", "succeeded", "running", "failed", "running", "failed"]);
+  assert.equal(starts.length, 3);
+  assert.deepEqual(completions.map((completion) => completion.errorType), [
+    "evidence_persistence_failed",
+    "evidence_persistence_failed",
+    "evidence_persistence_failed",
+  ]);
+  const warnings = stderr
+    .map((line) => {
+      try {
+        return JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        return undefined;
+      }
+    })
+    .filter((line) => line?.level === "warn");
+  assert.deepEqual(warnings.map((line) => [line?.tool, line?.outcome]), [
+    ["fixture.succeeds", "succeeded"],
+    ["fixture.tool-error", "failed"],
+    ["fixture.malformed", "failed"],
+  ]);
+  for (const warning of warnings) {
+    assert.equal(warning?.message, "native execution evidence could not be recorded; the tool's own outcome was returned");
+    assert.match(String(warning?.execution_id), /^native-persistence-failure-\d$/u);
+    assert.equal(warning?.error_type, "Error");
+    assert.equal(warning?.detail, "injected native persistence failure");
   }
 });
 

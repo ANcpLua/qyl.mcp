@@ -11,10 +11,21 @@
  * Genuine errors keep using console.error with plain text: for those the
  * stream-derived severity is the correct one.
  */
-export function logInfo(message: string): void {
-  process.stderr.write(`${JSON.stringify({ level: "info", message })}\n`);
+
+/** Extra structured fields of one line; `level` and `message` are the line's own. */
+export type LogFields = Readonly<Record<string, string | number | boolean>> & {
+  readonly level?: never;
+  readonly message?: never;
+};
+
+export function logInfo(message: string, fields?: LogFields): void {
+  writeLine("info", message, fields);
 }
 
-export function logWarning(message: string): void {
-  process.stderr.write(`${JSON.stringify({ level: "warn", message })}\n`);
+export function logWarning(message: string, fields?: LogFields): void {
+  writeLine("warn", message, fields);
+}
+
+function writeLine(level: "info" | "warn", message: string, fields: LogFields | undefined): void {
+  process.stderr.write(`${JSON.stringify({ level, message, ...fields })}\n`);
 }

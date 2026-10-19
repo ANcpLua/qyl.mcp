@@ -13,6 +13,7 @@ import type {
 } from "./mcp-semconv.js";
 import { SecretRedactor } from "./secret-redactor.js";
 import { readCollectorProjects, type CollectorAccess } from "./collector-access.js";
+import { logWarning } from "./stderr-log.js";
 import {
   McpTelemetry,
   type ActiveMcpOperation,
@@ -24,6 +25,8 @@ import {
 const NATIVE_STATE_VERSION = 3 as const;
 const DEFAULT_MAX_EXECUTIONS = 1_000;
 const NATIVE_SERVER_ID = "qyl.mcp/native";
+/** `error.type` on the operation span when its execution record could not be written. */
+const EVIDENCE_PERSISTENCE_FAILED = "evidence_persistence_failed";
 
 const IdentifierSchema = z.string().min(1).max(256);
 const IsoDateSchema = z.iso.datetime({ offset: true });
@@ -72,7 +75,7 @@ export interface FileNativeExecutionRepositoryOptions {
   environment?: Readonly<Record<string, string | undefined>>;
 }
 
-/** Bounded operation metadata kept separately from Workbench execution state. */
+/** Bounded operation metadata of a local server's incoming tools/call requests. */
 export class FileNativeExecutionRepository implements NativeExecutionRepository {
   private store: AtomicJsonStore<NativeExecutionState>;
   private readonly openStore: () => AtomicJsonStore<NativeExecutionState>;
@@ -248,11 +251,12 @@ export class NativeExecutionRuntime {
     try {
       await this.repository?.save(running);
     } catch (error) {
+      // Nothing has run yet, so refusing the call loses no outcome.
       operation?.end({
         endTimeMs: this.now(),
-        errorType: "evidence_persistence_failed",
+        errorType: EVIDENCE_PERSISTENCE_FAILED,
       });
-      throw new EvidenceRecordingError(error);
+      return recordingFailureResult(error, this.redactor);
     }
 
     let result: CallToolResult;
@@ -261,26 +265,16 @@ export class NativeExecutionRuntime {
       result = CallToolResultSchema.parse(rawResult);
     } catch (error) {
       const completedMs = this.now();
-      const completedAt = timestamp(completedMs);
-      const failedRecord = NativeExecutionRecordSchema.parse({
+      const recorded = await this.saveTerminal(NativeExecutionRecordSchema.parse({
         ...running,
         status: "failed",
-        completedAt,
+        completedAt: timestamp(completedMs),
         durationMs: duration(startedMs, completedMs),
         errorType: errorType(error),
-      });
-      try {
-        await this.repository?.save(failedRecord);
-      } catch (persistenceError) {
-        operation?.end({
-          endTimeMs: this.now(),
-          errorType: "evidence_persistence_failed",
-        });
-        throw new EvidenceRecordingError(persistenceError);
-      }
+      }));
       operation?.end({
         endTimeMs: completedMs,
-        errorType: errorType(error),
+        errorType: recorded ? errorType(error) : EVIDENCE_PERSISTENCE_FAILED,
         ...(error instanceof ProtocolError
           ? { rpcResponseStatusCode: String(error.code) }
           : {}),
@@ -289,29 +283,44 @@ export class NativeExecutionRuntime {
     }
 
     const completedMs = this.now();
-    const completedAt = timestamp(completedMs);
     const toolFailed = result.isError === true;
-    const completedRecord = NativeExecutionRecordSchema.parse({
+    const recorded = await this.saveTerminal(NativeExecutionRecordSchema.parse({
       ...running,
       status: toolFailed ? "failed" : "succeeded",
-      completedAt,
+      completedAt: timestamp(completedMs),
       durationMs: duration(startedMs, completedMs),
       ...(toolFailed ? { errorType: "tool_result_error" } : {}),
-    });
-    try {
-      await this.repository?.save(completedRecord);
-    } catch (error) {
-      operation?.end({
-        endTimeMs: this.now(),
-        errorType: "evidence_persistence_failed",
-      });
-      throw new EvidenceRecordingError(error);
-    }
+    }));
     operation?.end({
       endTimeMs: completedMs,
-      ...(toolFailed ? { errorType: "tool_error" } : {}),
+      ...(!recorded
+        ? { errorType: EVIDENCE_PERSISTENCE_FAILED }
+        : toolFailed ? { errorType: "tool_error" } : {}),
     });
     return result;
+  }
+
+  /**
+   * Write a completed or failed record. The tool has already run, so a failed
+   * write must not replace its outcome: a caller told "failed" would retry a
+   * write tool that already changed something. The fault goes to stderr as a
+   * structured warning and onto the operation span; the caller gets the tool's
+   * own result or error.
+   */
+  private async saveTerminal(record: NativeExecutionRecord): Promise<boolean> {
+    try {
+      await this.repository?.save(record);
+      return true;
+    } catch (error) {
+      logWarning("native execution evidence could not be recorded; the tool's own outcome was returned", {
+        tool: record.toolName,
+        execution_id: record.id,
+        outcome: record.status,
+        error_type: errorType(error),
+        detail: this.redactor.redactText(error instanceof Error ? error.message : String(error)),
+      });
+      return false;
+    }
   }
 
   close(): Promise<void> {
@@ -355,28 +364,16 @@ type UntypedSetRequestHandler = (
   handlerOrSchemas: unknown,
   handler?: UntypedRequestHandler,
 ) => void;
-/**
- * A fault in the evidence layer itself, as opposed to anything the tool did.
- * Only these become an isError result; a malformed tool result is a server bug
- * that fails the runtime's CallToolResultSchema parse and stays loud.
- */
-export class EvidenceRecordingError extends Error {
-  constructor(readonly cause: unknown) {
-    super(cause instanceof Error ? cause.message : String(cause));
-    this.name = "EvidenceRecordingError";
-  }
-}
 
 /**
- * Report a recording-layer fault to the caller of `tools/call`.
- *
- * The detail goes to stderr rather than into the result: the message reaches a
- * model, and a persistence fault names a local state path that has no meaning
- * to it and does not belong on the wire.
+ * Answer a tools/call whose running record could not be written: the call is
+ * refused before the tool runs. The detail goes to stderr rather than into the
+ * result: the message reaches a model, and a persistence fault names a local
+ * state path that has no meaning to it and does not belong on the wire.
  */
-function recordingFailureResult(error: unknown): CallToolResult {
+function recordingFailureResult(error: unknown, redactor: SecretRedactor): CallToolResult {
   const detail = error instanceof Error ? error.message : String(error);
-  console.error(`native execution evidence could not be recorded: ${detail}`);
+  console.error(`native execution evidence could not be recorded: ${redactor.redactText(detail)}`);
   return {
     content: [{
       type: "text",
@@ -411,18 +408,13 @@ export function installNativeExecutionRecording(
     recordingServers.add(server);
     original(method, async (request: unknown, ctx: ServerContext) => {
       const validated = CallToolRequestSchema.parse(request);
-      try {
-        return await runtime.execute(
-          { request: validated, ctx, transport },
-          () => handler(validated, ctx),
-        );
-      } catch (error) {
-        // The SDK converts throws into isError only inside the dispatcher this
-        // wrapper calls (errors.md); above it a throw leaves as a JSON-RPC error,
-        // so an evidence fault is answered here and every other throw passes.
-        if (!(error instanceof EvidenceRecordingError)) throw error;
-        return recordingFailureResult(error.cause);
-      }
+      // The SDK converts throws into isError only inside the dispatcher this
+      // wrapper calls (errors.md); a throw that reaches here is the tool call's
+      // own protocol error and leaves as a JSON-RPC error.
+      return runtime.execute(
+        { request: validated, ctx, transport },
+        () => handler(validated, ctx),
+      );
     });
   };
 }
