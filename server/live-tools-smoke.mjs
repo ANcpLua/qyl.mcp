@@ -118,7 +118,9 @@ const call = async (name, args) => { const r = await client.callTool({ name, arg
 try {
   await client.connect(transport);
   const { tools } = await client.listTools();
-  ok("32 tools listed", tools.length === 32, tools.map((t) => t.name).join(","));
+  const listed = new Set(tools.map((t) => t.name));
+  ok("the write tools are listed", ["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "update_failure_status", "delete_record"].every((name) => listed.has(name)), [...listed].join(","));
+  ok("no viewer, app-only or pre-rename tool is listed", ["display_traces", "display_mcp_dashboard", "fetch_telemetry", "delete"].every((name) => !listed.has(name)), [...listed].join(","));
   const windowArgs = { start_time: new Date(Date.now() - 3_600_000).toISOString(), end_time: new Date(Date.now() + 60_000).toISOString() };
 
   let r = await call("list_traces", { limit: 20 });
@@ -139,19 +141,6 @@ try {
   ok("query_metric p95 over one bucket returns a number", !r.isError && /\d/.test(JSON.stringify(r.structuredContent ?? r)));
   r = await call("query_metric", { metric_name: "live_smoke.requests", ...windowArgs, step_ms: 3_660_000, aggregation: "sum", group_by: ["http.route"] });
   ok("query_metric sum grouped by route", !r.isError && JSON.stringify(r.structuredContent ?? r).includes("/orders"));
-  r = await call("display_traces", {});
-  const uiUri = (tool) => JSON.stringify(tools.find((t) => t.name === tool)?._meta ?? {}).match(/ui:\/\/[^"]+/)?.[0];
-  ok("display_traces declares a UI resource in its _meta", !!uiUri("display_traces"), "no ui:// in _meta");
-  const app = await client.readResource({ uri: uiUri("display_traces") });
-  const html = app.contents?.[0]?.text ?? "";
-  ok("the trace explorer resource is a single-file HTML app", html.includes("<html") && html.length > 10_000, `${html.length} chars`);
-  const dash = await client.readResource({ uri: uiUri("display_mcp_dashboard") });
-  ok("the MCP dashboard resource is a single-file HTML app", (dash.contents?.[0]?.text ?? "").includes("<html"));
-  r = await call("display_mcp_dashboard", { hours: 1 });
-  ok("display_mcp_dashboard aggregates the mcp.method.name span", !r.isError && JSON.stringify(r.structuredContent ?? r).includes("tools/call"));
-  r = await call("fetch_telemetry", { view: "traces", limit: 5 });
-  ok("fetch_telemetry (app plumbing) answers", !r.isError);
-
   // Every added read has a concrete call; results are validated by the client.
   /** @type {Array<[string, Record<string, unknown>]>} */
   const addedReads = [
@@ -208,10 +197,10 @@ try {
   r = await call("update_saved_query", { id: saved?.id, etag: saved?.etag, name: queryName + "-updated" });
   const updatedQuery = r.structuredContent?.saved_query;
   ok("update_saved_query changes the saved object", !r.isError && updatedQuery?.etag !== saved?.etag, summary(r));
-  r = await call("delete", { kind: "saved_query", id: updatedQuery?.id, etag: updatedQuery?.etag });
-  ok("delete removes the saved query", r.structuredContent?.deleted === true, summary(r));
-  r = await call("delete", { kind: "annotation", id: edited?.id, etag: edited?.etag });
-  ok("delete removes the annotation", r.structuredContent?.deleted === true, summary(r));
+  r = await call("delete_record", { kind: "saved_query", id: updatedQuery?.id, etag: updatedQuery?.etag });
+  ok("delete_record removes the saved query", r.structuredContent?.deleted === true, summary(r));
+  r = await call("delete_record", { kind: "annotation", id: edited?.id, etag: edited?.etag });
+  ok("delete_record removes the annotation", r.structuredContent?.deleted === true, summary(r));
   r = await call("get_trace", { trace_id: traceId });
   ok(
     "the trace is unchanged by every write and its annotations are gone",
@@ -228,12 +217,12 @@ try {
     ok("HTTP server announces its /mcp endpoint", httpLog.includes(`http://127.0.0.1:${port}/mcp`), httpLog.slice(-300));
     const httpClient = new Client({ name: "qyl-live-smoke-http", version: "1.0.0" }, { versionNegotiation: { mode: { pin: "2026-07-28" } } });
     await httpClient.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`)));
-    const httpTools = await httpClient.listTools();
-    ok("HTTP tools/list matches stdio", httpTools.tools.length === tools.length);
+    const httpTools = new Set((await httpClient.listTools()).tools.map((t) => t.name));
+    ok("HTTP tools/list matches stdio", httpTools.size === listed.size && [...listed].every((name) => httpTools.has(name)));
     const hr = await httpClient.callTool({ name: "get_trace", arguments: { trace_id: traceId } });
     ok("HTTP get_trace reaches the same live collector", !hr.isError && JSON.stringify(hr.structuredContent ?? hr).includes(traceId));
-    const page = await fetch(`http://127.0.0.1:${port}/`);
-    ok("HTTP serves the product page at /", page.ok && (await page.text()).includes("<html"));
+    const root = await fetch(`http://127.0.0.1:${port}/`);
+    ok("HTTP answers 404 at /: /mcp is the only route", root.status === 404, String(root.status));
     const unauth = await fetch(`http://127.0.0.1:${port}/mcp`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: "{}" });
     ok("HTTP rejects a bodiless POST without crashing", unauth.status >= 400 && unauth.status < 500, String(unauth.status));
     await httpClient.close().catch(() => {});

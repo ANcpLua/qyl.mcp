@@ -34,17 +34,16 @@ saved queries and failure status in that project, never the telemetry.
 | How two populations differ | `compare_groups` | `discover_attributes` to choose the discriminating keys |
 | How services call each other | `get_service_map` | `aggregate_telemetry` grouped by `service.name` |
 | Whether telemetry itself is complete | `check_telemetry_health` | `discover_attributes` for the missing keys |
-| How MCP tools and servers perform | `get_mcp_stats` or `display_mcp_dashboard` | `list_traces` filtered to the failing tool |
+| How MCP tools and servers perform | `get_mcp_stats` | `list_traces` filtered to the failing tool |
 | What an agent run did | `list_sessions` (`active_only` for live runs) | `get_agent_run` with the `session_id` |
 | What the logs say | `search_logs` with `trace_id` or `service_name` and `severity_min` 17 for errors | `get_trace` for the spans around a log |
 | What a metric shows | `list_metrics` | `get_metric_series` for the streams, `query_metric` for the window |
 | What a CI run did | `ci_log` | `ci_log` with the `run_id` for its phases, failures first |
-| To look at a trace | `display_traces` | the viewer loads correlated logs itself |
 
 ## Defaults, so you do not have to choose
 
 - **Window.** Every read tool defaults to the last 60 minutes ending now
-  (`list_releases`: 7 days, `display_mcp_dashboard`: 24 hours). Pass
+  (`list_releases`: 7 days). Pass
   `lookback_minutes` to widen, up to 30 days. The result's `window` reports
   the applied bounds: pass them as `start_time` and `end_time` to later calls
   so one investigation keeps one window.
@@ -83,13 +82,11 @@ saved queries and failure status in that project, never the telemetry.
 - `coverage.scan_complete: false` or `truncated: true` means the answer
   rests on part of the data. Say which part.
 
-## Show, record, reuse (only when asked)
+## Record and reuse (only when asked)
 
-- When a person is watching in a client that displays MCP Apps, open
-  `display_traces` for the waterfall instead of quoting spans.
 - `create_annotation` puts a plain-text note on a trace, span or session;
   `get_trace` and `list_sessions` show it later with its `id` and `etag`.
-  `update_annotation` and `delete` take that `id` and the current `etag`; a
+  `update_annotation` and `delete_record` take that `id` and the current `etag`; a
   stale etag fails with `precondition_failed`, so read the object again
   first.
 - `update_failure_status` sets `open`, `resolved` or `ignored` (with
@@ -116,5 +113,5 @@ saved queries and failure status in that project, never the telemetry.
   `insufficient_scope` needs the user to grant that scope, not a retry.
 - qyl cannot delete or change telemetry, deploy or roll back services, or
   search the public web. When a request asks only for one of those actions,
-  state the limitation plainly without calling qyl tools; `delete` removes
-  only an annotation or a saved query.
+  state the limitation plainly without calling qyl tools; `delete_record`
+  removes only an annotation or a saved query.

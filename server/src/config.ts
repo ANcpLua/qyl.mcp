@@ -1,19 +1,13 @@
 /**
- * Shared configuration: UI resource URIs and collector endpoint resolution.
+ * Collector endpoint and credential resolution.
  *
- * The collector URL is resolved lazily (per call, not at module load) so the
- * embedding host — the qyl.mcp workbench hosting this server in-process — controls
- * it through its own environment.
+ * The collector URL is resolved lazily (per call, not at module load), so a
+ * process or test that sets QYL_COLLECTOR_URL after importing the server
+ * still controls where each call goes.
  */
 
 import { API_KEY_HEADER, PROJECT_HEADER } from "./contract-headers.js";
 import type { CollectorAccess } from "./collector-access.js";
-
-/** URI of the trace explorer UI resource. */
-export const RESOURCE_URI = "ui://qyl-explorer/mcp-app-v8.html";
-
-/** URI of the MCP dashboard UI resource. */
-export const DASHBOARD_RESOURCE_URI = "ui://qyl-explorer/mcp-dashboard-v6.html";
 
 export function collectorUrl(): string {
   const configured = process.env.QYL_COLLECTOR_URL ?? "http://127.0.0.1:5100";

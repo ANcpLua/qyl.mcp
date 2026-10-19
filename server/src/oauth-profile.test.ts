@@ -139,7 +139,7 @@ test("real signed access tokens reach modern MCP tools with zero, one, or both e
       return server;
     }, () => undefined);
     t.after(() => handler.close());
-    const serve = createFetch({ handler, landingPage: "", auth, allowedHosts: [resource.hostname] });
+    const serve = createFetch({ handler, auth, allowedHosts: [resource.hostname] });
     const fetch = (request: Request) => {
       const headers = new Headers(request.headers);
       headers.set("host", resource.host);

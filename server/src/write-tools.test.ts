@@ -49,7 +49,7 @@ const WRITE_TOOLS = {
   create_saved_query: { annotations: CREATE_TOOL_ANNOTATIONS, scopes: [QYL_MCP_SCOPE, QYL_MCP_WRITE_SCOPE] },
   update_saved_query: { annotations: UPDATE_TOOL_ANNOTATIONS, scopes: [QYL_MCP_SCOPE, QYL_MCP_WRITE_SCOPE] },
   update_failure_status: { annotations: UPDATE_TOOL_ANNOTATIONS, scopes: [QYL_MCP_SCOPE, QYL_MCP_WRITE_SCOPE] },
-  delete: { annotations: DELETE_TOOL_ANNOTATIONS, scopes: [QYL_MCP_SCOPE, QYL_MCP_DELETE_SCOPE] },
+  delete_record: { annotations: DELETE_TOOL_ANNOTATIONS, scopes: [QYL_MCP_SCOPE, QYL_MCP_DELETE_SCOPE] },
   list_saved_queries: { annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, scopes: [QYL_MCP_SCOPE] },
   run_saved_query: { annotations: READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, scopes: [QYL_MCP_SCOPE] },
 } as const;
@@ -235,10 +235,11 @@ function errorOf(result: CallToolResult): { code: string; message: string; retry
   return structured<{ error: { code: string; message: string; retryable: boolean } }>(result).error;
 }
 
-test("the write tools carry the contract's annotations and scopes; the eleven reads are unchanged", async (context) => {
+test("the write tools carry the contract's annotations and scopes; every other tool stays read-only", async (context) => {
   const client = await localClient(context);
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 32);
+  for (const name of Object.keys(WRITE_TOOLS)) assert.ok(tools.some((tool) => tool.name === name), `${name} is published`);
+  assert.ok(!tools.some((tool) => tool.name === "delete"), "delete was renamed to delete_record");
   for (const tool of tools) {
     const expected = WRITE_TOOLS[tool.name as keyof typeof WRITE_TOOLS];
     assert.ok(tool.title, tool.name);
@@ -251,7 +252,7 @@ test("the write tools carry the contract's annotations and scopes; the eleven re
     assert.deepEqual(tool.annotations, expected.annotations, tool.name);
     assert.deepEqual(tool._meta?.securitySchemes, [{ type: "oauth2", scopes: [...expected.scopes] }], tool.name);
   }
-  const remove = tools.find((tool) => tool.name === "delete");
+  const remove = tools.find((tool) => tool.name === "delete_record");
   assert.ok(remove);
   assert.deepEqual(
     (remove.inputSchema.properties as { kind: { enum: string[] } }).kind.enum,
@@ -284,7 +285,7 @@ for (const era of ["modern", "legacy"] as const) {
     // A step-up challenge names only the scope this operation still lacks.
     const writer = await hostedClient(context, OWNER, [QYL_MCP_SCOPE, QYL_MCP_WRITE_SCOPE], era);
     await assert.rejects(
-      writer.callTool({ name: "delete", arguments: { kind: "annotation", id: "ann-1", etag: "\"1\"" } }),
+      writer.callTool({ name: "delete_record", arguments: { kind: "annotation", id: "ann-1", etag: "\"1\"" } }),
       (error: unknown) => {
         assert(error instanceof InsufficientScopeError, String(error));
         assert.equal(error.requiredScope, "qyl:delete");
@@ -375,7 +376,7 @@ test("writes reach only the verified subject's project, with its key and the eta
   assert.equal(calls.at(-1)!.ifMatch, "\"1\"");
 
   const deleted = await owner.callTool({
-    name: "delete",
+    name: "delete_record",
     arguments: { kind: "annotation", id: "ann-1", etag: "\"2\"" },
   }) as CallToolResult;
   assert.equal(deleted.isError, undefined, JSON.stringify(deleted));
@@ -474,12 +475,12 @@ test("saved queries: create, conflict, update, list with paging, run and delete"
   assert.equal(run.result.items.length, 1);
   assert.deepEqual(calls.at(-1)!.body, { id: "sq-1", limit: 100 }, "the contract's default page size travels");
 
-  const deleted = await client.callTool({ name: "delete", arguments: { kind: "saved_query", id: "sq-1", etag: "\"2\"" } }) as CallToolResult;
+  const deleted = await client.callTool({ name: "delete_record", arguments: { kind: "saved_query", id: "sq-1", etag: "\"2\"" } }) as CallToolResult;
   assert.equal(deleted.isError, undefined, JSON.stringify(deleted));
   assert.equal(calls.at(-1)!.path, "/api/v1/saved-queries/sq-1");
   assert.equal(calls.at(-1)!.ifMatch, "\"2\"");
 
-  const missing = await client.callTool({ name: "delete", arguments: { kind: "saved_query", id: "gone", etag: "\"2\"" } }) as CallToolResult;
+  const missing = await client.callTool({ name: "delete_record", arguments: { kind: "saved_query", id: "gone", etag: "\"2\"" } }) as CallToolResult;
   assert.deepEqual(errorOf(missing), { code: "not_found", message: "saved query not found: gone", retryable: false });
 });
 
@@ -497,7 +498,7 @@ test("a Collector key without the write or delete role surfaces as collector_una
     retryable: false,
   });
   const deleted = await client.callTool({
-    name: "delete",
+    name: "delete_record",
     arguments: { kind: "annotation", id: "ann-1", etag: "\"1\"" },
   }) as CallToolResult;
   assert.match(errorOf(deleted).message, /needs the delete role/u);

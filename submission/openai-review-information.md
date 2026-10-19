@@ -11,7 +11,7 @@ qyl connects ChatGPT to the telemetry a user's services send to a qyl Collector:
 - a failure's path with its logs
 - whether a fix held
 
-They can also keep notes and saved queries beside the data. Two interactive views ship with the server: a Trace Explorer and an MCP Dashboard.
+They can also keep notes and saved queries beside the data.
 
 ## Server and authentication
 
@@ -24,34 +24,32 @@ They can also keep notes and saved queries beside the data. Two interactive view
 - **Tool schemas:** output schemas are inlined, without `$ref`.
 - **Skill:** the bundle carries the qyl-investigate skill, which says which tool to start with.
 
-## Tools (32; manifest `server/tool-manifest.snapshot.json`)
+## Tools (manifest `server/tool-manifest.snapshot.json`)
 
-- **26 read tools** with `readOnlyHint: true`:
+- **Read tools** with `readOnlyHint: true`:
   - triage, failures and failure context, fix verification
   - trace, session, log, metric and CI reads
   - aggregates, group comparisons, attribute discovery
   - agent runs, releases, service map, telemetry health, MCP statistics
-  - the two viewers
-  - `fetch_telemetry`, which only the Trace Explorer calls
-- **6 write tools** with `readOnlyHint: false`:
+- **Write tools** with `readOnlyHint: false`:
   - create and update annotations
   - create and update saved queries
   - update failure status
-  - `delete`
+  - `delete_record`
 
-  The update tools and `delete` also carry `destructiveHint: true`.
+  The update tools and `delete_record` also carry `destructiveHint: true`.
 - **What no tool can do:** change or delete telemetry, deploy or roll back anything, or reach the public web.
 
 ## How to test (with the reviewer account below)
 
 1. "What changed in the last 24 hours?" calls `triage`. It returns ranked failures, regressions and releases, or states plainly that nothing was recorded.
-2. "Show me the slowest traces today and open the worst one" calls `list_traces`, then `get_trace` or `display_traces` (the Trace Explorer view).
+2. "Show me the slowest traces today and open the worst one" calls `list_traces`, then `get_trace`.
 3. "Why is the checkout failing?" calls `list_failures`, then `get_failure_context`, which returns the failure's spans with their error logs.
 4. "Did the fix for that failure hold since the last release?" calls `verify_fix` with the failure id and `release`.
 5. "Compare the error rate of the two latest versions" calls `compare_groups`.
 6. "Which metrics do we record? Plot the request duration p95 per hour" calls `list_metrics`, then `query_metric`. A percentile on a gauge is refused with a clear validation error, by design.
-7. "Note on that trace: investigated, caused by the cache flush" calls `create_annotation` (needs `qyl:write`). Then "delete that note" calls `delete` (needs `qyl:delete`).
-8. "Open the MCP dashboard" calls `display_mcp_dashboard`.
+7. "Note on that trace: investigated, caused by the cache flush" calls `create_annotation` (needs `qyl:write`). Then "delete that note" calls `delete_record` (needs `qyl:delete`).
+8. "How are the MCP tools performing today?" calls `get_mcp_stats`.
 
 An empty answer means nothing matching was recorded in the project, not that the system is healthy. The tools say so in their text.
 

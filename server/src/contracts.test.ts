@@ -1,27 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import contractJsonSchema from "@ancplua/qyl-api-schema/json-schema" with { type: "json" };
 import * as ContractSchemas from "./contract-validation.js";
 import {
-  DisplayMcpDashboardInputSchema,
-  DisplayMcpDashboardOutputSchema,
-  DisplayTracesInputSchema,
-  DisplayTracesOutputSchema,
-  FetchTelemetryInputSchema,
-  FetchTelemetryOutputSchema,
   GetTraceInputSchema,
   GetTraceOutputSchema,
   ListSessionsInputSchema,
   ListSessionsOutputSchema,
   ListTracesInputSchema,
   ListTracesOutputSchema,
-  WorkbenchEvaluationExportRequestSchema,
-  WorkbenchEvaluationRunRequestSchema,
-  WorkbenchExecutionRequestSchema,
-  WorkbenchServerCreateRequestSchema,
-  WorkbenchTestAssertionSchema,
-  WorkbenchTestCaseCreateRequestSchema,
-  WorkbenchWorkspaceCreateRequestSchema,
   SearchLogsInputSchema,
   SearchLogsOutputSchema,
   SpanSchema,
@@ -34,29 +20,10 @@ import {
 } from "./collector.js";
 import { readContext, toolTrace, toolSummary } from "./analysis-context.test-helper.js";
 import { getTelemetryFixture } from "./telemetry-fixtures.test-helper.js";
-import fixtureStats from "../fixtures/dashboard-stats.json" with { type: "json" };
 const CiLogInputSchema = ContractSchemas.contractSchema("Mcp.Tools.CiLogInput");
 import { toolError } from "./request-scope.js";
 
-test("every published Workbench definition has a runtime validator", () => {
-  const exportedSchemas = ContractSchemas as Record<string, unknown>;
-  const missing = Object.keys(contractJsonSchema.$defs)
-    .filter((name) => name.startsWith("Workbench."))
-    .map((name) => `${name.slice("Workbench.".length)}Schema`)
-    .filter((name) => exportedSchemas[name] === undefined);
-
-  assert.deepEqual(missing, []);
-});
-
 test("published telemetry schemas own defaults, bounds, and required tool inputs", () => {
-  assert.deepEqual(DisplayTracesInputSchema.parse({}), { limit: 20 });
-  assert(!DisplayTracesInputSchema.safeParse({ limit: 0 }).success);
-  assert(!DisplayTracesInputSchema.safeParse({ limit: 101 }).success);
-
-  assert.deepEqual(DisplayMcpDashboardInputSchema.parse({}), { hours: 24 });
-  assert(!DisplayMcpDashboardInputSchema.safeParse({ hours: 0 }).success);
-  assert(!DisplayMcpDashboardInputSchema.safeParse({ hours: 169 }).success);
-
   assert.deepEqual(ListTracesInputSchema.parse({}), { limit: 20 });
   assert(!ListTracesInputSchema.safeParse({ limit: 1.5 }).success);
   assert(ListTracesInputSchema.safeParse({
@@ -106,18 +73,6 @@ test("published telemetry schemas own defaults, bounds, and required tool inputs
     end_time: "2026-10-11T01:00:00Z",
     cursor: "opaque",
   }).success);
-
-  // fetch_telemetry's input is a discriminated union over `view`: the schema,
-  // not the handler, decides that a trace view needs its trace_id.
-  assert.deepEqual(FetchTelemetryInputSchema.parse({ view: "traces" }), { view: "traces" });
-  assert(!FetchTelemetryInputSchema.safeParse({}).success);
-  assert(!FetchTelemetryInputSchema.safeParse({ view: "trace" }).success);
-  assert(FetchTelemetryInputSchema.safeParse({ view: "trace", trace_id: traceId }).success);
-  assert(!FetchTelemetryInputSchema.safeParse({ view: "traces", hours: 24 }).success);
-  assert(!FetchTelemetryInputSchema.safeParse({ view: "logs", severity_min: 25 }).success);
-  assert(!FetchTelemetryInputSchema.safeParse({ view: "mcp_stats", hours: 169 }).success);
-  assert(!FetchTelemetryInputSchema.safeParse({ view: "mcp_stats", hours: 1.5 }).success, "whole hours");
-  assert(!DisplayMcpDashboardInputSchema.safeParse({ hours: 1.5 }).success, "whole hours");
 });
 
 test("the server's error codes are the contract's ToolErrorCode enum", () => {
@@ -137,9 +92,7 @@ test("published output schemas accept the test telemetry fixture", async () => {
   const [trace] = fixture.traces;
   const summaries = fixture.traces.map(toolSummary);
   const context = readContext(fixture.traces.length);
-  const traces = fixture.traces.map(toolTrace);
 
-  assert(DisplayTracesOutputSchema.safeParse({ ...readContext(fixture.traces.length, false), traces, mode: "live" }).success);
   assert(ListTracesOutputSchema.safeParse({ ...context, traces: summaries, mode: "live", has_more: false }).success);
   assert(
     !ListTracesOutputSchema.safeParse({ ...readContext(fixture.traces.length, false), traces: summaries, mode: "live" }).success,
@@ -149,10 +102,6 @@ test("published output schemas accept the test telemetry fixture", async () => {
   assert(GetTraceOutputSchema.safeParse({ ...context, trace: toolTrace(trace!), mode: "live" }).success);
   assert(ListSessionsOutputSchema.safeParse({ ...context, sessions: fixture.sessions, mode: "live", has_more: false }).success);
   assert(SearchLogsOutputSchema.safeParse({ ...context, logs: fixture.logs, mode: "live", has_more: false }).success);
-  assert(FetchTelemetryOutputSchema.safeParse({ ...context, traces, mode: "live" }).success);
-
-  assert(DisplayMcpDashboardOutputSchema.safeParse({ ...readContext(fixture.traces.length, false), stats: fixtureStats }).success);
-  assert(FetchTelemetryOutputSchema.safeParse({ ...context, stats: fixtureStats, mode: "live" }).success);
 });
 
 test("64-bit nanosecond timestamps survive the wire exactly, above the safe-integer ceiling", () => {
@@ -188,101 +137,6 @@ test("TypeSpec record dictionaries retain their value contract at runtime", () =
   assert(SpanSchema.safeParse(span).success);
   span.attributes![0]!.value = { unsupported: null } as never;
   assert(!SpanSchema.safeParse(span).success);
-});
-
-test("published workbench request schemas own strictness, defaults, and opaque SDK payloads", () => {
-  assert.deepEqual(WorkbenchWorkspaceCreateRequestSchema.parse({ name: "Local lab" }), {
-    name: "Local lab",
-  });
-  assert(!WorkbenchWorkspaceCreateRequestSchema.safeParse({ name: "Local lab", public: true }).success);
-
-  assert.deepEqual(
-    WorkbenchServerCreateRequestSchema.parse({
-      name: "Fixture",
-      configuration: { transport: "stdio", command: "node" },
-    }),
-    {
-      name: "Fixture",
-      configuration: { transport: "stdio", command: "node" },
-      auto_connect: false,
-    },
-  );
-  assert(
-    !WorkbenchServerCreateRequestSchema.safeParse({
-      name: "Fixture",
-      configuration: { transport: "stdio", command: "node", token: "plaintext-secret" },
-    }).success,
-  );
-
-  assert.deepEqual(
-    WorkbenchExecutionRequestSchema.parse({
-      tool_name: "fixture.echo",
-      arguments: { nested: [true, 2, "three"] },
-      idempotency_key: "execution-1",
-    }),
-    {
-      tool_name: "fixture.echo",
-      arguments: { nested: [true, 2, "three"] },
-      timeout_ms: 30_000,
-      idempotency_key: "execution-1",
-    },
-  );
-});
-
-test("published workbench assertion, evaluation, and export unions reject local variants", () => {
-  assert(
-    WorkbenchTestAssertionSchema.safeParse({
-      id: "status-1",
-      kind: "status",
-      expected: ["succeeded"],
-    }).success,
-  );
-  assert(
-    !WorkbenchTestAssertionSchema.safeParse({
-      id: "semantic-1",
-      kind: "semantic",
-      expected: "similar",
-    }).success,
-  );
-  assert(
-    !WorkbenchTestAssertionSchema.safeParse({
-      id: "obsolete-shape-1",
-      type: "exact",
-      pointer: "/answer",
-      expected: 42,
-    }).success,
-  );
-
-  const testCase = WorkbenchTestCaseCreateRequestSchema.parse({
-    server_id: "server-1",
-    name: "Echo succeeds",
-    tool_name: "fixture.echo",
-    assertions: [{ id: "status-1", kind: "status", expected: ["succeeded"] }],
-  });
-  assert.equal(testCase.timeout_ms, 30_000);
-
-  assert.deepEqual(
-    WorkbenchEvaluationRunRequestSchema.parse({ idempotency_key: "evaluation-1" }),
-    { idempotency_key: "evaluation-1", concurrency: 1, fail_fast: false },
-  );
-  assert.deepEqual(
-    WorkbenchEvaluationExportRequestSchema.parse({
-      format: "json",
-      idempotency_key: "export-1",
-    }),
-    {
-      format: "json",
-      include_protocol_events: true,
-      include_telemetry: true,
-      idempotency_key: "export-1",
-    },
-  );
-  assert(
-    !WorkbenchEvaluationExportRequestSchema.safeParse({
-      format: "csv",
-      idempotency_key: "export-1",
-    }).success,
-  );
 });
 
 test("analysis boundary preserves RFC 3339 precision and rejects alternate wire encodings", () => {

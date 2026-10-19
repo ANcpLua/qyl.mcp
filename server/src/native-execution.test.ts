@@ -138,7 +138,6 @@ test("native tools/call records operation metadata and keeps payloads out of tel
 
     assert.equal(starts.length, 1);
     const started = starts[0] as Record<string, unknown>;
-    assert.equal(started.role, "server");
     assert.equal(started.method, "tools/call");
     assert.equal(started.serverId, "qyl.mcp/native");
     assert.equal(started.toolName, "fixture.evidence");

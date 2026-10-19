@@ -1,11 +1,10 @@
 {
   // Solution file. Language servers and editors only discover files named
   // tsconfig.json; each reference below owns its files, and the build runs
-  // every one of them with -p. ui before server before test: a source file in
-  // both server and test opens in the server project.
+  // every one of them with -p. Server before test: a source file in both
+  // opens in the server project.
   "files": [],
   "references": [
-    { "path": "./tsconfig.ui.json" },
     { "path": "./tsconfig.server.json" },
     { "path": "./tsconfig.test.json" }
   ]

@@ -1,13 +1,10 @@
 # qyl.mcp
 
 qyl provides MCP tools for investigating traces, logs, metrics and sessions in
-a qyl Collector. It measures and correlates; the agent reasons and acts.
+a qyl Collector. It measures and correlates; the agent reasons and acts. Agents
+build, maintain and use it; nothing here is a human interface.
 
-| Component | Source role |
-| --- | --- |
-| `server/` | Telemetry MCP server and bundled MCP App viewers |
-| `workbench/` | Local client for inspecting and invoking other MCP servers |
-| `dashboard/` | Browser UI built alongside the Workbench |
+`server/` is the MCP server (npm package `qyl-mcp-server`).
 
 ## Use the hosted server
 
@@ -74,20 +71,19 @@ defaults to loopback port 3001. `QYL_API_KEY` is an outgoing Collector
 credential, not an incoming MCP login.
 
 `./release.sh <version>` publishes `qyl-mcp-server` from the developer's machine
-(see `SKILL.md`). The executable uses Bun; the exported library subpaths support
-Node 24. C# and TypeScript telemetry definitions come from the qyl convention
+(see `SKILL.md`). The executable uses Bun; the library exports `qyl-mcp-server`
+and `qyl-mcp-server/auth` support Node 24. C# and TypeScript telemetry definitions come from the qyl convention
 registry, while product API contracts come from `qyl-api-schema`. The official
 MCP SDK, OpenTelemetry SDKs and exporters remain in use. See
 [release notes](server/README.md#release-notes); the npm registry's `latest` tag
 identifies the published version.
 
-### Tools and viewers
+### Tools
 
 The [generated manifest](server/tool-manifest.snapshot.json) is the tool
-contract. It has 32 tools: 26 read tools annotated `readOnlyHint: true` and the
-six [write tools](#write-tools); `fetch_telemetry` is app-only through
-`_meta.ui.visibility: ["app"]`. `bun run smoke` checks that `tools/list`
-returns exactly these 32 tools on `2026-07-28` and over the 2025-era handshake.
+contract: every read tool is annotated `readOnlyHint: true`, and the
+[write tools](#write-tools) change only records users create. `bun run smoke`
+checks `tools/list` on `2026-07-28` and over the 2025-era handshake.
 
 Start with sessions and traces, drill into one trace and its error logs,
 then discover metric instruments and series before querying. `get_trace`
@@ -95,8 +91,7 @@ returns the complete span tree by default. Use `errors_only` to select error
 spans, `max_spans` to cap the result after filtering, and
 `include_attributes=false` to omit attribute collections. Original trace totals
 are retained; the summary states how many matching spans were returned.
-`display_traces` supplies the waterfall and `search_logs` supplies filtered
-detail. `ci_log` accepts telemetry from any CI following its emitter convention;
+`search_logs` supplies filtered log detail. `ci_log` accepts telemetry from any CI following its emitter convention;
 `service_prefix` selects services in both run lists and phase breakdowns and
 defaults to `qyl-ci`. The [shared skill](submission/qyl/skills/qyl-investigate/SKILL.md)
 contains the full workflow; the server also serves it through the MCP skills
@@ -106,7 +101,7 @@ copies it into `server/dist/skills`.
 
 ### Write tools
 
-Six tools change something, and only records inside the caller's Collector
+The write tools change something, and only records inside the caller's Collector
 project: annotations (plain-text notes of at most 2000 characters on a trace,
 span or session), saved queries (named filters for traces, logs or metrics) and
 the status of recorded failures. No tool deletes or edits traces, logs or
@@ -119,7 +114,7 @@ metrics; retention alone removes telemetry.
 | `create_saved_query` | adds a named filter | `readOnlyHint: false`, `destructiveHint: false`, `idempotentHint: true` | `qyl:write` |
 | `update_saved_query` | renames it or replaces its description or filter | `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true` | `qyl:write` |
 | `update_failure_status` | sets a failure's status (`open`, `resolved` or `ignored`), assignee or ignore-until time | `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true` | `qyl:write` |
-| `delete` | removes one annotation or saved query (`kind` is `annotation` or `saved_query`) | `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true` | `qyl:delete` |
+| `delete_record` | removes one annotation or saved query (`kind` is `annotation` or `saved_query`) | `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true` | `qyl:delete` |
 
 `openWorldHint` is `false` on all of them. `list_saved_queries` and
 `run_saved_query` read saved queries and keep `qyl:read`; `get_trace` and
@@ -131,10 +126,6 @@ On the hosted server a write call without its
 scope gets a `403` `insufficient_scope` challenge naming the scopes to request,
 in both protocol eras, before any Collector request.
 
-The two viewers declare versioned resource URIs, a configured hosted origin
-and empty external connection/resource CSP allowlists. Local tests cover
-restoring the original query when refresh input is empty.
-
 ### MCP Events
 
 The source supports opt-in `trace.error` subscriptions on authenticated
@@ -144,25 +135,6 @@ signs deliveries, checks ongoing authorization, expires subscriptions and
 cancels delivery on unsubscribe or confirmed revocation. Subscription state
 is bounded and excludes OAuth tokens and copied telemetry.
 
-## The workbench
-
-```sh
-bun run build
-bun run start:workbench
-```
-
-The default URL is `http://127.0.0.1:18888`; `QYL_MCP_WORKBENCH_PORT` changes
-the port. Workbench can connect to HTTP and stdio servers, negotiate the
-protocol automatically, inspect schemas, invoke tools and retain execution
-evidence. It uses a loopback browser session and checks host/origin access.
-Tool annotations guide confirmation; they do not grant permission.
-
-Review an external stdio command before launching it: it executes locally.
-Use environment-variable references for credentials instead of embedding
-secrets in URLs or saved headers. Workbench state defaults to
-`~/.qyl/mcp-workbench.json`, overridden by `QYL_MCP_STATE_PATH`. Its execution
-records are distinct from the server's minimized incoming-call records.
-
 ### Incoming-call records and telemetry
 
 The server's strict native record schema contains its own ID, tool name,
@@ -171,16 +143,19 @@ status, timestamps, duration and error type. It contains no `arguments`,
 records at `~/.qyl/mcp-native-executions.json`; `QYL_MCP_NATIVE_STATE_PATH`
 overrides the path. Hosted HTTP with `MCP_PUBLIC_URL` disables that local store.
 Known version-1/2 data is projected into the minimized schema; unreadable
-archives require operator review.
+archives require operator review. When a completed or failed record cannot be
+written, the caller still gets the tool's own result or error; the server logs
+a structured `warn` line to stderr and marks the operation span
+`error.type=evidence_persistence_failed`. A record that cannot be written
+before the tool runs refuses the call.
 
 OTLP exports include operation timing/status and trace correlation. Native
 incoming calls do not supply argument/result bodies to that telemetry.
 Hosted calls export traces, duration metrics and named logs using the verified
 caller’s Collector project. Disabling the local record store does not disable
 these exports. Exporter setup failures are reported without blocking tools.
-Workbench has a separate optional content-capture setting. Local OTLP tests
-check redaction and matching trace/span IDs; they do not establish a production
-retention policy.
+Local OTLP tests check redaction and matching trace/span IDs; they do not
+establish a production retention policy.
 
 ## Configuration
 
@@ -193,11 +168,8 @@ retention policy.
 | `QYL_PROJECT` | Server-configured Collector project scope; its default is stated in the [server README](server/README.md#configuration). |
 | `MCP_COLLECTOR_PROJECTS` | Operator-controlled verified-subject-to-project mapping. |
 | `QYL_MCP_TELEMETRY=0` | Disable MCP self-telemetry. |
-| `QYL_MCP_CAPTURE_CONTENT=1` | Optional Workbench capture; does not add incoming-call payloads to native records. |
 | `QYL_OTLP_ENDPOINT` | Optional telemetry base; signal-specific OTel endpoints take precedence. |
-| `QYL_MCP_STATE_PATH` | Workbench state location. |
 | `QYL_MCP_NATIVE_STATE_PATH` | Native incoming-call record location. |
-| `QYL_MCP_WORKBENCH_PORT` | Workbench port, default 18888. |
 
 ## Deploying your own
 
@@ -206,26 +178,13 @@ describes the authorization boundary.
 
 `.railway/railway.ts` declares build `bun run --cwd server build`, start
 `bun server/dist/main.js`, healthcheck `/healthz` and an Events volume at
-`/data`. Railway deploys `mcp.qyl.at` from every push to `main`.
+`/data`. Railway deploys `mcp.qyl.at` from every push to `main`. The HTTP
+server answers `/mcp`, `/healthz`, the OAuth discovery documents and the OpenAI
+domain challenge; every other path, `/` included, is `404`.
 
 For a hosted bind, configure `MCP_PUBLIC_URL`, `MCP_BIND_HOST`, allowed hosts
 and origins, and the intended Collector URL/credential. The public URL sets
-the resource audience and canonical `/mcp` connector URL. For Claude, qyl sets
-`ui.domain` to the first 32 hex characters of SHA-256 over that exact connector
-URL plus `.claudemcpcontent.com`. Claude requires this format when the optional
-field is supplied. ChatGPT receives qyl's configured HTTPS origin in `ui.domain`
-and its `openai/widgetDomain` alias. OpenAI documents an origin-valued field
-and requires a dedicated, unique origin for UI plugin submission; choosing
-the MCP server's origin is qyl's configuration choice.
-
-The SDK's per-request client name and `User-Agent` are both checked. A recognized
-Claude or ChatGPT name wins conflicting hints. A missing or unrecognized name
-can use a recognized UA, including `Claude-User`, `openai-mcp/1.0.0` or
-`ChatGPT-User`. If neither hint is recognized, qyl omits both domain fields.
-A host that supports MCP Apps can then use its default sandbox; omission alone
-does not disable the viewer or reject the MCP client. Local viewers also omit
-the domain. The hints and their precedence are qyl's compatibility policy, not
-a documented client format.
+the resource audience and canonical `/mcp` connector URL.
 
 Keep Collector credentials on the server. With project mapping enabled, only
 the verified subject selects the project; client hints, tool arguments and
@@ -314,17 +273,15 @@ files in `.claude-plugin/` and `.mcp.json`, the OpenAI root `plugin.json` and
 `mcp.json`. `python3 submission/build-openai-package.py` builds the OpenAI ZIP
 into `submission/packages/` (ignored by Git), and
 [the connector listing draft](submission/anthropic-connector-listing.md) holds
-the Anthropic connector fields. The owner handles identity, public pages,
-reviewer accounts, recording, attestations, uploads, submission and
-publication. `GET /.well-known/openai-apps-challenge` returns the trimmed
-value of the hosted `OPENAI_APPS_CHALLENGE` variable as plain text, and `404`
-while it is blank; on mcp.qyl.at it carries the OpenAI portal's domain token.
+the Anthropic connector fields. `GET /.well-known/openai-apps-challenge` returns
+the trimmed value of the hosted `OPENAI_APPS_CHALLENGE` variable as plain text,
+and `404` while it is blank; on mcp.qyl.at it carries the OpenAI portal's domain
+token.
 
-The rules in `AGENTS.md` follow the directories' requirements: OpenAI
+Directory requirements: OpenAI
 [MCP server](https://developers.openai.com/plugins/build/mcp-server),
 [authentication](https://developers.openai.com/plugins/build/auth),
 [Events](https://developers.openai.com/plugins/build/mcp-events),
-[MCP UI](https://developers.openai.com/plugins/build/chatgpt-ui),
 [plugin guidelines](https://developers.openai.com/plugins/plugin-guidelines);
 Anthropic
 [connector checklist](https://claude.com/docs/connectors/building/review-criteria),
@@ -335,7 +292,6 @@ Anthropic
 
 ```sh
 mise run check
-bun run smoke:otlp
 bun run smoke:projects
 ```
 
@@ -371,5 +327,5 @@ The generated contracts come from `@ancplua/qyl-api-schema`; exact dependency
 versions are recorded in [server/package.json](server/package.json) and `bun.lock`.
 SDK major version and wire revision are
 independent. The server answers MCP `2026-07-28` and negotiates down for
-2025-era clients that send `initialize`. Server HTTP/stdio use SDK factories
-and negotiation defaults; Workbench uses automatic negotiation.
+2025-era clients that send `initialize`. HTTP and stdio use the SDK factories
+and their negotiation defaults.

@@ -34,9 +34,9 @@ export async function buildToolManifest(): Promise<string> {
           inputSchema: tool.inputSchema,
           outputSchema: tool.outputSchema ?? null,
         })),
-      // The ui:// resources tools advertise through _meta.ui.resourceUri are part
-      // of the surface an agent resolves: a tool pointing at a resource the server
-      // no longer registers must fail as a snapshot diff, not a client 404.
+      // The skill files the server serves through the skills extension are part
+      // of the surface an agent resolves: a dropped or renamed file must fail as
+      // a snapshot diff, not a client 404.
       resources: [...resources]
         .sort((left, right) => (left.uri < right.uri ? -1 : left.uri > right.uri ? 1 : 0))
         .map((resource) => ({

@@ -26,7 +26,6 @@ import { QYL_MCP_RESOURCE, QYL_MCP_SCOPE } from "./oauth.js";
 
 const resourceServerUrl = new URL(QYL_MCP_RESOURCE);
 const origin = resourceServerUrl.origin;
-const landingPage = "<!doctype html><title>qyl MCP</title><main>ready</main>";
 
 const oauthMetadata: OAuthMetadata = {
   issuer: "https://qyl-eu.eu.auth0.com/",
@@ -68,7 +67,6 @@ function hostedEndpoint(options: { authenticated?: boolean; openaiAppsChallenge?
     handler,
     fetch: createFetch({
       handler,
-      landingPage,
       allowedHosts: [resourceServerUrl.hostname],
       allowedOrigins: [resourceServerUrl.hostname],
       ...(options.openaiAppsChallenge === undefined ? {} : { openaiAppsChallenge: options.openaiAppsChallenge }),
@@ -110,16 +108,16 @@ function transportFetch(endpoint: Endpoint): FetchLike {
   }));
 }
 
-test("the public root serves the qyl MCP landing page", async (context) => {
+test("the public root is not a route; /healthz answers", async (context) => {
   const endpoint = hostedEndpoint();
   context.after(() => endpoint.handler.close());
 
-  const response = await endpoint.fetch(hosted("/"));
-  assert.equal(response.status, 200);
-  assert.equal(response.headers.get("content-type"), "text/html; charset=utf-8");
-  assert.equal(response.headers.get("cache-control"), "public, max-age=300");
-  assert.match(await response.text(), /<main>ready<\/main>/u);
-  assert.equal((await endpoint.fetch(hosted("/", { method: "POST" }))).status, 404);
+  for (const method of ["GET", "HEAD", "POST"]) {
+    const response = await endpoint.fetch(hosted("/", { method }));
+    assert.equal(response.status, 404, method);
+    assert.equal(response.headers.get("content-type"), "text/plain; charset=utf-8", method);
+  }
+  assert.equal((await endpoint.fetch(hosted("/index.html"))).status, 404);
   assert.equal((await endpoint.fetch(hosted("/healthz"))).status, 200);
 });
 

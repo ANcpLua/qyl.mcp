@@ -35,8 +35,7 @@ export async function queryAnalysis<Input extends object, Output extends object>
     const page = output as Record<string, unknown>;
     const originalPoints = operation === "get_metric_series" && typeof args.series_id === "string";
     const points = page.points as { items: unknown[] } | undefined;
-    const traceView = operation === "get_trace" || operation === "fetch_telemetry" && args.view === "trace";
-    const sizeKey = originalPoints ? "points_limit" : traceView ? "max_spans" : operation === "query_metric" ? "series_limit" : operation === "get_agent_run" ? "max_steps" : "limit";
+    const sizeKey = originalPoints ? "points_limit" : operation === "get_trace" ? "max_spans" : operation === "query_metric" ? "series_limit" : operation === "get_agent_run" ? "max_steps" : "limit";
     const trace = page.trace as { spans?: unknown[] } | undefined;
     const observed = page.observed as { error_spans?: unknown[]; logs?: unknown[] } | undefined;
     const sizes = [trace?.spans?.length, observed?.error_spans?.length, observed?.logs?.length,

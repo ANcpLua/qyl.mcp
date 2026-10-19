@@ -1,4 +1,4 @@
-# The toolchain used by the local gate and Railway builds. Install with mise install.
+# The toolchain used by the local check, CI and Railway builds. Install with mise install.
 [tools]
 "bun" = "1.4.3"
 # bun installs and runs the scripts; node runs `node --test`, the build and verify scripts,
@@ -8,7 +8,7 @@
 "node" = "24.21.0"
 
 [tasks.check]
-description = "Local release gate, one check at a time; a line per step, full log in artifacts/logs, QYL_VERBOSE=1 prints everything"
+description = "The check CI runs, one step at a time; a line per step, full log in artifacts/logs, QYL_VERBOSE=1 prints everything"
 quiet = true
 run = '''
 scripts/quiet.sh check \
@@ -25,11 +25,6 @@ scripts/quiet.sh check \
   'bun run --cwd server smoke:quiet' \
   'bun run --cwd server test:answer-key'
 '''
-
-[tasks.smoke-otlp]
-description = "Live OTLP and MCP surface against a built collector; override with QYL_COLLECTOR_DLL"
-quiet = true
-run = "scripts/quiet.sh smoke-otlp 'bun run smoke:otlp'"
 
 [tasks.hosted-eval]
 description = "Hosted reads, scope challenges and input validation with a token from the Keychain"

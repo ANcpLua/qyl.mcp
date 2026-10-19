@@ -9,11 +9,7 @@
     "ignorePatterns": [
         "dist",
         "node_modules",
-        "**/*.d.ts",
-        "sites",
-        "coverage",
-        "playwright-report",
-        "test-results"
+        "**/*.d.ts"
     ],
     "rules": {
         "no-restricted-imports": [
@@ -58,23 +54,8 @@
     "overrides": [
         {
             "files": [
-                "dashboard/src/**/*.ts",
-                "dashboard/src/**/*.tsx"
-            ],
-            "rules": {
-                "no-console": "error"
-            }
-        },
-        {
-            "files": [
                 "**/*.test.ts",
-                "**/*.test.tsx",
-                "**/*.spec.ts",
-                "**/*.spec.tsx",
-                "**/test/**",
-                "**/fixtures/**",
-                "**/*.test.mjs",
-                "**/*.spec.mjs"
+                "**/*.test.mjs"
             ],
             "rules": {
                 "no-console": "off",

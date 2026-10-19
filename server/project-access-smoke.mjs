@@ -162,13 +162,9 @@ try {
     ["ci_log", { run_id: `${f.marker}_session` }], ["list_metrics", {}],
     ["get_metric_series", { metric_name: `${f.marker}.requests` }],
     ["query_metric", { metric_name: `${f.marker}.requests`, ...window, aggregation: "avg" }],
-    ["display_traces", {}], ["display_traces", { session_id: `${f.marker}_session` }],
-    ["display_mcp_dashboard", { hours: 1 }], ["fetch_telemetry", { view: "traces" }],
-    ["fetch_telemetry", { view: "trace", trace_id: f.traceId }],
-    ["fetch_telemetry", { view: "logs" }], ["fetch_telemetry", { view: "mcp_stats", hours: 1 }],
   ];
   const writeTools = ["update_failure_status", "create_annotation", "update_annotation", "create_saved_query", "update_saved_query",
-    "delete", "list_saved_queries", "run_saved_query"];
+    "delete_record", "list_saved_queries", "run_saved_query"];
   /** @returns {Array<[string, Record<string, unknown>]>} */
   function extraReads(f, failure) { return [
     ["triage", {}], ["list_failures", {}], ["get_failure_context", { trace_id: f.traceId }],
@@ -191,14 +187,15 @@ try {
       assert.equal(client.getNegotiatedProtocolVersion(), revision);
       return client;
     }
-    let toolCount = 0;
     const written = await Promise.all(fixtures.map(async (f) => {
       const client = await connect(f.token);
       const foreign = fixtures.find((entry) => entry !== f);
       const { tools } = await client.listTools();
-      toolCount = tools.length;
-      assert.deepEqual(tools.map((tool) => tool.name).sort((a, b) => a.localeCompare(b)),
-        [...new Set([...cases(f).map(([name]) => name), ...extraReads(f, {}).map(([name]) => name), ...writeTools])].sort((a, b) => a.localeCompare(b)));
+      // Every published tool has an isolation case here, and every case names a published tool.
+      const published = new Set(tools.map((tool) => tool.name));
+      const covered = new Set([...cases(f).map(([name]) => name), ...extraReads(f, {}).map(([name]) => name), ...writeTools]);
+      assert.deepEqual([...published].filter((name) => !covered.has(name)), [], "published tools without an isolation case");
+      assert.deepEqual([...covered].filter((name) => !published.has(name)), [], "isolation cases for unpublished tools");
       for (const [name, args] of cases(f)) {
         const result = await client.callTool({ name, arguments: args,
           _meta: { subject: foreign.subject, project: foreign.project } });
@@ -208,7 +205,6 @@ try {
         assert(!json.includes(foreign.marker), `${name} leaked the other project's data`);
         for (const entry of fixtures) assert(!json.includes(entry.apiKey), `${name} exposed a key`);
       }
-      assert.equal(toolCount, 32);
       const failures = await client.callTool({ name: "list_failures", arguments: {} });
       assert(!failures.isError, JSON.stringify(failures));
       const failure = failures.structuredContent.failures[0];
@@ -224,8 +220,6 @@ try {
       /** @type {ReadonlyArray<readonly [string, Record<string, unknown>]>} */
       const foreignCases = [
         ["get_trace", { trace_id: foreign.traceId }],
-        ["fetch_telemetry", { view: "trace", trace_id: foreign.traceId }],
-        ["display_traces", { trace_id: foreign.traceId }],
       ];
       for (const [name, args] of foreignCases) {
         const denied = await client.callTool({ name, arguments: args });
@@ -266,10 +260,10 @@ try {
       /** @type {ReadonlyArray<readonly [string, Record<string, unknown>]>} */
       const takeovers = [
         ["update_annotation", { id: other.note.id, etag: other.note.etag, text: "takeover" }],
-        ["delete", { kind: "annotation", id: other.note.id, etag: other.note.etag }],
+        ["delete_record", { kind: "annotation", id: other.note.id, etag: other.note.etag }],
         ["update_saved_query", { id: other.saved.id, etag: other.saved.etag, name: "takeover" }],
         ["run_saved_query", { id: other.saved.id }],
-        ["delete", { kind: "saved_query", id: other.saved.id, etag: other.saved.etag }],
+        ["delete_record", { kind: "saved_query", id: other.saved.id, etag: other.saved.etag }],
       ];
       for (const [name, args] of takeovers) {
         const denied = await client.callTool({ name, arguments: args });
@@ -281,8 +275,8 @@ try {
         { kind: "annotation", id: note.id, etag: note.etag },
         { kind: "saved_query", id: saved.id, etag: saved.etag },
       ]) {
-        const removed = await client.callTool({ name: "delete", arguments: args });
-        assert.equal(removed.structuredContent?.deleted, true, `${revision} delete ${args.kind}: ${JSON.stringify(removed)}`);
+        const removed = await client.callTool({ name: "delete_record", arguments: args });
+        assert.equal(removed.structuredContent?.deleted, true, `${revision} delete_record ${args.kind}: ${JSON.stringify(removed)}`);
       }
     }
     const unassigned = await connect("unassigned-local-test");
@@ -295,7 +289,7 @@ try {
       assert.equal(result.isError, true, `${name} accepted an unassigned account`);
       assert.match(JSON.stringify(result), /No Collector project is assigned/u);
     }
-    console.log(`ok ${revision}: all ${toolCount} tools and viewer paths isolate concurrent accounts; writes stay in each account's project; foreign trace IDs, foreign objects and unassigned accounts denied`);
+    console.log(`ok ${revision}: every tool isolates concurrent accounts; writes stay in each account's project; foreign trace IDs, foreign objects and unassigned accounts denied`);
   }
 
   const store = createEventStore(join(temp, "events.json"));

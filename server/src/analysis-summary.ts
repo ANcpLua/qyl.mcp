@@ -17,7 +17,7 @@ export function analysisSummary(operation: string, output: object): string {
   for (const key of ["verdict", "reason", "settled", "method", "unit", "approximate"]) {
     if (data[key] !== undefined) lines.push(`${key}: ${short(data[key])}`);
   }
-  const totals = record(data.totals ?? record(data.stats).totals);
+  const totals = record(data.totals);
   if (totals.requests !== undefined) lines.push(`${short(totals.errors)} errors / ${short(totals.requests)} requests; p95 ${short(totals.p95_ms)} ms.`);
   const trace = record(data.trace);
   if (trace.trace_id) lines.push(`Trace ${short(trace.trace_id)}: ${short(trace.span_count)} spans${trace.has_error ? ", contains errors" : ""}.`);

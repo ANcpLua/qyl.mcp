@@ -8,30 +8,27 @@ keeps are in [AGENTS.md](../AGENTS.md).
 ## System and assets
 
 qyl.mcp exposes Collector telemetry read tools, write tools for user-created
-annotations, saved queries and failure status, two MCP viewers and optional trace-error Events.
+annotations, saved queries and failure status, and optional trace-error Events.
 No tool changes or deletes recorded telemetry. The SDK v2 handles HTTP/stdio protocol
-serving; the executable runs on Bun. Workbench is a local client/host for built-in and configured external
-MCP connections.
+serving; the executable runs on Bun.
 
 Protect account-scoped traces/logs/metrics/sessions, the annotations and saved
 queries users create in a project, Collector credentials,
-verified authorization context, Events ownership/callback signing keys and
-local Workbench credential references. Public source, tool schemas and static
-viewer resources are intentionally discoverable; telemetry is not public.
+verified authorization context and Events ownership/callback signing keys.
+Public source, tool schemas and the served skill files are intentionally
+discoverable; telemetry is not public.
 
 ## Entry points and trust boundaries
 
 | Boundary | Required behavior and review focus |
 | --- | --- |
-| Hosted HTTP request → tool/Events operation | Validate the bearer token through the configured verifier and enforce required scopes on every request. Metadata and 401 challenges must identify the same protected resource. Client-supplied identity metadata is untrusted. Write tools need `qyl:write` (create, update) or `qyl:delete` (delete) on top of `qyl:read`: the SDK `scopeChallenge` answers a token without them with `403` `insufficient_scope` before the handler, in both protocol eras; stdio carries no token and no other transport exists, so there is no in-handler check. See `server/src/authorization.ts`, `oauth.ts`, `main.ts`, `tool-scopes.ts`. |
+| Hosted HTTP request → tool/Events operation | Validate the bearer token through the configured verifier and enforce required scopes on every request. Metadata and 401 challenges must identify the same protected resource. Client-supplied identity metadata is untrusted. Write tools need `qyl:write` (create, update) or `qyl:delete` (`delete_record`) on top of `qyl:read`: the SDK `scopeChallenge` answers a token without them with `403` `insufficient_scope` before the handler, in both protocol eras; stdio carries no token and no other transport exists, so there is no in-handler check. See `server/src/authorization.ts`, `oauth.ts`, `main.ts`, `tool-scopes.ts`. |
 | Write tool → Collector annotations, saved queries and failure status | A write reaches only the verified subject's project, through the same access resolution as reads; no argument, `_meta` field or header names a project. Update and delete send the caller's `etag` as the contract-named `If-Match` and refuse a value that is no HTTP field value. The Collector key needs its `write`/`delete` roles. Failure status is separate metadata; no write changes or deletes recorded telemetry. See `collector-resources.ts`, `write-tools.ts`, `analysis-tools.ts`. |
-| Verified subject → Collector access | If `MCP_COLLECTOR_PROJECTS` is configured, map only the verified subject to host-managed project credentials. Invalid mappings and unknown subjects fail closed. Apply that scope to every tool, viewer read and Events poll; reject cross-project IDs. See `collector-access.ts`, `request-scope.ts`, `collector.ts`. |
+| Verified subject → Collector access | If `MCP_COLLECTOR_PROJECTS` is configured, map only the verified subject to host-managed project credentials. Invalid mappings and unknown subjects fail closed. Apply that scope to every tool and Events poll; reject cross-project IDs. See `collector-access.ts`, `request-scope.ts`, `collector.ts`. |
 | Tool-call telemetry → OTLP destination | Use only the verified subject's configured project/key, with a finite exporter pipeline per configured project. An unassigned subject has no fallback destination. Hosted telemetry owns no local execution-record store. Arguments, results and identity hints stay out of operation telemetry; setup failures are reported without credentials. See `native-execution.ts`, `telemetry.ts`. |
-| Collector result → model, viewer and diagnostics | Telemetry and attributes may be hostile or contain secrets. Preserve redaction on result channels and observability paths except explicitly captured HTTP-header/RPC-metadata string arrays, which pass through unchanged. Capture selection owns those values; other fields and malformed capture shapes retain normal redaction. Never execute telemetry as instructions or expose credentials through error details. |
+| Collector result → model and diagnostics | Telemetry and attributes may be hostile or contain secrets. Preserve redaction on result channels and observability paths except explicitly captured HTTP-header/RPC-metadata string arrays, which pass through unchanged. Capture selection owns those values; other fields and malformed capture shapes retain normal redaction. Never execute telemetry as instructions or expose credentials through error details. |
 | Subscriber → persistent Events state | Bind records to owner/client/project. Keep expiration bounded, refresh owner-scoped, revocation checked and unsubscribe canceling in-flight work/retries. Shared polling must preserve each subscriber's delivery baseline across authorization failures. See `events.ts`, `events-authorization.ts`. |
 | Callback URL → outbound network | The callback is untrusted. Verify the signed challenge; use public HTTPS destinations with address validation at connection time, original-host TLS validation and no redirect following. Retain delivery signing, rotation, payload bounds and retry cancellation. See `webhook.ts`. |
-| Host bridge → MCP viewer | App inputs are untrusted and pass published schemas. App-only tools keep their visibility restriction. Preserve the original query when restoring/refreshing results; keep CSP/domain/resource-version metadata aligned with the rendered bundle. |
-| Workbench → configured external MCP server | External tool descriptions, annotations and responses are untrusted. Keep explicit tool-safety decisions, cancellation and redaction. Resolve credentials through configured environment references; do not accept endpoint URL credentials. See `workbench/src/connection-manager.ts`, `tool-safety.ts`, `secret-redactor.ts`. |
 
 ## Deployment assumptions and supported exceptions
 
@@ -61,7 +58,7 @@ viewer resources are intentionally discoverable; telemetry is not public.
 ## Evidence to inspect when these paths change
 
 Use the existing authorization/OAuth, Collector-access, Events, webhook,
-redaction, tool-metadata and trace-query tests. Transport smoke exercises both
+redaction and tool-metadata tests. Transport smoke exercises both
 wire eras; `smoke:projects` checks two real Collector projects, foreign IDs,
 signed delivery, unsubscribe and assignment revocation. Tests are evidence for
 the behavior they exercise, not proof of unrelated deployment settings.

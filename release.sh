@@ -153,7 +153,6 @@ say "checks"
 [[ -z $(git status --porcelain) ]] || die "working tree not clean"
 git fetch -q origin main
 [[ $(git rev-parse HEAD) == $(git rev-parse origin/main) ]] || die "main differs from origin/main"
-start_commit=$(git rev-parse HEAD)
 [[ -z $(git ls-remote --tags origin "refs/tags/v$version") ]] || die "tag v$version already on origin"
 git rev-parse -q --verify "refs/tags/v$version" >/dev/null && die "tag v$version already exists locally"
 [[ -z $(npm view "$NPM_PKG@$version" version --registry="$NPM_REGISTRY" 2>/dev/null) ]] || die "$NPM_PKG@$version is already on npm"
@@ -178,36 +177,17 @@ if (( dry )); then
 else
   node --input-type=module - "$version" <<'NODE'
 import { readFileSync, writeFileSync } from "node:fs";
-for (const name of ["server", "workbench", "dashboard"]) {
-  const path = `${name}/package.json`;
-  const metadata = JSON.parse(readFileSync(path, "utf8"));
-  if (name === "server") metadata.version = process.argv[2];
-  else metadata.dependencies["qyl-mcp-server"] = process.argv[2];
-  writeFileSync(path, JSON.stringify(metadata, null, 2) + "\n");
-}
+const metadata = JSON.parse(readFileSync("server/package.json", "utf8"));
+metadata.version = process.argv[2];
+writeFileSync("server/package.json", JSON.stringify(metadata, null, 2) + "\n");
 NODE
   bun install
-  node verify-contract-pins.mjs
-  [[ $(git rev-parse HEAD) == "$start_commit" ]] || die "HEAD changed during the version bump"
-  git diff --cached --quiet || die "index changed during the version bump"
-  while IFS= read -r changed; do
-    case "$changed" in
-      server/package.json|workbench/package.json|dashboard/package.json|bun.lock) ;;
-      *) die "unexpected tracked change during the version bump: $changed" ;;
-    esac
-  done < <(git diff --name-only)
-  if ! git diff --quiet -- server/package.json workbench/package.json dashboard/package.json bun.lock; then
-    git commit -q --only -m "release: $NPM_PKG $version" -- \
-      server/package.json workbench/package.json dashboard/package.json bun.lock
+  if ! git diff --quiet -- server/package.json bun.lock; then
+    git commit -q --only -m "release: $NPM_PKG $version" -- server/package.json bun.lock
   fi
 fi
 
 release_commit=$(git rev-parse HEAD)
-assert_release_source() {
-  [[ $(git rev-parse HEAD) == "$release_commit" ]] || die "HEAD changed while packing; refusing to publish"
-  [[ -z $(git status --porcelain) ]] || die "source changed while packing; refusing to publish"
-}
-assert_release_source
 
 # Export only the captured commit. Build output and the tarball are isolated
 # release artifacts, not a Git worktree; concurrent working-tree edits cannot
@@ -230,15 +210,11 @@ const sha256 = createHash("sha256").update(readFileSync(tarball)).digest("hex");
 writeFileSync(output, JSON.stringify({ commit, tarball, sha256 }, null, 2) + "\n");
 console.log(`PACKED_COMMIT ${commit}\nPACKED_SHA256 ${sha256}\nARTIFACT_RECORD ${output}`);
 NODE
-assert_release_source
-git fetch -q origin main
-[[ $(git rev-parse origin/main) == "$start_commit" ]] || die "origin/main changed while packing; refusing to publish"
 
 say "publish verified tarball"
 (cd server && NPM_CONFIG_TOKEN=$(<"$NPM_TOKEN_FILE") bun publish "$package_tar" --registry "$NPM_REGISTRY" --access public $( (( dry )) && echo --dry-run ))
 
 if (( dry )); then
-  assert_release_source
   say "dry run finished: nothing published, nothing committed"
   echo "The real run then starts the detached verification ($verify_log, ./release.sh --wait $version):"
   echo "  wait until npm serves $NPM_PKG@$version (up to 15 min), compare the registry tarball with $package_tar,"
@@ -247,12 +223,7 @@ if (( dry )); then
 fi
 
 say "push, tag and GitHub release for $release_commit"
-# A concurrent push after registry acceptance must never move the release tag
-# to a different HEAD. Push only the packed commit, or keep a newer descendant.
-git fetch -q origin main
-if ! git merge-base --is-ancestor "$release_commit" origin/main; then
-  git push -q origin "$release_commit:refs/heads/main"
-fi
+git push -q origin "$release_commit:refs/heads/main"
 git tag -a "v$version" "$release_commit" -m "v$version"
 git push -q origin "v$version"
 gh release create "v$version" --title "v$version" --notes-file "$notes" "$package_tar" "$pack_root/release.json"

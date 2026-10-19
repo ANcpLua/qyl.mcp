@@ -1,8 +1,7 @@
 # qyl-mcp-server
 
 MCP tools over a live [qyl](https://github.com/ANcpLua/qyl) collector — traces,
-logs, metrics, sessions and CI runs, plus the Trace Explorer and MCP Dashboard
-viewers for hosts that render MCP Apps.
+logs, metrics, sessions and CI runs — for agents investigating a running system.
 
 ```bash
 bunx qyl-mcp-server --stdio    # stdio MCP server
@@ -27,8 +26,7 @@ its own.
 Both use MCP TypeScript SDK v2: Streamable HTTP through `createMcpHandler`
 and stdio through `serveStdio`, with their documented compatibility defaults.
 One factory serves revision `2026-07-28` and supported 2025-era requests.
-The HTTP server serves a product page at `/`; `/mcp` is the only protocol
-endpoint.
+`/mcp` is the only protocol endpoint; `/` answers `404`.
 
 ## Hosted authentication
 
@@ -63,8 +61,8 @@ an enabled module proves a client has been provisioned.
 
 ## Tools
 
-The server publishes 32 tools, including one app-only read tool. Reads use the collector's
-analysis queries and the generated qyl API contracts.
+Reads use the collector's analysis queries and the generated qyl API contracts; the
+committed `tool-manifest.snapshot.json` in the repository is the full catalog.
 
 | Purpose | Tools |
 | --- | --- |
@@ -73,8 +71,7 @@ analysis queries and the generated qyl API contracts.
 | Read executions | `list_sessions`, `list_traces`, `get_trace`, `search_logs`, `ci_log` |
 | Read metrics | `list_metrics`, `get_metric_series`, `query_metric` |
 | Saved questions | `list_saved_queries`, `run_saved_query` |
-| Interactive views | `display_traces`, `display_mcp_dashboard`, `fetch_telemetry` (app-only) |
-| Write project records | `create_annotation`, `update_annotation`, `create_saved_query`, `update_saved_query`, `delete`, `update_failure_status` |
+| Write project records | `create_annotation`, `update_annotation`, `create_saved_query`, `update_saved_query`, `delete_record`, `update_failure_status` |
 
 Read tools accept an absolute RFC 3339 time window or `lookback_minutes` and report the
 resolved `window` and `coverage`: examined, matched and returned counts, truncation,
@@ -88,14 +85,10 @@ and cumulative counter changes account for resets. Verification reports insuffic
 traffic as pending rather than calling an unobserved failure fixed.
 
 `get_trace` supports all spans, errors, errors with ancestors, or the critical path,
-selected attributes and correlated logs. `display_traces` preserves the selected span
-and can compare two executions. Notes and bookmarks are created only through explicit
-viewer actions. `display_mcp_dashboard` uses the same MCP aggregates as `get_mcp_stats`,
-shows the numerator and denominator behind rates, classifies failures, and opens matching
-calls from aggregate selections. `fetch_telemetry` serves five app-only views: traces,
-trace, logs, MCP statistics and comparison, with incremental refresh and field selection.
+selected attributes and correlated logs. `get_mcp_stats` reports MCP request totals,
+the numerator and denominator behind rates, and failure classes.
 
-The 26 read tools carry `readOnlyHint: true`. Six write tools change annotations, saved
+Every read tool carries `readOnlyHint: true`. The write tools change annotations, saved
 queries or failure status in the caller's project. An annotation can target a trace, span,
 session or failure and has optional labels and a classification. A bookmark is a note
 labelled `bookmark`. Updates and deletes require the current `etag`; stale writes are
@@ -105,7 +98,7 @@ body, so identical retries are safe. Supply a different key to deliberately crea
 another identical record. No tool edits or deletes recorded telemetry.
 
 `qyl:read` covers reads, `qyl:write` adds creation and updates, and `qyl:delete` permits
-`delete`. A missing scope returns the supported OAuth step-up challenge. Failed calls
+`delete_record`. A missing scope returns the supported OAuth step-up challenge. Failed calls
 carry a stable code, retryability, the problem type and field-level validation details
 when available. Secrets are redacted before model text or structured content is returned.
 
@@ -121,7 +114,9 @@ and error messages are not retained. Known version-1/2 files are reduced to
 this format on load; unreadable files still use the existing archive recovery
 path, and pre-existing archives are not purged. A public deployment (`MCP_PUBLIC_URL` set)
 records nothing to disk; that evidence file is a local developer artifact, not a
-multi-tenant audit log.
+multi-tenant audit log. A completed or failed record that cannot be written never
+changes the call's outcome: the tool's own result or error is returned, a structured
+`warn` line goes to stderr and the span carries `error.type=evidence_persistence_failed`.
 
 ## Configuration
 
@@ -133,7 +128,6 @@ multi-tenant audit log.
 | `MCP_COLLECTOR_PROJECTS` | Optional secret JSON mapping validated Auth0 subjects to project-bound Collector keys; see account isolation below. |
 | `QYL_OTLP_ENDPOINT` | Optional OTLP base for self-telemetry. |
 | `QYL_MCP_TELEMETRY=0` | Disable MCP spans, metrics, and operation logs. |
-| `QYL_MCP_CAPTURE_CONTENT=1` | Workbench content capture; native incoming tool-call telemetry never supplies request or response bodies. |
 | `QYL_MCP_NATIVE_STATE_PATH` | Override the native execution-evidence path. |
 | `MCP_EVENTS_STORE` | Optional internal Events subscription file; leave unset for the shared ChatGPT/Claude deployment. |
 | `MCP_EVENTS_AUTH0_CLIENT_ID` / `MCP_EVENTS_AUTH0_CLIENT_SECRET` | Dedicated Management API application with `read:users`, `read:clients`, `read:client_grants`, `read:grants`; resolves CIMD identities and keeps access checks current without storing subscriber tokens. |
@@ -173,15 +167,15 @@ Access deployments cannot enable this map. When the variable is absent, the
 existing deployment-wide credential behavior is retained.
 
 Only the verified SDK `AuthInfo.extra.subject` selects the project. Tool inputs
-and request metadata cannot override it. Telemetry tools, viewer refreshes and
-tool-call OTLP exports use that account's project credential. Export pipelines
+and request metadata cannot override it. Telemetry tools and tool-call OTLP
+exports use that account's project credential. Export pipelines
 are bounded by the configured projects; an unassigned caller gets no fallback
 export destination. Project
 keys are redacted from text and structured results, including keys nested in
 this JSON configuration. Keep the map in host secrets and out of the plugin ZIP.
 
 `bun run smoke:projects` from the repository root checks every tool, the
-writes included, viewer query paths and both protocol eras against a
+writes included, and both protocol eras against a
 real local Collector with two temporary projects. It reuses the completed Release
 build; set `QYL_COLLECTOR_DLL` for another build. The script uses local test identities
 and an in-process signed webhook receiver.
@@ -189,13 +183,13 @@ and an in-process signed webhook receiver.
 ### Seeded analysis verification
 
 `bun run --cwd server test:answer-key` starts a fresh temporary collector database,
-seeds real OTLP, and runs the 32 analysis checks through MCP and generated validators.
+seeds real OTLP, and runs the analysis checks through MCP and generated validators.
 It reuses the collector's completed build; set `QYL_COLLECTOR_DLL` when its location
 or configuration differs. `mise run check` includes this verification and the quiet
 SSE check. No pre-existing temporary file or manually seeded database is required.
 
-`QYL_BIN=/path/to/installed/qyl node live-tools-smoke.mjs` additionally checks
-all 32 tools against an isolated collector started by the published CLI.
+`QYL_BIN=/path/to/installed/qyl node live-tools-smoke.mjs` additionally calls
+every tool against an isolated collector started by the published CLI.
 
 ## Release notes
 

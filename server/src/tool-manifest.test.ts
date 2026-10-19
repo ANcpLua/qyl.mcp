@@ -2,9 +2,9 @@
  * Tool-manifest snapshot (architecture gate G10b).
  *
  * The manifest is what an agent actually sees: names, titles, descriptions,
- * annotations, UI metadata, the input/output JSON Schemas the SDK derives
- * from the generated contract schemas, and the ui:// resources those tools
- * point at. Pinning it means a contract change that is not regenerated here
+ * annotations, tool metadata, the input/output JSON Schemas the SDK derives
+ * from the generated contract schemas, and the skill:// resources the server
+ * serves. Pinning it means a contract change that is not regenerated here
  * fails as a diff instead of reaching clients unnoticed, and the recorded
  * contract revision ties the snapshot to the contract it came from rather
  * than to the day someone last looked at it.
@@ -45,8 +45,7 @@ test("telemetry tools advertise portable output schema spellings through the SDK
     tools: { name: string; outputSchema: unknown }[];
   };
   const affected = [
-    "display_traces", "get_trace", "list_traces", "search_logs", "get_metric_series", "query_metric",
-    "fetch_telemetry",
+    "get_trace", "list_traces", "search_logs", "get_metric_series", "query_metric",
   ];
   for (const name of affected) {
     const tool = tools.find((candidate) => candidate.name === name);
@@ -57,17 +56,13 @@ test("telemetry tools advertise portable output schema spellings through the SDK
   }
 });
 
-test("every tool input schema is an object at its root, the discriminated union included", async () => {
+test("every tool input schema is an object at its root", async () => {
   const { tools } = JSON.parse(await buildToolManifest()) as {
-    tools: { name: string; inputSchema: { type?: unknown; oneOf?: unknown[]; allOf?: unknown } }[];
+    tools: { name: string; inputSchema: { type?: unknown } }[];
   };
   assert.ok(tools.length > 0);
   for (const tool of tools) {
     // MCP requires `inputSchema.type: "object"`; hosts validate it on tools/list.
     assert.equal(tool.inputSchema.type, "object", tool.name);
   }
-  const fetchTelemetry = tools.find((tool) => tool.name === "fetch_telemetry");
-  assert.ok(fetchTelemetry);
-  assert.equal(fetchTelemetry.inputSchema.oneOf?.length, 5, "one variant per view");
-  assert.equal(fetchTelemetry.inputSchema.allOf, undefined, "the union is hoisted to the root");
 });

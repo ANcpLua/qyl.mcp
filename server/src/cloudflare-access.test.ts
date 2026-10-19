@@ -33,7 +33,7 @@ test("Cloudflare mode validates the edge assertion and passes read authorization
     return server;
   }, () => undefined);
   context.after(() => handler.close());
-  const serve = createFetch({ auth, allowedHosts: ["mcp.qyl.at"], allowedOrigins: ["mcp.qyl.at"], landingPage: "", handler });
+  const serve = createFetch({ auth, allowedHosts: ["mcp.qyl.at"], allowedOrigins: ["mcp.qyl.at"], handler });
   const assertion = await token();
   const transport = new StreamableHTTPClientTransport(resource, {
     fetch: async (url, init) => {
@@ -72,7 +72,7 @@ test("Cloudflare mode rejects a valid signature for a different app, issuer, exp
 test("Cloudflare mode leaves discovery to Access and does not advertise Auth0", async (context) => {
   const handler = createHostedHandler(() => new McpServer({ name: "discovery-test", version: "1" }), () => undefined);
   context.after(() => handler.close());
-  const serve = createFetch({ auth, allowedHosts: ["mcp.qyl.at"], landingPage: "", handler });
+  const serve = createFetch({ auth, allowedHosts: ["mcp.qyl.at"], handler });
   const response = await serve(new Request("https://mcp.qyl.at/.well-known/oauth-protected-resource/mcp", { headers: { host: "mcp.qyl.at" } }));
   assert.equal(response.status, 404);
   assert.doesNotMatch(await response.text(), /auth0/u);

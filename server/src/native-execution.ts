@@ -338,7 +338,6 @@ export class NativeExecutionRuntime {
   ): ActiveMcpOperation | undefined {
     try {
       return this.telemetry?.startOperation({
-        role: "server",
         method: "tools/call",
         serverId: NATIVE_SERVER_ID,
         toolName: input.request.params.name,

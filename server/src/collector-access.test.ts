@@ -97,7 +97,7 @@ test("unscoped data requests cannot use the default credential when project acce
 });
 
 for (const revision of ["2026-07-28", "2025-11-25"] as const) {
-  test(`verified account scope reaches model and viewer tools over ${revision}`, async (context) => {
+  test(`verified account scope reaches every tool call over ${revision}`, async (context) => {
     environment(context, {
       MCP_COLLECTOR_PROJECTS: JSON.stringify(PROJECTS),
       QYL_COLLECTOR_URL: "https://collector.example.test",
@@ -122,7 +122,6 @@ for (const revision of ["2026-07-28", "2025-11-25"] as const) {
       // Overlap calls to expose any process-global credential switching.
       await new Promise((resolve) => setTimeout(resolve, project === "owner" ? 5 : 1));
       if (pathname === "/api/v1/analysis/list_traces") return Response.json({ ...readContext(1), traces: [toolSummary(selected)], mode: "live", has_more: false });
-      if (["/api/v1/analysis/display_traces", "/api/v1/analysis/fetch_telemetry"].includes(pathname)) return Response.json({ ...readContext(1, pathname.endsWith("fetch_telemetry")), traces: [toolTrace(selected)], mode: "live" });
       if (pathname === "/api/v1/analysis/get_trace") {
         const args = await request.json() as { trace_id: string };
         if (args.trace_id === selected.trace_id) return Response.json({ ...readContext(1), trace: toolTrace(selected), mode: "live" });
@@ -168,20 +167,17 @@ for (const revision of ["2026-07-28", "2025-11-25"] as const) {
     const [owner, reviewer, unassigned] = await Promise.all([
       connect(OWNER), connect(REVIEWER), connect("auth0|unassigned-test"),
     ]);
-    for (const tool of ["list_traces", "display_traces", "fetch_telemetry"]) {
-      const args = tool === "fetch_telemetry" ? { view: "traces", limit: 2 } : { limit: 2 };
-      const [ownerResult, reviewResult] = await Promise.all([
-        owner.callTool({ name: tool, arguments: args }),
-        reviewer.callTool({ name: tool, arguments: args, _meta: { subject: OWNER, project: "owner" } }),
-      ]);
-      assert.equal(ownerResult.isError, undefined, JSON.stringify(ownerResult));
-      assert.equal(reviewResult.isError, undefined, JSON.stringify(reviewResult));
-      assert(JSON.stringify(ownerResult).includes(ownerTrace.trace_id));
-      assert(!JSON.stringify(ownerResult).includes(reviewerTrace.trace_id));
-      assert(JSON.stringify(reviewResult).includes(reviewerTrace.trace_id));
-      assert(!JSON.stringify(reviewResult).includes(ownerTrace.trace_id));
-      assert.doesNotMatch(JSON.stringify([ownerResult, reviewResult]), /owner-test-key|review-test-key/u);
-    }
+    const [ownerResult, reviewResult] = await Promise.all([
+      owner.callTool({ name: "list_traces", arguments: { limit: 2 } }),
+      reviewer.callTool({ name: "list_traces", arguments: { limit: 2 }, _meta: { subject: OWNER, project: "owner" } }),
+    ]);
+    assert.equal(ownerResult.isError, undefined, JSON.stringify(ownerResult));
+    assert.equal(reviewResult.isError, undefined, JSON.stringify(reviewResult));
+    assert(JSON.stringify(ownerResult).includes(ownerTrace.trace_id));
+    assert(!JSON.stringify(ownerResult).includes(reviewerTrace.trace_id));
+    assert(JSON.stringify(reviewResult).includes(reviewerTrace.trace_id));
+    assert(!JSON.stringify(reviewResult).includes(ownerTrace.trace_id));
+    assert.doesNotMatch(JSON.stringify([ownerResult, reviewResult]), /owner-test-key|review-test-key/u);
     const own = await reviewer.callTool({ name: "get_trace", arguments: { trace_id: reviewerTrace.trace_id } });
     assert.equal(own.isError, undefined);
     const foreign = await reviewer.callTool({ name: "get_trace", arguments: { trace_id: ownerTrace.trace_id } });

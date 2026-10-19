@@ -91,7 +91,7 @@ export const TRACE_ERROR_EVENT = {
   payloadSchema: {
     type: "object",
     properties: {
-      trace_id: { type: "string", description: "Trace identifier; pass it to get_trace or display_traces." },
+      trace_id: { type: "string", description: "Trace identifier; pass it to get_trace." },
       root_span: { type: "string", description: "Name of the trace's root span." },
       services: { type: "array", items: { type: "string" }, description: "Services involved in the trace." },
       span_count: { type: "integer", description: "Total span count." },

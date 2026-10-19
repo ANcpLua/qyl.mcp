@@ -4,10 +4,9 @@
  * Every header this repository sends to a collector is named by the contract,
  * never by a string typed beside it: a renamed header then breaks the build and
  * the module load, not the first request at runtime. The derivation lives here
- * once because three call sites need it — the server's collector client, the
- * server's OTLP exporter configuration, and the workbench's read-only
- * observability provider — and three copies of the same lookup drift one copy at
- * a time.
+ * once because several call sites need it — the collector client, the write
+ * tools' collector resources and the OTLP exporter configuration — and copies
+ * of the same lookup drift one copy at a time.
  *
  * The checks run at module load, so an absent or reshaped component fails the
  * process at startup rather than at the first call that would have used it.

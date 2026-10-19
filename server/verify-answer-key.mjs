@@ -21,7 +21,7 @@ async function withClient(run, project = fixture.project) {
  const previousProject=process.env.QYL_PROJECT;
  process.env.QYL_PROJECT=project;
  const handler=createMcpHandler(()=>createServer({nativeExecution:false}));
- const client=new Client({name:'qyl-32-answer-key',version:'1.0.0'},{versionNegotiation:{mode:{pin:'2026-07-28'}}});
+ const client=new Client({name:'qyl-answer-key',version:'1.0.0'},{versionNegotiation:{mode:{pin:'2026-07-28'}}});
  await client.connect(new StreamableHTTPClientTransport(new URL('http://qyl.test/mcp'),{fetch:(url,init)=>handler.fetch(new Request(url,init))}));
  try {return await run(async(name,args={})=>{
    const result=await client.callTool({name,arguments:args});
@@ -136,7 +136,6 @@ verify('19 metric route cardinality2 suggested for grouping',async call=>{const 
 verify('20a histogram p95 remains seconds and approximate',async call=>{const data=await call('query_metric',{...w,metric_name:'http.server.request.duration',aggregation:'p95',group_by:['http.route'],step_ms:3_600_000});assert.equal(data.unit,'s');assert.equal(data.approximate,true);const checkout=data.series.find(s=>s.attributes.some(a=>a.key==='http.route'&&a.value==='/checkout'));assert(checkout);const values=checkout.buckets.map(b=>b.value).filter(v=>v!==null);assert(values.some(v=>Math.abs(v-1.84)<.1),JSON.stringify(values));});
 verify('20b cumulative100,150,190 increase90',async call=>{const data=await call('query_metric',{...w,metric_name:'requests.total',function:'increase',step_ms:3_600_000});assert.equal(data.series.flatMap(s=>s.buckets).reduce((sum,b)=>sum+(b.value??0),0),90);});
 verify('21 CI new test failure and build3xregression',async call=>{const data=await call('ci_log',{...w,run_id:'ci_current',compare_to:'last_success'});assert(data.comparison.new_failures.some(p=>p.leg==='test'));assert(data.comparison.duration_regressions.some(p=>p.leg==='build'&&p.ratio===3));});
-verify('25 dashboard shares8/40timeout stats',async call=>{const data=await call('display_mcp_dashboard',{...w,tool_name:'search_logs'});const group=data.stats.tools.find(g=>g.name==='search_logs');assert.equal(group.error_rate,.2);assert.equal(group.errors,8);assert.equal(group.requests,40);assert.equal(data.stats.failure_classes.timeout,8);});
 verifyIsolated('27 annotation on F read back as count1',async call=>{const F=(await failures(call)).find(f=>f.operation==='checkout');assert(F);await call('create_annotation',{target:{kind:'failure',failure_id:F.failure_id},text:'Answer-key finding',classification:'finding',labels:['answer-key'],idempotency_key:'answer-key-finding'});const data=await call('list_failures',{...w,failure_id:F.failure_id});assert.equal(data.failures[0].annotation_count,1);});
 verifyIsolated('32a ignored F suppressed fromtriage',async call=>{const F=(await failures(call)).find(f=>f.operation==='checkout');assert(F);const saved=await call('update_failure_status',{failure_id:F.failure_id,etag:F.etag,status:'ignored'});assert.equal(saved.failure.status,'ignored');try { assert(!(await call('triage',w)).failures.some(f=>f.failure_id===F.failure_id)); } finally { await call('update_failure_status',{failure_id:F.failure_id,etag:saved.failure.etag,status:'open'}); }});
 verifyIsolated('32b resolved F recurrence markedregressed',async call=>{

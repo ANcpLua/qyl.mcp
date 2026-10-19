@@ -28,15 +28,14 @@ package is replaced by a split package family, and the v1 API names do not exist
 
 ## Package map (what to import from where)
 
-The inspected server/workbench manifests use these five split packages:
+The server manifest uses these split packages:
 
 | Package | Contains | qyl.mcp uses it for |
 | --- | --- | --- |
 | `@modelcontextprotocol/server` | `McpServer`, `createMcpHandler`, `ProtocolError` + subclasses, `inputRequired`, OAuth server helpers (`requireBearerAuth`, `oauthMetadataResponse`) | the qyl MCP server |
 | `@modelcontextprotocol/server/stdio` | `serveStdio`, `StdioServerTransport` (Node-only subpath) | stdio entry with SDK serving defaults |
-| `@modelcontextprotocol/client` | `Client`, `StreamableHTTPClientTransport`, `versionNegotiation` | dynamic foreign-server connections |
+| `@modelcontextprotocol/client` | `Client`, `StreamableHTTPClientTransport`, `versionNegotiation` | tests, smokes and the hosted evaluation (development dependency) |
 | `@modelcontextprotocol/core` | **Zod schema constants only**, no classes or functions (`CallToolResultSchema`, `OAuthMetadataSchema`, …) | validating raw wire JSON (native-execution, oauth) |
-| `@modelcontextprotocol/node` / `express` | Node/Express adapters over `createMcpHandler` | HTTP hosting |
 
 Rules that follow from the split:
 
@@ -79,9 +78,8 @@ An **era** is a behavior family decided once at connect time:
   client-opened `subscriptions/listen` stream; `_meta` envelope on every request.
 
 qyl.mcp serves modern and supported 2025-era clients through the SDK defaults
-of `createMcpHandler(factory)` and `serveStdio(factory)`. The workbench uses
-`versionNegotiation: { mode: 'auto' }`. Keep era pins and rejection in focused
-tests and fixtures, not production serving.
+of `createMcpHandler(factory)` and `serveStdio(factory)`. Keep era pins and
+rejection in focused tests and fixtures, not production serving.
 
 qyl.mcp uses none of sampling, roots, logging, tasks or the legacy HTTP+SSE
 transport. `runTool` forwards cancellation and progress only, and `verify:frame`
@@ -102,8 +100,8 @@ Full era matrix, serving patterns, sessions, notifications: `references/serving-
 
 ## Sharp edges (each one verified, not guessed)
 
-- **Zod v4 only** in qyl.mcp: the server imports `zod/v4`, matching the SDK's own docs; the workbench
-  imports the `zod` root, which is v4 in zod 4.x (the repo pins 4.6.5).
+- **Zod v4 only** in qyl.mcp: the server imports `zod/v4`, matching the SDK's own docs (the repo
+  pins zod 4.6.5).
 - The SDK **skips `outputSchema` validation** on any `isError: true` result.
 - Schema-rejected tool arguments come back as an `isError: true` result — the handler never runs.
 - A thrown `ProtocolError` **inside a tool handler** still becomes `isError: true` — it does not

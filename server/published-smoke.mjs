@@ -64,13 +64,15 @@ for (const era of ["modern", "legacy"]) {
     const revision = client.getNegotiatedProtocolVersion();
     if (era === "modern") assert.equal(revision, "2026-07-28");
     else assert.match(revision ?? "", /^2025-/);
-    const { tools } = await client.listTools();
-    assert.equal(tools.length, 32);
-    assert.ok(tools.some(({ name }) => name === "list_metrics"));
+    const names = new Set((await client.listTools()).tools.map(({ name }) => name));
+    for (const name of ["list_metrics", "delete_record"]) assert.ok(names.has(name), `${name} is published`);
+    for (const name of ["display_traces", "display_mcp_dashboard", "fetch_telemetry", "delete"]) {
+      assert.ok(!names.has(name), `${name} is not published`);
+    }
     const result = await client.callTool({ name: "list_metrics", arguments: {} });
     assert.notEqual(result.isError, true);
     assert.equal(result.structuredContent?.items?.length, 0);
-    console.log(`${era}: qyl.mcp ${version}, ${revision}, 32-tool catalog and live collector read passed`);
+    console.log(`${era}: qyl.mcp ${version}, ${revision}, tool catalog and live collector read passed`);
   } finally {
     try {
       await client.close();

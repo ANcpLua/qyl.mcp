@@ -10,7 +10,6 @@ import {
 } from "@modelcontextprotocol/server";
 import { serveStdio, type StdioServerHandle } from "@modelcontextprotocol/server/stdio";
 import { realpathSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createServer } from "./server.js";
@@ -24,7 +23,6 @@ import { closeDefaultNativeExecutionRuntime, defaultNativeExecutionRuntime } fro
 import { EventsRuntime, createEventStore } from "./events.js";
 import { hostedEventsAuthorization } from "./events-authorization.js";
 import { readCollectorProjects } from "./collector-access.js";
-import { hostedUiDomain } from "./ui-domain.js";
 
 export function sanitizedErrorType(error: unknown): string {
   if (!(error instanceof Error)) return "UnknownError";
@@ -120,7 +118,6 @@ export interface HostedAuth {
 
 export interface McpFetchOptions {
   handler: McpHttpHandler;
-  landingPage: string;
   allowedHosts?: readonly string[] | undefined;
   allowedOrigins?: readonly string[] | undefined;
   auth?: HostedAuth | undefined;
@@ -143,17 +140,6 @@ function openaiAppsChallengeResponse(request: Request, token: string | undefined
   return new Response(request.method === "HEAD" ? null : token, {
     status: 200,
     headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
-  });
-}
-
-function landingResponse(request: Request, html: string): Response {
-  if (request.method !== "GET" && request.method !== "HEAD") return notFound();
-  return new Response(request.method === "HEAD" ? null : html, {
-    status: 200,
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "cache-control": "public, max-age=300",
-    },
   });
 }
 
@@ -246,7 +232,7 @@ export function createFetch(options: McpFetchOptions): (request: Request) => Pro
     if (pathname === OPENAI_APPS_CHALLENGE_PATH) {
       return openaiAppsChallengeResponse(request, options.openaiAppsChallenge);
     }
-    if (pathname === "/") return landingResponse(request, options.landingPage);
+    // `/mcp` is the only protocol route; every other path, the root included, is 404.
     if (pathname !== "/mcp") return notFound();
 
     const preflight = corsPreflightResponse(request);
@@ -367,12 +353,8 @@ export function createHttpMcpServer(
   config: StreamableHTTPServerConfig,
   events?: EventsRuntime,
 ): McpServer {
-  const uiDomain = config.publicUrl === undefined
-    ? undefined
-    : hostedUiDomain(new URL("/mcp", config.publicUrl).href);
   return createServer({
     transport: "streamable_http",
-    ...(uiDomain === undefined ? {} : { uiDomain }),
     nativeExecution: defaultNativeExecutionRuntime(process.env, recordsNativeExecutionEvidence(config)),
     ...(events === undefined ? {} : { events }),
   });
@@ -390,7 +372,6 @@ async function createHostedRuntime(
 
   const options: McpFetchOptions = {
     handler,
-    landingPage: await readFile(new URL("./mcp-home.html", import.meta.url), "utf8"),
     ...(config.allowedHosts === undefined ? {} : { allowedHosts: config.allowedHosts }),
     ...(config.allowedOrigins === undefined ? {} : { allowedOrigins: config.allowedOrigins }),
     ...(auth === undefined ? {} : { auth }),

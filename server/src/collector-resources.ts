@@ -35,8 +35,7 @@ import { redactTelemetry } from "./telemetry-redaction.js";
 const ANNOTATIONS_PATH = "/api/v1/annotations";
 const SAVED_QUERIES_PATH = "/api/v1/saved-queries";
 
-// The operations' own bodies. They are bound here rather than in
-// contract-validation.ts, which the dashboard and workbench bundles import.
+// The operations' own bodies, bound where they are used.
 const AnnotationCreatedSchema = contractSchema("Operations.AnnotationsApi_create.Response.201");
 const AnnotationUpdatedSchema = contractSchema("Operations.AnnotationsApi_update.Response.200");
 const SavedQueryCreatedSchema = contractSchema("Operations.SavedQueriesApi_create.Response.201");

@@ -50,7 +50,7 @@ removed. It holds no OAuth tokens and no copied telemetry.
 
 ## Tools
 
-Most tools only read data and are annotated as read-only. Six tools change
+Most tools only read data and are annotated as read-only. The write tools change
 something, and only objects you create in qyl: notes, saved queries and the
 recorded status of a failure. They are annotated as not read-only, and the
 ones that replace or remove an existing object as destructive. Your client
@@ -68,12 +68,10 @@ decides when to ask for confirmation.
 | `search_logs` | Find error logs, including the logs that belong to one trace. |
 | `list_metrics`, `get_metric_series`, `query_metric` | Discover metric instruments and their attribute streams, then compare a metric over time or across groups. |
 | `ci_log` | Read CI runs that follow qyl's CI telemetry convention, failed phases first. |
-| `display_traces`, `display_mcp_dashboard` | Open the Trace Explorer or the MCP Dashboard. |
-| `fetch_telemetry` | Used only by the Trace Explorer to refresh or filter its view; hidden from the model. |
 | `create_annotation`, `update_annotation` | Leave a note of at most 2000 characters on a trace, span or session, or correct it. `get_trace` and `list_sessions` show the notes. |
 | `create_saved_query`, `update_saved_query` | Save a named filter for traces, logs or metrics, or change it. |
 | `list_saved_queries`, `run_saved_query` | Find a saved query and run it against the current telemetry. |
-| `delete` | Delete one note or saved query. It cannot delete telemetry. |
+| `delete_record` | Delete one note or saved query. It cannot delete telemetry. |
 
 The bundled skill `skills/qyl-investigate/SKILL.md` describes the
 investigation workflow these tools are designed for.
@@ -83,7 +81,7 @@ investigation workflow these tools are designed for.
 - "Which of my recent traces failed, and what do their error logs say?"
 - "List my five most recent sessions and summarize their status."
 - "Which metric instruments are recorded in my qyl project?"
-- "Open the Trace Explorer for my recent traces."
+- "What changed in the last hour, and which failure should I look at first?"
 
 ## Limits and troubleshooting
 
@@ -94,17 +92,15 @@ investigation workflow these tools are designed for.
   does not show that a system is healthy.
 - Most tools take limits and filters; every input description states its
   default. `get_trace` returns up to 100 spans per page and continues with
-  `next_cursor`; `display_traces` shows a trace as a waterfall, and
-  `search_logs` narrows logs by trace, service, severity or text.
+  `next_cursor`, and `search_logs` narrows logs by trace, service, severity
+  or text.
 - If sign-in fails or requests are rejected, reconnect qyl in your client and
   sign in with an account that has the `qyl:read` scope. A write that is
   refused for a missing `qyl:write` or `qyl:delete` scope asks your client to
   sign in again with that scope.
 - If a tool reports that no Collector project is assigned to your account,
   ask the qyl operator for project access.
-- The Trace Explorer and MCP Dashboard appear only in clients that display
-  MCP Apps; other clients receive the text summary and structured result.
-- The MCP Dashboard includes only MCP calls whose spans carry
+- `get_mcp_stats` includes only MCP calls whose spans carry
   `mcp.method.name` and reached your Collector project.
 
 ## Documentation and source

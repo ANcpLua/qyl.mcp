@@ -35,8 +35,8 @@ if (!qylRepo) {
   );
 }
 
-const mcpPin = JSON.parse(readFileSync(join(here, "server", "package.json"), "utf8"))
-  .dependencies?.["@ancplua/qyl-api-schema"];
+const server = JSON.parse(readFileSync(join(here, "server", "package.json"), "utf8"));
+const mcpPin = server.dependencies?.["@ancplua/qyl-api-schema"];
 
 if (!mcpPin) {
   throw new Error("verify:pins: server/package.json declares no @ancplua/qyl-api-schema dependency.");
@@ -65,31 +65,9 @@ if (mcpVersion !== qylPin) {
 
 console.log(`verify:pins: contract pins agree (@ancplua/qyl-api-schema ${mcpPin} == Qyl.Api.Contracts ${qylPin}, via ${qylRepo})`);
 
-const server = JSON.parse(readFileSync(join(here, "server", "package.json"), "utf8"));
 const lock = JSON.parse(execFileSync("bun", ["-e",
   'process.stdout.write(JSON.stringify({ workspaces: Bun.JSONC.parse(await Bun.file("bun.lock").text()).workspaces }))',
 ], { cwd: here, encoding: "utf8" }));
 if (lock.workspaces?.server?.version !== server.version) {
   throw new Error(`server bun.lock must name qyl-mcp-server ${server.version}; run bun install again`);
-}
-for (const workspace of ["workbench", "dashboard"]) {
-  const metadata = JSON.parse(readFileSync(join(here, workspace, "package.json"), "utf8"));
-  if (metadata.dependencies?.["qyl-mcp-server"] !== server.version) {
-    throw new Error(`${workspace} must pin the local qyl-mcp-server ${server.version}`);
-  }
-  if (lock.workspaces?.[workspace]?.dependencies?.["qyl-mcp-server"] !== server.version) {
-    throw new Error(`${workspace} bun.lock must pin qyl-mcp-server ${server.version}; run bun install again`);
-  }
-  if (metadata.dependencies?.["@ancplua/qyl-api-schema"] !== mcpPin) {
-    throw new Error(`${workspace} must pin @ancplua/qyl-api-schema ${mcpPin}`);
-  }
-}
-const workbench = JSON.parse(readFileSync(join(here, "workbench", "package.json"), "utf8"));
-const conventionsPackage = "@ancplua/qyl-semantic-conventions";
-const serverConventions = server.dependencies?.[conventionsPackage];
-const workbenchConventions = workbench.dependencies?.[conventionsPackage];
-const developmentConventions = workbench.devDependencies?.[conventionsPackage];
-if (!serverConventions || workbenchConventions !== serverConventions
-    || (developmentConventions !== undefined && developmentConventions !== workbenchConventions)) {
-  throw new Error("Workbench runtime and server must use the same generated conventions package; an optional development pin must also agree");
 }

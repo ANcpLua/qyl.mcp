@@ -26,7 +26,7 @@ import {
 
 export const QYL_MCP_ISSUER = "https://qyl-eu.eu.auth0.com/";
 export const QYL_MCP_RESOURCE = "https://mcp.qyl.at/mcp";
-/** Every hosted request carries it: the read tools, the viewers and Events. */
+/** Every hosted request carries it: the read tools and Events. */
 export const QYL_MCP_SCOPE = McpScopeValues.read;
 /** The create and update tools add it: annotations and saved queries. */
 export const QYL_MCP_WRITE_SCOPE = McpScopeValues.write;

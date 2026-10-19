@@ -1,7 +1,6 @@
 import {
     context,
     defaultTextMapGetter,
-    defaultTextMapSetter,
     isSpanContextValid,
     propagation,
     ROOT_CONTEXT,
@@ -39,8 +38,6 @@ import {
     ATTR_SERVICE_VERSION,
 } from "@ancplua/qyl-semantic-conventions";
 import {
-    METRIC_MCP_CLIENT_OPERATION_DURATION,
-    METRIC_MCP_CLIENT_OPERATION_DURATION_UNIT,
     METRIC_MCP_SERVER_OPERATION_DURATION,
     METRIC_MCP_SERVER_OPERATION_DURATION_UNIT,
 } from "@ancplua/qyl-semantic-conventions/incubating";
@@ -55,17 +52,7 @@ import {
     type McpPropagationCarrier,
     type McpOperationInput,
 } from "./mcp-semconv.js";
-import { isObservabilitySelfExportSuppressed } from "./observability-suppression.js";
 import { SecretRedactor } from "./secret-redactor.js";
-
-export {
-    WorkbenchTelemetryAttributes,
-    describeMcpOperationLog,
-    describeMcpOperationMetric,
-    describeMcpOperationSpan,
-    type McpOperationInput,
-    type McpPropagationCarrier,
-} from "./mcp-semconv.js";
 
 const Product = {
     name: "qyl.mcp",
@@ -76,9 +63,6 @@ const FLUSH_INTERVAL_MS = 5_000;
 const MAX_QUEUE = 512;
 const EXPORT_TIMEOUT_MS = 3_000;
 const ATTRIBUTE_VALUE_LIMIT = 2_000;
-const MAX_PROPAGATION_FIELDS = 32;
-const MAX_PROPAGATION_KEY_CHARACTERS = 256;
-const MAX_PROPAGATION_VALUE_CHARACTERS = 8_192;
 const INSTRUMENTATION_SCOPE = "qyl.mcp";
 const STANDARD_MCP_PROPAGATOR = new CompositePropagator({
     propagators: [
@@ -99,25 +83,20 @@ export type McpOperationStartInput = Omit<
     McpOperationInput,
     | "endTimeMs"
     | "errorType"
-    | "errorMessage"
     | "rpcResponseStatusCode"
     | "jsonRpcRequestId"
-    | "responseBody"
 >;
 
 export interface McpOperationCompletion {
     endTimeMs: number;
     errorType?: string;
-    errorMessage?: string;
     rpcResponseStatusCode?: string;
     jsonRpcRequestId?: string | number;
     protocolVersion?: string;
-    responseBody?: unknown;
 }
 
 export interface ActiveMcpOperation {
     readonly correlation?: McpSpanCorrelation;
-    readonly propagation?: McpPropagationCarrier;
     run<T>(operation: () => T): T;
     end(completion: McpOperationCompletion): McpSpanCorrelation | undefined;
 }
@@ -128,20 +107,6 @@ export interface McpTelemetryOptions {
 }
 
 const activeMcpContext = new AsyncLocalStorage<Context | null>();
-
-export function runWithMcpPropagation<T>(
-    carrier: McpPropagationCarrier | undefined,
-    operation: () => T,
-): T {
-    if (carrier === undefined) return activeMcpContext.run(null, operation);
-    const extracted = extractPropagation(context.active(), carrier);
-    return activeMcpContext.run(extracted, () => context.with(extracted, operation));
-}
-
-export function currentMcpPropagation(): McpPropagationCarrier | undefined {
-    const active = activeMcpContext.getStore();
-    return active === null || active === undefined ? undefined : injectPropagation(active);
-}
 
 export function signalEndpoint(
     env: Readonly<Record<string, string | undefined>>,
@@ -171,7 +136,6 @@ export class McpTelemetry {
     private logger?: Logger;
     private readonly histograms = new Map<string, Histogram>();
     private readonly redactor: SecretRedactor;
-    private readonly captureContent: boolean;
 
     get operationTracingEnabled(): boolean {
         return this.tracer !== undefined;
@@ -183,7 +147,6 @@ export class McpTelemetry {
         options: McpTelemetryOptions = {},
     ) {
         this.redactor = redactor;
-        this.captureContent = env.QYL_MCP_CAPTURE_CONTENT === "1";
         this.tracer = options.tracer;
         this.logger = options.logger;
         if (env.QYL_MCP_TELEMETRY === "0") return;
@@ -261,17 +224,12 @@ export class McpTelemetry {
             })],
         });
         const meter = this.metricProvider.getMeter(INSTRUMENTATION_SCOPE, Product.version);
-        for (const [name, unit] of [
-            [METRIC_MCP_CLIENT_OPERATION_DURATION, METRIC_MCP_CLIENT_OPERATION_DURATION_UNIT],
-            [METRIC_MCP_SERVER_OPERATION_DURATION, METRIC_MCP_SERVER_OPERATION_DURATION_UNIT],
-        ] as const) {
-            this.histograms.set(name, meter.createHistogram(name, {
-                unit,
-                advice: {
-                    explicitBucketBoundaries: [...MCP_DURATION_EXPLICIT_BUCKET_BOUNDARIES],
-                },
-            }));
-        }
+        this.histograms.set(METRIC_MCP_SERVER_OPERATION_DURATION, meter.createHistogram(METRIC_MCP_SERVER_OPERATION_DURATION, {
+            unit: METRIC_MCP_SERVER_OPERATION_DURATION_UNIT,
+            advice: {
+                explicitBucketBoundaries: [...MCP_DURATION_EXPLICIT_BUCKET_BOUNDARIES],
+            },
+        }));
 
         const logExporter = new OTLPLogExporter({
             url: endpoints.logs,
@@ -296,14 +254,13 @@ export class McpTelemetry {
     }
 
     startOperation(input: McpOperationStartInput): ActiveMcpOperation {
-        if (isObservabilitySelfExportSuppressed()) return inactiveOperation();
-
+        // A server operation starts its own trace unless the caller propagated one;
+        // whatever was active when it started is linked, never parented.
         const ambientContext = activeMcpContext.getStore() ?? context.active();
-        const baseParentContext = input.role === "server" ? ROOT_CONTEXT : ambientContext;
         const parentContext = input.remotePropagation === undefined
-            ? baseParentContext
-            : extractPropagation(baseParentContext, input.remotePropagation);
-        const links = operationLinks(input.role, ambientContext, parentContext);
+            ? ROOT_CONTEXT
+            : extractPropagation(ROOT_CONTEXT, input.remotePropagation);
+        const links = operationLinks(ambientContext, parentContext);
         let span: Span | undefined;
         let operationContext: Context | undefined;
         if (this.tracer) {
@@ -329,14 +286,10 @@ export class McpTelemetry {
         const correlation = identifiers !== undefined && isSpanContextValid(identifiers)
             ? { traceId: identifiers.traceId, spanId: identifiers.spanId }
             : undefined;
-        const carrier = operationContext === undefined
-            ? undefined
-            : injectPropagation(operationContext);
         let ended = false;
 
         return {
             ...(correlation === undefined ? {} : { correlation }),
-            ...(carrier === undefined ? {} : { propagation: carrier }),
             run: (operation) => operationContext === undefined
                 ? operation()
                 : activeMcpContext.run(
@@ -360,14 +313,7 @@ export class McpTelemetry {
                         () => describeMcpOperationSpan(completed, this.redactor),
                     );
                     if (descriptor !== undefined) span.setAttributes(descriptor.attributes);
-                    if (completed.errorType) {
-                        span.setStatus({
-                            code: SpanStatusCode.ERROR,
-                            ...(!this.captureContent || completed.errorMessage === undefined
-                                ? {}
-                                : { message: this.redactor.redactText(completed.errorMessage) }),
-                        });
-                    }
+                    if (completed.errorType) span.setStatus({ code: SpanStatusCode.ERROR });
                 } catch {
                     span.setStatus({ code: SpanStatusCode.ERROR });
                 } finally {
@@ -376,26 +322,6 @@ export class McpTelemetry {
                 return correlation;
             },
         };
-    }
-
-    recordOperation(input: McpOperationInput): McpSpanCorrelation | undefined {
-        const {
-            endTimeMs,
-            errorType,
-            errorMessage,
-            rpcResponseStatusCode,
-            jsonRpcRequestId,
-            responseBody,
-            ...start
-        } = input;
-        return this.startOperation(start).end({
-            endTimeMs,
-            ...(errorType === undefined ? {} : { errorType }),
-            ...(errorMessage === undefined ? {} : { errorMessage }),
-            ...(rpcResponseStatusCode === undefined ? {} : { rpcResponseStatusCode }),
-            ...(jsonRpcRequestId === undefined ? {} : { jsonRpcRequestId }),
-            ...(responseBody === undefined ? {} : { responseBody }),
-        });
     }
 
     async close(): Promise<void> {
@@ -425,11 +351,7 @@ export class McpTelemetry {
     private emitOperationLog(input: McpOperationInput, operationContext: Context): void {
         if (this.logger === undefined) return;
         try {
-            const descriptor = describeMcpOperationLog(
-                input,
-                this.redactor,
-                this.captureContent,
-            );
+            const descriptor = describeMcpOperationLog(input, this.redactor);
             this.logger.emit({
                 eventName: descriptor.eventName,
                 severityNumber: descriptor.severityNumber,
@@ -453,13 +375,6 @@ function safeDescriptor<T>(create: () => T): T | undefined {
     }
 }
 
-function inactiveOperation(): ActiveMcpOperation {
-    return {
-        run: (operation) => operation(),
-        end: () => undefined,
-    };
-}
-
 function extractPropagation(
     base: Context,
     carrier: McpPropagationCarrier,
@@ -473,36 +388,10 @@ function extractPropagation(
     return extracted;
 }
 
-function injectPropagation(value: Context): McpPropagationCarrier | undefined {
-    const staging = Object.create(null) as Record<string, string>;
-    STANDARD_MCP_PROPAGATOR.inject(value, staging, defaultTextMapSetter);
-    try {
-        propagation.inject(value, staging, defaultTextMapSetter);
-    } catch {
-        // Standard W3C propagation remains available.
-    }
-    const bounded = Object.create(null) as Record<string, string>;
-    for (const [key, entry] of prioritizedPropagationEntries(staging)) {
-        if (key.length === 0
-            || key.length > MAX_PROPAGATION_KEY_CHARACTERS
-            || typeof entry !== "string"
-            || entry.length > MAX_PROPAGATION_VALUE_CHARACTERS) {
-            continue;
-        }
-        bounded[key] = entry;
-        if (Object.keys(bounded).length >= MAX_PROPAGATION_FIELDS) break;
-    }
-    return Object.keys(bounded).length === 0
-        ? undefined
-        : Object.freeze({ ...bounded });
-}
-
 function operationLinks(
-    role: McpOperationStartInput["role"],
     ambientContext: Context,
     parentContext: Context,
 ): Link[] | undefined {
-    if (role !== "server") return undefined;
     const ambient = trace.getSpanContext(ambientContext);
     const parent = trace.getSpanContext(parentContext);
     if (ambient === undefined || !isSpanContextValid(ambient)) return undefined;
@@ -511,15 +400,4 @@ function operationLinks(
         && ambient.traceId === parent.traceId
         && ambient.spanId === parent.spanId) return undefined;
     return [{ context: ambient }];
-}
-
-function prioritizedPropagationEntries(
-    value: Readonly<Record<string, unknown>>,
-): [string, unknown][] {
-    const entries = Object.entries(value);
-    const priority = new Set(["traceparent", "tracestate", "baggage"]);
-    return [
-        ...entries.filter(([key]) => priority.has(key)),
-        ...entries.filter(([key]) => !priority.has(key)),
-    ];
 }

@@ -82,8 +82,6 @@ function responseFor(operation: string, args: Record<string, unknown>): Response
     case "search_logs": return Response.json({ ...context, mode: "live", has_more: false, logs: [getTelemetryFixture().logs[0]] });
     case "ci_log": return Response.json({ ...context, mode: "live", has_more: false, ...(args.run_id ? { run_id: args.run_id, phases: [] } : { runs: [] }) });
     case "list_metrics": return Response.json({ ...context, has_more: false, items: [] });
-    case "display_traces": return Response.json({ ...readContext(1, false), mode: "live", traces: [toolTrace(getTelemetryFixture().traces[0]!)] });
-    case "fetch_telemetry": return Response.json({ ...context, mode: "live", traces: [toolTrace(getTelemetryFixture().traces[0]!)] });
     default: throw new Error(`Unexpected operation ${operation}`);
   }
 }
@@ -101,9 +99,9 @@ test("ci_log reports its collector query and final step to a client that asked",
 
 test("every one-round-trip tool reports the query and final step", async (context) => {
   const connection = await collectorConnection(context);
-  for (const name of ["list_traces", "search_logs", "ci_log", "list_metrics", "display_traces", "fetch_telemetry"]) {
+  for (const name of ["list_traces", "search_logs", "ci_log", "list_metrics"]) {
     const updates: ProgressUpdate[] = [];
-    const result = await connection.client.callTool({ name, arguments: name === "fetch_telemetry" ? { view: "traces" } : {} }, { onprogress: update => void updates.push(update) });
+    const result = await connection.client.callTool({ name, arguments: {} }, { onprogress: update => void updates.push(update) });
     assert.equal(result.isError, undefined, name);
     assert.deepEqual(updates.map(update => update.progress), [1, 2], name);
     assert.deepEqual(updates.map(update => update.total), [2, 2], name);
@@ -214,27 +212,26 @@ test("cancelling a tool call aborts the in-flight collector fetch", async () => 
 });
 
 
-test("oversized viewer pages requery with a smaller limit and retain collector coverage", async (context) => {
+test("oversized pages requery with a smaller limit and retain collector coverage", async (context) => {
   const requests: Record<string, unknown>[] = [];
-  const trace = toolTrace(getTelemetryFixture().traces[0]!);
-  trace.spans[0]!.name = "x".repeat(6_000);
-  const traces = Array.from({ length: 8 }, () => trace);
+  const log = { ...getTelemetryFixture().logs[0]!, body: "x".repeat(6_000) };
+  const logs = Array.from({ length: 8 }, () => log);
   const connection = await collectorConnection(context, (_operation, args) => {
     requests.push(args);
-    const page = traces.slice(0, Number(args.limit ?? traces.length));
-    const metadata = readContext(8, false);
-    return Response.json({ ...metadata, mode: "live", traces: page,
+    const page = logs.slice(0, Number(args.limit ?? logs.length));
+    const metadata = readContext(8);
+    return Response.json({ ...metadata, mode: "live", logs: page,
       coverage: { ...metadata.coverage, returned: page.length, truncated: page.length < 8 } });
   });
-  const result = await connection.client.callTool({ name: "display_traces", arguments: {} });
-  assert.equal(result.isError, undefined);
+  const result = await connection.client.callTool({ name: "search_logs", arguments: {} });
+  assert.equal(result.isError, undefined, JSON.stringify(result).slice(0, 500));
   assert.equal(requests.length, 2);
   assert(Number(requests[1]!.limit) < 8);
   assert.equal(requests[1]!.start_time, readContext().window.start_time);
   assert.equal(requests[1]!.end_time, readContext().window.end_time);
-  const output = result.structuredContent as { coverage: { examined: number; returned: number; truncated: boolean }; traces: unknown[] };
+  const output = result.structuredContent as { coverage: { examined: number; returned: number; truncated: boolean }; logs: unknown[] };
   assert.equal(output.coverage.examined, 8);
-  assert.equal(output.coverage.returned, output.traces.length);
+  assert.equal(output.coverage.returned, output.logs.length);
   assert.equal(output.coverage.truncated, true);
   assert(Buffer.byteLength(JSON.stringify(result), "utf8") <= 24_000);
 });

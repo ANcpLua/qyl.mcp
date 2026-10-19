@@ -2,7 +2,7 @@
 # The hosted-server test: a bearer token for https://mcp.qyl.at/mcp (Keychain
 # refresh first, browser once), then reads, scope challenges and validation over
 # Streamable HTTP at protocol revision 2026-07-28 with the official client.
-# This does not prove successful owner operations for all 32 tools.
+# This does not prove successful owner operations; verify-owner.mjs does.
 #   mise run hosted-eval   (tools/hosted-eval/run.sh)            refresh from Keychain, else browser
 #   mise run hosted-eval   (tools/hosted-eval/run.sh) --browser  force the browser flow (new consent)
 set -uo pipefail

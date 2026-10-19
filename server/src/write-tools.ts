@@ -1,6 +1,6 @@
 /**
  * The tools that change something: annotations, saved queries and the one
- * delete tool, plus the two saved-query reads that belong with them.
+ * delete tool, `delete_record`, plus the two saved-query reads that belong with them.
  *
  * What they change is limited to objects users create in qyl, inside the
  * verified caller's Collector project: a note on a trace, span or session, and
@@ -12,7 +12,7 @@
  * Identical creates are deduplicated for 24 hours; a new explicit retry key
  * requests another object. Update and delete are destructive and idempotent (they
  * replace or remove a version named by its etag, and repeating them changes
- * nothing more). The create and update tools need `qyl:write`, delete needs
+ * nothing more). The create and update tools need `qyl:write`, `delete_record` needs
  * `qyl:delete`, and the saved-query reads keep `qyl:read` (tool-scopes.ts).
  */
 
@@ -96,7 +96,7 @@ function savedQueryLine(query: SavedQuery): string {
   return `- ${query.name} (${query.filter.signal}) · id ${query.id} · etag ${query.etag}${description}`;
 }
 
-/** Registers the seven tools; every handler runs inside runTool. */
+/** Registers the annotation and saved-query tools; every handler runs inside runTool. */
 export function registerWriteTools(server: McpServer): void {
   server.registerTool(
     "create_annotation",
@@ -220,14 +220,14 @@ export function registerWriteTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "delete",
+    "delete_record",
     {
       title: "Delete Annotation or Saved Query",
       description: "Delete an annotation or saved query with its current etag when removing a stored note or question, never traces, logs or metrics.",
       inputSchema: DeleteInputSchema,
       outputSchema: compactOutputSchema(DeleteOutputSchema),
       annotations: DELETE_TOOL_ANNOTATIONS,
-      scopeChallenge: toolScopeChallenge("delete", DELETE_SCOPES),
+      scopeChallenge: toolScopeChallenge("delete_record", DELETE_SCOPES),
       _meta: securityMeta(DELETE_SCOPES),
     },
     (args: DeleteInput, ctx: ServerContext): Promise<CallToolResult> =>

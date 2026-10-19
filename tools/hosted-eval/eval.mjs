@@ -48,11 +48,12 @@ try {
 
   const listing = await client.listTools();
   const tools = listing.tools.map((t) => t.name);
-  check(tools.length === 32, "tools/list returns 32 tools", `${tools.length}: ${tools.join(", ")}`);
-  const writes = ["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "delete", "update_failure_status"];
+  const writes = ["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "delete_record", "update_failure_status"];
+  const retired = ["display_traces", "display_mcp_dashboard", "fetch_telemetry", "delete"];
+  check(retired.every((name) => !tools.includes(name)), "tools/list publishes no viewer, app-only or pre-rename tool", tools.join(", "));
   check(
     writes.every((name) => listing.tools.find((t) => t.name === name)?.annotations?.readOnlyHint === false),
-    "the six write tools are published without readOnlyHint",
+    "the write tools are published without readOnlyHint",
   );
 
   // A token without qyl:write meets the MCP scope challenge before anything
@@ -80,8 +81,6 @@ try {
     ["list_sessions", {}],
     ["list_metrics", {}],
     ["search_logs", { query: "request" }],
-    ["display_mcp_dashboard", {}],
-    ["fetch_telemetry", { view: "traces" }],
     ["ci_log", {}],
   ];
   let firstTrace = null;
@@ -99,20 +98,20 @@ try {
 
   const dependent = new Set();
   if (firstTrace) {
-    for (const name of ["get_trace", "display_traces", "get_failure_context", "get_agent_run"].filter((n) => tools.includes(n))) {
+    for (const name of ["get_trace", "get_failure_context", "get_agent_run"].filter((n) => tools.includes(n))) {
       const { res, text: t, err } = await call(name, { trace_id: firstTrace });
       check(res !== null && !res.isError, `${name} answers for ${firstTrace.slice(0, 12)}…`, err ?? t);
       dependent.add(name);
     }
   } else {
-    console.log("info\tno trace on the hosted collector; get_trace and display_traces not exercised");
+    console.log("info\tno trace on the hosted collector; trace-dependent reads not exercised");
   }
 
   check(!client.getServerCapabilities()?.events, "shared deployment does not advertise MCP Events");
   const covered = new Set([...plan.map(([n]) => n), ...dependent, "create_annotation"]);
   for (const name of tools.filter((n) => !covered.has(n)).sort()) {
     const { res, text: t, err } = await call(name, {});
-    const requiredScope = name === "delete" ? "qyl:delete" : writes.includes(name) ? "qyl:write" : null;
+    const requiredScope = name === "delete_record" ? "qyl:delete" : writes.includes(name) ? "qyl:write" : null;
     if (requiredScope && !granted.includes(requiredScope)) {
       check(err?.includes(`required "${requiredScope}"`), `${name} requires ${requiredScope}`, err ?? t);
     } else {

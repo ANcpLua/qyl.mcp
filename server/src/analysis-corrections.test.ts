@@ -63,9 +63,6 @@ test("every nested matcher input rejects 33 matchers and triage rejects 51", () 
     ["CompareGroupsInput",{signal:"spans",group_a:{matchers},group_b:"rest"}],
     ["CompareGroupsInput",{signal:"spans",group_a:{},group_b:{matchers}}],
     ["QueryMetricInput",{metric_name:"count",ratio_of:{metric_name:"total",matchers}}],
-    ["FetchTelemetryInput",{view:"traces",matchers}],
-    ["FetchTelemetryInput",{view:"logs",matchers}],
-    ["FetchTelemetryInput",{view:"metrics",matchers}],
     ["TriageInput",{limit:51}],
   ] as const) assert.equal(contractSchema(`Mcp.Tools.${name}`).safeParse(input).success,false,name);
 });

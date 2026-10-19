@@ -1,22 +1,19 @@
 /**
- * Smoke test for child-process MCP transport and apps with fixed telemetry fixtures.
+ * Smoke test for the child-process MCP transport with fixed telemetry fixtures.
  *
  * Spawns `bun dist/main.js --stdio` with a local typed fixture collector and asserts the direct
- * tool surface, MCP Apps metadata, trace/log behavior, explicit mode
- * selection, generated-fixture invariants, and dashboard aggregation.
+ * tool surface, trace/log behavior, explicit mode selection and the native execution records.
  *
  * Run: node smoke-test.mjs   (after `bun run build`)
  */
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { Client } from "@modelcontextprotocol/client";
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
 import { getTelemetryFixture } from "./src/telemetry-fixtures.test-helper.ts";
-import fixtureStats from "./fixtures/dashboard-stats.json" with { type: "json" };
 
 let failures = 0;
 function check(name, condition, detail = "") {
@@ -32,7 +29,20 @@ async function callTool(client, name, args) {
   return client.callTool({ name, arguments: args });
 }
 
-// This fixture verifies child-process transport and app rendering only.
+// Presence and absence of named tools; the committed manifest pins the whole catalog.
+const READ_TOOLS = [
+  "triage", "list_failures", "get_failure_context", "compare_groups", "compare_traces", "verify_fix",
+  "aggregate_telemetry", "discover_attributes", "get_agent_run", "list_releases", "get_service_map",
+  "check_telemetry_health", "get_mcp_stats", "ci_log", "get_metric_series", "get_trace", "list_metrics",
+  "list_saved_queries", "list_sessions", "list_traces", "query_metric", "run_saved_query", "search_logs",
+];
+const WRITE_TOOLS = [
+  "create_annotation", "update_annotation", "create_saved_query", "update_saved_query",
+  "update_failure_status", "delete_record",
+];
+const RETIRED_TOOLS = ["display_traces", "display_mcp_dashboard", "fetch_telemetry", "delete"];
+
+// This fixture verifies the child-process transport only.
 // Recorded-telemetry query semantics are verified in verify-answer-key.mjs.
 const fixture = getTelemetryFixture();
 const context = { window: { start_time: new Date(Date.now()-86_400_000).toISOString(), end_time: new Date().toISOString() }, coverage: { examined: 8, matched: 8, returned: 8, truncated: false, scan_complete: true, as_of: new Date().toISOString() } };
@@ -51,22 +61,14 @@ const fixtureCollector = createServer((request, response) => {
       if (!trace) { response.statusCode=404; response.setHeader("content-type","application/problem+json"); response.end(JSON.stringify({type:"https://qyl.at/problems/not-found",title:"Not Found",code:"not_found",status:404,detail:"trace not found"})); return; }
       data={trace:fullTrace(trace)}; break;
     }
-    case "display_traces": data = {traces:fixture.traces.slice(0,args.limit ?? fixture.traces.length).map(fullTrace)}; break;
-    case "search_logs": data={logs:fixture.logs.filter(l=>args.severity_min===undefined || l.severity_number>=args.severity_min)}; break;
+    case "search_logs": data={logs:fixture.logs.filter(l=>(args.severity_min===undefined || l.severity_number>=args.severity_min) && (args.trace_id===undefined || l.trace_id===args.trace_id))}; break;
     case "ci_log": data={runs:[]}; break;
     case "list_metrics": data={items:[0,1,2].map(i=>({instrument_id:`fixture-instrument-${i}`,has_conflict:false,name:`fixture.metric.${i}`,kind:"gauge",unit:"1",series_count:1,temporality:"unspecified",monotonic:false,last_seen:new Date().toISOString()}))}; break;
-    case "display_mcp_dashboard": data={stats:{...fixtureStats,mode:"live"}}; break;
-    case "fetch_telemetry":
-      if(args.view==="mcp_stats") data={stats:{...fixtureStats,mode:"live"}};
-      else if(args.view==="trace") data={trace:fullTrace(fixture.traces.find(t=>t.trace_id===args.trace_id))};
-      else if(args.view==="logs") data={logs:fixture.logs.filter(l=>l.trace_id===args.trace_id)};
-      else data={traces:fixture.traces.slice(0,args.limit ?? fixture.traces.length).map(fullTrace)};
-      break;
     default: response.statusCode=400; response.setHeader("content-type","application/problem+json"); response.end(JSON.stringify({type:"https://qyl.at/problems/validation-failed",title:"Validation Failed",code:"validation_failed",errors:[],status:400,detail:"Writes require the real collector integration suite."})); return;
   }
-  const paged = ["list_traces","get_trace","list_metrics","search_logs","ci_log","fetch_telemetry"].includes(operation);
+  const paged = ["list_traces","get_trace","list_metrics","search_logs","ci_log"].includes(operation);
   const pageContext = Array.isArray(data.traces) ? {...context, coverage:{...context.coverage, returned:data.traces.length, truncated:data.traces.length < fixture.traces.length}} : context;
-  response.end(JSON.stringify({...pageContext,...(operation==="list_metrics"||operation==="display_mcp_dashboard"?{}:{mode:"live"}),...(paged?{has_more:false}:{}),...data}));
+  response.end(JSON.stringify({...pageContext,...(operation==="list_metrics"?{}:{mode:"live"}),...(paged?{has_more:false}:{}),...data}));
  })().catch(error=>{response.statusCode=500;response.end(String(error));});
 });
 await new Promise(resolve=>fixtureCollector.listen(0,"127.0.0.1",resolve));
@@ -121,39 +123,12 @@ console.log("stdout hygiene");
 // --- 1. Direct tools/list ----------------------------------------------------
 console.log("tools/list");
 const { tools } = await client.listTools();
-const names = tools.map((t) => t.name).sort();
-check(
-  "exactly the 32 supported tools",
-  names.length === 32 &&
-    JSON.stringify(names) ===
-      JSON.stringify(
-        [
-          "triage", "list_failures", "get_failure_context", "compare_groups",
-          "compare_traces", "verify_fix", "aggregate_telemetry", "discover_attributes",
-          "get_agent_run", "list_releases", "get_service_map", "check_telemetry_health",
-          "get_mcp_stats", "update_failure_status",
-          "ci_log",
-          "create_annotation",
-          "create_saved_query",
-          "delete",
-          "display_mcp_dashboard",
-          "display_traces",
-          "fetch_telemetry",
-          "get_metric_series",
-          "get_trace",
-          "list_metrics",
-          "list_saved_queries",
-          "list_sessions",
-          "list_traces",
-          "query_metric",
-          "run_saved_query",
-          "search_logs",
-          "update_annotation",
-          "update_saved_query",
-        ].sort(),
-      ),
-  `got: ${names.join(", ")}`,
-);
+const names = new Set(tools.map((t) => t.name));
+const missing = [...READ_TOOLS, ...WRITE_TOOLS].filter((name) => !names.has(name));
+check("every read and write tool is published", missing.length === 0, `missing: ${missing.join(", ")}`);
+const retired = RETIRED_TOOLS.filter((name) => names.has(name));
+check("no viewer, app-only or pre-rename tool is published", retired.length === 0, `published: ${retired.join(", ")}`);
+check("no tool names a UI resource", tools.every((t) => t._meta?.ui === undefined));
 
 // Writes change only annotations and saved queries; their hints say so, and
 // the collector enforces the verified project and required write roles.
@@ -164,13 +139,13 @@ check(
     hints("create_saved_query") === hints("create_annotation") &&
     hints("update_annotation") === JSON.stringify({ readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }) &&
     hints("update_saved_query") === hints("update_annotation") &&
-    hints("delete") === hints("update_annotation"),
-  `${hints("create_annotation")} ${hints("update_annotation")} ${hints("delete")}`,
+    hints("delete_record") === hints("update_annotation"),
+  `${hints("create_annotation")} ${hints("update_annotation")} ${hints("delete_record")}`,
 );
 check(
   "every other tool stays read-only",
   tools
-    .filter((t) => !["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "update_failure_status", "delete"].includes(t.name))
+    .filter((t) => !WRITE_TOOLS.includes(t.name))
     .every((t) => t.annotations?.readOnlyHint === true && t.annotations?.destructiveHint === false),
 );
 const fixtureWrite = await callTool(client, "create_annotation", {
@@ -183,29 +158,6 @@ check(
     !/real collector integration suite/u.test(fixtureWrite.content?.[0]?.text ?? ""),
   JSON.stringify(fixtureWrite),
 );
-
-const displayTraces = tools.find((t) => t.name === "display_traces");
-check(
-  "display_traces has _meta.ui.resourceUri",
-  displayTraces?._meta?.ui?.resourceUri === "ui://qyl-explorer/mcp-app-v8.html",
-  JSON.stringify(displayTraces?._meta),
-);
-
-const fetchTelemetry = tools.find((t) => t.name === "fetch_telemetry");
-check(
-  'fetch_telemetry has _meta.ui.visibility ["app"]',
-  JSON.stringify(fetchTelemetry?._meta?.ui?.visibility) === '["app"]',
-  JSON.stringify(fetchTelemetry?._meta),
-);
-
-const displayDashboard = tools.find((t) => t.name === "display_mcp_dashboard");
-check(
-  "display_mcp_dashboard has _meta.ui.resourceUri",
-  displayDashboard?._meta?.ui?.resourceUri ===
-    "ui://qyl-explorer/mcp-dashboard-v6.html",
-  JSON.stringify(displayDashboard?._meta),
-);
-
 
 const ciLog = await callTool(client, "ci_log", {});
 check("ci_log returns typed run evidence", !ciLog.isError && Array.isArray(ciLog.structuredContent?.runs));
@@ -231,35 +183,7 @@ check(
   missingTrace.content?.[0]?.text,
 );
 
-// --- 3. display_traces {} ----------------------------------------------------
-console.log("display_traces {}");
-const display = await client.callTool({ name: "display_traces", arguments: {} });
-const sc = display.structuredContent;
-check("not isError", !display.isError, display.content?.[0]?.text);
-check("returns a bounded trace page", sc?.traces?.length > 0 && sc.traces.length <= 8, `got ${sc?.traces?.length}`);
-check("response stays within24KB", Buffer.byteLength(JSON.stringify(display), "utf8") <= 24_000);
-check('mode is live', sc?.mode === "live", `got ${sc?.mode}`);
-check(
-  "every trace has full spans (spans.length === span_count > 0)",
-  sc?.traces?.every((t) => Array.isArray(t.spans) && t.spans.length === t.span_count && t.span_count > 0),
-);
-
-// Fixture-data sanity the waterfall depends on: children contained in parents,
-// no negative offsets, deep chain and error trace present.
-for (const trace of sc.traces) {
-  const byId = new Map(trace.spans.map((s) => [s.span_id, s]));
-  const contained = trace.spans.every((s) => {
-    if (s.end_time_unix_nano < s.start_time_unix_nano) return false;
-    if (!s.parent_span_id) return true;
-    const parent = byId.get(s.parent_span_id);
-    return (
-      parent &&
-      s.start_time_unix_nano >= parent.start_time_unix_nano &&
-      s.end_time_unix_nano <= parent.end_time_unix_nano
-    );
-  });
-  check(`span containment valid in ${trace.trace_id.slice(0, 8)}…`, contained);
-}
+// --- 3. fixture traces -------------------------------------------------------
 // The response budget may place a special case outside this bounded page.
 // Fetch each known case explicitly so its transport assertions always run.
 async function requiredFixtureTrace(predicate, label) {
@@ -295,7 +219,7 @@ check(
 
 // --- 4. get_trace ------------------------------------------------------------
 console.log("get_trace");
-const someId = sc.traces[0].trace_id;
+const someId = listed.structuredContent.traces[0].trace_id;
 const got = await callTool(client, "get_trace", { trace_id: someId });
 check("not isError", !got.isError, got.content?.[0]?.text);
 check(
@@ -316,22 +240,13 @@ check(
   JSON.stringify(logs?.map((l) => l.severity_number)),
 );
 
-// --- 6. fetch_telemetry view:"logs" for the error trace ----------------------
-console.log('fetch_telemetry { view: "logs", trace_id: <error trace> }');
-const corr = await client.callTool({
-  name: "fetch_telemetry",
-  arguments: { view: "logs", trace_id: errorTrace.trace_id },
-});
+// --- 6. search_logs for the error trace -------------------------------------
+console.log("search_logs { trace_id: <error trace> }");
+const corr = await callTool(client, "search_logs", { trace_id: errorTrace.trace_id });
 const corrLogs = corr.structuredContent?.logs;
 check("not isError", !corr.isError, corr.content?.[0]?.text);
-check(
-  "returns correlated logs",
-  Array.isArray(corrLogs) && corrLogs.length > 0,
-);
-check(
-  "every log belongs to the error trace",
-  corrLogs?.every((l) => l.trace_id === errorTrace.trace_id),
-);
+check("returns logs", Array.isArray(corrLogs) && corrLogs.length > 0);
+check("every log belongs to the error trace", corrLogs?.every((l) => l.trace_id === errorTrace.trace_id));
 check(
   "includes an ERROR log with a stacktrace body",
   corrLogs?.some(
@@ -342,124 +257,11 @@ check(
   ),
 );
 
-// Bonus: fetch_telemetry view "trace" and "traces" shapes.
-console.log('fetch_telemetry { view: "trace" } / { view: "traces" }');
-const one = await client.callTool({
-  name: "fetch_telemetry",
-  arguments: { view: "trace", trace_id: errorTrace.trace_id },
-});
-check(
-  'view "trace" returns { trace } with spans',
-  one.structuredContent?.trace?.spans?.length > 0,
-);
-const many = await client.callTool({
-  name: "fetch_telemetry",
-  arguments: { view: "traces" },
-});
-check(
-  'view "traces" returns { traces } with full spans',
-  many.structuredContent?.traces?.length > 0 && many.structuredContent.traces.length <= 8 &&
-    many.structuredContent.traces.every((t) => t.spans.length > 0),
-);
-
-// --- 7. display_mcp_dashboard (fixture aggregation) -----------------------------
-console.log("display_mcp_dashboard {}");
-const dash = await client.callTool({
-  name: "display_mcp_dashboard",
-  arguments: {},
-});
-const stats = dash.structuredContent?.stats;
-check("not isError", !dash.isError, dash.content?.[0]?.text);
-check('mode is live', stats?.mode === "live", `got ${stats?.mode}`);
-check("fixture reports complete coverage", stats?.truncated === false);
-check(
-  "totals.requests > 500 in the 24h fixture window",
-  stats?.totals?.requests > 500,
-  `got ${stats?.totals?.requests}`,
-);
-check(
-  "4 tool rows",
-  stats?.tools?.length === 4,
-  `got ${stats?.tools?.length}`,
-);
-check(
-  "tools sorted by requests desc",
-  stats?.tools?.every(
-    (row, i, rows) => i === 0 || rows[i - 1].requests >= row.requests,
-  ),
-  JSON.stringify(stats?.tools?.map((t) => t.requests)),
-);
-const byErrorRate = [...(stats?.tools ?? [])].sort(
-  (a, b) => b.error_rate - a.error_rate,
-);
-check(
-  "one tool has a meaningfully higher error_rate than the rest",
-  byErrorRate.length === 4 && byErrorRate[0].error_rate > byErrorRate[1].error_rate,
-  JSON.stringify(byErrorRate.map((t) => `${t.name}=${t.error_rate}`)),
-);
-check(
-  "24-48 buckets",
-  stats?.buckets?.length >= 24 && stats?.buckets?.length <= 48,
-  `got ${stats?.buckets?.length}`,
-);
-check(
-  "bucket request/error sums equal totals",
-  stats?.buckets?.reduce((sum, b) => sum + b.requests, 0) ===
-    stats?.totals?.requests &&
-    stats?.buckets?.reduce((sum, b) => sum + b.errors, 0) ===
-      stats?.totals?.errors,
-);
-check(
-  "p95_ms >= avg_ms for every tool row",
-  stats?.tools?.every((row) => row.p95_ms >= row.avg_ms),
-  JSON.stringify(stats?.tools?.map((t) => `${t.name}: avg ${t.avg_ms} p95 ${t.p95_ms}`)),
-);
-check(
-  "by_server / by_transport / by_method populated",
-  stats?.by_server?.length === 3 &&
-    stats?.by_transport?.length === 2 &&
-    stats?.by_method?.length === 3,
-);
-
-// --- 8. fetch_telemetry view:"mcp_stats" -------------------------------------
-console.log('fetch_telemetry { view: "mcp_stats", hours: 24 }');
-const mcpStatsRes = await client.callTool({
-  name: "fetch_telemetry",
-  arguments: { view: "mcp_stats", hours: 24 },
-});
-check("not isError", !mcpStatsRes.isError, mcpStatsRes.content?.[0]?.text);
-check(
-  "returns { stats } with the same totals shape",
-  mcpStatsRes.structuredContent?.stats?.totals?.requests > 500 &&
-    mcpStatsRes.structuredContent.stats.mode === "live",
-);
-
-// --- 9. resources/read of the debugger UIs -----------------------------------
-console.log("resources/read ui://qyl-explorer/mcp-dashboard-v6.html");
-if (existsSync(new URL("./dist/mcp-dashboard.html", import.meta.url))) {
-  const dashRes = await client.readResource({
-    uri: "ui://qyl-explorer/mcp-dashboard-v6.html",
-  });
-  const content = dashRes.contents?.[0];
-  check(
-    "dashboard resource serves non-empty HTML",
-    typeof content?.text === "string" && content.text.length > 0,
-  );
-  check(
-    "dashboard resource has empty-CSP _meta",
-    JSON.stringify(content?._meta?.ui?.csp) ===
-      '{"connectDomains":[],"resourceDomains":[]}',
-    JSON.stringify(content?._meta),
-  );
-} else {
-  console.log("  SKIPPED  dist/mcp-dashboard.html not built yet");
-}
-
 const nativeState = JSON.parse(await readFile(nativeStatePath, "utf8"));
 check(
   "native tool execution evidence is automatic and terminal",
   nativeState.version === 3 &&
-    nativeState.executions.length >= 9 &&
+    nativeState.executions.length >= 8 &&
     nativeState.executions.every((execution) =>
       execution.status !== "running" &&
       execution.durationMs >= 0 &&
@@ -494,7 +296,12 @@ try {
     },
   }));
   check("stock client negotiated the legacy era", legacyClient.getProtocolEra() === "legacy");
-  check("legacy catalog has all 32 tools", (await legacyClient.listTools()).tools.length === 32);
+  const legacyNames = new Set((await legacyClient.listTools()).tools.map((t) => t.name));
+  check(
+    "legacy catalog publishes the same tools",
+    [...READ_TOOLS, ...WRITE_TOOLS].every((name) => legacyNames.has(name)) &&
+      RETIRED_TOOLS.every((name) => !legacyNames.has(name)),
+  );
   const metrics = await legacyClient.callTool({ name: "list_metrics", arguments: {} });
   check("legacy read tool returns typed metric descriptors", !metrics.isError && metrics.structuredContent?.items?.length === 3, JSON.stringify(metrics));
   const invalid = await legacyClient.callTool({ name: "get_trace", arguments: {} });

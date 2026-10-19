@@ -2,44 +2,16 @@
  * Deterministic post-build verifier for hosted deployment guidance.
  *
  * The root README is the operator-facing source for deployment and OAuth
- * configuration. The public landing page, however, is served from the Vite
- * output in dist/, not from mcp-home.html. Checking the canonical deployment
- * section together with the shipped HTML catches both prose drift and a build
- * that publishes guidance different from its source.
+ * configuration; this checks that its canonical deployment section keeps the
+ * authorization requirements below.
  *
  * Run after `bun run --cwd server build`.
  */
 import { readFile } from "node:fs/promises";
 
-const builtLandingUrl = new URL("dist/mcp-home.html", import.meta.url);
-const deploymentReadmeUrl = new URL("../README.md", import.meta.url);
-
-const [builtLandingHtml, deploymentReadme] = await Promise.all([
-  readRequiredBuildArtifact(builtLandingUrl, "public landing page"),
-  readFile(deploymentReadmeUrl, "utf8"),
-]);
-
+const deploymentReadme = await readFile(new URL("../README.md", import.meta.url), "utf8");
 const deploymentGuidance = markdownSection(deploymentReadme, "Deploying your own");
 const failures = [];
-
-requireMatch(
-  "built landing page",
-  builtLandingHtml,
-  /2026-07-28/u,
-  "must name the modern protocol revision",
-);
-requireMatch(
-  "built landing page",
-  builtLandingHtml,
-  /2025-era clients/u,
-  "must describe compatibility with 2025-era tool clients",
-);
-requireMatch(
-  "built landing page",
-  builtLandingHtml,
-  /Events use <code>2026-07-28<\/code>/u,
-  "must distinguish the protocol required for Events",
-);
 
 requireMatch(
   "deployment README",
@@ -122,30 +94,14 @@ if (failures.length > 0) {
   throw new Error(
     `verify:deployment-guidance failed (${failures.length} problem(s)):\n\n`
       + failures.map((failure) => `  - ${failure}`).join("\n")
-      + "\n\n  Update the canonical deployment guidance and rebuild the server before retrying.",
+      + "\n\n  Update the canonical deployment guidance before retrying.",
   );
 }
 
 console.log(
-  "verify:deployment-guidance: built landing page and deployment README preserve "
-    + "the served protocol revision, pinned issuer, CIMD/DCR profiles, optional extensions, and DCR warning.",
+  "verify:deployment-guidance: the deployment README preserves "
+    + "the pinned issuer, CIMD/DCR profiles, optional extensions, and DCR warning.",
 );
-
-async function readRequiredBuildArtifact(url, label) {
-  try {
-    return await readFile(url, "utf8");
-  } catch (cause) {
-    throw missingBuildArtifact(label, url, cause);
-  }
-}
-
-function missingBuildArtifact(label, url, cause) {
-  return new Error(
-    `verify:deployment-guidance: ${label} is unavailable at ${url.pathname}; `
-      + "run the server build before this post-build verifier",
-    { cause },
-  );
-}
 
 function markdownSection(markdown, heading) {
   const headingPattern = new RegExp(`^## ${escapeRegExp(heading)}\\s*$`, "mu");

@@ -1,8 +1,8 @@
 {
   "name": "qyl-mcp-server",
-  "version": "11.1.4",
+  "version": "12.0.0",
   "type": "module",
-  "description": "qyl telemetry MCP server: analysis tools and viewers for a live collector; Bun 1.4 runtime",
+  "description": "qyl telemetry MCP server: analysis tools for a live collector; Bun 1.4 runtime",
   "repository": {
     "type": "git",
     "url": "https://github.com/ANcpLua/qyl.mcp",
@@ -19,42 +19,6 @@
     "./auth": {
       "types": "./dist/auth.d.ts",
       "default": "./dist/auth.js"
-    },
-    "./contract-headers": {
-      "types": "./dist/contract-headers.d.ts",
-      "default": "./dist/contract-headers.js"
-    },
-    "./contract-validation": {
-      "types": "./dist/contract-validation.d.ts",
-      "default": "./dist/contract-validation.js"
-    },
-    "./secret-redactor": {
-      "types": "./dist/secret-redactor.d.ts",
-      "default": "./dist/secret-redactor.js"
-    },
-    "./atomic-json-store": {
-      "types": "./dist/atomic-json-store.d.ts",
-      "default": "./dist/atomic-json-store.js"
-    },
-    "./execution-evidence": {
-      "types": "./dist/execution-evidence.d.ts",
-      "default": "./dist/execution-evidence.js"
-    },
-    "./execution-result": {
-      "types": "./dist/execution-result.d.ts",
-      "default": "./dist/execution-result.js"
-    },
-    "./mcp-semconv": {
-      "types": "./dist/mcp-semconv.d.ts",
-      "default": "./dist/mcp-semconv.js"
-    },
-    "./observability-suppression": {
-      "types": "./dist/observability-suppression.d.ts",
-      "default": "./dist/observability-suppression.js"
-    },
-    "./telemetry": {
-      "types": "./dist/telemetry.d.ts",
-      "default": "./dist/telemetry.js"
     }
   },
   "bin": {
@@ -65,13 +29,13 @@
   ],
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true }); require('node:fs').rmSync('dist-test', { recursive: true, force: true })\"",
-    "build": "bun run clean && tsc -p tsconfig.ui.json --noEmit && vite build --mode mcp-home && vite build --mode mcp-app && vite build --mode mcp-dashboard && tsc -p tsconfig.server.json && node -e \"const fs=require('node:fs'); fs.chmodSync('dist/main.js', 0o755); fs.cpSync('../submission/qyl/skills', 'dist/skills', { recursive: true })\"",
+    "build": "bun run clean && tsc -p tsconfig.server.json && node -e \"const fs=require('node:fs'); fs.chmodSync('dist/main.js', 0o755); fs.cpSync('../submission/qyl/skills', 'dist/skills', { recursive: true })\"",
     "postbuild": "bun run verify:deployment-guidance",
     "verify:deployment-guidance": "node verify-deployment-guidance.mjs",
     "verify:readme": "node verify-package-readme.mjs",
     "verify:frame": "node verify-tool-frame.mjs",
     "snapshot:tools": "bun run build && tsc -p tsconfig.test.json && bun run stage:test && node update-tool-manifest-snapshot.mjs",
-    "stage:test": "node -e \"const fs=require('node:fs'); for (const name of ['mcp-app.html','mcp-dashboard.html']) fs.copyFileSync('dist/'+name,'dist-test/'+name); fs.cpSync('dist/skills', 'dist-test/skills', { recursive: true })\"",
+    "stage:test": "node -e \"require('node:fs').cpSync('dist/skills', 'dist-test/skills', { recursive: true })\"",
     "test": "bun run build && bun run test:built",
     "smoke": "node smoke-test.mjs",
     "smoke:quiet": "node quiet-stream-smoke.mjs",
@@ -105,9 +69,7 @@
     "@types/bun": "1.4.3",
     "@types/node": "26.6.5",
     "protobufjs": "8.8.1",
-    "typescript": "7.0.2",
-    "vite": "8.3.4",
-    "vite-plugin-singlefile": "2.3.3"
+    "typescript": "7.0.2"
   },
   "engines": {
     "node": "24.x",

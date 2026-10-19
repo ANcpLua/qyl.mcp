@@ -11,15 +11,11 @@ import {
     ATTR_NETWORK_PROTOCOL_NAME,
     ATTR_NETWORK_PROTOCOL_VERSION,
     ATTR_NETWORK_TRANSPORT,
-    ATTR_SERVER_ADDRESS,
-    ATTR_SERVER_PORT,
     NETWORK_TRANSPORT_VALUE_PIPE,
     NETWORK_TRANSPORT_VALUE_TCP,
 } from "@ancplua/qyl-semantic-conventions";
 import {
     ATTR_QYL_MCP_EXECUTION_ID,
-    ATTR_QYL_MCP_EVALUATION_RUN_ID,
-    ATTR_QYL_MCP_TEST_CASE_ID,
     ATTR_QYL_MCP_SERVER_ID,
     EVENT_QYL_MCP_OPERATION,
     ATTR_GEN_AI_OPERATION_NAME,
@@ -32,8 +28,6 @@ import {
     ATTR_MCP_RESOURCE_URI,
     ATTR_RPC_RESPONSE_STATUS_CODE,
     GEN_AI_OPERATION_NAME_VALUE_EXECUTE_TOOL,
-    METRIC_MCP_CLIENT_OPERATION_DURATION,
-    METRIC_MCP_CLIENT_OPERATION_DURATION_UNIT,
     METRIC_MCP_SERVER_OPERATION_DURATION,
     METRIC_MCP_SERVER_OPERATION_DURATION_UNIT,
 } from "@ancplua/qyl-semantic-conventions/incubating";
@@ -43,22 +37,16 @@ const ATTRIBUTE_VALUE_LIMIT = 2_000;
 const LOG_BODY_CHARACTER_LIMIT = 64_000;
 const JSONRPC_DEFAULT_VERSION = "2.0";
 
-export { EVENT_QYL_MCP_OPERATION };
-
-export type McpTelemetryRole = "client" | "server";
+/** The transports this server is reached through; `inproc` and `builtin` have no network. */
 export type McpTelemetryTransport =
     | "stdio"
-    | "http"
     | "streamable_http"
-    | "streamable-http"
-    | "sse"
     | "inproc"
     | "builtin";
 
 export type McpPropagationCarrier = Readonly<Record<string, string>>;
 
 interface McpNetworkInput {
-    role: McpTelemetryRole;
     transport: McpTelemetryTransport;
     networkProtocolName?: string;
     networkProtocolVersion?: string;
@@ -70,10 +58,10 @@ interface McpProtocolInput extends McpNetworkInput {
     protocolVersion?: string;
     jsonRpcProtocolVersion?: string;
     errorType?: string;
-    errorMessage?: string;
     rpcResponseStatusCode?: string;
 }
 
+/** One operation this server answered. Payloads never enter its telemetry. */
 export interface McpOperationInput extends McpProtocolInput {
     method: string;
     toolName?: string;
@@ -82,10 +70,6 @@ export interface McpOperationInput extends McpProtocolInput {
     jsonRpcRequestId?: string | number;
     serverId?: string;
     executionId?: string;
-    evaluationRunId?: string;
-    testCaseId?: string;
-    requestBody?: unknown;
-    responseBody?: unknown;
     startTimeMs: number;
     endTimeMs: number;
     remotePropagation?: McpPropagationCarrier;
@@ -93,15 +77,13 @@ export interface McpOperationInput extends McpProtocolInput {
 
 export interface McpSpanDescriptor {
     name: string;
-    kind: SpanKind.CLIENT | SpanKind.SERVER;
+    kind: SpanKind.SERVER;
     attributes: Attributes;
 }
 
 export interface McpMetricDescriptor {
-    name:
-        | typeof METRIC_MCP_CLIENT_OPERATION_DURATION
-        | typeof METRIC_MCP_SERVER_OPERATION_DURATION;
-    unit: typeof METRIC_MCP_CLIENT_OPERATION_DURATION_UNIT;
+    name: typeof METRIC_MCP_SERVER_OPERATION_DURATION;
+    unit: typeof METRIC_MCP_SERVER_OPERATION_DURATION_UNIT;
     value: number;
     attributes: Attributes;
 }
@@ -113,13 +95,6 @@ export interface McpLogDescriptor {
     body: LogBody;
     attributes: LogAttributes;
 }
-
-export const WorkbenchTelemetryAttributes = {
-    executionId: ATTR_QYL_MCP_EXECUTION_ID,
-    evaluationRunId: ATTR_QYL_MCP_EVALUATION_RUN_ID,
-    testCaseId: ATTR_QYL_MCP_TEST_CASE_ID,
-    serverId: ATTR_QYL_MCP_SERVER_ID,
-} as const;
 
 export function describeMcpOperationSpan(
     input: McpOperationInput,
@@ -137,15 +112,15 @@ export function describeMcpOperationSpan(
     if (input.resourceUri && resourceMethodHasUri(input.method)) {
         attributes[ATTR_MCP_RESOURCE_URI] = bounded(redactor.redactUri(input.resourceUri));
     }
-    addPeerAttributes(attributes, input, safe, true);
-    addWorkbenchAttributes(attributes, input, safe);
+    addPeerAttributes(attributes, input, safe);
+    addQylAttributes(attributes, input, safe);
 
     const target = input.method === "tools/call"
         ? input.toolName
         : input.method === "prompts/get" ? input.promptName : undefined;
     return {
         name: target ? `${method} ${safe(target)}` : method,
-        kind: input.role === "client" ? SpanKind.CLIENT : SpanKind.SERVER,
+        kind: SpanKind.SERVER,
         attributes,
     };
 }
@@ -160,14 +135,9 @@ export function describeMcpOperationMetric(
         [ATTR_MCP_METHOD_NAME]: requireText(input.method, "method", safe),
     };
     addOperationAttributes(attributes, input, safe);
-    addPeerAttributes(attributes, input, safe, false);
     return {
-        name: input.role === "client"
-            ? METRIC_MCP_CLIENT_OPERATION_DURATION
-            : METRIC_MCP_SERVER_OPERATION_DURATION,
-        unit: input.role === "client"
-            ? METRIC_MCP_CLIENT_OPERATION_DURATION_UNIT
-            : METRIC_MCP_SERVER_OPERATION_DURATION_UNIT,
+        name: METRIC_MCP_SERVER_OPERATION_DURATION,
+        unit: METRIC_MCP_SERVER_OPERATION_DURATION_UNIT,
         value: durationSeconds(input.startTimeMs, input.endTimeMs),
         attributes,
     };
@@ -176,7 +146,6 @@ export function describeMcpOperationMetric(
 export function describeMcpOperationLog(
     input: McpOperationInput,
     redactor: SecretRedactor = new SecretRedactor(),
-    captureContent = false,
 ): McpLogDescriptor {
     validateTiming(input.startTimeMs, input.endTimeMs);
     const safe = safeText(redactor);
@@ -190,20 +159,14 @@ export function describeMcpOperationLog(
     if (input.resourceUri && resourceMethodHasUri(input.method)) {
         attributes[ATTR_MCP_RESOURCE_URI] = bounded(redactor.redactUri(input.resourceUri));
     }
-    addPeerAttributes(attributes, input, safe, true);
-    addWorkbenchAttributes(attributes, input, safe);
+    addPeerAttributes(attributes, input, safe);
+    addQylAttributes(attributes, input, safe);
 
     const failed = input.errorType !== undefined;
     const body = {
         message: "MCP operation completed.",
-        role: input.role,
+        role: "server",
         duration_ms: input.endTimeMs - input.startTimeMs,
-        ...(captureContent && input.requestBody !== undefined
-            ? { request: input.requestBody }
-            : {}),
-        ...(captureContent && input.responseBody !== undefined
-            ? { response: input.responseBody }
-            : {}),
         ...(failed
             ? {
                 error: {
@@ -211,9 +174,6 @@ export function describeMcpOperationLog(
                     ...(input.rpcResponseStatusCode === undefined
                         ? {}
                         : { code: input.rpcResponseStatusCode }),
-                    ...(!captureContent || input.errorMessage === undefined
-                        ? {}
-                        : { message: input.errorMessage }),
                 },
             }
             : {}),
@@ -261,42 +221,25 @@ function addOperationAttributes(
     }
 }
 
+/** Span and log only: a client address would explode the metric's cardinality. */
 function addPeerAttributes(
     attributes: Attributes,
     input: McpNetworkInput,
     safe: (value: string) => string,
-    spanOrLog: boolean,
 ): void {
-    if (input.role === "client") {
-        if (input.peerAddress) attributes[ATTR_SERVER_ADDRESS] = safe(input.peerAddress);
-        if (input.peerAddress && input.peerPort !== undefined) {
-            attributes[ATTR_SERVER_PORT] = input.peerPort;
-        }
-        return;
-    }
-    if (spanOrLog && input.peerAddress) {
-        attributes[ATTR_CLIENT_ADDRESS] = safe(input.peerAddress);
-    }
-    if (spanOrLog && input.peerAddress && input.peerPort !== undefined) {
+    if (input.peerAddress) attributes[ATTR_CLIENT_ADDRESS] = safe(input.peerAddress);
+    if (input.peerAddress && input.peerPort !== undefined) {
         attributes[ATTR_CLIENT_PORT] = input.peerPort;
     }
 }
 
-function addWorkbenchAttributes(
+function addQylAttributes(
     attributes: Attributes,
     input: McpOperationInput,
     safe: (value: string) => string,
 ): void {
-    if (input.serverId) attributes[WorkbenchTelemetryAttributes.serverId] = safe(input.serverId);
-    if (input.executionId) {
-        attributes[WorkbenchTelemetryAttributes.executionId] = safe(input.executionId);
-    }
-    if (input.evaluationRunId) {
-        attributes[WorkbenchTelemetryAttributes.evaluationRunId] = safe(input.evaluationRunId);
-    }
-    if (input.testCaseId) {
-        attributes[WorkbenchTelemetryAttributes.testCaseId] = safe(input.testCaseId);
-    }
+    if (input.serverId) attributes[ATTR_QYL_MCP_SERVER_ID] = safe(input.serverId);
+    if (input.executionId) attributes[ATTR_QYL_MCP_EXECUTION_ID] = safe(input.executionId);
 }
 
 function resourceMethodHasUri(method: string): boolean {
@@ -308,18 +251,12 @@ function resourceMethodHasUri(method: string): boolean {
 
 function networkTransport(transport: McpTelemetryTransport): string | undefined {
     if (transport === "stdio") return NETWORK_TRANSPORT_VALUE_PIPE;
-    if (transport === "http" || transport === "streamable_http"
-        || transport === "streamable-http" || transport === "sse") {
-        return NETWORK_TRANSPORT_VALUE_TCP;
-    }
+    if (transport === "streamable_http") return NETWORK_TRANSPORT_VALUE_TCP;
     return undefined;
 }
 
 function inferredNetworkProtocol(transport: McpTelemetryTransport): string | undefined {
-    return transport === "http" || transport === "streamable_http"
-        || transport === "streamable-http" || transport === "sse"
-        ? "http"
-        : undefined;
+    return transport === "streamable_http" ? "http" : undefined;
 }
 
 function safeText(redactor: SecretRedactor): (value: string) => string {

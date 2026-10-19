@@ -2,27 +2,21 @@
   "name": "qyl.mcp",
   "private": true,
   "type": "module",
-  "description": "qyl MCP host, telemetry tools, MCP Apps viewers, and local resource dashboard",
+  "description": "qyl MCP server: telemetry analysis tools for agents",
   "workspaces": [
-    "server",
-    "workbench",
-    "dashboard"
+    "server"
   ],
   "scripts": {
-    "build": "bun run --cwd server build && bun run --cwd workbench build && bun run --cwd dashboard build",
-    "postbuild": "node scripts/build-site.mjs",
+    "build": "bun run --cwd server build",
     "test": "bun install --frozen-lockfile && bun run build && bun run test:built",
     "start": "bun server/dist/main.js",
-    "start:workbench": "node workbench/dist/main.js",
-    "smoke": "bun run --cwd server smoke && bun run --cwd workbench smoke",
+    "smoke": "bun run --cwd server smoke",
     "smoke:live": "bun run --cwd server smoke:live",
-    "smoke:otlp": "bun run --cwd workbench smoke:otlp",
-    "dev": "bun run --cwd server build && bun run --cwd dashboard dev",
     "verify:pins": "node verify-contract-pins.mjs",
     "verify:sdk": "node --test scripts/verify-mcp-sdk.test.mjs && bun scripts/verify-mcp-sdk.mjs",
     "lint": "oxlint .",
     "smoke:projects": "bun run --cwd server smoke:projects",
-    "test:built": "bun run --cwd server test:built && bun run --cwd workbench test:built && bun run --cwd dashboard test && node --test scripts/build-site.test.mjs"
+    "test:built": "bun run --cwd server test:built"
   },
   "engines": {
     "node": "24.x"
@@ -31,8 +25,7 @@
     "@types/node": "26.6.5",
     "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2004",
-    "typescript": "7.0.2",
-    "vite": "8.3.4"
+    "typescript": "7.0.2"
   },
   "optionalDependencies": {
     "@typescript/typescript-darwin-arm64": "7.0.2",

@@ -4,18 +4,25 @@ import {
   Client,
   StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
-import {
-  createMcpHandler,
-  ProtocolError,
-  ProtocolErrorCode,
-} from "@modelcontextprotocol/server";
+import { createMcpHandler } from "@modelcontextprotocol/server";
 import { connectModernTestClient } from "./modern-test-client.test-helper.js";
-import { createServer, registerViewerResource } from "./server.js";
+import { createServer } from "./server.js";
 import { READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS } from "./tools.js";
 import { QYL_MCP_SCOPE } from "./oauth.js";
 
 /** The tools that change annotations or saved queries; write-tools.test.ts pins their hints. */
-const WRITE_TOOLS = new Set(["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "update_failure_status", "delete"]);
+const WRITE_TOOLS = new Set(["create_annotation", "update_annotation", "create_saved_query", "update_saved_query", "update_failure_status", "delete_record"]);
+
+/** Read tools every client must find. */
+const READ_TOOLS = [
+  "aggregate_telemetry", "check_telemetry_health", "ci_log", "compare_groups", "compare_traces",
+  "discover_attributes", "get_agent_run", "get_failure_context", "get_mcp_stats", "get_metric_series",
+  "get_service_map", "get_trace", "list_failures", "list_metrics", "list_releases", "list_saved_queries",
+  "list_sessions", "list_traces", "query_metric", "run_saved_query", "search_logs", "triage", "verify_fix",
+];
+
+/** Retired names: the viewers and their app-only refresh tool, and `delete` before its rename. */
+const RETIRED_TOOLS = ["display_traces", "display_mcp_dashboard", "fetch_telemetry", "delete"];
 
 test("qyl read tools publish read-only safety annotations", async () => {
   const connection = await connectModernTestClient(
@@ -25,48 +32,15 @@ test("qyl read tools publish read-only safety annotations", async () => {
 
   try {
     const { tools } = await connection.client.listTools();
-    assert.deepEqual(
-      tools.map((tool) => tool.name).sort(),
-      [
-        "aggregate_telemetry",
-        "check_telemetry_health",
-        "ci_log",
-        "compare_groups",
-        "compare_traces",
-        "create_annotation",
-        "create_saved_query",
-        "delete",
-        "discover_attributes",
-        "display_mcp_dashboard",
-        "display_traces",
-        "fetch_telemetry",
-        "get_agent_run",
-        "get_failure_context",
-        "get_mcp_stats",
-        "get_metric_series",
-        "get_service_map",
-        "get_trace",
-        "list_failures",
-        "list_metrics",
-        "list_releases",
-        "list_saved_queries",
-        "list_sessions",
-        "list_traces",
-        "query_metric",
-        "run_saved_query",
-        "search_logs",
-        "triage",
-        "update_annotation",
-        "update_failure_status",
-        "update_saved_query",
-        "verify_fix",
-      ],
-    );
+    const names = new Set(tools.map((tool) => tool.name));
+    for (const name of [...READ_TOOLS, ...WRITE_TOOLS]) assert.ok(names.has(name), `${name} is published`);
+    for (const name of RETIRED_TOOLS) assert.ok(!names.has(name), `${name} is not published`);
     for (const tool of tools.filter((candidate) => !WRITE_TOOLS.has(candidate.name))) {
       assert.deepEqual(tool.annotations, READ_ONLY_TELEMETRY_TOOL_ANNOTATIONS, tool.name);
       assert.deepEqual(tool._meta?.securitySchemes, [
         { type: "oauth2", scopes: [QYL_MCP_SCOPE] },
       ], tool.name);
+      assert.equal((tool._meta as { ui?: unknown } | undefined)?.ui, undefined, `${tool.name} names no UI resource`);
     }
   } finally {
     await connection.close();
@@ -75,7 +49,7 @@ test("qyl read tools publish read-only safety annotations", async () => {
 
 test("qyl server factory serves protocol revision 2026-07-28 over the fetch entry", async () => {
   const handler = createMcpHandler(
-    () => createServer({ nativeExecution: false, uiDomain: "https://mcp.qyl.test" }),
+    () => createServer({ nativeExecution: false }),
     { legacy: "reject" },
   );
   const transport = new StreamableHTTPClientTransport(
@@ -99,8 +73,10 @@ test("qyl server factory serves protocol revision 2026-07-28 over the fetch entr
       ttlMs: number;
       cacheScope: string;
     };
-    const { tools } = toolsResult;
-    assert.equal(tools.length, 32);
+    const names = toolsResult.tools.map((tool) => tool.name);
+    assert.ok(names.includes("triage"));
+    assert.ok(names.includes("delete_record"));
+    for (const name of RETIRED_TOOLS) assert.ok(!names.includes(name), `${name} is not published`);
     assert.equal(toolsResult.ttlMs, 300_000);
     assert.equal(toolsResult.cacheScope, "public");
     const discover = client.getDiscoverResult() as ReturnType<Client["getDiscoverResult"]> & {
@@ -109,70 +85,22 @@ test("qyl server factory serves protocol revision 2026-07-28 over the fetch entr
     };
     assert.equal(discover?.ttlMs, 300_000);
     assert.equal(discover?.cacheScope, "public");
-    const displayMetadata = tools.find((tool) => tool.name === "display_traces")?._meta as
-      | { ui?: { resourceUri?: unknown } }
-      | undefined;
-    assert.equal(
-      displayMetadata?.ui?.resourceUri,
-      "ui://qyl-explorer/mcp-app-v8.html",
-    );
+    const instructions = client.getInstructions() ?? "";
+    assert.match(instructions, /recorded telemetry/u);
+    assert.doesNotMatch(instructions, /viewer|interactive|\b\d+ tools\b/u, "no viewers and no tool count");
 
     const resourcesResult = await client.listResources() as Awaited<ReturnType<Client["listResources"]>> & {
       ttlMs: number;
       cacheScope: string;
     };
-    const { resources } = resourcesResult;
     assert.equal(resourcesResult.ttlMs, 300_000);
     assert.equal(resourcesResult.cacheScope, "public");
-    assert.equal(
-      resources.find((resource) => resource.uri === "ui://qyl-explorer/mcp-app-v8.html")?.mimeType,
-      "text/html;profile=mcp-app",
-    );
-    const appResult = await client.readResource({ uri: "ui://qyl-explorer/mcp-app-v8.html" }) as
-      Awaited<ReturnType<Client["readResource"]>> & { ttlMs: number; cacheScope: string };
-    assert.equal(appResult.ttlMs, 86_400_000);
-    assert.equal(appResult.cacheScope, "public");
-    for (const resource of resources.filter((candidate) => candidate.uri.startsWith("ui://"))) {
-      const result = await client.readResource({ uri: resource.uri });
-      assert.deepEqual(result.contents[0]?._meta?.ui, {
-        domain: "https://mcp.qyl.test",
-        csp: { connectDomains: [], resourceDomains: [] },
-      }, resource.uri);
+    assert.ok(resourcesResult.resources.length > 0, "the skill files are resources");
+    for (const resource of resourcesResult.resources) {
+      assert.match(resource.uri, /^skill:\/\/qyl\//u);
     }
   } finally {
     await client.close().catch(() => undefined);
     await handler.close().catch(() => undefined);
-  }
-});
-
-test("a viewer whose bundle is missing reads as a typed resource-not-found error", async () => {
-  const missingUri = "ui://qyl-explorer/not-built.html";
-  const connection = await connectModernTestClient(
-    { name: "viewer-error-test", version: "1.0.0" },
-    () => {
-      const server = createServer({ nativeExecution: false });
-      registerViewerResource(server, missingUri, "definitely-not-built.html");
-      return server;
-    },
-  );
-
-  try {
-    await assert.rejects(
-      () => connection.client.readResource({ uri: missingUri }),
-      (error: unknown) => {
-        // errors.md: a read callback has no isError channel, and anything that
-        // is not a ProtocolError leaves as -32603 carrying the raw exception —
-        // here fs's ENOENT, which would also publish an absolute server path.
-        assert.ok(ProtocolError.isInstance(error), `not a ProtocolError: ${String(error)}`);
-        assert.equal(error.code, ProtocolErrorCode.InvalidParams);
-        assert.deepEqual(error.data, { uri: missingUri });
-        assert.match(error.message, /is not built/u);
-        assert.doesNotMatch(error.message, /ENOENT/u);
-        assert.doesNotMatch(error.message, new RegExp(process.cwd().replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
-        return true;
-      },
-    );
-  } finally {
-    await connection.close();
   }
 });

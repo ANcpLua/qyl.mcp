@@ -91,7 +91,10 @@ try {
   owner = await connect(values.token, "owner");
   const reviewer = await connect(values["reviewer-token"], "reviewer");
   listing = await owner.listTools();
-  check(new Set(listing.tools.map(tool => tool.name)).size === 32, "Hosted manifest exposes 32 distinct tools");
+  const published = listing.tools.map(tool => tool.name);
+  check(new Set(published).size === published.length, "Hosted manifest names every tool once");
+  check(["display_traces", "display_mcp_dashboard", "fetch_telemetry", "delete"].every(name => !published.includes(name)),
+    "Hosted manifest publishes no viewer, app-only or pre-rename tool");
 
   const failures = await call(owner, "list_failures", { ...w, service_name: services.checkout, status: "all" });
   const failure = failures.failures.find(item => item.operation === "checkout");
@@ -145,13 +148,6 @@ try {
   const ci = await call(owner, "ci_log", { ...w, run_id: sessions.ci_current, compare_to: "last_success" });
   check(ci.comparison.new_failures.some(item => item.leg === "test"), "CI analysis retains the deliberately failed test leg");
 
-  const displayed = await call(owner, "display_traces", { ...w, trace_id: key["db-root"].trace_id });
-  check(displayed.traces.some(item => item.trace_id === key["db-root"].trace_id), "Trace viewer receives the selected original trace");
-  const dashboard = await call(owner, "display_mcp_dashboard", { ...w, server_name: fixture.mcp_server_name, tool_name: "search_logs" });
-  check(dashboard.stats.tools.find(item => item.name === "search_logs").errors === 8, "Dashboard includes all eight expected errors");
-  const fetched = await call(owner, "fetch_telemetry", { ...w, view: "trace", trace_id: key["db-root"].trace_id });
-  check(fetched.trace?.trace_id === key["db-root"].trace_id || fetched.traces?.some(item => item.trace_id === key["db-root"].trace_id), "Telemetry viewer receives the selected trace");
-
   const created = await call(owner, "create_annotation", { target: { kind: "trace", trace_id: key["db-root"].trace_id },
     text: `Owner verification ${fixture.run_id}`, labels: ["owner-verification"], classification: "finding", idempotency_key: `${fixture.run_id}-annotation` });
   owned.set(created.annotation.id, { kind: "annotation", ...created.annotation });
@@ -194,18 +190,18 @@ try {
   }
   if (owner) for (const item of owned.values()) {
     try {
-      const deleted = await call(owner, "delete", { kind: item.kind, id: item.id, etag: item.etag });
+      const deleted = await call(owner, "delete_record", { kind: item.kind, id: item.id, etag: item.etag });
       check(deleted.deleted === true, `Owned ${item.kind} is deleted after verification`);
     } catch (error) { failed = true; evidence.cleanup_errors.push({ kind: item.kind, id: item.id, message: error.message }); }
   }
-  // Delete is exercised during cleanup. Evaluate completeness only after every owned
+  // delete_record is exercised during cleanup. Evaluate completeness only after every owned
   // object was removed, and never count an expected rejection as a successful operation.
-  if (listing && (!listing.tools.every(tool => succeeded.has(tool.name)) || succeeded.size !== 32)) {
+  const complete = !!listing && listing.tools.every(tool => succeeded.has(tool.name));
+  if (listing && !complete) {
     failed = true;
     evidence.missing_successes = listing.tools.map(tool => tool.name).filter(name => !succeeded.has(name));
   }
-  const complete = !!listing && succeeded.size === 32 && listing.tools.every(tool => succeeded.has(tool.name));
-  evidence.assertions.push({ label: "All 32 hosted tools completed successful authorized operations; isolation refusals are separate", passed: complete });
+  evidence.assertions.push({ label: "Every listed hosted tool completed a successful authorized operation; isolation refusals are separate", passed: complete });
   for (const client of connections) {
     try { await client.close(); }
     catch (error) { failed = true; evidence.cleanup_errors.push({ kind: "client", message: error.message }); }
@@ -216,5 +212,5 @@ try {
   writeFileSync(output, JSON.stringify(evidence, null, 2) + "\n", { mode: 0o600 });
   chmodSync(output, 0o600);
 }
-console.log(`${failed ? "FAILED" : "VERIFIED"}: ${succeeded.size}/32 successful hosted tools; evidence ${output}`);
+console.log(`${failed ? "FAILED" : "VERIFIED"}: ${succeeded.size}/${listing?.tools.length ?? "?"} listed hosted tools succeeded; evidence ${output}`);
 process.exitCode = failed ? 1 : 0;
