@@ -1,8 +1,7 @@
-# The gate, reporting only: `mise run check` on every push to main and every pull request.
-# Nothing publishes, deploys or waits for this run. The gate reads the qyl checkout beside this
-# one (contract pins, the answer-key seed and its Release collector), so both are checked out
-# side by side, as on the machine, and the collector is built first. A failed run keeps
-# artifacts/logs as gate-log.
+# `mise run check` on every push to main and every pull request; it only reports, nothing
+# publishes, deploys or waits for this run. The check reads the qyl checkout beside this one
+# (contract pin, the answer-key seed and its Release collector), so both are checked out side by
+# side, as on the machine, and the collector is built first. A failed run keeps artifacts/logs.
 name: check
 
 on:
@@ -41,22 +40,27 @@ jobs:
         with:
           working_directory: qyl.mcp
 
-      # The runner's .NET SDK satisfies qyl's global.json (latestFeature). The collector is only a
-      # fixture here: analyzers are qyl's own gate, so they are skipped (source generators still run).
+      # The runner's preinstalled SDKs fall behind qyl's global.json pin, so install the one it names.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: qyl/global.json
+
+      # The collector is only a fixture here: analyzers belong to qyl's own check, so they are
+      # skipped (source generators still run).
       - name: Release collector for the answer key
         working-directory: qyl
         run: |
           dotnet restore services/qyl.collector/qyl.collector.csproj -p:TreatWarningsAsErrors=false
-          dotnet build services/qyl.collector/qyl.collector.csproj --configuration Release --no-restore -p:QylEmbedDashboard=false -p:RunAnalyzers=false -nologo -clp:NoSummary -v quiet
+          dotnet build services/qyl.collector/qyl.collector.csproj --configuration Release --no-restore -p:RunAnalyzers=false -nologo -clp:NoSummary -v quiet
 
-      - name: Gate
+      - name: Check
         run: mise run check
 
-      - name: Keep the gate log
+      - name: Keep the check log
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: gate-log
+          name: check-log
           path: qyl.mcp/artifacts/logs/
           if-no-files-found: ignore
           retention-days: 7
