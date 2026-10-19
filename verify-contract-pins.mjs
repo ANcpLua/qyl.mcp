@@ -16,6 +16,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
+import { execFileSync } from "node:child_process";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -65,10 +66,19 @@ if (mcpVersion !== qylPin) {
 console.log(`verify:pins: contract pins agree (@ancplua/qyl-api-schema ${mcpPin} == Qyl.Api.Contracts ${qylPin}, via ${qylRepo})`);
 
 const server = JSON.parse(readFileSync(join(here, "server", "package.json"), "utf8"));
+const lock = JSON.parse(execFileSync("bun", ["-e",
+  'process.stdout.write(JSON.stringify({ workspaces: Bun.JSONC.parse(await Bun.file("bun.lock").text()).workspaces }))',
+], { cwd: here, encoding: "utf8" }));
+if (lock.workspaces?.server?.version !== server.version) {
+  throw new Error(`server bun.lock must name qyl-mcp-server ${server.version}; run bun install again`);
+}
 for (const workspace of ["workbench", "dashboard"]) {
   const metadata = JSON.parse(readFileSync(join(here, workspace, "package.json"), "utf8"));
   if (metadata.dependencies?.["qyl-mcp-server"] !== server.version) {
     throw new Error(`${workspace} must pin the local qyl-mcp-server ${server.version}`);
+  }
+  if (lock.workspaces?.[workspace]?.dependencies?.["qyl-mcp-server"] !== server.version) {
+    throw new Error(`${workspace} bun.lock must pin qyl-mcp-server ${server.version}; run bun install again`);
   }
   if (metadata.dependencies?.["@ancplua/qyl-api-schema"] !== mcpPin) {
     throw new Error(`${workspace} must pin @ancplua/qyl-api-schema ${mcpPin}`);

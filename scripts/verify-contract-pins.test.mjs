@@ -7,7 +7,7 @@ import test from "node:test";
 
 const conventionsPackage = "@ancplua/qyl-semantic-conventions";
 
-function verify({ runtime = "13.0.0", development, server = "13.0.0", contract = "14.0.0" } = {}) {
+function verify({ runtime = "13.0.0", development, server = "13.0.0", contract = "14.0.0", lockedVersion = "10.0.0" } = {}) {
   const root = mkdtempSync(join(tmpdir(), "qyl-pin-contract-"));
   try {
     copyFileSync(new URL("../verify-contract-pins.mjs", import.meta.url), join(root, "verify-contract-pins.mjs"));
@@ -22,6 +22,11 @@ function verify({ runtime = "13.0.0", development, server = "13.0.0", contract =
     }
     writeFileSync(join(root, "qyl", "Version.props"),
       `<Project><PropertyGroup><QylApiContractsVersion>${contract}</QylApiContractsVersion></PropertyGroup></Project>`);
+    writeFileSync(join(root, "bun.lock"), JSON.stringify({ workspaces: {
+      server: { version: "10.0.0" },
+      workbench: { dependencies: { "qyl-mcp-server": "10.0.0" } },
+      dashboard: { dependencies: { "qyl-mcp-server": lockedVersion } },
+    } }));
     return spawnSync(process.execPath, [join(root, "verify-contract-pins.mjs")], {
       cwd: root,
       env: { ...process.env, QYL_REPO: join(root, "qyl") },
@@ -61,4 +66,10 @@ test("matching conventions do not bypass the Collector API contract check", () =
   const result = verify({ contract: "13.0.0" });
   assert.equal(result.status, 1, result.stderr);
   assert.match(result.stderr, /cross-repo contract skew/u);
+});
+
+test("matching manifests cannot hide a stale workspace server pin in the lockfile", () => {
+  const result = verify({ lockedVersion: "9.0.0" });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /dashboard bun\.lock must pin qyl-mcp-server/u);
 });
